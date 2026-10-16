@@ -2250,6 +2250,29 @@ sed 's/Sparkle/Redacted/g' "$ROOT/SOURCE_PROVENANCE.md" >"$META/SOURCE_PROVENANC
 assert_fail metadata-provenance-missing /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
 assert_contains "$TMP/metadata-provenance-missing.err" "no coverage"
 cp "$ROOT/SOURCE_PROVENANCE.md" "$META/SOURCE_PROVENANCE.md"
+/usr/bin/python3 - "$META/SBOM.spdx.json" "$META/Package.resolved" <<'PY'
+import json
+import sys
+from pathlib import Path
+sbom_path = Path(sys.argv[1])
+resolved_path = Path(sys.argv[2])
+resolved = json.loads(resolved_path.read_text())
+revision = None
+for pin in resolved["pins"]:
+    if pin["identity"] == "sparkle":
+        pin["location"] = "git@github.com:sparkle-project/Sparkle.git"
+        revision = pin["state"]["revision"]
+resolved_path.write_text(json.dumps(resolved, indent=2) + "\n")
+payload = json.loads(sbom_path.read_text())
+for package in payload["packages"]:
+    if str(package.get("name", "")).lower() == "sparkle":
+        package["downloadLocation"] = f"git+git@github.com:evil/Other.git@{revision}"
+sbom_path.write_text(json.dumps(payload, indent=2) + "\n")
+PY
+assert_fail metadata-ssh-location-mismatch /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-ssh-location-mismatch.err" "does not match resolved location"
+cp "$ROOT/SBOM.spdx.json" "$META/SBOM.spdx.json"
+cp "$ROOT/Package.resolved" "$META/Package.resolved"
 assert_pass metadata-fixture-restored /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
 
 echo "== public preflight proves its tools before lengthy gates =="
