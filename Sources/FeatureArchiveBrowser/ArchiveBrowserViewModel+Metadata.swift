@@ -38,7 +38,7 @@ extension ArchiveBrowserViewModel {
         aliasesText: String,
         appNote: String
     ) {
-        metadataEditing.applySongNotes(
+        _ = metadataEditing.applySongNotes(
             for: song,
             virtualTitle: virtualTitle,
             aliasesText: aliasesText,

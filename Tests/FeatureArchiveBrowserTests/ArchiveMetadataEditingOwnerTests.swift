@@ -190,7 +190,7 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
         box.generation = 1
         let coordinator = makeCoordinator(metadataStore: store, box: box)
 
-        coordinator.applySongNotes(
+        _ = coordinator.applySongNotes(
             for: song,
             virtualTitle: "  New Title  ",
             aliasesText: " a1 , ,a2 ",
@@ -382,6 +382,34 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
 
         XCTAssertNil(box.replaced.last?.workflowStatus, "Undo restored the earlier status")
         XCTAssertTrue(undo.canRedo)
+    }
+
+    func testRefusedUndoOfNotesEditRegistersNoRedo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Notes Undo Refused Song")
+        let store = OwnerFakeMetadataStore()
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+        let outcome = coordinator.applySongNotes(
+            for: song,
+            virtualTitle: "New Title",
+            aliasesText: "",
+            appNote: "New note"
+        )
+        XCTAssertEqual(outcome, .saved)
+        coordinator.registerMetadataUndo(
+            songID: song.id,
+            previousVirtualTitle: song.virtualTitle,
+            previousAliases: song.aliases,
+            previousAppNote: song.appNote
+        )
+        let changed = try XCTUnwrap(box.replaced.last)
+        box.songs = [changed]
+        store.failUpsertAll = SongUserMetadataCorruptRowError(songIDs: [song.id])
+
+        undo.undo()
+
+        XCTAssertEqual(box.replaced.count, 1, "a refused Undo must not change the visible notes")
+        XCTAssertFalse(undo.canRedo, "no Redo for an Undo that restored nothing")
     }
 
     func testStatusChangeSavedWithWarningStillRegistersUndo() throws {

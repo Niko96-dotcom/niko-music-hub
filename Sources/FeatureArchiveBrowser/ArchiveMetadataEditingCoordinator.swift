@@ -180,14 +180,14 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         virtualTitle: String,
         aliasesText: String,
         appNote: String
-    ) {
+    ) -> MetadataCommitOutcome {
         let trimmedTitle = virtualTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = appNote.trimmingCharacters(in: .whitespacesAndNewlines)
         let aliases = aliasesText
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        _ = applyMetadataMerge(for: song) { metadata, _ in
+        return applyMetadataMerge(for: song) { metadata, _ in
             metadata.virtualTitle = trimmedTitle.isEmpty ? nil : trimmedTitle
             metadata.aliases = aliases
             metadata.appNote = trimmedNote.isEmpty ? nil : trimmedNote
@@ -202,7 +202,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
     ) {
         guard let songs = host.currentSongs(),
               let song = songs.first(where: { $0.id == songID }) else { return }
-        applySongNotes(for: song, virtualTitle: virtualTitle, aliasesText: aliases, appNote: appNote)
+        _ = applySongNotes(for: song, virtualTitle: virtualTitle, aliasesText: aliases, appNote: appNote)
     }
 
     func statusHistory(for song: Song, limit: Int = 5) -> [WorkflowStatusChange] {
@@ -249,12 +249,14 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         let currentTitle = song.virtualTitle
         let currentAliases = song.aliases
         let currentNote = song.appNote
-        applySongNotes(
+        let outcome = applySongNotes(
             for: song,
             virtualTitle: previousVirtualTitle ?? "",
             aliasesText: previousAliases.joined(separator: ", "),
             appNote: previousAppNote ?? ""
         )
+        // A refused commit restored nothing, so there is nothing to redo.
+        guard outcome != .refused else { return }
         registerMetadataUndo(
             songID: songID,
             previousVirtualTitle: currentTitle,
