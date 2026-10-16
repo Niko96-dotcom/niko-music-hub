@@ -354,6 +354,6 @@ public struct BPMTapperView: View {
     }
 
     private func formatBPM(_ bpm: Double) -> String {
-        String(Int(bpm.rounded()))
+        BPMTapperViewModel.formattedBPM(bpm)
     }
 }

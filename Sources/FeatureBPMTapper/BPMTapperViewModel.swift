@@ -271,6 +271,15 @@ public final class BPMTapperViewModel: ObservableObject {
     }
 
     private func formatBPM(_ bpm: Double) -> String {
-        String(Int(bpm.rounded()))
+        Self.formattedBPM(bpm)
+    }
+
+    /// Decoded history values are not range-checked, so guard the `Int`
+    /// conversion: a non-finite or huge value would otherwise trap.
+    nonisolated static func formattedBPM(_ bpm: Double) -> String {
+        guard bpm.isFinite, abs(bpm) < 10_000 else {
+            return "--"
+        }
+        return String(Int(bpm.rounded()))
     }
 }

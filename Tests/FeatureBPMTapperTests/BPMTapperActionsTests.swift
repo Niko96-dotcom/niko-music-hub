@@ -76,6 +76,21 @@ final class BPMTapperActionsTests: XCTestCase {
         XCTAssertEqual(viewModel.copyConfirmation, "BPM copied")
     }
 
+    func testCopySavedBPMDoesNotTrapOnOutOfRangeDecodedValue() {
+        let clipboard = FakeClipboard()
+        let viewModel = makeViewModel(clipboard: clipboard)
+        let entry = BPMHistoryEntry(
+            bpm: 1e300,
+            rawTappedBPM: 1e19,
+            adjustment: .original,
+            timestamp: Date(timeIntervalSince1970: 20)
+        )
+
+        viewModel.copySavedBPM(entry)
+
+        XCTAssertEqual(clipboard.copiedValues, ["--"])
+    }
+
     func testCopiedHistoryRowBadgeClearsOnTapAndReset() {
         let viewModel = makeViewModel()
         let entry = BPMHistoryEntry(
