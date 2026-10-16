@@ -347,13 +347,17 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     }
 
     static func startFailureMessage(from message: String) -> String {
-        let firstLine = message
+        let lines = message
             .split(whereSeparator: { $0 == "\n" || $0 == "\r" })
-            .first
-            .map(String.init)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmed = (firstLine?.isEmpty == false ? firstLine! : message.trimmingCharacters(in: .whitespacesAndNewlines))
-        let limited = String(trimmed.prefix(200))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        // A Python crash starts with "Traceback (most recent call last):";
+        // the exception line at the end names the real cause.
+        let cause = DemucsMLXBackend.exceptionLine(in: lines)
+            ?? lines.first { !DemucsMLXBackend.isTracebackFrameLine($0) }
+            ?? lines.first
+            ?? message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let limited = String(DemucsMLXBackend.redactPaths(in: cause).prefix(200))
         return "demucs-mlx could not start: \(limited)"
     }
 

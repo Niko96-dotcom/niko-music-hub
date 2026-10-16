@@ -175,18 +175,30 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
             .split(whereSeparator: { $0 == "\r" || $0 == "\n" })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        let exceptionLine = lines.last { line in
-            line.range(of: #"^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt)\b"#, options: .regularExpression) != nil
-        }
         let otherLine = lines.last { line in
-            progressParser.parse(line: line) == nil
-                && !line.hasPrefix("File \"")
-                && !line.hasPrefix("Traceback (")
-                && line.range(of: #"^[\^~\s]+$"#, options: .regularExpression) == nil
+            progressParser.parse(line: line) == nil && !Self.isTracebackFrameLine(line)
         }
-        guard let cause = exceptionLine ?? otherLine else { return nil }
+        guard let cause = Self.exceptionLine(in: lines) ?? otherLine else { return nil }
         let redacted = DiagnosticsPathRedactor.redactPathsInText(cause)
         return redacted.count > 200 ? String(redacted.prefix(200)) + "…" : redacted
+    }
+
+    /// The last Python exception line (`ModuleNotFoundError: …`), if any.
+    static func exceptionLine(in lines: [String]) -> String? {
+        lines.last { line in
+            line.range(of: #"^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt)\b"#, options: .regularExpression) != nil
+        }
+    }
+
+    static func redactPaths(in text: String) -> String {
+        DiagnosticsPathRedactor.redactPathsInText(text)
+    }
+
+    /// Traceback header, frame and caret lines never name the cause.
+    static func isTracebackFrameLine(_ line: String) -> Bool {
+        line.hasPrefix("File \"")
+            || line.hasPrefix("Traceback (")
+            || line.range(of: #"^[\^~\s]+$"#, options: .regularExpression) != nil
     }
 
     private func resolvedOutputFolderURL(for request: StemSeparationBackendRequest) -> URL {

@@ -498,6 +498,19 @@ struct StemSeparationViewModelTests {
     }
 
     @Test
+    func startFailureMessage_namesPythonExceptionLineAndRedactsHome() {
+        let home = NSHomeDirectory()
+        let traceback = """
+        Traceback (most recent call last):
+          File "\(home)/.local/bin/demucs-mlx", line 5, in <module>
+            from demucs_mlx.cli import main
+        ModuleNotFoundError: No module named 'mlx' (from \(home)/.local/lib)
+        """
+        let message = StemSeparationViewModel.startFailureMessage(from: traceback)
+        #expect(message == "demucs-mlx could not start: ModuleNotFoundError: No module named 'mlx' (from ~/.local/lib)")
+    }
+
+    @Test
     func localHelperFailureWithChangedWordingSetsSetup() async throws {
         let customWording = "custom demucs helper blown up (code 9) XYZ"
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
