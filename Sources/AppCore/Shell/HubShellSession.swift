@@ -212,8 +212,15 @@ public final class HubShellSession: ObservableObject {
     /// unconditional publish + defaults write there fed preferencesDidChange churn.
     public func setShowMenuBarExtra(_ visible: Bool) {
         guard visible != showMenuBarExtra else { return }
+        // Save first, like the Settings toggle: a failed save (settings paused
+        // for repair) must not leave the live extra out of step with settings.
+        do {
+            try settingsStore?.updateSettings { $0.showMenuBarExtra = visible }
+        } catch {
+            commandsLogger.error("Menu bar extra change not saved: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         applyShowMenuBarExtra(visible)
-        try? settingsStore?.updateSettings { $0.showMenuBarExtra = visible }
     }
 
     /// Update the live extra without writing settings (Settings already persisted).

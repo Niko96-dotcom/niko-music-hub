@@ -156,6 +156,18 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertTrue(try settings.loadSettings().showMenuBarExtra)
     }
 
+    func testShowMenuBarExtraKeepsLiveStateWhenSaveFails() throws {
+        let session = HubShellSession(
+            preferences: MockPreferenceStore(),
+            settingsStore: SaveFailingSettingsStore()
+        )
+        XCTAssertTrue(session.showMenuBarExtra)
+
+        session.setShowMenuBarExtra(false)
+        XCTAssertTrue(session.showMenuBarExtra)
+        XCTAssertTrue(session.menuBarExtra.isInserted)
+    }
+
     func testRestoreSelectedToolID() throws {
         let store = MockPreferenceStore()
         let registry = try ToolRegistry(features: [
@@ -265,6 +277,16 @@ private final class MockPreferenceStore: PreferenceStore, @unchecked Sendable {
         datas.removeValue(forKey: key)
         strings.removeValue(forKey: key)
     }
+}
+
+private struct SaveFailingSettingsStore: SettingsStore {
+    enum SaveFailure: Error {
+        case paused
+    }
+
+    func loadSettings() throws -> AppSettings { .default }
+    func saveSettings(_ settings: AppSettings) throws { throw SaveFailure.paused }
+    func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws { throw SaveFailure.paused }
 }
 
 private struct StubRestoreFeature: ToolFeature {
