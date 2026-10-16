@@ -561,6 +561,7 @@ struct SongDetailView: View {
             onOpen: { try? viewModel.openProjectVersion($0, for: liveSong) },
             onSetMain: { viewModel.setManualMainCPR(for: liveSong, versionID: $0.id) },
             onHide: { viewModel.ignoreCPRVersion(for: liveSong, versionID: $0.id) },
+            onShow: { viewModel.unignoreCPRVersion(for: liveSong, versionID: $0.id) },
             onRevertToAuto: { viewModel.revertCPRToAuto(for: liveSong) }
         )
     }

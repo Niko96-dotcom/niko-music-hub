@@ -229,6 +229,12 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    func unignoreCPRVersion(for song: Song, versionID: String) {
+        _ = applyMetadataMerge(for: song) { metadata, _ in
+            metadata.ignoredCPRVersionIDs.removeAll { $0 == versionID }
+        }
+    }
+
     func setSongHidden(_ song: Song, hidden: Bool) {
         _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.isIgnored = hidden

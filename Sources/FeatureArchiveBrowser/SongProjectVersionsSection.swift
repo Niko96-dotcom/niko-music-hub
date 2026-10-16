@@ -9,6 +9,7 @@ struct SongProjectVersionsSection: View {
     let onOpen: (ProjectVersion) -> Void
     let onSetMain: (ProjectVersion) -> Void
     let onHide: (ProjectVersion) -> Void
+    let onShow: (ProjectVersion) -> Void
     let onRevertToAuto: () -> Void
 
     var body: some View {
@@ -43,7 +44,8 @@ struct SongProjectVersionsSection: View {
                             openBlockReason: openBlockReason,
                             onOpen: { onOpen(version) },
                             onSetMain: { onSetMain(version) },
-                            onHide: { onHide(version) }
+                            onHide: { onHide(version) },
+                            onShow: { onShow(version) }
                         )
                     }
                 }

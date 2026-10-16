@@ -1638,6 +1638,39 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(reloaded.filteredSongs.map(\.id), [merged.id])
     }
 
+    func testHiddenProjectVersionCanBeShownAgain() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-unhide-cpr-vm-\(UUID().uuidString).sqlite")
+        let indexStore = try SQLiteArchiveIndexStore(databaseURL: databaseURL)
+        let metadataStore = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: indexStore,
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { !$0.projectVersions.isEmpty })
+        let version = try XCTUnwrap(song.projectVersions.first)
+
+        viewModel.ignoreCPRVersion(for: song, versionID: version.id)
+        let hidden = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        XCTAssertTrue(hidden.ignoredCPRVersionIDs.contains(version.id))
+        XCTAssertFalse(hidden.visibleProjectVersions.contains { $0.id == version.id })
+
+        viewModel.unignoreCPRVersion(for: hidden, versionID: version.id)
+        let shown = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        XCTAssertFalse(shown.ignoredCPRVersionIDs.contains(version.id))
+        XCTAssertTrue(shown.visibleProjectVersions.contains { $0.id == version.id })
+        XCTAssertEqual(try metadataStore.loadAll()[song.id]?.ignoredCPRVersionIDs.contains(version.id), false)
+    }
+
     func testMarkingDoneArchivesTheUpdatedWorkflowSnapshot() async throws {
         let runtime = RecordingProjectVaultRuntime()
         let suiteName = "FeatureArchiveBrowserTests.\(UUID())"

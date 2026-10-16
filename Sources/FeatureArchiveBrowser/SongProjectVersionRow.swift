@@ -11,6 +11,7 @@ struct SongProjectVersionRow: View {
     let onOpen: () -> Void
     let onSetMain: () -> Void
     let onHide: () -> Void
+    let onShow: () -> Void
 
     private var metaLine: String? {
         var parts: [String] = []
@@ -40,22 +41,24 @@ struct SongProjectVersionRow: View {
                         .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                 }
                 Spacer(minLength: 0)
-                if !isIgnored {
-                    Menu {
+                Menu {
+                    if isIgnored {
+                        Button("Show in browse", action: onShow)
+                    } else {
                         Button("Open in \(version.applicationName)", action: onOpen)
                             .disabled(openBlockReason != nil)
                             .help(openBlockReason ?? "Open this version in \(version.applicationName)")
                         Button("Set Main", action: onSetMain)
                             .disabled(isMain)
                         Button("Hide from browse", action: onHide)
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .frame(width: 28, height: 28)
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .accessibilityLabel("Actions for \(version.fileName)")
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 28, height: 28)
                 }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .accessibilityLabel("Actions for \(version.fileName)")
             }
 
             Text("\(version.applicationName) · \(version.modifiedAt.formatted(date: .abbreviated, time: .shortened))")
