@@ -204,8 +204,21 @@ public struct FFmpegAudioConverter: AudioConverting, @unchecked Sendable {
             if let channelCount = channelCount(from: lowercasedLine) {
                 return channelCount
             }
+            // Any other named layout (quad, 5.0, 6.1, hexagonal, ...) has more than one channel.
+            if hasChannelLayoutField(in: lowercasedLine) {
+                return 2
+            }
         }
         return nil
+    }
+
+    private func hasChannelLayoutField(in line: String) -> Bool {
+        let fields = line.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let sampleRateIndex = fields.firstIndex(where: { $0.hasSuffix(" hz") }),
+              sampleRateIndex + 1 < fields.count else {
+            return false
+        }
+        return !fields[sampleRateIndex + 1].isEmpty
     }
 
     private func channelCount(from line: String) -> Int? {

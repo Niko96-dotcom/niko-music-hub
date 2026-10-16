@@ -324,6 +324,50 @@ final class FFmpegAudioConverterTests: XCTestCase {
         XCTAssertEqual(result.spec.channelCount, 1)
     }
 
+    func testPreserveMonoStereoTreatsOtherFFmpegLayoutAsStereo() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let sourceURL = directory.appendingPathComponent("Quad Source.mp3")
+        let outputDirectory = directory.appendingPathComponent("out", isDirectory: true)
+        try Data("source".utf8).write(to: sourceURL)
+        let runner = RecordingRunner { request in
+            if request.arguments.last == sourceURL.path {
+                return ExternalProcessResult(
+                    exitCode: 1,
+                    standardOutput: "",
+                    standardError: "Input #0, mp3, from 'Quad Source.mp3':\n  Stream #0:0: Audio: aac (LC), 48000 Hz, quad, fltp"
+                )
+            }
+
+            try writeTestWAV(
+                to: URL(fileURLWithPath: request.arguments.last ?? ""),
+                sampleRate: 44100,
+                bitDepth: 24,
+                channelCount: 2
+            )
+            return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+        }
+        let converter = FFmpegAudioConverter(
+            ffmpegURL: URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg"),
+            runner: runner
+        )
+
+        let result = try await converter.convert(
+            ConversionRequest(
+                sourceURL: sourceURL,
+                outputDirectory: outputDirectory,
+                preset: .cubaseDefault,
+                sourceType: .mp3
+            )
+        )
+
+        XCTAssertEqual(runner.requests.count, 2)
+        let channelArgumentIndex = try XCTUnwrap(runner.requests[1].arguments.firstIndex(of: "-ac"))
+        XCTAssertEqual(runner.requests[1].arguments[channelArgumentIndex + 1], "2")
+        XCTAssertEqual(result.spec.channelCount, 2)
+    }
+
     func testNoShellInvocationAppearsInSource() throws {
         let source = try String(
             contentsOfFile: "Sources/FeatureAudioConverter/FFmpegAudioConverter.swift",
