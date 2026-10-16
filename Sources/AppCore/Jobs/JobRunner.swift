@@ -225,7 +225,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
     }
 
     private func markCompleted(id: Job.ID) {
-        mutateJob(id: id) { job in
+        let applied = mutateJob(id: id) { job in
             guard job.state == .running else { return false }
             job.state = .completed
             job.progress = 1
@@ -233,12 +233,13 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             job.finishedAt = Date()
             return true
         }
+        guard applied else { return }
         jobsLogger.info("Job finished id=\(id.uuidString, privacy: .public) result=\("completed", privacy: .public)")
     }
 
     private func markFailed(id: Job.ID, message: String, failureReason: JobFailureReason? = nil) {
         let boundedMessage = boundedText(message, maximumUTF8Bytes: maximumSnapshotTextBytes)
-        mutateJob(id: id) { job in
+        let applied = mutateJob(id: id) { job in
             guard job.state == .running else { return false }
             job.state = .failed
             job.message = boundedMessage
@@ -246,18 +247,20 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
             job.finishedAt = Date()
             return true
         }
+        guard applied else { return }
         // Error text can embed paths/URLs; keep it private.
         jobsLogger.error("Job failed id=\(id.uuidString, privacy: .public) error=\(boundedMessage, privacy: .private)")
     }
 
     private func markCanceled(id: Job.ID) {
-        mutateJob(id: id) { job in
+        let applied = mutateJob(id: id) { job in
             guard !job.state.isTerminal else { return false }
             job.state = .canceled
             job.message = "Canceled"
             job.finishedAt = Date()
             return true
         }
+        guard applied else { return }
         jobsLogger.info("Job finished id=\(id.uuidString, privacy: .public) result=\("canceled", privacy: .public)")
     }
 
@@ -286,7 +289,8 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
         }
     }
 
-    private func mutateJob(id: Job.ID, update: (inout Job) -> Bool) {
+    @discardableResult
+    private func mutateJob(id: Job.ID, update: (inout Job) -> Bool) -> Bool {
         let outcome = lock.withLock { () -> (Job?, [AsyncStream<Job>.Continuation], Bool) in
             guard var current = jobs[id], update(&current) else { return (nil, [], false) }
             jobs[id] = current
@@ -303,6 +307,7 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
         if outcome.0 != nil {
             emitSnapshot()
         }
+        return outcome.0 != nil
     }
 
     private func publish(
