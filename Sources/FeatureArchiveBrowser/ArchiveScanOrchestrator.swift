@@ -434,7 +434,7 @@ final class ArchiveScanOrchestrator {
                   activeIncrementalGeneration == request.id,
                   host.rootGeneration == request.generation,
                   host.roots.standardizedArchivePaths == request.roots.standardizedArchivePaths else { return }
-            host.setBackgroundStatusMessage("Incremental rescan failed: \(error.localizedDescription)")
+            host.setBackgroundStatusMessage("Incremental rescan failed. Details are in the diagnostics log.")
             host.diagnostics.log(.error, "Incremental archive rescan failed: \(error)")
         }
     }

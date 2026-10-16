@@ -790,6 +790,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Cache Song"])
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive cache could not be saved") == true)
+        XCTAssertFalse(viewModel.statusMessage?.contains("forced persistence failure") == true, "raw error text must stay in diagnostics")
     }
 
     func testMetadataSaveFailureIsVisibleWithoutDiscardingEdit() async throws {
@@ -810,6 +811,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let edited = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
         XCTAssertEqual(edited.effectiveDisplayTitle, "Visible Edit")
         XCTAssertTrue(viewModel.statusMessage?.contains("Song metadata could not be saved") == true)
+        XCTAssertFalse(viewModel.statusMessage?.contains("forced persistence failure") == true, "raw error text must stay in diagnostics")
     }
 
     func testCorruptSQLiteRowEditBlockedThroughViewModel() throws {
