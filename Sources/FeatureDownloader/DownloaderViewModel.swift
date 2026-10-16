@@ -164,7 +164,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         case .available:
             downloadState = .readyToDownload
             statusMessage = DownloaderCopy.readyToDownload
-            detectedFileName = url.lastPathComponent
+            detectedFileName = DownloaderUseCase.fallbackJobTitle(for: url)
         case .missing:
             downloadState = .failed(DownloaderCopy.missingYtDlp)
             statusMessage = nil

@@ -427,7 +427,8 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
 
     static func fallbackJobTitle(for url: URL) -> String {
         let path = url.path
-        if path == "/watch" || path.isEmpty || url.lastPathComponent == "watch" {
+        let genericComponents: Set<String> = ["/", "watch", "playlist"]
+        if path.isEmpty || genericComponents.contains(url.lastPathComponent) {
             return url.host ?? "media"
         }
         return url.lastPathComponent

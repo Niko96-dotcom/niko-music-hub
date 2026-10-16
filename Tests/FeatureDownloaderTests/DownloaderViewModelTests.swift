@@ -12,6 +12,17 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertNotNil(DownloaderViewModel.validatedHTTPURL("https://example.com/file"))
     }
 
+    func testFallbackJobTitleUsesHostForGenericPaths() throws {
+        func title(_ string: String) throws -> String {
+            DownloaderUseCase.fallbackJobTitle(for: try XCTUnwrap(URL(string: string)))
+        }
+        XCTAssertEqual(try title("https://youtu.be/abc"), "abc")
+        XCTAssertEqual(try title("https://example.com"), "example.com")
+        XCTAssertEqual(try title("https://example.com/"), "example.com")
+        XCTAssertEqual(try title("https://www.youtube.com/watch?v=x"), "www.youtube.com")
+        XCTAssertEqual(try title("https://www.youtube.com/playlist?list=PL1"), "www.youtube.com")
+    }
+
     func testCanceledDebounceNeverInvokesHealthChecker() async throws {
         let runner = SequencedHealthRunner()
         let checker = YtDlpHealthChecker(
