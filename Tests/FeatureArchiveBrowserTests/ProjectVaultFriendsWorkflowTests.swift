@@ -1049,6 +1049,42 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
     }
 
+    func testKeepLocalOffRemovesRestorePinsUnderAliasedFolderPaths() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = try fixture.runtime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let original = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.archiveInProjectVault(original, trigger: .backupCopy)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        await viewModel.refreshProjectVaultSnapshots()
+        let readySong = try XCTUnwrap(viewModel.songs.first { $0.id == original.id })
+        let snapshot = try XCTUnwrap(viewModel.projectVaultSnapshot(for: readySong))
+        // A restore through a symlinked Active root pins the destination under
+        // the alias path, which differs as a string from the scanned folder.
+        let link = fixture.root.appendingPathComponent("ActiveLink", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: fixture.active)
+        let aliased = link.appendingPathComponent("Friends Workflow Song", isDirectory: true)
+        try fixture.settingsStore.updateSettings {
+            $0.vault.keepLocalProjectIDs.formUnion([
+                snapshot.record.id.description,
+                aliased.path,
+                aliased.standardizedFileURL.path,
+                aliased.standardizedFileURL.resolvingSymlinksInPath().path,
+            ])
+        }
+        viewModel.refreshProjectVaultPresentationContext()
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.isKeepLocal, true)
+
+        viewModel.setProjectKeepLocal(false, for: readySong)
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs, [])
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.isKeepLocal, false)
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
+    }
+
     func testPersistedFreeSpaceActionInvokesFreshCaptureNotStaleApproval() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }

@@ -153,7 +153,19 @@ extension ArchiveBrowserViewModel {
             let keys = vaultObservation.keepLocalKeys(for: song)
             try settingsStore.updateSettings { settings in
                 if keepLocal { settings.vault.keepLocalProjectIDs.formUnion(keys) }
-                else { settings.vault.keepLocalProjectIDs.subtract(keys) }
+                else {
+                    // Restore pins the destination under the path it had then
+                    // (symlinked root, `/private` alias). Remove every stored
+                    // path that names the same folder, not only exact strings.
+                    let folders = Set(keys.filter { $0.hasPrefix("/") }.map {
+                        ArchiveVaultObservation.vaultCanonicalPath(URL(fileURLWithPath: $0, isDirectory: true))
+                    })
+                    settings.vault.keepLocalProjectIDs = settings.vault.keepLocalProjectIDs.filter { key in
+                        !keys.contains(key) && !(key.hasPrefix("/") && folders.contains(
+                            ArchiveVaultObservation.vaultCanonicalPath(URL(fileURLWithPath: key, isDirectory: true))
+                        ))
+                    }
+                }
             }
             refreshProjectVaultPresentationContext()
         } catch {

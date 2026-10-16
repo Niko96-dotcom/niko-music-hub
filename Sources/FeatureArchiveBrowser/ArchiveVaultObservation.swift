@@ -752,7 +752,7 @@ final class ArchiveVaultObservation: ObservableObject {
 
     // MARK: - Canonical path utilities (pure)
 
-    static func vaultCanonicalPath(_ url: URL) -> String {
+    nonisolated static func vaultCanonicalPath(_ url: URL) -> String {
         let path = url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL.path
         for alias in ["/private/var", "/private/tmp"] {
             if path == alias { return String(alias.dropFirst("/private".count)) }
