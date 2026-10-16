@@ -20,7 +20,7 @@ final class ArchiveDiagnosticsPanelContextTests: XCTestCase {
         XCTAssertEqual(panel.supportSummaryLine, exportLine)
         XCTAssertTrue(panel.supportSummaryLine.hasPrefix("roots:"))
         XCTAssertTrue(panel.supportSummaryLine.contains("Scanned 9 songs"))
-        XCTAssertTrue(panel.supportSummaryLine.contains("1 song(s) with"))
+        XCTAssertTrue(panel.supportSummaryLine.contains("1 song with 1 warning"))
         XCTAssertTrue(panel.supportSummaryLine.contains("Broken Folder Example"))
         XCTAssertTrue(panel.supportSummaryLine.contains("2 skipped at roots"))
     }

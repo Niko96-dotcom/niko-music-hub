@@ -41,7 +41,7 @@ final class ArchiveDiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(text.contains("CubaseArchive"))
         XCTAssertTrue(
             text.contains(
-                "· Scanned 9 songs · 1 song(s) with 1 warning(s) — Broken Folder Example · 2 skipped at roots"
+                "· Scanned 9 songs · 1 song with 1 warning — Broken Folder Example · 2 skipped at roots"
             )
         )
         // The exact synthetic-home path is redacted; the fixture root is written home-relative.

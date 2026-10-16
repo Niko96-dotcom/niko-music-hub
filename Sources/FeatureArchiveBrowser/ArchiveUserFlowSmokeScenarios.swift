@@ -21,7 +21,7 @@ enum ArchiveUserFlowSmokeScenarios {
         exportSummaryLineSubstrings: [
             "summary_line=roots:",
             "Scanned 9 songs",
-            "1 song(s) with 1 warning(s)",
+            "1 song with 1 warning",
             "Broken Folder Example",
             "2 skipped at roots",
         ],
@@ -46,7 +46,7 @@ enum ArchiveUserFlowSmokeScenarios {
         supportSummarySubstrings: [
             "roots:",
             "Scanned 9 songs",
-            "1 song(s) with 1 warning(s)",
+            "1 song with 1 warning",
             "Broken Folder Example",
             "2 skipped at roots",
         ]
@@ -79,7 +79,7 @@ enum ArchiveUserFlowSmokeScenarios {
         exportSummarySubstrings: [
             "summary_line=roots:",
             "Scanned 8 songs",
-            "8 song(s) with 8 warning(s)",
+            "8 songs with 8 warnings",
             "and 3 more",
             "Summary Warning 01",
         ],

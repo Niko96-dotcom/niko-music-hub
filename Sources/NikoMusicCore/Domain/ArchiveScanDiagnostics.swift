@@ -95,7 +95,7 @@ public struct ArchiveScanDiagnostics: Sendable, Equatable, Codable {
 
     private var songWarningSummaryClause: String {
         guard totalSongWarningCount > 0 else { return "no warnings" }
-        var clause = "\(songsWithWarningsCount) song(s) with \(totalSongWarningCount) warning(s)"
+        var clause = "\(CountCopy.count(songsWithWarningsCount, "song")) with \(CountCopy.count(totalSongWarningCount, "warning"))"
         let titles = songWarningSummaries.map(\.displayTitle).sorted()
         if let titleList = Self.formattedSongWarningTitles(titles) {
             clause += " — \(titleList)"
