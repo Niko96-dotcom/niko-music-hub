@@ -64,12 +64,14 @@ EXPORT_PATHS=(
   CHANGELOG.md
   CONTRIBUTING.md
   LICENSE
+  Package.resolved
   Package.swift
   README.md
   RELEASE_ARCHITECTURES
   Resources
   SBOM.spdx.json
   SOURCE_PROVENANCE.md
+  SPARKLE_PUBLIC_ED_KEY
   Sources
   THIRD_PARTY_NOTICES.md
   Tests
@@ -98,8 +100,10 @@ EXPORT_PATHS=(
   script/extract-release-notes.sh
   script/fixtures
   script/generate-release-record.py
+  script/install-local.sh
   script/lib
   script/live_smoke_stem_separation.sh
+  script/local-build-identity.sh
   script/public-tree-hygiene.sh
   script/release-all.sh
   script/release-env.sh
@@ -110,6 +114,7 @@ EXPORT_PATHS=(
   script/validate-release-artifact.sh
   script/validate-release-uat.sh
   script/validate-source-sale-approval.py
+  script/validate-update-feed.py
   script/verify-installed-release.sh
   script/verify-source-distribution.py
 )

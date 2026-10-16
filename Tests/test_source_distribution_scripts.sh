@@ -166,6 +166,14 @@ restore_approval
 
 echo "== source scanner rejects PII, credentials, and private workflow state =="
 assert_contains "$ROOT/script/export-source-sale.sh" "  RELEASE_ARCHITECTURES"
+# Exported tests and release scripts read these files, so the buyer tree must ship them.
+for exported_dependency in Package.resolved SPARKLE_PUBLIC_ED_KEY script/install-local.sh \
+  script/local-build-identity.sh script/validate-update-feed.py; do
+  grep -Fxq "  $exported_dependency" "$ROOT/script/export-source-sale.sh" || {
+    echo "expected '$exported_dependency' in EXPORT_PATHS" >&2
+    exit 1
+  }
+done
 SCAN="$TMP/scan"
 mkdir -p "$SCAN"
 printf 'safe source\n' >"$SCAN/safe.txt"
