@@ -590,7 +590,9 @@ public actor VaultAutomationScheduler {
         self.failureSink = failureSink
     }
 
-    public func run(candidates: [VaultAutomationCandidate]) async -> [VaultAutomationRunResult] {
+    /// Throws `CancellationError` or `VaultTransferInterruption` when the
+    /// archive is stopped; every other error becomes a `.failed` result.
+    public func run(candidates: [VaultAutomationCandidate]) async throws -> [VaultAutomationRunResult] {
         guard policy.isVaultEnabled, policy.isAutomaticArchivingEnabled else {
             let reason: VaultAutomationPostponement = policy.isVaultEnabled ? .automaticArchivingDisabled : .vaultDisabled
             return candidates.map { .postponed($0.projectID, reason) }
@@ -629,11 +631,16 @@ public actor VaultAutomationScheduler {
                 case .postponed(let reason):
                     results.append(.postponed(candidate.projectID, reason))
                 }
+            } catch is CancellationError {
+                // A stop is not a failure: end the pass and let callers see it.
+                throw CancellationError()
+            } catch let interruption as VaultTransferInterruption {
+                throw interruption
             } catch {
                 let failure = VaultAutomationFailureNotification(
                     projectID: candidate.projectID,
                     stage: "automatic-archive",
-                    message: String(describing: error)
+                    message: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 )
                 await failureSink(failure)
                 results.append(.failed(failure))

@@ -516,7 +516,7 @@ extension LiveProjectVaultRuntime {
             projectedArchiveBytes: capacity?.projectedArchiveBytes,
             trigger: .workflowDone
         )
-        guard let result = await scheduler.run(candidates: [candidate]).first else {
+        guard let result = try await scheduler.run(candidates: [candidate]).first else {
             throw ProjectVaultRuntimeError.unavailable
         }
         switch result {
