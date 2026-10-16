@@ -76,6 +76,25 @@ final class BPMTapperActionsTests: XCTestCase {
         XCTAssertEqual(viewModel.copyConfirmation, "BPM copied")
     }
 
+    func testCopiedHistoryRowBadgeClearsOnTapAndReset() {
+        let viewModel = makeViewModel()
+        let entry = BPMHistoryEntry(
+            bpm: 120.0,
+            rawTappedBPM: 120.0,
+            adjustment: .original,
+            timestamp: Date(timeIntervalSince1970: 20)
+        )
+
+        viewModel.copySavedBPM(entry)
+        XCTAssertEqual(viewModel.copiedHistoryEntryID, entry.id)
+        viewModel.recordTap(at: 0.0)
+        XCTAssertNil(viewModel.copiedHistoryEntryID)
+
+        viewModel.copySavedBPM(entry)
+        viewModel.resetTaps()
+        XCTAssertNil(viewModel.copiedHistoryEntryID)
+    }
+
     func testClearHistoryDoesNotResetCurrentRun() throws {
         let store = FakeHistoryStore(entries: [
             BPMHistoryEntry(

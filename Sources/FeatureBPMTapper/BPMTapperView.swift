@@ -9,7 +9,6 @@ public struct BPMTapperView: View {
     @ObservedObject private var viewModel: BPMTapperViewModel
     @FocusState private var tapSurfaceFocused: Bool
     @State private var clearHistoryConfirmationVisible = false
-    @State private var copiedHistoryEntryID: UUID?
     @State private var tapSurfacePressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -150,7 +149,6 @@ public struct BPMTapperView: View {
                 isEnabled: viewModel.displayedBPM != nil,
                 expands: true
             ) {
-                copiedHistoryEntryID = nil
                 viewModel.saveDisplayedBPM()
             }
 
@@ -161,7 +159,6 @@ public struct BPMTapperView: View {
                 isEnabled: viewModel.displayedBPM != nil,
                 expands: true
             ) {
-                copiedHistoryEntryID = nil
                 viewModel.copyDisplayedBPM()
             }
 
@@ -253,7 +250,6 @@ public struct BPMTapperView: View {
                     role: .destructive,
                     isEnabled: !viewModel.historyEntries.isEmpty
                 ) {
-                    copiedHistoryEntryID = nil
                     clearHistoryConfirmationVisible = true
                 }
             }
@@ -299,10 +295,9 @@ public struct BPMTapperView: View {
                     help: "Copy this saved tempo"
                 ) {
                     viewModel.copySavedBPM(entry)
-                    copiedHistoryEntryID = entry.id
                 }
 
-                if copiedHistoryEntryID == entry.id {
+                if viewModel.copiedHistoryEntryID == entry.id {
                     Text("BPM copied")
                         .font(HubDesignSystem.Typography.bodySmall())
                         .foregroundStyle(HubDesignSystem.Colors.success)
