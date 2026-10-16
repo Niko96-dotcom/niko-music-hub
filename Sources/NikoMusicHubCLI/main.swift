@@ -3,7 +3,7 @@ import NikoMusicCore
 
 @main
 struct NikoMusicHubCLI {
-    static func main() throws {
+    static func main() {
         var args = Array(CommandLine.arguments.dropFirst())
         guard let command = args.first else {
             printUsage()
@@ -11,17 +11,38 @@ struct NikoMusicHubCLI {
         }
         args.removeFirst()
 
-        switch command {
-        case "export-index":
-            try runExportIndex(args: args)
-        case "export-diagnostics":
-            try runExportDiagnostics(args: args)
-        case "--help", "-h", "help":
-            printUsage()
-        default:
-            fputs("unknown command: \(command)\n", stderr)
-            printUsage()
+        // An error that escapes `@main` traps the process ("Error raised at
+        // top level"), so every failure is reported here and ends in exit 1.
+        do {
+            switch command {
+            case "export-index":
+                try runExportIndex(args: args)
+            case "export-diagnostics":
+                try runExportDiagnostics(args: args)
+            case "--help", "-h", "help":
+                printUsage()
+            default:
+                fputs("unknown command: \(command)\n", stderr)
+                printUsage()
+                exit(1)
+            }
+        } catch {
+            fputs("error: \(errorMessage(error))\n", stderr)
             exit(1)
+        }
+    }
+
+    private static func errorMessage(_ error: Error) -> String {
+        switch error {
+        case let error as ArchiveDiagnosticsExportError:
+            switch error {
+            case .destinationInsideArchiveRoot:
+                return "the output location is inside an archive root. Choose a path outside the archive."
+            }
+        case let error as CLIError:
+            return error.description
+        default:
+            return error.localizedDescription
         }
     }
 
