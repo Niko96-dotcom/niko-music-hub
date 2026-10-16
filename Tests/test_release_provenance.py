@@ -758,6 +758,17 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             result = run_cmd(uat_args(uat))
             self.assertEqual(result.returncode, 0, msg=result.stderr)
 
+    def test_uat_rejects_non_object_payload_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            uat = tmp / "uat.json"
+            for bad in ([], "approved", 1, None):
+                uat.write_text(json.dumps(bad) + "\n", encoding="utf-8")
+                result = run_cmd(uat_args(uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"payload={bad!r}")
+                self.assertIn("must be a JSON object", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_approval_rejects_impossible_gate_completed_utc(self) -> None:
         # Gate completed_utc goes through the same shared timestamp check.
         with tempfile.TemporaryDirectory() as raw:

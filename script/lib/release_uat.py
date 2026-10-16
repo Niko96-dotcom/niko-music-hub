@@ -83,6 +83,8 @@ def validate_uat(
     impersonates a human. Schema, exact ten-check, and fail-closed
     (pending/failed reject) semantics are unchanged.
     """
+    if not isinstance(payload, dict):
+        raise SystemExit("release UAT evidence must be a JSON object")
     # schema_version must be exact int 1: type(schema) is int and
     # schema == 1. Rejects "1", True/False (bool is not int), and 1.0
     # (float; 1.0 == 1 in Python, so an equality-only check would pass it).
