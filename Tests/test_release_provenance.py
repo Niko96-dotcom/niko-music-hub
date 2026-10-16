@@ -703,6 +703,33 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("hardened", result.stderr)
 
+    def test_uat_placeholder_check_is_case_insensitive_and_prefix_exact(self) -> None:
+        # Sentinels are TODO, TODO_*, REPLACE_WITH_* in any case; a real
+        # value that merely starts with the letters "TODO" is not a sentinel.
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            uat = tmp / "uat.json"
+            for placeholder in ("todo", "todo_name", "Todo_Executor", "replace_with_name", "Replace_With_Me"):
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=placeholder: payload.__setitem__("approved_by", value))
+                result = run_cmd(uat_args(uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"approved_by={placeholder!r}")
+                self.assertIn("real approved_by", result.stderr)
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=placeholder: payload.__setitem__("machine", value))
+                result = run_cmd(uat_args(uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"machine={placeholder!r}")
+                self.assertIn("tested machine description", result.stderr)
+            for real in ("TODOROV-STUDIO", "Todorov MacBook Pro"):
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=real: payload.__setitem__("machine", value))
+                result = run_cmd(uat_args(uat))
+                self.assertEqual(result.returncode, 0, msg=f"machine={real!r}: {result.stderr}")
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=real: payload.__setitem__("approved_by", value))
+                result = run_cmd(uat_args(uat))
+                self.assertEqual(result.returncode, 0, msg=f"approved_by={real!r}: {result.stderr}")
+
     def test_uat_rejects_trailing_newline_and_impossible_timestamps(self) -> None:
         # approved_at_utc must be a complete, real ISO-8601 UTC timestamp:
         # `$` would accept a trailing newline, and a digit-shape regex alone

@@ -49,16 +49,20 @@ def is_placeholder_or_blank(value: object) -> bool:
     """True when an executor-owned free-text field is still a template value.
 
     AI agent/session identifiers are accepted; TODO, TODO_*, REPLACE_WITH_*,
-    blank, and whitespace-only values are rejected.
+    blank, and whitespace-only values are rejected. The sentinel comparison
+    is case-insensitive (``todo_name`` is still a template value) and keyed
+    on the ``TODO_`` / ``REPLACE_WITH_`` prefixes, so a real name such as
+    ``TODOROV-STUDIO`` is not refused.
     """
     if not isinstance(value, str):
         return True
     stripped = value.strip()
     if not stripped:
         return True
-    if stripped == "TODO" or stripped.startswith("TODO"):
+    upper = stripped.upper()
+    if upper == "TODO" or upper.startswith("TODO_"):
         return True
-    if stripped.startswith("REPLACE_WITH_"):
+    if upper.startswith("REPLACE_WITH_"):
         return True
     return False
 
