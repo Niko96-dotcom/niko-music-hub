@@ -94,4 +94,49 @@ final class ArchiveScanDiagnosticsBuilderTests: XCTestCase {
         XCTAssertEqual(merged.skippedEntries.map(\.label), ["old.txt", "new.txt"])
         XCTAssertEqual(merged.songCount, 2)
     }
+
+    func testMergeIncrementalDropsResolvedEntriesOfRescannedFoldersAndRoots() {
+        let root = URL(fileURLWithPath: "/archive", isDirectory: true)
+        let prior = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            rootPaths: [root.path],
+            songCount: 1,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: ["Could not read root-level project files: /archive"],
+            songWarningSummaries: [],
+            skippedEntries: [
+                SkippedScanEntry(kind: .unreadableChild, label: "Fixed Song", reason: "Could not scan folder: denied"),
+                SkippedScanEntry(kind: .unreadableChild, label: "Still Broken", reason: "Could not scan folder: old"),
+                SkippedScanEntry(kind: .unreadableChild, label: "Untouched", reason: "Could not scan folder: denied"),
+                SkippedScanEntry(
+                    kind: .unreadableChild,
+                    label: "archive",
+                    reason: "Could not read root-level project files: denied"
+                )
+            ]
+        )
+        let built = ArchiveScanDiagnostics(
+            scannedAt: Date(timeIntervalSince1970: 2),
+            rootPaths: [root.path],
+            songCount: 2,
+            songsWithWarningsCount: 0,
+            totalSongWarningCount: 0,
+            globalWarnings: [],
+            songWarningSummaries: [],
+            skippedEntries: [
+                SkippedScanEntry(kind: .unreadableChild, label: "Still Broken", reason: "Could not scan folder: new")
+            ]
+        )
+        let rescanned = ArchiveSongFolderResolver.Resolution(
+            songFolders: [root.appendingPathComponent("Fixed Song"), root.appendingPathComponent("Still Broken")],
+            rootsForRootLevelScan: [root]
+        )
+
+        let merged = ArchiveScanDiagnosticsBuilder.mergeIncremental(prior: prior, built: built, rescanned: rescanned)
+
+        XCTAssertEqual(merged.globalWarnings, [])
+        XCTAssertEqual(merged.skippedEntries.map(\.label), ["Untouched", "Still Broken"])
+        XCTAssertEqual(merged.skippedEntries.last?.reason, "Could not scan folder: new")
+    }
 }

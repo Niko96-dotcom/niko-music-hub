@@ -359,7 +359,11 @@ struct ArchiveCatalogCoordinator {
         let built = buildDiagnostics(result: mergedResult, roots: roots, scannedAt: scannedAt)
         return IncrementalFilesystemApplyResult(
             songs: withMetadata.songs,
-            diagnostics: ArchiveScanDiagnosticsBuilder.mergeIncremental(prior: priorDiagnostics, built: built),
+            diagnostics: ArchiveScanDiagnosticsBuilder.mergeIncremental(
+                prior: priorDiagnostics,
+                built: built,
+                rescanned: incremental.resolution
+            ),
             incrementalSongCount: incremental.result.songs.count,
             firstUpdatedTitle: incremental.result.songs.first?.displayTitle,
             scannedAt: scannedAt,
@@ -372,11 +376,11 @@ struct ArchiveCatalogCoordinator {
         changedPaths: [URL],
         roots: [URL],
         existingSongs: [Song]
-    ) async throws -> (result: ScanResult, affectedSongIDs: Set<String>) {
+    ) async throws -> (result: ScanResult, affectedSongIDs: Set<String>, resolution: ArchiveSongFolderResolver.Resolution) {
         try Task.checkCancellation()
         let resolution = ArchiveSongFolderResolver.resolve(changedPaths: changedPaths, roots: roots)
         guard !resolution.isEmpty else {
-            return (ScanResult(), [])
+            return (ScanResult(), [], resolution)
         }
         let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
         let scanTask = Task.detached(priority: .userInitiated) {
@@ -394,7 +398,7 @@ struct ArchiveCatalogCoordinator {
             resolution: resolution,
             existing: existingSongs
         )
-        return (result, affectedSongIDs)
+        return (result, affectedSongIDs, resolution)
     }
 
     nonisolated static func mergeIncrementalScan(
