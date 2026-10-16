@@ -182,11 +182,26 @@ public struct StemSeparationService: Sendable {
         try outputGuard.validate(outputDirectoryURL)
     }
 
+    /// UTF-8 bytes kept from the title. APFS allows 255 bytes per name, and the job
+    /// folder adds about 85 bytes (" - preset - timestamp - uuid").
+    static let maxTitleBytes = 150
+
     private func sanitizedTitle(_ title: String) -> String {
-        title
+        let cleaned = title
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: "\\", with: "-")
             .trimmingCharacters(in: .whitespaces)
+        guard cleaned.utf8.count > Self.maxTitleBytes else { return cleaned }
+        // Cut at a character boundary so no multibyte character is split.
+        var truncated = ""
+        var byteCount = 0
+        for character in cleaned {
+            let characterBytes = character.utf8.count
+            guard byteCount + characterBytes <= Self.maxTitleBytes else { break }
+            truncated.append(character)
+            byteCount += characterBytes
+        }
+        return truncated.trimmingCharacters(in: .whitespaces)
     }
 
     private func uniqueOutputFolder(

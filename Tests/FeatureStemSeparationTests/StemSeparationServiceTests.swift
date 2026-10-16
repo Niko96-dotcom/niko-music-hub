@@ -106,6 +106,34 @@ struct StemSeparationServiceTests {
     }
 
     @Test
+    func startJob_longMultibyteTitle_keepsFolderAndStemNamesWithinAPFSLimit() async throws {
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let inbox = FakeOutputInboxStore()
+        let (service, runner, _) = makeService(backend: backend, inbox: inbox)
+        // About 237 bytes, like a long yt-dlp file name with a Japanese title and emoji.
+        let title = String(repeating: "夜明けの歌", count: 14) + " 🎶🎶🎶 [dQw4w9WgXcQ]"
+        let request = StemSeparationRequest(
+            inputURL: makeInputFile(), outputRootURL: root, preset: .experimental6, title: title
+        )
+        backend.filesToWrite = StemSeparationPreset.experimental6.expectedStemRoles.map { ($0, "\($0.rawValue).wav") }
+
+        let job = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: job)
+
+        #expect(runner.job(id: job.id)?.state == .completed)
+        let folder = try #require(backend.requests.first?.outputFolderURL)
+        #expect(folder.lastPathComponent.utf8.count <= 255)
+        #expect(folder.lastPathComponent.hasPrefix("夜明けの歌"))
+        #expect(inbox.items.count == 6)
+        #expect(inbox.items.allSatisfy { $0.fileURL.lastPathComponent.hasPrefix("夜明けの歌") })
+        #expect(inbox.items.allSatisfy { $0.fileURL.lastPathComponent.utf8.count <= 255 })
+    }
+
+    @Test
     func startJob_failedBackend_doesNotAddInboxItems() async throws {
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: "mock failure")
