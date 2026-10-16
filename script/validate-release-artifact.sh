@@ -189,7 +189,7 @@ ACTUAL_ARCHITECTURES="$(lipo -archs "$BINARY" | tr ' ' '\n' | sed '/^[[:space:]]
 if [[ "$MODE" == "public" ]]; then
   codesign --verify --deep --strict --verbose=2 "$APP"
   SIGN_OUTPUT="$(codesign -dv --verbose=4 "$APP" 2>&1 || true)"
-  if ! grep -Fq "Authority=$SIGNING_IDENTITY" <<<"$SIGN_OUTPUT"; then
+  if ! grep -Fxq "Authority=$SIGNING_IDENTITY" <<<"$SIGN_OUTPUT"; then
     echo "public artifact signing identity does not match manifest" >&2
     exit 1
   fi

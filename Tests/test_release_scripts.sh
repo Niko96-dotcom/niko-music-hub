@@ -294,6 +294,7 @@ assert_contains "$ROOT/script/release-all.sh" '--architectures "$RELEASE_ARCHITE
 assert_contains "$ROOT/script/release-all.sh" '--minimum-macos "$MIN_MACOS_VERSION"'
 assert_contains "$ROOT/script/release-all.sh" '--artifact-size "$ARTIFACT_SIZE"'
 assert_contains "$ROOT/script/validate-release-artifact.sh" 'lipo -archs "$BINARY"'
+assert_contains "$ROOT/script/validate-release-artifact.sh" 'grep -Fxq "Authority=$SIGNING_IDENTITY"'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'NMH_BUILD_CONFIGURATION="${NMH_BUILD_CONFIGURATION:-debug}"'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'swift build -c "$NMH_BUILD_CONFIGURATION" --product "$NMH_APP_NAME" --explicit-target-dependency-import-check error'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'nmh_running_dist_app_pids'
