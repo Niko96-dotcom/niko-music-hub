@@ -449,6 +449,11 @@ run_candidate_install_smoke() {
   log "install smoke ($label): exact candidate installation verified"
 }
 
+# Bash reads a script one command at a time, so an in-place edit of this file
+# during a run would change the top-level commands still to come. Wrapping the
+# run in main() makes bash parse all of it before any of it executes, so the
+# live-vs-pinned cmp guard below covers every command that runs after it.
+main() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --local-only) MODE="local-only"; shift ;;
@@ -1118,3 +1123,6 @@ $([[ "$INSTALL_SMOKE" != true ]] && echo "- Exact candidate installation smoke w
 REPORT
 
 echo "release finished: $REPORT"
+}
+
+main "$@"; exit
