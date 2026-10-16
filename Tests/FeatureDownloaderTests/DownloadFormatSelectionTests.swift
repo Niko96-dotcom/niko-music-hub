@@ -42,8 +42,13 @@ final class DownloadFormatSelectionTests: XCTestCase {
         )
         XCTAssertEqual(
             args.formatSelector,
-            "best[height<=720][ext=mp4]/best[height<=720]/best"
+            "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba/b[height<=720]"
         )
+        XCTAssertEqual(args.extraArguments, ["--merge-output-format", "mp4"])
+        // No alternative may pick a format above 720p.
+        for alternative in args.formatSelector.split(separator: "/") {
+            XCTAssertTrue(alternative.contains("[height<=720]"), "unbounded alternative: \(alternative)")
+        }
     }
 
     func testSummaryLabelReflectsSelection() {
