@@ -167,7 +167,36 @@ final class ArchiveBrowseProjectionTests: XCTestCase {
         XCTAssertTrue(body.contains("SecretTakes"))
         XCTAssertTrue(body.contains("Permission denied"))
         XCTAssertTrue(body.contains("Skipped folders (1)"))
-        XCTAssertTrue(body.contains("Settings → Archive"))
+        XCTAssertFalse(body.contains("Settings → Archive"), "Exclusions cannot fix a permission error")
+    }
+
+    func testSkippedSearchCopySeparatesEntriesAndAdvisesOnlyForExclusions() {
+        func match(_ kind: SkippedScanEntryKind, _ label: String, _ reason: String) -> SkippedEntrySearchResult {
+            SkippedEntrySearchResult(
+                entry: SkippedScanEntry(kind: kind, label: label, reason: reason),
+                score: 1,
+                details: []
+            )
+        }
+
+        let excluded = ArchiveSkippedSearchCopy.emptyStateBody(matches: [
+            match(.unreadableChild, "A", "Excluded by scan settings"),
+            match(.unreadableChild, "B", "Excluded by scan settings"),
+        ])
+        XCTAssertEqual(
+            excluded,
+            "No songs match. Skipped folders (2): A — Excluded by scan settings; B — Excluded by scan settings."
+                + " Change scan exclusions in Settings → Archive to include excluded folders."
+        )
+
+        let mixed = ArchiveSkippedSearchCopy.emptyStateBody(matches: [
+            match(.nonFolderAtRoot, "LOOSE_FILE.txt", SkippedScanEntry.standardNonFolderAtRootReason),
+            match(.unreadableChild, "Locked", "Could not read entry: You don’t have permission to view it."),
+        ])
+        XCTAssertTrue(mixed.contains("Skipped items (2)"))
+        XCTAssertTrue(mixed.contains("view it."))
+        XCTAssertFalse(mixed.contains(".."))
+        XCTAssertFalse(mixed.contains("Settings → Archive"))
     }
 
     // MARK: - Single-shelf-pass parity (scoped index vs standalone fallback)
