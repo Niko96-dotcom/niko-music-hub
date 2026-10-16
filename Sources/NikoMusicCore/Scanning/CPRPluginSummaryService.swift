@@ -20,10 +20,13 @@ public enum CPRPluginSummaryService {
     private static let boundedReadChunkBytes = 256 * 1024
     private static let cacheLock = NSLock()
     private nonisolated(unsafe) static var cache: [String: CacheEntry] = [:]
+    private nonisolated(unsafe) static var accessCounter: UInt64 = 0
 
     private struct CacheEntry: Sendable {
         let modifiedAt: Date
         let summary: CPRPluginSummary
+        /// Monotonic access stamp; eviction removes the least recently used entry.
+        var lastAccess: UInt64
     }
 
     public static func loadPlugins(
@@ -38,6 +41,8 @@ public enum CPRPluginSummaryService {
 
         if let cachedSummary = cacheLock.withLock({ () -> CPRPluginSummary? in
             guard let cached = cache[cacheKey], cached.modifiedAt == modifiedAt else { return nil }
+            accessCounter &+= 1
+            cache[cacheKey]?.lastAccess = accessCounter
             return cached.summary
         }) {
             return cachedSummary
@@ -67,9 +72,10 @@ public enum CPRPluginSummaryService {
         guard !Task.isCancelled else { return .empty }
 
         cacheLock.withLock {
-            cache[cacheKey] = CacheEntry(modifiedAt: modifiedAt, summary: summary)
+            accessCounter &+= 1
+            cache[cacheKey] = CacheEntry(modifiedAt: modifiedAt, summary: summary, lastAccess: accessCounter)
             if cache.count > maxCacheEntries,
-               let keyToRemove = cache.min(by: { $0.value.modifiedAt < $1.value.modifiedAt })?.key {
+               let keyToRemove = cache.min(by: { $0.value.lastAccess < $1.value.lastAccess })?.key {
                 cache.removeValue(forKey: keyToRemove)
             }
         }

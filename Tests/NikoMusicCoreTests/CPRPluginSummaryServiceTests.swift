@@ -89,6 +89,50 @@ final class CPRPluginSummaryServiceTests: XCTestCase {
         XCTAssertEqual(uncanceledSummary.pluginNames, ["Marker Synth"])
         XCTAssertEqual(uncanceledSummary.source, "marker")
     }
+
+    func testFullCacheKeepsJustInsertedOldProject() async throws {
+        CPRPluginSummaryService.clearCache()
+        defer { CPRPluginSummaryService.clearCache() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plugins-lru-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        for index in 0..<128 {
+            let file = directory.appendingPathComponent("recent-\(index).cpr")
+            FileManager.default.createFile(atPath: file.path, contents: Data("fixture".utf8))
+            _ = await CPRPluginSummaryService.loadPlugins(cprURL: file, subprocessRunner: { _ in ["Synth"] })
+        }
+
+        let oldFile = directory.appendingPathComponent("old.cpr")
+        FileManager.default.createFile(atPath: oldFile.path, contents: Data("fixture".utf8))
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 946_684_800)],
+            ofItemAtPath: oldFile.path
+        )
+        let calls = PluginSubprocessCallCounter()
+        _ = await CPRPluginSummaryService.loadPlugins(
+            cprURL: oldFile,
+            subprocessRunner: { _ in await calls.record() }
+        )
+        let summary = await CPRPluginSummaryService.loadPlugins(
+            cprURL: oldFile,
+            subprocessRunner: { _ in await calls.record() }
+        )
+
+        let callCount = await calls.count
+        XCTAssertEqual(callCount, 1)
+        XCTAssertEqual(summary.pluginNames, ["Old Synth"])
+    }
+}
+
+private actor PluginSubprocessCallCounter {
+    private(set) var count = 0
+
+    func record() -> [String]? {
+        count += 1
+        return ["Old Synth"]
+    }
 }
 
 private actor PluginSubprocessProbe {
