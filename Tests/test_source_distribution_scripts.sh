@@ -183,6 +183,29 @@ for exported_dependency in Package.resolved SPARKLE_PUBLIC_ED_KEY script/install
     exit 1
   }
 done
+# Every repo script that an exported test names must be exported too, or the buyer's CI fails.
+/usr/bin/python3 - "$ROOT" <<'PY'
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+text = (root / "script/export-source-sale.sh").read_text(encoding="utf-8")
+block = re.search(r"^EXPORT_PATHS=\(\n(.*?)^\)", text, re.S | re.M).group(1)
+exported = [line.strip() for line in block.splitlines() if line.strip()]
+# Named only in a comment; no exported test reads it.
+comment_only = {"script/performance/vault-recovery.swift"}
+def covered(rel):
+    return any(rel == path or rel.startswith(path + "/") for path in exported)
+missing = set()
+for test in (root / "Tests").rglob("*"):
+    if not test.is_file():
+        continue
+    body = test.read_text(encoding="utf-8", errors="replace")
+    for rel in re.findall(r"script/[A-Za-z0-9_./-]*[A-Za-z0-9_]", body):
+        if rel not in comment_only and (root / rel).exists() and not covered(rel):
+            missing.add(f"{rel} (named in {test.relative_to(root)})")
+if missing:
+    print("exported tests need files that EXPORT_PATHS leaves out:", *sorted(missing), sep="\n  ", file=sys.stderr)
+    sys.exit(1)
+PY
 SCAN="$TMP/scan"
 mkdir -p "$SCAN"
 printf 'safe source\n' >"$SCAN/safe.txt"

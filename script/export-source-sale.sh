@@ -108,14 +108,17 @@ EXPORT_PATHS=(
   script/lib
   script/live_smoke_stem_separation.sh
   script/local-build-identity.sh
+  script/prove-bookmark-relaunch.sh
   script/public-tree-hygiene.sh
   script/release-all.sh
   script/release-env.sh
   script/release-preflight.sh
+  script/release-version-allowlist.txt
   script/release-version-verify.sh
   script/ui_probe.swift
   script/validate-release-approval.sh
   script/validate-release-artifact.sh
+  script/validate-release-metadata.py
   script/validate-release-uat.sh
   script/validate-source-sale-approval.py
   script/validate-update-feed.py
