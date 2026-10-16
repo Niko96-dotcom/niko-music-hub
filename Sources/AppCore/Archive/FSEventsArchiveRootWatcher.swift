@@ -23,6 +23,14 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
             | kFSEventStreamEventFlagUnmount
     )
 
+    /// `WatchRoot` is required for FSEvents to send `RootChanged` when a
+    /// watched root (or one of its parents) is renamed, moved or deleted.
+    static let streamCreateFlags = FSEventStreamCreateFlags(
+        kFSEventStreamCreateFlagUseCFTypes
+            | kFSEventStreamCreateFlagFileEvents
+            | kFSEventStreamCreateFlagWatchRoot
+    )
+
     private final class DeliveryToken: @unchecked Sendable {
         private let lock = NSLock()
         private var isActive = true
@@ -117,10 +125,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
                 release: nil,
                 copyDescription: nil
             )
-            let flags = FSEventStreamCreateFlags(
-                kFSEventStreamCreateFlagUseCFTypes
-                    | kFSEventStreamCreateFlagFileEvents
-            )
+            let flags = Self.streamCreateFlags
             guard let createdStream = FSEventStreamCreate(
                 nil,
                 { _, info, numEvents, eventPaths, eventFlags, _ in

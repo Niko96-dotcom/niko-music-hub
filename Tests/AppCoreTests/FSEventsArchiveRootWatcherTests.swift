@@ -247,6 +247,11 @@ final class FSEventsArchiveRootWatcherTests: XCTestCase {
         }
     }
 
+    func testStreamWatchesRootSoRootChangedEventsArrive() {
+        let watchRoot = FSEventStreamCreateFlags(kFSEventStreamCreateFlagWatchRoot)
+        XCTAssertEqual(FSEventsArchiveRootWatcher.streamCreateFlags & watchRoot, watchRoot)
+    }
+
     func testSongFolderPathUsesDeepestRootAndKeepsItsSpelling() {
         let prefixes = ["/var/a", "/private/var/a", "/var/a/nested"]
         XCTAssertEqual(
