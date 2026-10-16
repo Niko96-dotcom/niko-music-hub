@@ -154,6 +154,25 @@ final class TempoEstimatorTests: XCTestCase {
         XCTAssertEqual(finalEstimate.status, .stableEstimate)
     }
 
+    func testStrayTapInsideOneBeatCountsAsOneBeat() throws {
+        var estimator = TempoEstimator()
+        var timestamp: TimeInterval = 0.0
+        _ = estimator.tap(at: timestamp)
+        for _ in 0..<4 {
+            timestamp += 1.0
+            _ = estimator.tap(at: timestamp)
+        }
+
+        _ = estimator.tap(at: timestamp + 0.4)
+        timestamp += 1.0
+        let merged = estimator.tap(at: timestamp)
+
+        XCTAssertTrue(merged.intervalAccepted)
+        XCTAssertEqual(merged.tapCount, 6)
+        XCTAssertEqual(merged.acceptedIntervalCount, 5)
+        XCTAssertEqual(try XCTUnwrap(merged.bpm), 60.0, accuracy: 0.001)
+    }
+
     func testBackwardTimestampDoesNotRewindAnchorAndNextTapRecovers() throws {
         var estimator = TempoEstimator()
         _ = estimator.tap(at: 0.0)
