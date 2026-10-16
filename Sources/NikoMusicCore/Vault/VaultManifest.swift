@@ -314,7 +314,9 @@ extension VaultManifest {
     /// extended attributes, the root folder's included. Allocation is left out:
     /// APFS trims a file's preallocated blocks the first time the file is
     /// cloned, so copying the source can change its allocated size without
-    /// changing a byte.
+    /// changing a byte. Directory modification times are left out too: Finder
+    /// writing an ignored `.DS_Store` touches them without changing any
+    /// archived content.
     func hasSameObservedContent(as other: VaultManifest) -> Bool {
         guard entries.count == other.entries.count,
               rootExtendedAttributeBytes == other.rootExtendedAttributeBytes else { return false }
@@ -322,7 +324,7 @@ extension VaultManifest {
             before.relativePath == after.relativePath
                 && before.type == after.type
                 && before.byteCount == after.byteCount
-                && before.modifiedAt == after.modifiedAt
+                && (before.type == .directory || before.modifiedAt == after.modifiedAt)
                 && before.sha256 == after.sha256
                 && before.extendedAttributeBytes == after.extendedAttributeBytes
         }
