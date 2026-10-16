@@ -48,7 +48,12 @@ extension ArchiveBrowserViewModel {
             collaborators = try collaboratorStore.loadAll()
         } catch {
             diagnostics.log(.error, "Collaborator load failed: \(error)")
-            collaborators = []
+            // Keep the last loaded list so names stay resolvable, and surface
+            // the failure: a silent empty address book invites re-adding a
+            // name under a new ID that songs do not reference.
+            recordPersistenceWarning(
+                "Collaborators could not be loaded: \(error.localizedDescription). Collaborator names may be missing until the address book can be read again."
+            )
         }
     }
 

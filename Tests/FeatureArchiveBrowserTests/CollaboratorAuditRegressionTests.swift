@@ -295,6 +295,23 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         XCTAssertTrue(markerExists(folder: folder))
     }
 
+    func testCollaboratorLoadFailureKeepsListAndSurfacesWarning() throws {
+        let store = InMemoryCollaboratorStore()
+        let viewModel = makeViewModel(collaboratorStore: store)
+        let jamie = Collaborator(displayName: "Jamie")
+        try store.upsert(jamie)
+        viewModel.loadCollaborators()
+        XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
+        XCTAssertNil(viewModel.persistenceWarningMessage)
+
+        store.failLoad = true
+        viewModel.loadCollaborators()
+
+        XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
+        let warning = try XCTUnwrap(viewModel.persistenceWarningMessage)
+        XCTAssertTrue(warning.contains("Collaborators could not be loaded"))
+    }
+
     func testConfirmRemoveRetainsRowOnRepeatedIdenticalPersistWarning() throws {
         let (store, dbURL) = try makeCollaboratorStore()
         defer { try? FileManager.default.removeItem(at: dbURL) }
@@ -849,9 +866,13 @@ private final class InMemoryCollaboratorStore: CollaboratorStoring, @unchecked S
     private let lock = NSLock()
     private var items: [String: Collaborator] = [:]
     var failDelete = false
+    var failLoad = false
 
     func loadAll() throws -> [Collaborator] {
-        lock.withLock { Array(items.values) }
+        try lock.withLock {
+            if failLoad { throw AuditRegressionPersistenceError.forced }
+            return Array(items.values)
+        }
     }
 
     func upsert(_ collaborator: Collaborator) throws {
