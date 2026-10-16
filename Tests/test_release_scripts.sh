@@ -390,6 +390,9 @@ assert_contains "$ROOT/script/release-all.sh" '"$ROOT/script/release-preflight.s
 assert_not_contains "$ROOT/script/release-all.sh" '--root "$INVOKING_ROOT"'
 assert_contains "$ROOT/script/release-all.sh" 'if [[ "${NMH_RELEASE_TEST_MODE:-}" == "1" ]]; then'
 
+echo "== release log in a subdirectory survives the release dir wipe =="
+assert_contains "$ROOT/script/release-all.sh" 'mkdir -p "$(dirname "$LOG_FILE")"'
+
 echo "== explicit local-only mode does not publish =="
 assert_fail local-publish "$ROOT/script/release-all.sh" --local-only --publish --skip-tests
 assert_contains "$TMP/local-publish.err" "local-only release cannot publish"

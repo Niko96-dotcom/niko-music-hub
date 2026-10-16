@@ -778,6 +778,9 @@ if [[ "$MODE" == "public" ]]; then
   fi
 fi
 LOG_FILE="${LOG_FILE:-$RELEASE_DIR/release.log}"
+# NMH_RELEASE_LOG may name a subdirectory of RELEASE_DIR, which the wipe above
+# removed along with everything else.
+mkdir -p "$(dirname "$LOG_FILE")"
 : >"$LOG_FILE"
 
 log "release identity"
