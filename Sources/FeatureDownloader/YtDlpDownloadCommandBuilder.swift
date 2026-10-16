@@ -37,6 +37,10 @@ enum YtDlpDownloadCommandBuilder {
             "--progress-template", progressTemplate,
             "--progress-template", postProcessTemplate,
             "--print", filePrintMarker,
+            // `--print` turns quiet mode on and hides the `[download] … has
+            // already been downloaded` and Destination lines that carry
+            // output provenance; keep them.
+            "--no-quiet",
             "-P", "home:\(request.outputDirectory.path)",
             "-P", "temp:\(partialDirectory.path)",
             "-o", request.outputTemplate,
