@@ -1037,12 +1037,32 @@ final class AudioConverterViewModelTests: XCTestCase {
             "AudioConverterCopy.stopAfterThisFile",
             "viewModel.presetSummaryText",
             "AudioConverterCopy.ready",
-            "Verified WAV ready",
+            "AudioConverterCopy.verified",
             "Choose FFmpeg",
             "Reveal in Finder"
         ].forEach {
             XCTAssertTrue(source.contains($0), "Missing copy: \($0)")
         }
+    }
+
+    func testAudioConverterViewShowsRowStatusForVerifiedAndSkippedRows() throws {
+        let source = try String(
+            contentsOfFile: "Sources/FeatureAudioConverter/AudioConverterView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(
+            source.contains("return \"Skipped\""),
+            "A canceled row must show the row's own status text (\"Canceled\"), not a fixed \"Skipped\""
+        )
+        XCTAssertFalse(
+            source.contains("return \"Verified WAV ready\""),
+            "A verified row with a handoff warning must not show a plain \"Verified WAV ready\""
+        )
+        XCTAssertTrue(
+            source.contains("AudioConverterCopy.verifiedWithHandoffWarning"),
+            "The row must show the handoff-warning copy when hasHandoffWarning is set"
+        )
     }
 
     func testAudioConverterViewContainsEditablePresetControls() throws {
