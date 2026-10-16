@@ -100,6 +100,9 @@ if rg -n '/' "$SHA_FILE" >/dev/null; then
   echo "checksum file must contain artifact basenames only: $SHA_FILE" >&2
   exit 1
 fi
+[[ "$(awk 'END {print NR}' "$SHA_FILE")" == "1" ]] || { echo "checksum file must contain exactly one line: $SHA_FILE" >&2; exit 1; }
+SHA_FILE_NAME="$(awk '{name = $2; sub(/^\*/, "", name); print name}' "$SHA_FILE")"
+[[ "$SHA_FILE_NAME" == "$ARTIFACT_BASENAME" ]] || { echo "checksum file names '$SHA_FILE_NAME', not the artifact $ARTIFACT_BASENAME" >&2; exit 1; }
 (cd "$ARTIFACT_DIR" && shasum -a 256 -c "$(basename "$SHA_FILE")")
 ACTUAL_SHA="$(awk '{print $1}' "$SHA_FILE")"
 [[ "$(manifest_value artifact_sha256)" == "$ACTUAL_SHA" ]] || { echo "manifest artifact_sha256 mismatch" >&2; exit 1; }
