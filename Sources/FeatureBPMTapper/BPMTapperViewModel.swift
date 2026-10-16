@@ -152,6 +152,12 @@ public final class BPMTapperViewModel: ObservableObject {
             hasCorruptHistory = true
             errorText = Self.corruptHistoryMessage
             saveConfirmation = nil
+        } catch BPMHistoryStoreError.corruptBackupFailed {
+            // The malformed bytes stay live, so keep the corrupt-history copy
+            // that matches the "Unreadable" card and its Clear action.
+            hasCorruptHistory = true
+            errorText = Self.corruptHistoryMessage
+            saveConfirmation = nil
         } catch {
             errorText = Self.saveFailureMessage
             saveConfirmation = nil

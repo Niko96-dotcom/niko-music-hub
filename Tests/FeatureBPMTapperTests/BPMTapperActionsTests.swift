@@ -272,6 +272,21 @@ final class BPMTapperActionsTests: XCTestCase {
         XCTAssertEqual(viewModel.tapCount, 2)
     }
 
+    func testSaveWithFailedCorruptBackupKeepsCorruptHistoryMessage() {
+        let viewModel = BPMTapperViewModel(
+            historyStore: CorruptBackupFailingHistoryStore(),
+            clipboard: FakeClipboard()
+        )
+        tap120BPM(on: viewModel)
+        XCTAssertThrowsError(try viewModel.loadHistory())
+
+        viewModel.saveDisplayedBPM()
+
+        XCTAssertTrue(viewModel.hasCorruptHistory)
+        XCTAssertEqual(viewModel.errorText, BPMTapperViewModel.corruptHistoryMessage)
+        XCTAssertNil(viewModel.saveConfirmation)
+    }
+
     private func makeViewModel(
         store: FakeHistoryStore = FakeHistoryStore(),
         clipboard: FakeClipboard = FakeClipboard()
@@ -314,6 +329,24 @@ private final class FakeClipboard: BPMClipboardWriting, @unchecked Sendable {
 }
 
 private struct FlakyHistoryStoreError: Error {}
+
+/// Unreadable history whose quarantine backup cannot be verified, so every
+/// write leaves the malformed bytes live.
+private final class CorruptBackupFailingHistoryStore: BPMHistoryStore, @unchecked Sendable {
+    func listEntries() throws -> [BPMHistoryEntry] {
+        throw DecodingError.dataCorrupted(
+            DecodingError.Context(codingPath: [], debugDescription: "corrupt")
+        )
+    }
+
+    func addEntry(_ entry: BPMHistoryEntry) throws {
+        throw BPMHistoryStoreError.corruptBackupFailed
+    }
+
+    func clearEntries() throws {
+        throw BPMHistoryStoreError.corruptBackupFailed
+    }
+}
 
 /// Isolated `UserDefaults` preference store pre-seeded with invalid BPM
 /// history bytes, so view-model recovery is exercised end to end.
