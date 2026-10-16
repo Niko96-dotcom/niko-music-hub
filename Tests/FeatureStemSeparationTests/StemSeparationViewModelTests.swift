@@ -429,6 +429,13 @@ struct StemSeparationViewModelTests {
         }
         #expect(vm.helperNeedsSetup == true)
         #expect(vm.errorMessage == "demucs-mlx could not start: boom line1")
+
+        let card = StemSeparationView.helperMissingCard(detail: vm.errorMessage)
+        #expect(card.label == StemSeparationHelperCopy.unusableLabel)
+        #expect(card.body == "demucs-mlx could not start: boom line1")
+        let missingCard = StemSeparationView.helperMissingCard(detail: StemSeparationHelperCopy.missingBody)
+        #expect(missingCard.label == StemSeparationHelperCopy.missingLabel)
+        #expect(missingCard.body == StemSeparationHelperCopy.missingBody)
     }
 
     @Test
