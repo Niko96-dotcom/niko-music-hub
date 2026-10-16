@@ -1016,6 +1016,39 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertFalse(paused.statusLabel.contains("Ready to free space"))
     }
 
+    func testKeepLocalOffRemovesPinsStoredUnderEveryKey() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let runtime = try fixture.runtime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        let original = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
+        viewModel.archiveInProjectVault(original, trigger: .backupCopy)
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        await viewModel.refreshProjectVaultSnapshots()
+        let readySong = try XCTUnwrap(viewModel.songs.first { $0.id == original.id })
+        let snapshot = try XCTUnwrap(viewModel.projectVaultSnapshot(for: readySong))
+        let folder = readySong.folderPath.standardizedFileURL
+        // A restore pins the project ID and the folder paths, not the key the toggle writes.
+        try fixture.settingsStore.updateSettings {
+            $0.vault.keepLocalProjectIDs.formUnion([
+                snapshot.record.id.description,
+                readySong.id,
+                folder.path,
+                folder.resolvingSymlinksInPath().path,
+            ])
+        }
+        viewModel.refreshProjectVaultPresentationContext()
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.isKeepLocal, true)
+
+        viewModel.setProjectKeepLocal(false, for: readySong)
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs, [])
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.isKeepLocal, false)
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
+    }
+
     func testPersistedFreeSpaceActionInvokesFreshCaptureNotStaleApproval() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }

@@ -391,6 +391,26 @@ final class ArchiveVaultObservation: ObservableObject {
         return !context.keepLocalProjectIDs.isDisjoint(with: keys)
     }
 
+    /// Every settings key under which Keep Local can match this song: the
+    /// catalog project ID, the song ID, the song folder and the transfer
+    /// source in raw, standardized, resolved, and canonical form. Turning
+    /// Keep Local off removes all of them, so no leftover key keeps a pin.
+    static func keepLocalKeys(snapshot: ProjectVaultRuntimeSnapshot?, song: Song) -> Set<String> {
+        var keys: Set<String> = [song.id]
+        var folders: [URL] = [song.folderPath]
+        if let snapshot {
+            keys.insert(snapshot.record.id.description)
+            if let sourceURL = snapshot.transfer?.sourceURL { folders.append(sourceURL) }
+        }
+        for folder in folders {
+            keys.insert(folder.path)
+            keys.insert(folder.standardizedFileURL.path)
+            keys.insert(folder.standardizedFileURL.resolvingSymlinksInPath().path)
+            keys.insert(vaultCanonicalPath(folder))
+        }
+        return keys
+    }
+
     /// Keep Local detection for the automatic Done path, using the same
     /// identity/path keys as the snapshot and presentation logic. Every
     /// source is OR-ed; a settings-only check never clears a runtime pin.
