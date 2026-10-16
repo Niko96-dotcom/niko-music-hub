@@ -509,6 +509,8 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         switch notice {
         case let .subfoldersIgnored(_, count):
             return "\(CountCopy.count(count, "subfolder")) ignored"
+        case let .unreadableItemsSkipped(count):
+            return "\(CountCopy.count(count, "unreadable item")) skipped"
         }
     }
 
