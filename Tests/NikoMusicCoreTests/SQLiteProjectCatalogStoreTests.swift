@@ -33,6 +33,27 @@ final class SQLiteProjectCatalogStoreTests: XCTestCase {
         XCTAssertTrue(try metadataStore.statusHistory(forSongID: legacyID).isEmpty)
     }
 
+    func testLegacyRepairBackupsFollowMetadataMigration() throws {
+        let databaseURL = temporaryDatabaseURL()
+        defer { removeDatabase(at: databaseURL) }
+        let database = try SQLiteArchiveDatabase(databaseURL: databaseURL)
+        let metadataStore = try SQLiteSongUserMetadataStore(database: database)
+        let catalogStore = try SQLiteProjectCatalogStore(database: database)
+        let projectID = ProjectID(rawValue: UUID(uuidString: "abababab-abab-abab-abab-abababababab")!)
+        let legacyID = "root://active-root/Broken Sky"
+        try metadataStore.upsert(SongUserMetadata(songID: legacyID, virtualTitle: "Broken Sky", aliases: ["bs"]))
+        try database.withConnection { db in
+            XCTAssertEqual(sqlite3_exec(db, "UPDATE song_metadata SET aliases_json = '{not-json}';", nil, nil, nil), SQLITE_OK)
+        }
+        XCTAssertNotNil(try metadataStore.repairCorruptRow(songID: legacyID))
+        XCTAssertEqual(try metadataStore.repairBackups(forSongID: legacyID).count, 1)
+
+        try catalogStore.apply(reconciliation(projectID: projectID, legacyID: legacyID, title: "Broken Sky"))
+
+        XCTAssertEqual(try metadataStore.repairBackups(forSongID: projectID.description).count, 1)
+        XCTAssertTrue(try metadataStore.repairBackups(forSongID: legacyID).isEmpty)
+    }
+
     func testMetadataCollisionRollsBackCatalogAndMetadataMigration() throws {
         let databaseURL = temporaryDatabaseURL()
         defer { removeDatabase(at: databaseURL) }

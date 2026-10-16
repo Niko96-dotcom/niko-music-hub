@@ -165,6 +165,9 @@ public struct SQLiteProjectCatalogStore: ActiveProjectLocationPersisting, @unche
             if try tableExists("song_status_history", db: db) {
                 try updateKey(table: "song_status_history", key: "song_id", from: legacyID, to: projectID.description, db: db)
             }
+            if try tableExists("song_metadata_repair_backup", db: db) {
+                try updateKey(table: "song_metadata_repair_backup", key: "song_id", from: legacyID, to: projectID.description, db: db)
+            }
         }
     }
 
