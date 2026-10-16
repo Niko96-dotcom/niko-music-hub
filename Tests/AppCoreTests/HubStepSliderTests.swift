@@ -13,4 +13,10 @@ final class HubStepSliderTests: XCTestCase {
         XCTAssertEqual(HubStepSlider<Int>.step(at: 1.4, in: [5, 10, 0]), 10)
         XCTAssertEqual(HubStepSlider<Int>.step(at: 9, in: [5, 10, 0]), 0)
     }
+
+    func testSelectionOutsideStepsSnapsToTheStepUnderTheThumb() {
+        XCTAssertEqual(HubStepSlider<Int>.snappedSelection(7, in: [5, 10, 0]), 5)
+        XCTAssertNil(HubStepSlider<Int>.snappedSelection(0, in: [5, 10, 0]))
+        XCTAssertNil(HubStepSlider<Int>.snappedSelection(7, in: []))
+    }
 }
