@@ -23,6 +23,26 @@ final class ArchiveUserFlowTests: XCTestCase {
         XCTAssertTrue(run.isValid, "\(evidence)")
     }
 
+    func testHarnessRuntimeForcesDryRunOpenWhenEnvironmentDoesNotSetIt() throws {
+        let previous = ProcessInfo.processInfo.environment["NIKO_MUSIC_HUB_DRY_RUN_OPEN"]
+        unsetenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN")
+        defer {
+            if let previous {
+                setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", previous, 1)
+            } else {
+                unsetenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN")
+            }
+        }
+        XCTAssertFalse(MusicHubRuntimeEnvironment.current.dryRunOpen)
+
+        let fixtureRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-harness-runtime-\(UUID().uuidString)", isDirectory: true)
+        let runtime = ArchiveUserFlowSmoke.harnessRuntime(fixtureRoot: fixtureRoot)
+
+        XCTAssertTrue(runtime.dryRunOpen, "smoke harness must never open the fixture CPR with the real workspace opener")
+        XCTAssertEqual(runtime.fixtureRootURL?.path, fixtureRoot.path)
+    }
+
     func testFixtureUserFlowScanSearchOpenDryRunLeavesArchiveUnchanged() async throws {
         try CubaseFixtures.ensureGenerated()
         setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)

@@ -8,6 +8,8 @@ extension ArchiveUserFlowSmoke {
     static func harnessRuntime(fixtureRoot: URL) -> MusicHubRuntimeEnvironment {
         var environment = ProcessInfo.processInfo.environment
         environment[MusicHubRuntimeEnvironment.fixtureRootKey] = fixtureRoot.path
+        // The smoke flow opens the fixture CPR; never hand it to the real workspace opener.
+        environment[MusicHubRuntimeEnvironment.dryRunOpenKey] = "1"
         return MusicHubRuntimeEnvironment(environment: environment)
     }
 
