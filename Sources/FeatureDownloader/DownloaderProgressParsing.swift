@@ -9,6 +9,12 @@ enum DownloaderProgressParsing {
         if trimmed.hasPrefix(nikoProgressPrefix) {
             let valuePart = trimmed.dropFirst(nikoProgressPrefix.count)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            if valuePart.hasPrefix("{") {
+                // `%(progress)s` prints the whole dict; `filename` and
+                // `tmpfilename` come before `_percent_str` and can hold "N%".
+                guard let percentText = lastPercentString(in: valuePart) else { return nil }
+                return percentageValue(from: percentText)
+            }
             return percentageValue(from: String(valuePart))
         }
 
@@ -20,6 +26,16 @@ enum DownloaderProgressParsing {
     static func parseNormalizedProgress(from line: String) -> Double? {
         guard let percentage = parseProgressPercentage(from: line) else { return nil }
         return min(max(percentage / 100.0, 0), 1)
+    }
+
+    private static func lastPercentString(in dict: String) -> String? {
+        let pattern = "'_percent_str': '([^']*)'"
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.matches(in: dict, range: NSRange(dict.startIndex..., in: dict)).last,
+              let range = Range(match.range(at: 1), in: dict) else {
+            return nil
+        }
+        return String(dict[range])
     }
 
     private static func percentageValue(from text: String) -> Double? {

@@ -8,6 +8,17 @@ final class DownloadProgressParsingTests: XCTestCase {
         XCTAssertEqual(YtDlpDownloader.parseProgressPercentage(from: "NIKO_PROGRESS: 10.0%"), 10.0)
     }
 
+    func testProgressDictIgnoresPercentInFilename() {
+        let line = "NIKO_PROGRESS:{'status': 'downloading', 'downloaded_bytes': 1024, "
+            + "'tmpfilename': '/tmp/Top 40% Hits.webm.part', 'filename': '/tmp/Top 40% Hits.webm', "
+            + "'_percent_str': ' 12.5%'}"
+        XCTAssertEqual(YtDlpDownloader.parseProgressPercentage(from: line), 12.5)
+
+        let unknown = "NIKO_PROGRESS:{'status': 'downloading', 'filename': '/tmp/100% Pure.webm', "
+            + "'_percent_str': 'N/A%'}"
+        XCTAssertNil(YtDlpDownloader.parseProgressPercentage(from: unknown))
+    }
+
     func testParseNormalizedProgressFromNIKOProgressMarker() {
         XCTAssertEqual(DownloaderUseCase.parseProgress(from: "NIKO_PROGRESS: 45.2%") ?? -1, 0.452, accuracy: 0.0001)
     }
