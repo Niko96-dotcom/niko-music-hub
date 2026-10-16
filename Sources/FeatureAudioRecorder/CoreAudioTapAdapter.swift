@@ -88,12 +88,15 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         case recording(RecordingContext)
         case stopping(RecordingContext, StopFlight)
         case completed(RecorderResult)
+        /// A stop flight failed; the next `stopRecording` reports this error once.
+        case failed(RecorderError)
     }
 
     private enum StopAction {
         case cancelStart(RecordingContext)
         case awaitStop(Task<RecorderResult, any Error>)
         case returnCompleted(RecorderResult)
+        case returnFailure(RecorderError)
         case noRecording
     }
 
@@ -106,7 +109,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
             switch state {
             case .starting, .recording, .stopping:
                 true
-            case .idle, .completed:
+            case .idle, .completed, .failed:
                 false
             }
         }
@@ -188,7 +191,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         )
         let accepted = stateLock.withLock { () -> Bool in
             switch state {
-            case .idle, .completed:
+            case .idle, .completed, .failed:
                 state = .starting(context, autoStopRequested: false)
                 return true
             case .starting, .recording, .stopping:
@@ -257,6 +260,9 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
                     return .awaitStop(flight.task)
                 case let .completed(result):
                     return .returnCompleted(result)
+                case let .failed(error):
+                    state = .idle
+                    return .returnFailure(error)
                 }
             }
 
@@ -269,6 +275,8 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
                 return try await task.value
             case let .returnCompleted(result):
                 return result
+            case let .returnFailure(error):
+                throw error
             case .noRecording:
                 throw RecorderError.apiError("No active recording")
             }
@@ -285,7 +293,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
                 }
             case let .recording(context):
                 _ = beginStopLocked(context: context)
-            case .idle, .stopping, .completed:
+            case .idle, .stopping, .completed, .failed:
                 break
             }
         }
@@ -300,7 +308,7 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
                 return result
             } catch {
                 let mapped = mapRecordingError(error)
-                failStop(context: context)
+                failStop(context: context, error: mapped)
                 throw mapped
             }
         }
@@ -317,10 +325,11 @@ public final class CoreAudioTapAdapter: @unchecked Sendable, AudioCapturePort {
         context.finishStream()
     }
 
-    private func failStop(context: RecordingContext) {
+    private func failStop(context: RecordingContext, error: RecorderError) {
         stateLock.withLock {
             guard case let .stopping(current, _) = state, current === context else { return }
-            state = .idle
+            // An auto-stop flight has no awaiting caller; keep the error for the next stop.
+            state = .failed(error)
         }
         context.finishStream()
     }
