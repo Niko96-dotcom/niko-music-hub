@@ -17,7 +17,7 @@ assert_fail() {
 assert_contains() {
   local file="$1"
   local value="$2"
-  grep -Fq "$value" "$file" || { echo "expected '$value' in $file" >&2; exit 1; }
+  grep -Fq -- "$value" "$file" || { echo "expected '$value' in $file" >&2; exit 1; }
 }
 
 COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
