@@ -2,6 +2,7 @@ import NikoMusicCore
 @testable import FeatureArchiveBrowser
 import XCTest
 
+@MainActor
 final class SongStatusHistoryListTests: XCTestCase {
     func testRowsShowNewestChangeFirstWithStableIDs() {
         let older = Date(timeIntervalSinceReferenceDate: 1_000)
