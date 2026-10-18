@@ -113,6 +113,8 @@ assert_contains "$TMP/lifecycle-relative-target.err" "app binary path must be ab
 LONG_BINARY_DIR="$TMP/long-path-$(printf 'x%.0s' {1..120})/LongPath.app/Contents/MacOS"
 mkdir -p "$LONG_BINARY_DIR"
 cp /bin/sleep "$LONG_BINARY_DIR/NikoMusicHub"
+# macOS kills a copied platform binary at launch unless it is signed again.
+/usr/bin/codesign --force --sign - "$LONG_BINARY_DIR/NikoMusicHub" >/dev/null 2>&1
 "$LONG_BINARY_DIR/NikoMusicHub" 30 </dev/null >/dev/null 2>&1 &
 LONG_BINARY_PID=$!
 assert_pass lifecycle-long-path bash -c "source '$ROOT/script/lib/app_lifecycle.sh'; nmh_running_app_binary_pids '$LONG_BINARY_DIR/NikoMusicHub'" </dev/null
