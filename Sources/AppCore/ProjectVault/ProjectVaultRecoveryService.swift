@@ -122,11 +122,10 @@ public struct ProjectVaultRecoveryService: Sendable {
         }
         // Music roots are read-only: a bundle inside one would show up as
         // project content on the next scan or Vault sweep.
-        let protectedRoots = settings.musicRoots.map(\.fallbackURL)
-        let policy = ReadOnlyArchivePolicy()
+        let outputGuard = ToolOutputGuard(settings: settings)
         do {
-            try policy.enforceNoWrite(at: bundleURL, archiveRoots: protectedRoots)
-            try policy.enforceNoWrite(at: bundleURL.deletingLastPathComponent(), archiveRoots: protectedRoots)
+            try outputGuard.validate(bundleURL)
+            try outputGuard.validate(bundleURL.deletingLastPathComponent())
         } catch {
             throw ProjectVaultRecoveryServiceError.destinationInsideMusicRoot
         }
