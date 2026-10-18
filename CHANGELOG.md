@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.8.0 - 2026-10-18
+
+- Keep every configured music folder (Active, Archive and library) write-protected for tool output while Project Vault is off: the WAV Converter, Downloader, Audio Recorder, Stem Separation, the Settings output picker, Export Index, Export Diagnostics, New Song and recovery copies now refuse those folders, follow a folder that was renamed or moved in Finder, and also catch a path that reaches a music folder through a broken symbolic link.
+- Refuse Archive Now, Done, New Song, exports, recordings, conversions, downloads and stem runs when saved settings cannot be read, instead of carrying on with default settings; a Keep Local song no longer shows as ready to free space in that state, and launch at login is left as it is.
+- Say "Settings couldn't be read" in plain words when settings no longer load, instead of showing "The data couldn't be read because it isn't in the correct format." or blaming the chosen folder.
+- Refuse song edits when the song database cannot be opened, instead of showing them as saved and losing them at the next rescan; a refused title, note or alias edit now stays unsaved in the song detail.
+- Stop archiving a project when its move to Done was not saved, and add no Undo or Redo step for a status or note change that did not happen.
+- Stop offering Recover after an archive fails before it starts removing the Active copy; Recover could replace newer Active work with the older Vault copy.
+- Unpin a restored project completely when Keep Local is turned off, so Free up space is offered again.
+- Keep a project restorable after a temporary read error; Retry now completes instead of the restore staying blocked.
+- Apply a project identity review only to the two projects it was about; when three or more catalog entries share one folder, ask about each pair instead of merging or unlinking all of them at once.
+- Stop failing an archive copy with "Project files changed while archiving" when Finder only updated a folder's hidden view settings, and name a symbolic link inside a project as the reason when it blocks the copy.
+- Export recovery copies to exFAT, FAT and network (SMB) drives; a recovery export also says when the Vault is busy or settings cannot be read, and its default folder name uses the same date format on every calendar and locale. Test Restore no longer updates "Last verified"; only real Vault checks set it.
+- Make Done a plain status change, with Undo, while Project Vault is off or not set up, instead of a card that would not move, and show "Archive this project?" at once from the song detail's "Manage storage" sheet instead of only after that sheet was closed.
+- Make Choose Folder in the restore sheet create the project folder inside the folder you pick, with a free name when that name is taken, instead of giving a destination the sheet then refused.
+- End an automatic archive pass when it is stopped, and show plain failure messages instead of internal error text.
+- Keep an unavailable Vault folder in Settings exactly once, instead of adding another copy of it on each change.
+- Keep a working stem helper when a reinstall fails or is cancelled, remove old helper environments that only took up disk space, and report failed helper downloads as download failures.
+- Keep typed spaces in the archive search field and in song notes and metadata fields; a space no longer dropped everything typed after it or toggled the preview.
+- Keep excluded folders out of the archive after an automatic rescan, rescan when a music folder is renamed or moved, keep file watching alive after an empty change batch, stop a cancelled full scan from starting again by itself, and drop a deleted loose project under a /private path.
+- Keep valid matches in filtered archive searches, find typos that cross a word boundary (such as "mysnog" for "My Song Remix"), and stop short words from matching almost every skipped item.
+- Detect project versions without mistaking a tempo such as "140 BPM" or a day-first date for a version, keep a real folder name when a delivery file is only named "V2" or "Mix 2", and explain preview choices that were decided by the song title.
+- Detect the key of mixdowns correctly (labels were mirrored and leaned toward minor keys), and find a tempo for slow songs and mixdowns with long kicks, which often got no tempo before.
+- Make skip and seek work while an archive preview is still loading, instead of leaving the player silent or stuck, and say why Open Preview (P) did nothing: the song has no main preview, or the file is missing or blocked.
+- Add Show in browse to a project version that was hidden from browse, so hiding it can be undone in the app, and report a New Song as created when only its template project fails to open; a template that contains a symbolic link or special file gets its own message.
+- Show the newest change first in a song's status history, refresh the Plugins tab when the main project changes, keep duplicate hints in a stable order, and leave hidden, removed and finished songs out of the Analytics stage times.
+- Clear skipped items and folder warnings after a rescan finds them readable again, show a warning when collaborators cannot be loaded, replace database error text in archive warnings with plain sentences, keep each song's notes on one line in Export Diagnostics, and hide every home folder path in diagnostics text.
+- Keep the converter's mono output from dropping a channel: reducing stereo to mono now mixes both channels.
+- Show the real disk error when a conversion cannot write its output, instead of "FFmpeg is required"; an FFmpeg that cannot run now offers Choose FFmpeg.
+- Convert failed, skipped and canceled files again when they are added again, show "Canceled" instead of "Skipped" for canceled files, and show the handoff warning on verified files that have one.
+- Skip unreadable files in a dropped folder and count them ("2 unreadable items skipped") instead of refusing the whole drop, convert sources with layouts such as quad or 5.0, shorten very long output names to fit the file system, and reject a 32-bit float file where 32-bit integer WAV is expected.
+- Download playlists with 25 or more entries (they never downloaded before), name a playlist job after the playlist, and check a playlist link without reading every entry first.
+- Make "MP4 (720p)" give 720p on YouTube and never more than 720p on other sites.
+- Show "already exists" for files that are already downloaded, report a broken yt-dlp as a helper problem instead of "URL not supported", name jobs after the site when a link has no useful title, keep progress from jumping on a percent sign in a file name, and stop calling a yt-dlp of exactly the minimum age outdated.
+- Keep the audio already recorded when writing a take fails part-way: the error card names the kept file, says it may be incomplete and offers Show Kept Take. An empty take is still removed.
+- Show "Output Folder Not Allowed" with the plain reason when the recorder's output folder is inside a music archive, instead of a full-disk message.
+- Count the recorder's timer and time limit from audio actually written, show the error of a failed stop at the time limit instead of "No active recording", and stop a recording that is stopped while it starts or while the audio route changes from starting anyway.
+- Stop custom recording names from producing hidden files or doubled extensions (a name such as "Take.wav.mp3" now saves as "Take.wav"), meter interleaved audio correctly, and stop odd stored values from crashing the duration display or the time-limit setting.
+- Explain in the macOS microphone prompt why it appears on audio interfaces and other output devices with inputs: nothing records the microphone, and previews play either way.
+- Accept only readable audio files as stems, add a finished stem set to the Output Inbox all at once or not at all, and keep job folder and stem names within the file system's length limit for long titles.
+- Show a plain cause when stem separation fails (the exit code and the Python error line, with home paths hidden) instead of the helper's raw output, show "Stem helper can't start" for an installed helper that does not run, wait for setup before YouTube to Stems starts, and start progress again at 0 after a model download.
+- Follow a steady slower tempo in BPM Tapper instead of keeping the old BPM, clear the "BPM copied" badge, keep the unreadable-history message when a save fails, and stop an odd saved value from crashing the history.
+- Show the full BPM line in Output Inbox rows ("119.7 BPM", "Analyzing…", "No tempo" when none is found), keep the list visible when a BPM cannot be saved (the row says "Not saved"), and offer Analyze BPM only for audio files that are there.
+- Explain an Open at login switch that macOS holds for approval, with an Open Login Items button, instead of letting it snap back without a word.
+- Move through every tool with the arrow keys in the sidebar, open the main window from the Dock menu even when no window is open, and stop ⌘F from refocusing archive search each time the main window reopens.
+- Stop reporting "Up to date" after an update was dismissed, skipped or staged, keep the menu bar icon setting and helper paths as they were when saving them fails, open System Settings once instead of twice, size the first-run Music archive sheet to its content, draw no waveform bar as played before playback starts, stop a helper that closes its output early from keeping a processor core busy, and stop a finished job from coming back in the job status.
+- Make the command-line tool print an error and exit with code 1 instead of crashing, and write Export Index files in one step so an interrupted export cannot leave a cut-off file.
+
 ## 1.7.3 - 2026-09-28
 
 - Ask before quitting while a download (from the moment Download is pressed), stem separation, conversion, recording, helper install or Project Vault operation is running; on Stop and Quit, cancel it cleanly (a recording keeps its take) and wait up to 5 seconds for it to finish.
