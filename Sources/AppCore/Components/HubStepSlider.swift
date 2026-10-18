@@ -39,13 +39,6 @@ public struct HubStepSlider<Value: Hashable>: View {
         return steps[min(max(Int(position.rounded()), 0), steps.count - 1)]
     }
 
-    /// Step to adopt when `selection` is not in the list, so the thumb (which sits on the
-    /// first step) and the readout show the same value; nil when no change is needed.
-    static func snappedSelection(_ selection: Value, in steps: [Value]) -> Value? {
-        guard let first = steps.first, !steps.contains(selection) else { return nil }
-        return first
-    }
-
     public var body: some View {
         VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
             Slider(value: index, in: 0...Double(max(steps.count - 1, 1)), step: 1)
@@ -71,8 +64,5 @@ public struct HubStepSlider<Value: Hashable>: View {
             }
         }
         .help(help(selection))
-        .onChange(of: selection, initial: true) { _, newValue in
-            if let step = Self.snappedSelection(newValue, in: steps) { selection = step }
-        }
     }
 }
