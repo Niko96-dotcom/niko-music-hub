@@ -44,3 +44,7 @@ goal-agents/
 .claude/
 .ultracode/
 .audit/
+
+# Performance bake-off (script/bakeoff/): synthetic archives and the per-checkout run name
+bakeoff-data/
+BAKEOFF_NAME
