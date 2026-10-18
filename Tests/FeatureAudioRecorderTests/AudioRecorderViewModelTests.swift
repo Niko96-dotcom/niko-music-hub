@@ -649,6 +649,14 @@ final class AudioRecorderViewModelTests: XCTestCase {
         try kept.read(into: samples)
         let channel = try XCTUnwrap(samples.floatChannelData)[0]
         XCTAssertEqual((0..<512).map { channel[$0] }, (0..<512).map { Float($0 % 32) / 32.0 })
+
+        XCTAssertEqual(vm.keptPartialTakeURL?.standardizedFileURL, recorded.standardizedFileURL)
+        let card = AudioRecorderView.cardFor(.verificationFailed(message), keptTake: vm.keptPartialTakeURL)
+        XCTAssertTrue(card.body.contains("kept as “\(recorded.lastPathComponent)”"), card.body)
+        XCTAssertFalse(card.body.contains(recorded.deletingLastPathComponent().path), "the card names the file, not its folder path")
+        XCTAssertEqual(card.recoveryActions.map(\.label), ["Show Kept Take", "Try Again"])
+        vm.dismissError()
+        XCTAssertNil(vm.keptPartialTakeURL)
     }
 
     func testFailedVerificationRemovesIncompleteOutput() async throws {
@@ -674,6 +682,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let failedURL = try XCTUnwrap(port.recordedOutputURL)
         XCTAssertFalse(FileManager.default.fileExists(atPath: failedURL.path))
         XCTAssertEqual(try inbox.listItems().count, 0)
+        XCTAssertNil(vm.keptPartialTakeURL, "a removed empty take is not offered")
     }
 }
 

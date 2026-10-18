@@ -102,6 +102,8 @@ public final class AudioRecorderViewModel: ObservableObject {
     /// The last take was saved, but it is silent because macOS withheld system audio.
     @Published public private(set) var savedRecordingIsSilentFromBlockedCapture = false
     @Published public private(set) var recentRecordings: [OutputInboxItem] = []
+    /// The failed take's file when audio recorded before the error is still on disk.
+    @Published public private(set) var keptPartialTakeURL: URL?
 
     public var isRecording: Bool {
         recordingState == .recording
@@ -125,6 +127,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     private let outputInboxStore: any OutputInboxStore
     private let jobStatusCenter: ShellJobStatusCenter?
     private var isStartInFlight = false
+    private var activeTakeURL: URL?
 
     public convenience init(
         capturePort: AudioCapturePort,
@@ -202,6 +205,8 @@ public final class AudioRecorderViewModel: ObservableObject {
         elapsedTime = 0
         currentLevel = nil
         error = nil
+        keptPartialTakeURL = nil
+        activeTakeURL = nil
         handoffWarningMessage = nil
         showSaveConfirmation = false
 
@@ -241,6 +246,7 @@ public final class AudioRecorderViewModel: ObservableObject {
             return
         }
 
+        activeTakeURL = fileURL
         recordingTask = Task {
             do {
                 let stream = try await capturePort.startRecording(
@@ -355,6 +361,10 @@ public final class AudioRecorderViewModel: ObservableObject {
     }
 
     private func presentFailure(_ recorderError: RecorderError) {
+        // A failed take is removed unless it holds written audio, so a file that is
+        // still there is the audio recorded before the error.
+        keptPartialTakeURL = activeTakeURL.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+        activeTakeURL = nil
         currentLevel = nil
         recordingState = .presentation(for: recorderError)
         error = recorderError
@@ -428,6 +438,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         }
 
         lastRecordedURL = result.outputURL
+        activeTakeURL = nil
         showSaveConfirmation = true
         recordingState = .idle
         elapsedTime = 0
@@ -467,6 +478,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     /// visible error/incompatible card and returns the tool to idle.
     public func dismissError() {
         error = nil
+        keptPartialTakeURL = nil
         savedRecordingIsSilentFromBlockedCapture = false
         recordingState = .idle
     }

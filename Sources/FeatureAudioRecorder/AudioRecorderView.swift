@@ -432,7 +432,7 @@ public struct AudioRecorderView: View {
 
     @ViewBuilder
     private func errorCard(for error: RecorderError) -> some View {
-        let card = cardFor(error)
+        let card = Self.cardFor(error, keptTake: viewModel.keptPartialTakeURL)
         StandardErrorCard(card: card) { action in
             switch action {
             case .tryAgain:
@@ -442,7 +442,10 @@ public struct AudioRecorderView: View {
             case .revealInFinder:
                 // NMH-043: the write-error card's Show Output Folder action
                 // reveals the output folder; it must not fall through to break.
-                context.fileActions.revealInFinder(appSettings.settings.outputFolder.url)
+                // A kept partial take is revealed itself.
+                context.fileActions.revealInFinder(
+                    viewModel.keptPartialTakeURL ?? appSettings.settings.outputFolder.url
+                )
             case .dismiss:
                 viewModel.dismissError()
             case .openHubSettingsHelpers, .installHelperTools, .chooseToolPath, .openTerminal, .clearHistory:
@@ -451,7 +454,16 @@ public struct AudioRecorderView: View {
         }
     }
 
-    private func cardFor(_ error: RecorderError) -> AppErrorCard {
+    static func keptTakeSentence(_ url: URL?) -> String {
+        guard let url else { return "" }
+        return " The audio recorded before the error was kept as “\(url.lastPathComponent)”. It may be incomplete."
+    }
+
+    static func cardFor(_ error: RecorderError, keptTake: URL?) -> AppErrorCard {
+        let keptTakeSentence = keptTakeSentence(keptTake)
+        let showKeptTake = keptTake.map { _ in
+            AppErrorCard.RecoveryAction(label: "Show Kept Take", style: .secondary, action: .revealInFinder)
+        }
         switch error {
         case .permissionDenied:
             return AppErrorCard(
@@ -494,9 +506,10 @@ public struct AudioRecorderView: View {
                 category: .conversionFile,
                 label: "Could Not Save Recording",
                 icon: "externaldrive.badge.xmark",
-                body: "Check available disk space. The output folder may be full or on a read-only volume.",
+                body: "Check available disk space. The output folder may be full or on a read-only volume." + keptTakeSentence,
                 recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "Show Output Folder", style: .secondary, action: .revealInFinder),
+                    showKeptTake
+                        ?? AppErrorCard.RecoveryAction(label: "Show Output Folder", style: .secondary, action: .revealInFinder),
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
@@ -526,8 +539,8 @@ public struct AudioRecorderView: View {
                 category: .conversionFile,
                 label: "Recording Verification Failed",
                 icon: "checkmark.shield",
-                body: "The recorded file could not be verified. It may be corrupted.",
-                recoveryActions: [
+                body: "The recorded file could not be verified. It may be corrupted." + keptTakeSentence,
+                recoveryActions: [showKeptTake].compactMap { $0 } + [
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
@@ -536,8 +549,8 @@ public struct AudioRecorderView: View {
                 category: .conversionFile,
                 label: "No Audio Received",
                 icon: "waveform.badge.exclamationmark",
-                body: "The recorder did not receive system audio. Start playback in another app, then try again. If audio is already playing, check its output device.",
-                recoveryActions: [
+                body: "The recorder did not receive system audio. Start playback in another app, then try again. If audio is already playing, check its output device." + keptTakeSentence,
+                recoveryActions: [showKeptTake].compactMap { $0 } + [
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]
             )
@@ -571,7 +584,7 @@ public struct AudioRecorderView: View {
         case .stopping:
             return "Stopping…"
         case .error(let error):
-            return cardFor(error).label
+            return Self.cardFor(error, keptTake: nil).label
         }
     }
 
