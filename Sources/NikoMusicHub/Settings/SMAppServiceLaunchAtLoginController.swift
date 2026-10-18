@@ -8,6 +8,14 @@ final class SMAppServiceLaunchAtLoginController: LaunchAtLoginControlling {
         SMAppService.mainApp.status == .enabled
     }
 
+    func needsApproval() -> Bool {
+        SMAppService.mainApp.status == .requiresApproval
+    }
+
+    func openApprovalSettings() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
+
     func setEnabled(_ enabled: Bool) throws {
         do {
             if enabled {

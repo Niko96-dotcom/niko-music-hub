@@ -16,6 +16,7 @@ final class HubSettingsSession: ObservableObject {
     @Published var settings: AppSettings = .default
     @Published var launchAtLogin = false
     @Published var launchAtLoginError: String?
+    @Published var launchAtLoginNeedsApproval = false
     @Published var settingsLoadError: String?
     @Published var saveError: String?
     @Published var helperPathError: String?
@@ -159,6 +160,7 @@ final class HubSettingsSession: ObservableObject {
         }
         launchAtLogin = context.launchAtLogin.isEnabled()
         launchAtLoginError = nil
+        launchAtLoginNeedsApproval = false
         saveError = nil
         helperPathError = nil
     }
@@ -200,6 +202,16 @@ final class HubSettingsSession: ObservableObject {
             launchAtLogin = context.launchAtLogin.isEnabled()
             launchAtLoginError = error.localizedDescription
         }
+        // A switch that snaps back because macOS waits for approval gets a plain
+        // sentence and a way to System Settings, with or without an error.
+        launchAtLoginNeedsApproval = enabled && !launchAtLogin && context.launchAtLogin.needsApproval()
+        if launchAtLoginNeedsApproval {
+            launchAtLoginError = LaunchAtLoginCopy.needsApproval
+        }
+    }
+
+    func openLoginItemsSettings() {
+        context.launchAtLogin.openApprovalSettings()
     }
 
     func chooseOutputFolder() {
@@ -266,8 +278,10 @@ struct SettingsView: View {
                 appearance: session.appearanceBinding,
                 launchAtLogin: $session.launchAtLogin,
                 launchAtLoginError: session.launchAtLoginError,
+                launchAtLoginNeedsApproval: session.launchAtLoginNeedsApproval,
                 showMenuBarExtra: session.showMenuBarExtraBinding,
-                onLaunchAtLoginChange: session.setLaunchAtLogin
+                onLaunchAtLoginChange: session.setLaunchAtLogin,
+                onOpenLoginItems: session.openLoginItemsSettings
             )
             SettingsOutputSection(
                 outputFolderPath: session.settings.outputFolder.url.path,
@@ -400,8 +414,10 @@ private struct SettingsGeneralSection: View {
     @Binding var appearance: AppAppearance
     @Binding var launchAtLogin: Bool
     let launchAtLoginError: String?
+    let launchAtLoginNeedsApproval: Bool
     @Binding var showMenuBarExtra: Bool
     let onLaunchAtLoginChange: (Bool) -> Void
+    let onOpenLoginItems: () -> Void
 
     var body: some View {
         SettingsSection(title: "General") {
@@ -431,6 +447,17 @@ private struct SettingsGeneralSection: View {
                 inlineWarning(launchAtLoginError)
                     .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
                     .padding(.vertical, 10)
+                if launchAtLoginNeedsApproval {
+                    SettingsRow("Login Items") {
+                        HubLabeledButton(
+                            icon: "gearshape",
+                            label: "Open Login Items",
+                            style: .secondary,
+                            help: "Open System Settings › General › Login Items",
+                            action: onOpenLoginItems
+                        )
+                    }
+                }
             }
             SettingsRowDivider()
             SettingsRow("Show in menu bar") {
