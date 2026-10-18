@@ -34,7 +34,7 @@ public struct HubStepSlider<Value: Hashable>: View {
     }
 
     /// Step nearest to a slider position, clamped to the list; nil when the list is empty.
-    static func step(at position: Double, in steps: [Value]) -> Value? {
+    nonisolated static func step(at position: Double, in steps: [Value]) -> Value? {
         guard !steps.isEmpty else { return nil }
         return steps[min(max(Int(position.rounded()), 0), steps.count - 1)]
     }
