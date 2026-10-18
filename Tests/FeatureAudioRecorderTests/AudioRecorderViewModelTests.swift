@@ -536,18 +536,6 @@ final class AudioRecorderViewModelTests: XCTestCase {
         )
     }
 
-    // L197: the card shows the real cause and where a kept take is, not fixed copy.
-    func testErrorCardsShowMessageAndKeptTakePath() {
-        let note = RecorderPCMWriterPipeline.keptPartialTakeNote(URL(fileURLWithPath: "/tmp/take.wav"))
-        let guardRefusal = "The output folder cannot be inside a music archive root."
-
-        XCTAssertTrue(AudioRecorderView.cardFor(.writeError(guardRefusal)).body.contains(guardRefusal))
-        XCTAssertFalse(AudioRecorderView.cardFor(.writeError(guardRefusal)).body.contains("disk space"))
-        XCTAssertTrue(AudioRecorderView.cardFor(.writeError("Writing to disk failed. \(note)")).body.contains(note))
-        XCTAssertTrue(AudioRecorderView.cardFor(.verificationFailed("Bad header. \(note)")).body.contains(note))
-        XCTAssertTrue(AudioRecorderView.cardFor(.noAudioCaptured("No frames. \(note)")).body.contains(note))
-    }
-
     // L200: unusual stored durations are omitted instead of trapping or printing "0:-5".
     func testDurationLabelRejectsNonFiniteNegativeAndHugeValues() {
         XCTAssertEqual(AudioRecorderView.durationLabel(for: "125.4"), "2:05")

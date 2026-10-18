@@ -233,6 +233,9 @@ public final class AudioRecorderViewModel: ObservableObject {
         } catch let recorderError as RecorderError {
             presentFailure(recorderError)
             return
+        } catch let guardError as OutputWriteGuardError {
+            presentFailure(RecorderError.outputRefused(guardError.localizedDescription))
+            return
         } catch {
             presentFailure(RecorderError.writeError(error.localizedDescription))
             return
