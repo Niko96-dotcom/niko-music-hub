@@ -6,9 +6,19 @@ enum HubMainWindow {
     static let windowID = "main"
     static let revealNotification = Notification.Name("NikoMusicHub.revealMainWindow")
 
+    /// `openWindow` from the menu-bar commands, which exist even when no window
+    /// is open; the notification observers live only in open windows.
+    @MainActor private static var commandsOpenWindow: OpenWindowAction?
+
+    @MainActor
+    static func keepOpenWindow(_ action: OpenWindowAction) {
+        commandsOpenWindow = action
+    }
+
     @MainActor
     static func reveal() {
         NotificationCenter.default.post(name: revealNotification, object: nil)
+        commandsOpenWindow?(id: windowID)
         NSApp.activate()
         // Front the main window itself (it may be closed but still held), never
         // whichever other window (Help, Settings) happens to come first.

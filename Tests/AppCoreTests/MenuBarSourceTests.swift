@@ -166,6 +166,19 @@ final class MenuBarSourceTests: XCTestCase {
         )
     }
 
+    func testDockRevealOpensMainWindowWhenNoWindowIsOpen() throws {
+        let dock = try SourceTestSupport.read("Sources/NikoMusicHub/Dock/HubDockMenu.swift")
+        XCTAssertTrue(
+            dock.contains("commandsOpenWindow?(id: windowID)"),
+            "reveal() must call a live openWindow, not only post to observers in open windows"
+        )
+        let commands = try SourceTestSupport.read("Sources/NikoMusicHub/Commands/HubToolsCommands.swift")
+        XCTAssertTrue(
+            commands.contains("HubMainWindow.keepOpenWindow(openWindow)"),
+            "The always-present menu commands must hand their openWindow to the Dock reveal"
+        )
+    }
+
     // MARK: - Private helpers
 
     private func menuBarMenuViewSource() throws -> String {

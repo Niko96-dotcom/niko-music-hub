@@ -13,6 +13,8 @@ struct HubToolsCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Tools") {
+            // Dock menu reveals reach the main window through this action.
+            let _ = HubMainWindow.keepOpenWindow(openWindow)
             ForEach(HubToolsShortcutMap.menuMetadata(from: registry.metadata), id: \.id) { metadata in
                 toolMenuItem(metadata)
             }
