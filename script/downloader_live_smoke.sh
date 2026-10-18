@@ -35,12 +35,24 @@ FFPROBE="$(resolve_binary ffprobe)" || {
   echo "downloader live smoke failed: ffprobe not found" >&2
   exit 1
 }
-FFMPEG_DIR="$(dirname "$(resolve_binary ffmpeg)")"
+FFMPEG="$(resolve_binary ffmpeg)" || {
+  echo "downloader live smoke failed: ffmpeg not found" >&2
+  exit 1
+}
+FFMPEG_DIR="$(dirname "$FFMPEG")"
 
 OUTPUT_DIR="$ROOT/.build/downloader-live-smoke-$(date +%Y%m%d%H%M%S)"
 LOG_FILE="$OUTPUT_DIR/smoke.log"
 mkdir -p "$OUTPUT_DIR"
-trap 'rm -rf "$OUTPUT_DIR"' EXIT
+cleanup() {
+  local status=$?
+  if [[ "$status" -eq 0 ]]; then
+    rm -rf "$OUTPUT_DIR"
+  else
+    echo "downloader live smoke failed (exit $status); logs kept in $OUTPUT_DIR" >&2
+  fi
+}
+trap cleanup EXIT
 
 # Keep this aligned with the durable public clip used by the real UAT record.
 # The historical yt-dlp test clip BaW_jenozKc is no longer available.

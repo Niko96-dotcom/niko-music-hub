@@ -144,12 +144,18 @@ public struct HubWaveformSurface: View {
                 width: max(barWidth * 0.7, 1),
                 height: max(height, variant == .meter ? 1 : 2)
             )
-            let played = Double(index) / Double(values.count) <= Double(clampedProgress)
+            let played = Self.isBarPlayed(index: index, count: values.count, progress: Double(clampedProgress))
             context.fill(
                 Path(roundedRect: rect, cornerSize: CGSize(width: 1.5, height: 1.5)),
                 with: .color(played ? HubDesignSystem.Palette.accent : barColor)
             )
         }
+    }
+
+    /// A bar counts as played only once its end edge is reached, so progress 0 lights no bars.
+    static func isBarPlayed(index: Int, count: Int, progress: Double) -> Bool {
+        guard count > 0, progress.isFinite else { return false }
+        return Double(index + 1) <= min(max(progress, 0), 1) * Double(count)
     }
 
     private var barColor: Color {

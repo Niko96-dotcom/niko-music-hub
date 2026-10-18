@@ -47,6 +47,18 @@ final class VaultCopySourceStabilityTests: XCTestCase {
         XCTAssertTrue(before.hasSameObservedContent(as: allocOnly))
         XCTAssertFalse(before.entries == allocOnly.entries, "the old whole-Entry check would fire on allocation alone")
 
+        // Finder writing an ignored .DS_Store touches only the folder's mtime.
+        let directoryMtimeChanged = VaultManifest(entries: [VaultManifest.Entry(
+            relativePath: "Audio",
+            type: .directory,
+            byteCount: 0,
+            modifiedAt: fixedDate.addingTimeInterval(1),
+            sha256: nil,
+            allocatedByteCount: 4096,
+            extendedAttributeBytes: 0
+        ), file])
+        XCTAssertTrue(before.hasSameObservedContent(as: directoryMtimeChanged), "directory modifiedAt alone must pass")
+
         let pathChanged = VaultManifest(entries: [directory, VaultManifest.Entry(
             relativePath: "Audio/take2.wav",
             type: .regularFile,

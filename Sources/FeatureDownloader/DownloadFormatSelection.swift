@@ -117,8 +117,11 @@ public enum YtDlpFormatArgumentBuilder {
                 formatSelector: "best[height<=360][ext=mp4]/best[height<=360]/worst"
             )
         case .mp4_720:
+            // YouTube no longer serves progressive 720p, so merge separate
+            // video and audio streams; never fall back above 720p.
             return YtDlpFormatArguments(
-                formatSelector: "best[height<=720][ext=mp4]/best[height<=720]/best"
+                formatSelector: "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba/b[height<=720]",
+                extraArguments: ["--merge-output-format", "mp4"]
             )
         case .best:
             return YtDlpFormatArguments(formatSelector: "bestvideo*+bestaudio/best")

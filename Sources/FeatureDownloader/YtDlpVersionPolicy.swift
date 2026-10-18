@@ -38,7 +38,7 @@ enum YtDlpVersionPolicy {
         guard let threshold = effectiveMinimumDate(referenceDate: referenceDate) else {
             return "recent release"
         }
-        let components = Calendar(identifier: .gregorian).dateComponents(
+        let components = utcCalendar.dateComponents(
             [.year, .month, .day],
             from: threshold
         )
@@ -48,11 +48,19 @@ enum YtDlpVersionPolicy {
         return String(format: "%04d.%02d.%02d", year, month, day)
     }
 
+    /// Version dates are UTC midnight, so the threshold is computed on UTC day boundaries too.
+    private static var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? calendar.timeZone
+        return calendar
+    }
+
     private static func effectiveMinimumDate(referenceDate: Date) -> Date? {
-        guard let ageThreshold = Calendar(identifier: .gregorian).date(
+        let calendar = utcCalendar
+        guard let ageThreshold = calendar.date(
             byAdding: .day,
             value: -stalenessDays,
-            to: referenceDate
+            to: calendar.startOfDay(for: referenceDate)
         ) else {
             return nil
         }

@@ -745,6 +745,73 @@ final class VaultProjectionSupplementTests: XCTestCase {
         XCTAssertEqual(sideEffects.openCount, 0)
     }
 
+    func testTransientTransferReadFailureKeepsRestoreRetryable() async throws {
+        let fixture = try LegacyProjectionFixture()
+        defer { fixture.remove() }
+        let database = try SQLiteArchiveDatabase(databaseURL: fixture.databaseURL)
+        let store = try SQLiteVaultTransferStore(database: database)
+        try store.save(fixture.legacyTransfer)
+        let supplement = try VaultProjectionSupplementBuilder().build(
+            at: fixture.generation,
+            verifiedAgainst: fixture.legacyManifest
+        )
+        _ = try store.compareAndSetProjectionSupplement(
+            supplement,
+            transferID: fixture.legacyTransfer.id,
+            expectedManifest: fixture.legacyManifest,
+            expectedDestinationURL: fixture.generation,
+            expectedState: .archiveVerified
+        )
+
+        let restoreID = UUID()
+        let destinationURL = fixture.active
+            .appendingPathComponent("Restored/Transient Read", isDirectory: true)
+        let restore = VaultRestoreRecord(
+            id: restoreID,
+            projectID: fixture.projectID,
+            archiveGenerationURL: fixture.generation,
+            stagingURL: fixture.active
+                .appendingPathComponent(".niko-staging", isDirectory: true)
+                .appendingPathComponent(restoreID.uuidString.lowercased(), isDirectory: true),
+            destinationURL: destinationURL,
+            manifest: fixture.legacyManifest,
+            archiveTransferID: fixture.legacyTransfer.id,
+            archiveTransferState: .archiveVerified,
+            requiresArchiveMaterialization: false,
+            projectionSupplement: nil
+        )
+        try store.saveRestore(restore)
+
+        let sideEffects = SupplementRestoreSideEffectSpy()
+        let engine = LocalVaultRestoreEngine(
+            activeRoot: fixture.active,
+            archiveRoot: fixture.root.appendingPathComponent("Archive"),
+            activeRootID: UUID(),
+            resolver: store,
+            store: store,
+            projectionStore: FailingOnceTransferReadSpy(store: store),
+            provider: SupplementProviderSpy(locality: .fullyLocalCurrent),
+            catalog: sideEffects,
+            projectOpener: sideEffects,
+            writeAdmission: { _, operation in try await operation() }
+        )
+
+        do {
+            _ = try await engine.retryRestore(id: restoreID)
+            XCTFail("expected the transient read failure")
+        } catch SupplementTestError.persistence {}
+
+        let blocked = try XCTUnwrap(try store.restoreRecord(id: restoreID))
+        XCTAssertNil(blocked.failureReason, "a store read error must not block the restore")
+        XCTAssertNil(blocked.completedAt)
+
+        let completed = try await engine.retryRestore(id: restoreID)
+        XCTAssertEqual(completed.id, restoreID)
+        XCTAssertNotNil(completed.completedAt)
+        XCTAssertNil(completed.failureReason)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destinationURL.path))
+    }
+
 }
 
 private struct LegacyProjectionFixture {
@@ -889,6 +956,41 @@ private final class ProjectionStoreSpy: VaultProjectionSupplementStoring, @unche
         case .conflict:
             throw VaultProjectionSupplementError.conflict
         }
+    }
+}
+
+private final class FailingOnceTransferReadSpy: VaultProjectionSupplementStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private let store: SQLiteVaultTransferStore
+    private var failed = false
+
+    init(store: SQLiteVaultTransferStore) {
+        self.store = store
+    }
+
+    func record(id: UUID) throws -> VaultTransferRecord? {
+        let shouldFail = lock.withLock { () -> Bool in
+            defer { failed = true }
+            return !failed
+        }
+        if shouldFail { throw SupplementTestError.persistence }
+        return try store.record(id: id)
+    }
+
+    func compareAndSetProjectionSupplement(
+        _ supplement: VaultProjectionSupplement,
+        transferID: UUID,
+        expectedManifest: VaultManifest,
+        expectedDestinationURL: URL,
+        expectedState: VaultTransferState
+    ) throws -> VaultTransferRecord {
+        try store.compareAndSetProjectionSupplement(
+            supplement,
+            transferID: transferID,
+            expectedManifest: expectedManifest,
+            expectedDestinationURL: expectedDestinationURL,
+            expectedState: expectedState
+        )
     }
 }
 

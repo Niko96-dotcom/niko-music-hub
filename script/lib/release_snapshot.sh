@@ -23,14 +23,18 @@
 # Layout (all under a private run dir that is a sibling of RELEASE_DIR, never
 # beneath it, so later `rm -rf "$RELEASE_DIR"` cannot remove it):
 #   <release-dir>.provenance-<short12>-<pid>/
+#     .provenance-run           # run marker written at creation (cleanup gate)
 #     pinned-source/            # detached worktree at <pinned-commit> with genuine .git
 #     snapshot-provenance.json  # pinned commit + git metadata + file hashes
 #     frozen-uat.json           # frozen UAT bytes (public mode only)
 #
 # Cleanup is safe and bounded (nmh_snapshot_cleanup): only a run dir beneath
-# its allowed parent and carrying the provenance marker is removed. The
-# invoking working tree and untracked content are never touched. Reviewable
-# outputs/logs stay in RELEASE_DIR; the run dir is removed on EXIT.
+# its allowed parent and carrying a provenance marker (.provenance-run or
+# snapshot-provenance.json) is removed. The run marker exists from creation,
+# so a failure between `git worktree add` and the provenance record still
+# lets cleanup deregister the pinned-source worktree instead of leaking it.
+# The invoking working tree and untracked content are never touched.
+# Reviewable outputs/logs stay in RELEASE_DIR; the run dir is removed on EXIT.
 #
 # These helpers take explicit paths so the behavioral harness can exercise
 # them against disposable temp git fixtures with stubbed side effects. They
@@ -121,6 +125,13 @@ nmh_snapshot_init_run_dir() {
     echo "cannot create provenance run dir: $run_dir" >&2
     return 1
   }
+  # Run marker from the start: nmh_snapshot_cleanup accepts it, so a failure
+  # after `git worktree add` but before snapshot-provenance.json exists does
+  # not leave a registered pinned-source worktree behind.
+  if ! : >"$run_dir/.provenance-run"; then
+    echo "cannot write provenance run marker: $run_dir/.provenance-run" >&2
+    return 1
+  fi
   printf '%s\n' "$run_dir"
 }
 
@@ -393,7 +404,8 @@ nmh_snapshot_publish_frozen_uat() {
 }
 
 # Safe, bounded cleanup: only removes a run dir beneath its allowed parent that
-# carries the provenance marker. Never touches the working tree or untracked
+# carries a provenance marker (.provenance-run from nmh_snapshot_init_run_dir,
+# or snapshot-provenance.json). Never touches the working tree or untracked
 # content outside the run dir. Reviewable RELEASE_DIR outputs are untouched.
 # Detached worktrees are deregistered first (bounded to this dest only).
 nmh_snapshot_cleanup() {
@@ -413,7 +425,8 @@ base = os.path.basename(run)
 if ".provenance-" not in base:
     raise SystemExit(f"refusing to clean non-provenance dir: {run}")
 marker = os.path.join(run, "snapshot-provenance.json")
-if not os.path.isfile(marker):
+run_marker = os.path.join(run, ".provenance-run")
+if not (os.path.isfile(marker) or os.path.isfile(run_marker)):
     raise SystemExit(f"refusing to clean run dir without provenance marker: {run}")
 PY
     return 1

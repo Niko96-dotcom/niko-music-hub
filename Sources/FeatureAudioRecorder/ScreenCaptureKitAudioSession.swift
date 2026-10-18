@@ -15,12 +15,17 @@ final class ScreenCaptureKitAudioSession: NSObject, @unchecked Sendable, Recorde
     private var generation = 0
     private var running = false
     private var stopping = false
+    /// Set by any stop(), even one that finds no stream yet. Each session is single-use,
+    /// so a stop that lands during the content lookup still keeps the stream from starting.
+    private var cancelled = false
 
     func start(generation: Int, callbacks: RecorderBackendCallbacks) async throws {
         do {
             try await startCapture(generation: generation, callbacks: callbacks)
         } catch let error as RecorderError {
             throw error
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             if Self.isCapturePermissionFailure(error) { throw RecorderError.permissionDenied }
             throw error
@@ -44,6 +49,7 @@ final class ScreenCaptureKitAudioSession: NSObject, @unchecked Sendable, Recorde
     }
 
     private func startCapture(generation: Int, callbacks: RecorderBackendCallbacks) async throws {
+        if lock.withLock({ cancelled }) { throw CancellationError() }
         let content = try await SCShareableContent.current
         guard let display = content.displays.first else {
             throw RecorderError.apiError("ScreenCaptureKit found no display to anchor system-audio capture")
@@ -63,12 +69,18 @@ final class ScreenCaptureKitAudioSession: NSObject, @unchecked Sendable, Recorde
 
         let activeStream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try activeStream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
-        lock.withLock {
+        let published = lock.withLock { () -> Bool in
+            guard !cancelled else { return false }
             self.generation = generation
             self.callbacks = callbacks
             stream = activeStream
             running = true
             stopping = false
+            return true
+        }
+        guard published else {
+            try? activeStream.removeStreamOutput(self, type: .audio)
+            throw CancellationError()
         }
         do {
             try await activeStream.startCapture()
@@ -81,10 +93,18 @@ final class ScreenCaptureKitAudioSession: NSObject, @unchecked Sendable, Recorde
             try? activeStream.removeStreamOutput(self, type: .audio)
             throw error
         }
+        // A stop() that ran while startCapture() was pending may have raced the start;
+        // stop the stream again so it cannot keep capturing after the cancel.
+        if lock.withLock({ cancelled }) {
+            try? await activeStream.stopCapture()
+            try? activeStream.removeStreamOutput(self, type: .audio)
+            throw CancellationError()
+        }
     }
 
     func stop() async {
         let activeStream = lock.withLock { () -> SCStream? in
+            cancelled = true
             guard !stopping else { return nil }
             stopping = true
             running = false
@@ -158,13 +178,15 @@ final class ScreenCaptureKitAudioSession: NSObject, @unchecked Sendable, Recorde
             callbacks.onStructuralNoData(snapshot.1)
             return
         }
-        callbacks.onMetadata(RecorderBackendMetadata(
-            outputDeviceUID: "screen-capture-kit",
-            sourceSampleRate: sourceFormat.sampleRate,
-            sourceChannelCount: Int(sourceFormat.channelCount)
-        ))
-        _ = callbacks.onPCM(snapshot.1, sourceFormat, pcm, bytes)
-        _ = retainedBlockBuffer // Retains borrowed audio storage through the synchronous write.
+        // Retains borrowed audio storage through the synchronous write.
+        withExtendedLifetime(retainedBlockBuffer) {
+            callbacks.onMetadata(RecorderBackendMetadata(
+                outputDeviceUID: "screen-capture-kit",
+                sourceSampleRate: sourceFormat.sampleRate,
+                sourceChannelCount: Int(sourceFormat.channelCount)
+            ))
+            _ = callbacks.onPCM(snapshot.1, sourceFormat, pcm, bytes)
+        }
     }
 }
 

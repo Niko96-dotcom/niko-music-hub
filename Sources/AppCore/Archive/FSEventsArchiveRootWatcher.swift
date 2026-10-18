@@ -23,6 +23,14 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
             | kFSEventStreamEventFlagUnmount
     )
 
+    /// `WatchRoot` is required for FSEvents to send `RootChanged` when a
+    /// watched root (or one of its parents) is renamed, moved or deleted.
+    static let streamCreateFlags = FSEventStreamCreateFlags(
+        kFSEventStreamCreateFlagUseCFTypes
+            | kFSEventStreamCreateFlagFileEvents
+            | kFSEventStreamCreateFlagWatchRoot
+    )
+
     private final class DeliveryToken: @unchecked Sendable {
         private let lock = NSLock()
         private var isActive = true
@@ -117,10 +125,7 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
                 release: nil,
                 copyDescription: nil
             )
-            let flags = FSEventStreamCreateFlags(
-                kFSEventStreamCreateFlagUseCFTypes
-                    | kFSEventStreamCreateFlagFileEvents
-            )
+            let flags = Self.streamCreateFlags
             guard let createdStream = FSEventStreamCreate(
                 nil,
                 { _, info, numEvents, eventPaths, eventFlags, _ in
@@ -184,6 +189,15 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
             } else {
                 self.recordChangedPathsLocked(paths)
             }
+        }
+    }
+
+    /// Behavioral test hook for a native batch whose paths all failed to
+    /// decode: the debounce is scheduled with nothing pending.
+    func simulateUndecodableFSEventBatch() {
+        eventQueue.async { [weak self] in
+            guard let self, self.isActive else { return }
+            self.scheduleDebouncedCallbackLocked()
         }
     }
 
@@ -345,6 +359,8 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
                   self.isActive,
                   let onChange = self.onChange,
                   let token = self.deliveryToken else { return }
+            // Clear before any early return, or every later batch is dropped.
+            self.debounceWorkItem = nil
             let event: ArchiveRootWatchEvent
             if self.fullRescanRequired {
                 self.fullRescanRequired = false
@@ -358,7 +374,6 @@ public final class FSEventsArchiveRootWatcher: ArchiveRootWatching, @unchecked S
                 guard !paths.isEmpty else { return }
                 event = .paths(paths)
             }
-            self.debounceWorkItem = nil
             Task { @MainActor in
                 token.performIfActive {
                     onChange(event)

@@ -326,7 +326,10 @@ extension ArchiveBrowserViewModel {
                     )
                     seenCanonical.insert(canonical)
                 }
-                for stored in preservedUnresolved where !merged.contains(where: { $0.id == stored.id }) {
+                // Unresolved Vault roots already survive through `retainedVaultRoots`.
+                for stored in preservedUnresolved
+                    where !merged.contains(where: { $0.id == stored.id })
+                    && !retainedVaultRoots.contains(where: { $0.id == stored.id }) {
                     let canonical = Self.canonicalPath(for: stored.fallbackURL)
                     if seenCanonical.contains(canonical) {
                         continue

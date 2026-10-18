@@ -63,7 +63,7 @@ public struct SongTitleResolver: Sendable {
            PreviewFilenameSemantics.isSongPreview(preview),
            isTrustworthyPreviewForTitle(preview),
            let deliveryTitle = PreviewSongIdentity.unstructuredDeliveryTitle(preview.fileName),
-           normalizedTitleWords(deliveryTitle).contains(where: { !Self.stripTokenSet.contains($0) }),
+           hasSongWordBeyondLabels(deliveryTitle),
            !isLikelyStemExportTitle(deliveryTitle) {
             return deliveryTitle
         }
@@ -265,6 +265,21 @@ public struct SongTitleResolver: Sendable {
             .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
             .map(String.init)
             .filter { !$0.isEmpty }
+    }
+
+    /// True when a delivery title carries a song name, not only export, stage or version labels.
+    /// A purely numeric title ("404") stays valid; numbers next to labels ("Mix 2", "Version 3") do not.
+    private func hasSongWordBeyondLabels(_ title: String) -> Bool {
+        let words = normalizedTitleWords(title)
+        let remaining = words.filter { word in
+            !Self.stripTokenSet.contains(word)
+                && word != "version"
+                && word.range(of: #"^v\d+$"#, options: .regularExpression) == nil
+        }
+        if remaining.contains(where: { $0.contains(where: \.isLetter) }) {
+            return true
+        }
+        return !remaining.isEmpty && remaining.count == words.count
     }
 
     private func isBounceLikePreview(_ preview: PreviewCandidate) -> Bool {

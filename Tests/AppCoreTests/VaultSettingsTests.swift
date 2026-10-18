@@ -40,6 +40,40 @@ final class VaultSettingsTests: XCTestCase {
         XCTAssertEqual(settings.archiveRoots.map(\.url.path), [scanOnly.fallbackURL.path])
     }
 
+    /// A root renamed in Finder keeps its bookmark but not its stored path; the bookmark's
+    /// current location must stay write-protected for every role.
+    func testToolOutputGuardProtectsTheBookmarkedLocationOfAMovedRoot() throws {
+        struct MovedBookmarks: SecurityScopedBookmarkResolving {
+            let locations: [Data: URL]
+            func resolveBookmark(_ data: Data) throws -> URL {
+                throw SecurityScopedBookmarkError.staleBookmark
+            }
+            func currentLocation(ofBookmark data: Data) -> URL? { locations[data] }
+        }
+        let roles: [MusicRootRole] = [.archive, .active, .scanOnly]
+        var settings = AppSettings()
+        var locations: [Data: URL] = [:]
+        settings.musicRoots = roles.map { role in
+            let bookmark = Data(role.rawValue.utf8)
+            locations[bookmark] = URL(fileURLWithPath: "/tmp/nmh-l573/\(role.rawValue) 2026", isDirectory: true)
+            return StoredMusicRoot(
+                role: role,
+                url: URL(fileURLWithPath: "/tmp/nmh-l573/\(role.rawValue)"),
+                securityScopedBookmark: bookmark
+            )
+        }
+        let outputGuard = ToolOutputGuard(settings: settings, bookmarks: MovedBookmarks(locations: locations))
+        for role in roles {
+            let moved = URL(fileURLWithPath: "/tmp/nmh-l573/\(role.rawValue) 2026/Out", isDirectory: true)
+            XCTAssertThrowsError(try outputGuard.validate(moved), "\(role) root moved")
+            XCTAssertThrowsError(
+                try outputGuard.validate(URL(fileURLWithPath: "/tmp/nmh-l573/\(role.rawValue)/Out", isDirectory: true)),
+                "\(role) root stored path"
+            )
+        }
+        XCTAssertNoThrow(try outputGuard.validate(URL(fileURLWithPath: "/tmp/nmh-l573/Output", isDirectory: true)))
+    }
+
     func testVaultDefaultsAreOptInAndMatchPolicy() {
         let vault = AppSettings.default.vault
         XCTAssertFalse(vault.isEnabled)

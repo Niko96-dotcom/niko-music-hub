@@ -161,7 +161,7 @@ final class EnumeratedPathResolver {
         }
         let rootPath = resolvedFolder()
         return Resolution(
-            isContained: derived.canonical == rootPath || derived.canonical.hasPrefix(rootPath + "/"),
+            isContained: derived.canonical == rootPath || derived.canonical.hasPrefix(PathSafety.childPrefix(of: rootPath)),
             canonicalPath: derived.canonical,
             noFollowPath: derived.noFollowPath
         )
@@ -181,7 +181,7 @@ final class EnumeratedPathResolver {
         if linkCheckDeferred {
             let rootPath = resolvedFolder()
             return Resolution(
-                isContained: derived.canonical == rootPath || derived.canonical.hasPrefix(rootPath + "/"),
+                isContained: derived.canonical == rootPath || derived.canonical.hasPrefix(PathSafety.childPrefix(of: rootPath)),
                 canonicalPath: derived.canonical,
                 noFollowPath: derived.noFollowPath
             )
@@ -190,7 +190,7 @@ final class EnumeratedPathResolver {
         case .linkFree:
             let rootPath = resolvedFolder()
             return Resolution(
-                isContained: derived.canonical == rootPath || derived.canonical.hasPrefix(rootPath + "/"),
+                isContained: derived.canonical == rootPath || derived.canonical.hasPrefix(PathSafety.childPrefix(of: rootPath)),
                 canonicalPath: derived.canonical,
                 noFollowPath: derived.noFollowPath
             )

@@ -274,7 +274,7 @@ struct OutputInboxInspectorView: View {
             }
         }
         .contextMenu {
-            if isAudioItem(item) {
+            if isAudioItem(item) && item.status == .available {
                 Button("Analyze BPM") {
                     analyzeBPM(for: item)
                 }
@@ -292,7 +292,7 @@ struct OutputInboxInspectorView: View {
             OutputInboxRowAccessibilityActions(
                 revealable: revealable,
                 openable: openable,
-                analyzable: isAudioItem(item),
+                analyzable: isAudioItem(item) && item.status == .available,
                 onReveal: { context.fileActions.revealInFinder(item.fileURL) },
                 onOpen: { NSWorkspace.shared.open(item.fileURL) },
                 onAnalyze: { analyzeBPM(for: item) }

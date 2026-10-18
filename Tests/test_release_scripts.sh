@@ -85,6 +85,12 @@ echo "== release version verifier =="
 assert_pass version-ok "$ROOT/script/release-version-verify.sh"
 assert_fail stale-version "$ROOT/script/release-version-verify.sh" --previous-version 1.4
 assert_contains "$TMP/stale-version.err" "previous version 1.4 appears outside allowlist"
+# A git grep error (exit > 1) must fail the stale-version check, not pass it.
+mkdir -p "$TMP/fake-git-bin"
+printf '#!/usr/bin/env bash\necho "fatal: fake git error" >&2\nexit 128\n' >"$TMP/fake-git-bin/git"
+chmod +x "$TMP/fake-git-bin/git"
+assert_fail stale-version-git-error env PATH="$TMP/fake-git-bin:$PATH" "$ROOT/script/release-version-verify.sh" --previous-version 0.0.0-not-present
+assert_contains "$TMP/stale-version-git-error.err" "git grep for previous version 0.0.0-not-present failed (exit 128)"
 
 echo "== permanent bundle identity =="
 EXPECTED_BUNDLE_ID="$(tr -d '[:space:]' <"$ROOT/BUNDLE_ID")"
@@ -103,6 +109,50 @@ assert_contains "$TMP/output-outside-repo.err" "output directory must stay benea
 assert_pass lifecycle-missing-target bash -c "source '$ROOT/script/lib/app_lifecycle.sh'; nmh_stop_app_binary '$TMP/Missing.app/Contents/MacOS/NikoMusicHub' true"
 assert_fail lifecycle-relative-target bash -c "source '$ROOT/script/lib/app_lifecycle.sh'; nmh_stop_app_binary 'relative/NikoMusicHub' true"
 assert_contains "$TMP/lifecycle-relative-target.err" "app binary path must be absolute"
+# A path longer than the 79-column non-tty ps width must still be found.
+LONG_BINARY_DIR="$TMP/long-path-$(printf 'x%.0s' {1..120})/LongPath.app/Contents/MacOS"
+mkdir -p "$LONG_BINARY_DIR"
+cp /bin/sleep "$LONG_BINARY_DIR/NikoMusicHub"
+# macOS kills a copied platform binary at launch unless it is signed again.
+/usr/bin/codesign --force --sign - "$LONG_BINARY_DIR/NikoMusicHub" >/dev/null 2>&1
+"$LONG_BINARY_DIR/NikoMusicHub" 30 </dev/null >/dev/null 2>&1 &
+LONG_BINARY_PID=$!
+assert_pass lifecycle-long-path bash -c "source '$ROOT/script/lib/app_lifecycle.sh'; nmh_running_app_binary_pids '$LONG_BINARY_DIR/NikoMusicHub'" </dev/null
+kill "$LONG_BINARY_PID" >/dev/null 2>&1 || true
+wait "$LONG_BINARY_PID" 2>/dev/null || true
+if ! grep -qx "$LONG_BINARY_PID" "$TMP/lifecycle-long-path.out"; then
+  echo "expected pid $LONG_BINARY_PID for long app binary path" >&2
+  exit 1
+fi
+# A failed nested Sparkle helper signature must fail nmh_sign_bundle itself and
+# stop before the app wrapper is signed. The dev path calls the function as an
+# `if !` condition, where errexit is off, so only an explicit return makes the
+# ad-hoc fallback run instead of leaving a bundle with mixed signatures.
+SIGN_FIXTURE="$TMP/sign-fixture"
+mkdir -p "$SIGN_FIXTURE/Sparkle.framework/Versions/B"
+: >"$SIGN_FIXTURE/Sparkle.framework/Versions/B/Autoupdate"
+assert_fail lifecycle-nested-sign-failure bash -c '
+  source "$1/script/lib/app_lifecycle.sh"
+  NMH_SPARKLE_FRAMEWORK="$2/Sparkle.framework"
+  codesign_log="$2/codesign-calls.log"
+  # Shadow the absolute codesign path; the last argument is the signed target.
+  /usr/bin/codesign() {
+    local target
+    for target; do :; done
+    printf "%s\n" "$target" >>"$codesign_log"
+    if [[ "$target" == */Autoupdate ]]; then
+      echo "codesign shim: refusing $target" >&2
+      return 1
+    fi
+    return 0
+  }
+  nmh_sign_bundle -
+' _ "$ROOT" "$SIGN_FIXTURE"
+assert_contains "$SIGN_FIXTURE/codesign-calls.log" "/Versions/B/Autoupdate"
+if grep -Fq -- ".app" "$SIGN_FIXTURE/codesign-calls.log"; then
+  echo "nmh_sign_bundle must stop at the first failed nested signature, not sign the app wrapper" >&2
+  exit 1
+fi
 
 echo "== isolated startup control flow =="
 # Exercise the real entrypoint with lifecycle doubles; no GUI or real settings.
@@ -187,11 +237,40 @@ git -C "$PUBLIC_TREE" config user.name "Release Test"
 git -C "$PUBLIC_TREE" config user.email "release-test@example.invalid"
 printf 'local proof: /Users/private-user/Music/project.cpr\n' >"$PUBLIC_TREE/docs/uat.md"
 printf 'private planning state\n' >"$PUBLIC_TREE/.planning/STATE.md"
-git -C "$PUBLIC_TREE" add .planning/STATE.md docs/uat.md
+# The fake key is assembled at runtime so this test file never carries a
+# credential-shaped string itself.
+HYGIENE_FAKE_KEY="AKIA""FAKEFAKEFAKEFAKE"
+printf 'notes\naws: %s\n' "$HYGIENE_FAKE_KEY" >"$PUBLIC_TREE/docs/notes.md"
+# Current token formats put a '-' or '_' segment right after the prefix.
+HYGIENE_FAKE_FORMATS=(
+  "sk-ant-""api03-FakeFake_Fake-FakeFakeFakeFake"
+  "sk-proj-""FakeFake_Fake-FakeFakeFakeFake"
+  "github_pat_""11FAKEFAKEFAKEFAKEFAKE_fakefake"
+  "sk_live_""FakeFakeFakeFakeFakeFake"
+  "-----BEGIN ENCRYPTED ""PRIVATE KEY-----"
+)
+printf '%s\n' "${HYGIENE_FAKE_FORMATS[@]}" >>"$PUBLIC_TREE/docs/notes.md"
+git -C "$PUBLIC_TREE" add .planning/STATE.md docs/uat.md docs/notes.md
 git -C "$PUBLIC_TREE" commit -qm initial
 assert_fail hygiene-public-private-state "$PUBLIC_TREE/script/public-tree-hygiene.sh" --public-release
 assert_contains "$TMP/hygiene-public-private-state.err" "private planning or agent state"
 assert_contains "$TMP/hygiene-public-private-state.err" "real home-directory path"
+# A credential hit names file and line, but never echoes the secret itself
+# (the report is teed into the release log).
+assert_contains "$TMP/hygiene-public-private-state.err" "docs/notes.md:2: credential-shaped string"
+assert_not_contains "$TMP/hygiene-public-private-state.err" "$HYGIENE_FAKE_KEY"
+for hygiene_line in 3 4 5 6 7; do
+  assert_contains "$TMP/hygiene-public-private-state.err" "docs/notes.md:$hygiene_line: credential-shaped string"
+done
+assert_contains "$TMP/hygiene-public-private-state.err" "docs/uat.md:1: real home-directory path"
+assert_not_contains "$TMP/hygiene-public-private-state.err" "/Users/private-user"
+HYGIENE_NO_RG_BIN="$TMP/hygiene-no-rg-bin"
+mkdir -p "$HYGIENE_NO_RG_BIN"
+for tool in bash git dirname find sort; do
+  ln -sf "$(command -v "$tool")" "$HYGIENE_NO_RG_BIN/$tool"
+done
+assert_fail hygiene-missing-rg env PATH="$HYGIENE_NO_RG_BIN" "$ROOT/script/public-tree-hygiene.sh"
+assert_contains "$TMP/hygiene-missing-rg.err" "requires ripgrep (rg)"
 
 echo "== checksum basename validation =="
 CHECK_DIR="$TMP/checksum"
@@ -229,6 +308,8 @@ assert_contains "$ROOT/script/release-all.sh" '--architectures "$RELEASE_ARCHITE
 assert_contains "$ROOT/script/release-all.sh" '--minimum-macos "$MIN_MACOS_VERSION"'
 assert_contains "$ROOT/script/release-all.sh" '--artifact-size "$ARTIFACT_SIZE"'
 assert_contains "$ROOT/script/validate-release-artifact.sh" 'lipo -archs "$BINARY"'
+assert_contains "$ROOT/script/validate-release-artifact.sh" 'grep -Fxq "Authority=$SIGNING_IDENTITY"'
+assert_contains "$ROOT/script/validate-release-artifact.sh" '[[ "$SHA_FILE_NAME" == "$ARTIFACT_BASENAME" ]]'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'NMH_BUILD_CONFIGURATION="${NMH_BUILD_CONFIGURATION:-debug}"'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'swift build -c "$NMH_BUILD_CONFIGURATION" --product "$NMH_APP_NAME" --explicit-target-dependency-import-check error'
 assert_contains "$ROOT/script/lib/app_lifecycle.sh" 'nmh_running_dist_app_pids'
@@ -283,6 +364,12 @@ assert_fail public-skip-tests "$ROOT/script/release-all.sh" --public --dry-run-p
 assert_contains "$TMP/public-skip-tests.err" "public release rejects --skip-tests"
 assert_fail public-emergency-no-reason "$ROOT/script/release-all.sh" --public --dry-run-publish --emergency-skip-tests
 assert_contains "$TMP/public-emergency-no-reason.err" "requires a non-empty --reason"
+# A trailing --reason must print usage, not exit silently; a following flag is not a value.
+assert_fail public-reason-missing-value "$ROOT/script/release-all.sh" --public --dry-run-publish --emergency-skip-tests --reason
+assert_contains "$TMP/public-reason-missing-value.err" "--reason requires a value"
+assert_contains "$TMP/public-reason-missing-value.err" "usage:"
+assert_fail public-reason-takes-flag "$ROOT/script/release-all.sh" --public --emergency-skip-tests --reason --dry-run-publish
+assert_contains "$TMP/public-reason-takes-flag.err" "--reason requires a value"
 
 echo "== public mode fails closed without credentials (clean-prerequisite aware) =="
 # The candidate checkout carries uncommitted test edits during development, so the
@@ -324,6 +411,9 @@ echo "== post-pin preflight reads pinned snapshot, not live checkout =="
 assert_contains "$ROOT/script/release-all.sh" '"$ROOT/script/release-preflight.sh" --root "$ROOT"'
 assert_not_contains "$ROOT/script/release-all.sh" '--root "$INVOKING_ROOT"'
 assert_contains "$ROOT/script/release-all.sh" 'if [[ "${NMH_RELEASE_TEST_MODE:-}" == "1" ]]; then'
+
+echo "== release log in a subdirectory survives the release dir wipe =="
+assert_contains "$ROOT/script/release-all.sh" 'mkdir -p "$(dirname "$LOG_FILE")"'
 
 echo "== explicit local-only mode does not publish =="
 assert_fail local-publish "$ROOT/script/release-all.sh" --local-only --publish --skip-tests
@@ -519,6 +609,45 @@ for i in $(seq 1 25); do
     echo "notarize helper rejected an Accepted verdict on run $i" >&2
     exit 1
   fi
+done
+
+echo "== a Rejected notary verdict is final and saves Apple's log =="
+# notarytool reports both Invalid and Rejected as final verdicts. Either one must
+# fail without retrying and must fetch the log so the reason is in the record.
+for verdict in Invalid Rejected; do
+  VERDICT_STUB="$TMP/notary-stub-$verdict"
+  mkdir -p "$VERDICT_STUB"
+  cat >"$VERDICT_STUB/xcrun" <<STUB
+#!/usr/bin/env bash
+# Mimics \`notarytool submit --wait\` with a $verdict verdict and \`notarytool log\`.
+echo "\$*" >>"$VERDICT_STUB/calls"
+if [[ "\$2" == "log" ]]; then
+  echo '{"status":"$verdict"}'
+  exit 0
+fi
+echo "  id: 11111111-1111-1111-1111-111111111111"
+echo "  status: $verdict"
+exit 0
+STUB
+  chmod +x "$VERDICT_STUB/xcrun"
+  VERDICT_DIR="$TMP/notary-release-$verdict"
+  mkdir -p "$VERDICT_DIR"
+  if PATH="$VERDICT_STUB:$PATH" bash -c "set -euo pipefail; LOG_FILE=/dev/null; RELEASE_DIR='$VERDICT_DIR'; NMH_NOTARY_PROFILE=stub; sleep() { :; }; $NOTARIZE_FN; notarize app /dev/null" >/dev/null 2>&1; then
+    echo "notarize helper accepted a $verdict verdict" >&2
+    exit 1
+  fi
+  if ! grep -q '^notarytool log 11111111-1111-1111-1111-111111111111 ' "$VERDICT_STUB/calls"; then
+    echo "notarize helper did not fetch Apple's log for a $verdict verdict" >&2
+    exit 1
+  fi
+  if [[ "$(grep -c '^notarytool submit ' "$VERDICT_STUB/calls")" != "1" ]]; then
+    echo "notarize helper retried a final $verdict verdict" >&2
+    exit 1
+  fi
+  [[ -s "$VERDICT_DIR/notary-app-11111111-1111-1111-1111-111111111111.json" ]] || {
+    echo "notarize helper did not save Apple's log next to the release output for a $verdict verdict" >&2
+    exit 1
+  }
 done
 
 echo "== throwaway settings suites are forgotten completely, the real domain never =="
@@ -1835,6 +1964,7 @@ assert_contains "$ROOT/script/validate-update-feed.py" "exactly one arm64"
 assert_contains "$ROOT/script/validate-update-feed.py" "exactly one full enclosure"
 assert_contains "$ROOT/script/validate-update-feed.py" "deltaFrom"
 assert_not_contains "$ROOT/script/validate-update-feed.py" 'if len(expected_architectures) == 1:'
+assert_not_contains "$ROOT/script/validate-update-feed.py" "feed_signed={'yes' if match else 'no'}"
 FEED_DIR="$TMP/feed"
 FEED_GOOD="$TMP/feed-good"
 FEED_VERSION="9.9.9"
@@ -2136,6 +2266,29 @@ sed 's/Sparkle/Redacted/g' "$ROOT/SOURCE_PROVENANCE.md" >"$META/SOURCE_PROVENANC
 assert_fail metadata-provenance-missing /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
 assert_contains "$TMP/metadata-provenance-missing.err" "no coverage"
 cp "$ROOT/SOURCE_PROVENANCE.md" "$META/SOURCE_PROVENANCE.md"
+/usr/bin/python3 - "$META/SBOM.spdx.json" "$META/Package.resolved" <<'PY'
+import json
+import sys
+from pathlib import Path
+sbom_path = Path(sys.argv[1])
+resolved_path = Path(sys.argv[2])
+resolved = json.loads(resolved_path.read_text())
+revision = None
+for pin in resolved["pins"]:
+    if pin["identity"] == "sparkle":
+        pin["location"] = "git@github.com:sparkle-project/Sparkle.git"
+        revision = pin["state"]["revision"]
+resolved_path.write_text(json.dumps(resolved, indent=2) + "\n")
+payload = json.loads(sbom_path.read_text())
+for package in payload["packages"]:
+    if str(package.get("name", "")).lower() == "sparkle":
+        package["downloadLocation"] = f"git+git@github.com:evil/Other.git@{revision}"
+sbom_path.write_text(json.dumps(payload, indent=2) + "\n")
+PY
+assert_fail metadata-ssh-location-mismatch /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
+assert_contains "$TMP/metadata-ssh-location-mismatch.err" "does not match resolved location"
+cp "$ROOT/SBOM.spdx.json" "$META/SBOM.spdx.json"
+cp "$ROOT/Package.resolved" "$META/Package.resolved"
 assert_pass metadata-fixture-restored /usr/bin/python3 "$ROOT/script/validate-release-metadata.py" --root "$META"
 
 echo "== public preflight proves its tools before lengthy gates =="

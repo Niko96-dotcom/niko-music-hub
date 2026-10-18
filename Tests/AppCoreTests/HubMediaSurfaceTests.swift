@@ -1,4 +1,4 @@
-import AppCore
+@testable import AppCore
 import AppKit
 import SwiftUI
 import XCTest
@@ -42,6 +42,19 @@ final class HubMediaSurfaceTests: XCTestCase {
             ),
             size: CGSize(width: 220, height: 22)
         ))
+    }
+
+    func testPlayedBarCountMatchesProgress() {
+        func litBars(_ progress: Double) -> Int {
+            (0..<16).filter { HubWaveformSurface.isBarPlayed(index: $0, count: 16, progress: progress) }.count
+        }
+
+        XCTAssertEqual(litBars(0), 0)
+        XCTAssertEqual(litBars(0.0625), 1)
+        XCTAssertEqual(litBars(0.5), 8)
+        XCTAssertEqual(litBars(1.0), 16)
+        XCTAssertEqual(litBars(.nan), 0)
+        XCTAssertEqual(litBars(-1), 0)
     }
 
     func testMediaSurfaceSourceExposesRequiredStates() throws {

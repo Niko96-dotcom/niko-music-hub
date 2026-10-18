@@ -217,6 +217,8 @@ def validate(args: argparse.Namespace) -> None:
     verify(enclosure_signature, artifact_bytes, "enclosure")
 
     match = FEED_SIGNATURE_PATTERN.search(raw_feed)
+    # Only a trailer verified against the bundle key may be reported as signed.
+    feed_signed = "no" if match is None else "unverified"
     if bundle["require_signed_feed"]:
         if match is None:
             raise FeedValidationError(
@@ -229,12 +231,13 @@ def validate(args: argparse.Namespace) -> None:
                 f"appcast signature covers {signed_length} bytes but the file is {len(raw_feed)}"
             )
         verify(match.group(1).decode("ascii"), raw_feed[:signed_length], "appcast feed")
+        feed_signed = "yes"
 
     print(
         "update feed validated: "
         f"version={args.version} build={args.build_number} "
         f"enclosure={args.expected_enclosure_url} "
-        f"feed_signed={'yes' if match else 'no'} "
+        f"feed_signed={feed_signed} "
         f"key={bundle['public_key'][:12]}…"
     )
 

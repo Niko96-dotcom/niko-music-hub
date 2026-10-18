@@ -1,5 +1,6 @@
 import AppCore
 import Foundation
+import NikoMusicCore
 
 public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable {
     private let settingsProvider: @Sendable () throws -> HelperToolSettings
@@ -145,11 +146,11 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
             try Task.checkCancellation()
 
             guard result.exitCode == 0 else {
-                let stderr = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
-                let message = stderr.isEmpty
-                    ? "demucs-mlx exited with code \(result.exitCode)"
-                    : "demucs-mlx failed: \(stderr)"
-                return .failed(message: message)
+                let summary = "Stem separation failed (demucs-mlx exit code \(result.exitCode))"
+                guard let cause = failureCause(from: result.standardError) else {
+                    return .failed(message: summary + ".")
+                }
+                return .failed(message: "\(summary): \(cause)")
             }
 
             let outputFolderURL = resolvedOutputFolderURL(for: request)
@@ -164,6 +165,40 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
         } catch {
             return .failed(message: "Process error: \(error.localizedDescription)")
         }
+    }
+
+    /// The last non-progress stderr line names the cause (for example the final
+    /// traceback line); the rest of the terminal output never becomes UI copy.
+    /// An exception line wins even when it mentions a phase word ("loading model").
+    private func failureCause(from standardError: String) -> String? {
+        let lines = standardError
+            .split(whereSeparator: { $0 == "\r" || $0 == "\n" })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let otherLine = lines.last { line in
+            progressParser.parse(line: line) == nil && !Self.isTracebackFrameLine(line)
+        }
+        guard let cause = Self.exceptionLine(in: lines) ?? otherLine else { return nil }
+        let redacted = DiagnosticsPathRedactor.redactPathsInText(cause)
+        return redacted.count > 200 ? String(redacted.prefix(200)) + "…" : redacted
+    }
+
+    /// The last Python exception line (`ModuleNotFoundError: …`), if any.
+    static func exceptionLine(in lines: [String]) -> String? {
+        lines.last { line in
+            line.range(of: #"^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt)\b"#, options: .regularExpression) != nil
+        }
+    }
+
+    static func redactPaths(in text: String) -> String {
+        DiagnosticsPathRedactor.redactPathsInText(text)
+    }
+
+    /// Traceback header, frame and caret lines never name the cause.
+    static func isTracebackFrameLine(_ line: String) -> Bool {
+        line.hasPrefix("File \"")
+            || line.hasPrefix("Traceback (")
+            || line.range(of: #"^[\^~\s]+$"#, options: .regularExpression) != nil
     }
 
     private func resolvedOutputFolderURL(for request: StemSeparationBackendRequest) -> URL {
@@ -214,28 +249,44 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
             guard let parsed = progressParser.parse(line: String(trimmed)) else { continue }
-            let reported = tracker.next(for: parsed.progress)
-            progressHandler(reported, parsed.message)
+            let reported = tracker.next(for: parsed.progress, message: parsed.message)
+            progressHandler(reported.progress, reported.message)
         }
     }
 }
 
+/// Progress never moves backwards within one phase. Model download and loading
+/// are their own phases, so a finished download does not pin separation at 100%.
 private final class DemucsProgressTracker: @unchecked Sendable {
+    private static let downloading = "Downloading model…"
+    private static let loading = "Loading model…"
+    private static let separating = "Separating stems…"
+
     private let lock = NSLock()
-    private var lastKnown: Double = 0
+    private var phase: String?
     private var maxReported: Double = 0
 
-    func next(for parsed: Double?) -> Double {
+    func next(for parsed: Double?, message: String?) -> (progress: Double, message: String?) {
         lock.withLock {
-            let candidate: Double
-            if let parsed {
-                candidate = max(parsed, lastKnown, maxReported)
-            } else {
-                candidate = max(lastKnown, maxReported)
+            var message = message
+            if phase == Self.downloading, parsed != nil, message == Self.separating {
+                // Bare percentages after "Downloading" belong to the download until a
+                // lower value starts the next progress bar.
+                if let parsed, parsed < maxReported {
+                    message = Self.separating
+                } else {
+                    message = Self.downloading
+                }
             }
-            lastKnown = candidate
-            maxReported = max(maxReported, candidate)
-            return candidate
+            if message != phase,
+               message == Self.downloading || message == Self.loading || phase == Self.downloading {
+                maxReported = 0
+            }
+            if let message { phase = message }
+            if let parsed {
+                maxReported = max(parsed, maxReported)
+            }
+            return (maxReported, message)
         }
     }
 }

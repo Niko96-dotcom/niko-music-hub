@@ -4,6 +4,28 @@ import Foundation
 import XCTest
 
 final class HelperToolInstallerTests: XCTestCase {
+    func testURLSessionRequestErrorsBecomeDownloadFailed() async throws {
+        // An unsupported scheme fails inside URLSession without any network access.
+        let url = try XCTUnwrap(URL(string: "nmh-unsupported://example.invalid/tool.sha256"))
+        let downloader = URLSessionHelperDownloader()
+        do {
+            _ = try await downloader.fetchText(url)
+            XCTFail("fetchText should throw")
+        } catch let error as HelperInstallError {
+            guard case .downloadFailed = error else { return XCTFail("unexpected error \(error)") }
+        }
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("tool")
+        defer { try? FileManager.default.removeItem(at: destination.deletingLastPathComponent()) }
+        do {
+            _ = try await downloader.download(url, to: destination, progress: { _ in })
+            XCTFail("download should throw")
+        } catch let error as HelperInstallError {
+            guard case .downloadFailed = error else { return XCTFail("unexpected error \(error)") }
+        }
+    }
+
     @MainActor
     func testDirectoriesAndDirectorySymlinksAreNotInstalledOrReady() throws {
         for symbolicLink in [false, true] {
@@ -227,6 +249,35 @@ final class HelperToolInstallerTests: XCTestCase {
         XCTAssertTrue(warmup.arguments.contains("htdemucs_ft"))
         let outputIndex = try XCTUnwrap(warmup.arguments.firstIndex(of: "--out"))
         XCTAssertTrue(warmup.arguments[outputIndex + 1].hasPrefix(attemptRoot.path + "/"))
+        assertNoStagingLeft(managedRoot: managedRoot)
+    }
+
+    func testStemInstallRemovesLeftoverStagingAndSupersededEnvironments() async throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let managedRoot = root.appendingPathComponent("Tools", isDirectory: true)
+        let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
+        let downloader = FakeDownloader()
+        seedStemSeparation(downloader: downloader)
+        let uvTools = managedRoot.appendingPathComponent("uv-tools", isDirectory: true)
+        let orphanStaging = managedRoot.appendingPathComponent(".staging/orphan", isDirectory: true)
+        let orphanEnvironment = uvTools.appendingPathComponent("orphan", isDirectory: true)
+        for directory in [orphanStaging, orphanEnvironment] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+
+        let installer = HelperToolInstaller(locator: locator, downloader: downloader, processRunner: FakeRunner())
+        try await installer.install(.stemSeparation) { _ in }
+        let first = try FileManager.default.contentsOfDirectory(atPath: uvTools.path)
+        XCTAssertEqual(first.count, 1, "uv-tools: \(first)")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphanEnvironment.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphanStaging.path))
+
+        try await installer.install(.stemSeparation) { _ in }
+        let second = try FileManager.default.contentsOfDirectory(atPath: uvTools.path)
+        XCTAssertEqual(second.count, 1, "uv-tools: \(second)")
+        XCTAssertNotEqual(second, first, "The superseded environment must be removed")
+        XCTAssertTrue(installer.isInstalled(.stemSeparation))
         assertNoStagingLeft(managedRoot: managedRoot)
     }
 

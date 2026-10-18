@@ -90,7 +90,10 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         guard case .error(let error) = vm.recordingState else {
             return XCTFail("Expected .error but got \(vm.recordingState)")
         }
-        XCTAssertNotEqual(error, .settingsUnreadable)
+        guard case .outputRefused(let message) = error else {
+            return XCTFail("Expected .outputRefused but got \(error)")
+        }
+        XCTAssertTrue(message.contains("cannot be inside a music archive root"), message)
     }
 
     func testReadableSettingsWithUnprotectedDestinationStartCapture() async throws {

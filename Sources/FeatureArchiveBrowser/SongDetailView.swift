@@ -124,7 +124,18 @@ struct SongDetailView: View {
         }
         .onChange(of: workspaceTab) { _, tab in
             if tab == .plugins {
-                viewModel.pluginsSectionExpanded = true
+                // Already expanded means no false→true change below, so ask
+                // here: the main project may have changed since the last visit.
+                if viewModel.pluginsSectionExpanded {
+                    viewModel.refreshCPRPluginSummary(for: liveSong)
+                } else {
+                    viewModel.pluginsSectionExpanded = true
+                }
+            }
+        }
+        .onChange(of: liveSong.effectiveLatestCPR?.filePath) { _, _ in
+            if viewModel.pluginsSectionExpanded {
+                viewModel.refreshCPRPluginSummary(for: liveSong)
             }
         }
         // Identity is per song (`.id(song.id)` at the call sites), so a song
@@ -550,6 +561,7 @@ struct SongDetailView: View {
             onOpen: { try? viewModel.openProjectVersion($0, for: liveSong) },
             onSetMain: { viewModel.setManualMainCPR(for: liveSong, versionID: $0.id) },
             onHide: { viewModel.ignoreCPRVersion(for: liveSong, versionID: $0.id) },
+            onShow: { viewModel.unignoreCPRVersion(for: liveSong, versionID: $0.id) },
             onRevertToAuto: { viewModel.revertCPRToAuto(for: liveSong) }
         )
     }
@@ -646,7 +658,13 @@ struct SongDetailView: View {
             )
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .disabled(viewModel.blocksGenericProjectVaultFileActions(for: liveSong))
+            // Edits of a song that needs repair are refused by the metadata
+            // gate; the repair notice above says so. Disable the form so a
+            // typed value never looks saved.
+            .disabled(
+                viewModel.blocksGenericProjectVaultFileActions(for: liveSong)
+                    || viewModel.metadataRepairSongIDs.contains(liveSong.id)
+            )
             SongCollaboratorsSection(
                 collaborators: viewModel.collaborators,
                 selectedIDs: liveSong.collaboratorIDs,
@@ -772,12 +790,16 @@ struct SongDetailView: View {
         let previousTitle = song.virtualTitle
         let previousAliases = song.aliases
         let previousNote = song.appNote
-        viewModel.applySongNotes(
+        let outcome = viewModel.applySongNotes(
             for: song,
             virtualTitle: virtualTitleDraft,
             aliasesText: aliasesDraft,
             appNote: appNoteDraft
         )
+        // A refused save stored nothing: keep the drafts dirty so the fields
+        // keep the typed text, the autosave flush retries, and the next
+        // catalog refresh does not silently replace text that was never saved.
+        guard outcome != .refused else { return }
         syncedVirtualTitle = virtualTitleDraft
         syncedAliases = aliasesDraft
         syncedAppNote = appNoteDraft
@@ -800,7 +822,7 @@ struct SongDetailView: View {
     private func commitVirtualTitle() {
         let song = liveSong
         let previousTitle = song.virtualTitle
-        viewModel.updateVirtualTitle(for: song, title: virtualTitleDraft)
+        guard viewModel.commitVirtualTitle(for: song, title: virtualTitleDraft) != .refused else { return }
         syncedVirtualTitle = virtualTitleDraft
         if viewModel.songs.first(where: { $0.id == song.id })?.virtualTitle != previousTitle {
             viewModel.registerMetadataUndo(
@@ -815,7 +837,7 @@ struct SongDetailView: View {
     private func commitAppNote() {
         let song = liveSong
         let previousNote = song.appNote
-        viewModel.updateAppNote(for: song, note: appNoteDraft)
+        guard viewModel.commitAppNote(for: song, note: appNoteDraft) != .refused else { return }
         syncedAppNote = appNoteDraft
         if viewModel.songs.first(where: { $0.id == song.id })?.appNote != previousNote {
             viewModel.registerMetadataUndo(
@@ -830,7 +852,7 @@ struct SongDetailView: View {
     private func commitAliases() {
         let song = liveSong
         let previousAliases = song.aliases
-        viewModel.updateAliases(for: song, aliasesText: aliasesDraft)
+        guard viewModel.commitAliases(for: song, aliasesText: aliasesDraft) != .refused else { return }
         syncedAliases = aliasesDraft
         if viewModel.songs.first(where: { $0.id == song.id })?.aliases != previousAliases {
             viewModel.registerMetadataUndo(

@@ -45,6 +45,12 @@ public struct ProjectVaultRecoveredLibrary: Sendable, Equatable {
 
 public enum ProjectVaultRecoveryServiceError: Error, Equatable, Sendable {
     case databaseUnavailable
+    /// Another Project Vault operation holds the mutation lease; retry later.
+    case vaultBusy
+    /// The current settings could not be read, so no export was made.
+    case settingsUnreadable(String)
+    /// The chosen export location is inside a configured music root.
+    case destinationInsideMusicRoot
     case recoveredSuiteUnavailable
     case recoveryDestinationOccupied(String)
     case ioFailed(String)
@@ -97,11 +103,32 @@ public struct ProjectVaultRecoveryService: Sendable {
         guard let database else {
             throw ProjectVaultRecoveryServiceError.databaseUnavailable
         }
-        let lease = try ProjectVaultMutationFileLease(
-            url: database.fileURL.appendingPathExtension("project-vault.lock")
-        )
+        let lease: ProjectVaultMutationFileLease
+        do {
+            lease = try ProjectVaultMutationFileLease(
+                url: database.fileURL.appendingPathExtension("project-vault.lock")
+            )
+        } catch ProjectVaultRuntimeError.mutationInProgress {
+            throw ProjectVaultRecoveryServiceError.vaultBusy
+        } catch {
+            throw ProjectVaultRecoveryServiceError.ioFailed("cannot claim Vault mutation lease: \(error)")
+        }
         defer { lease.release() }
-        let settings = try settingsStore.loadSettings()
+        let settings: AppSettings
+        do {
+            settings = try settingsStore.loadSettings()
+        } catch {
+            throw ProjectVaultRecoveryServiceError.settingsUnreadable(String(describing: error))
+        }
+        // Music roots are read-only: a bundle inside one would show up as
+        // project content on the next scan or Vault sweep.
+        let outputGuard = ToolOutputGuard(settings: settings)
+        do {
+            try outputGuard.validate(bundleURL)
+            try outputGuard.validate(bundleURL.deletingLastPathComponent())
+        } catch {
+            throw ProjectVaultRecoveryServiceError.destinationInsideMusicRoot
+        }
         try ProjectVaultRecoveryBundle.exportBundle(
             database: database,
             settings: settings,
@@ -265,7 +292,11 @@ public struct ProjectVaultRecoveryService: Sendable {
         ownedFiles.removeAll { $0 == staged.databaseURL }
         ownedFiles.append(finalDatabaseURL)
         // Re-verify the placed file through the read-only path after the move.
-        try SQLiteArchiveDatabase.verifyBackupFileIntegrity(at: finalDatabaseURL)
+        do {
+            try SQLiteArchiveDatabase.verifyBackupFileIntegrity(at: finalDatabaseURL)
+        } catch {
+            throw ProjectVaultRecoveryBundle.BundleError.databaseIntegrityFailed(String(describing: error))
+        }
         // Recovered settings go ONLY to the fresh suite, via the same store
         // the app uses for that suite. Current settings are never written.
         // (The backend already forced automation off/paused in `staged.settings`.)

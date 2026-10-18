@@ -17,6 +17,12 @@ final class MusicSearchMatcherFuzzyTests: XCTestCase {
         XCTAssertEqual(MusicSearchMatcher.boundedEditDistance("neon", "noen", max: 2), 1)
     }
 
+    func testBoundedEditDistanceHandlesEmptyOperand() {
+        XCTAssertEqual(MusicSearchMatcher.boundedEditDistance("", "", max: 1), 0)
+        XCTAssertEqual(MusicSearchMatcher.boundedEditDistance("", "a", max: 1), 1)
+        XCTAssertEqual(MusicSearchMatcher.boundedEditDistance("ab", "", max: 2), 2)
+    }
+
     func testTypoMatchesSongTitle() {
         let song = Song(
             folderPath: URL(fileURLWithPath: "/tmp/Neon Hook", isDirectory: true),
@@ -26,6 +32,16 @@ final class MusicSearchMatcherFuzzyTests: XCTestCase {
         let details = MusicSearchMatcher.matchDetails(song: song, queryTokens: ["noen"])
         XCTAssertEqual(details.first?.kind, .fuzzyTitle)
         XCTAssertFalse(MusicSearchMatcher.matchDetails(song: song, queryTokens: ["hooj"]).isEmpty)
+    }
+
+    func testTypoAcrossWordBoundaryMatchesLongTitle() {
+        let song = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/Track 01", isDirectory: true),
+            originalFolderName: "Track 01",
+            displayTitle: "My Song Remix"
+        )
+        let details = MusicSearchMatcher.matchDetails(song: song, queryTokens: ["mysnog"])
+        XCTAssertEqual(details.first?.kind, .fuzzyTitle)
     }
 
     func testBoundedWindowRetainsTightMatchRejectsSpread() {

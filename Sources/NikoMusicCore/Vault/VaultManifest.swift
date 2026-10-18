@@ -314,7 +314,9 @@ extension VaultManifest {
     /// extended attributes, the root folder's included. Allocation is left out:
     /// APFS trims a file's preallocated blocks the first time the file is
     /// cloned, so copying the source can change its allocated size without
-    /// changing a byte.
+    /// changing a byte. Directory modification times are left out too: Finder
+    /// writing an ignored `.DS_Store` touches them without changing any
+    /// archived content.
     func hasSameObservedContent(as other: VaultManifest) -> Bool {
         guard entries.count == other.entries.count,
               rootExtendedAttributeBytes == other.rootExtendedAttributeBytes else { return false }
@@ -322,7 +324,7 @@ extension VaultManifest {
             before.relativePath == after.relativePath
                 && before.type == after.type
                 && before.byteCount == after.byteCount
-                && before.modifiedAt == after.modifiedAt
+                && (before.type == .directory || before.modifiedAt == after.modifiedAt)
                 && before.sha256 == after.sha256
                 && before.extendedAttributeBytes == after.extendedAttributeBytes
         }
@@ -711,14 +713,17 @@ public struct VaultManifestBuilder: @unchecked Sendable {
         }
     }
 
+    /// Never follows a symlink: the entry is refused as a link right after this,
+    /// and reading through a dangling or unreadable link would turn that into
+    /// an enumeration failure with the wrong advice.
     private static func extendedAttributeBytes(at url: URL) throws -> Int64 {
         try url.withUnsafeFileSystemRepresentation { path in
             guard let path else { throw VaultManifestError.enumerationFailed(url.path) }
-            let nameBytes = listxattr(path, nil, 0, 0)
+            let nameBytes = listxattr(path, nil, 0, XATTR_NOFOLLOW)
             guard nameBytes >= 0 else { throw posixReadError(url: url) }
             guard nameBytes > 0 else { return 0 }
             var names = [CChar](repeating: 0, count: nameBytes)
-            guard listxattr(path, &names, names.count, 0) == nameBytes else {
+            guard listxattr(path, &names, names.count, XATTR_NOFOLLOW) == nameBytes else {
                 throw posixReadError(url: url)
             }
             var total = Int64(nameBytes)
@@ -729,7 +734,7 @@ public struct VaultManifestBuilder: @unchecked Sendable {
                     let name = base.advanced(by: offset)
                     let length = strlen(name)
                     guard length > 0 else { break }
-                    let valueBytes = getxattr(path, name, nil, 0, 0, 0)
+                    let valueBytes = getxattr(path, name, nil, 0, 0, XATTR_NOFOLLOW)
                     guard valueBytes >= 0 else { throw posixReadError(url: url) }
                     let (nextTotal, overflow) = total.addingReportingOverflow(Int64(valueBytes))
                     guard !overflow else { throw VaultManifestError.invalidSize }

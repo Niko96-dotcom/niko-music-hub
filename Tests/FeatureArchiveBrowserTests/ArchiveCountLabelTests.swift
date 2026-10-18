@@ -33,7 +33,12 @@ final class ArchiveCountLabelTests: XCTestCase {
     func testSidebarHealthAndFilesystemStatusSayOneSong() {
         let solo = song(named: "Solo", warnings: ["No preview"])
         let health = ArchiveSidebarHealthContext.make(report: ArchiveHealthReport(songs: [solo]), skippedEntryCount: 0)
-        XCTAssertEqual(health.summary, "1 song · 1 warning")
+        XCTAssertEqual(health.summary, "1 song · 1 song with warnings")
+
+        let noisy = song(named: "Noisy", warnings: ["No preview", "No CPR", "Odd name"])
+        let quiet = song(named: "Quiet", warnings: ["No preview"])
+        let multi = ArchiveSidebarHealthContext.make(report: ArchiveHealthReport(songs: [noisy, quiet]), skippedEntryCount: 0)
+        XCTAssertEqual(multi.summary, "2 songs · 2 songs with warnings")
 
         let diagnostics = ArchiveScanDiagnostics(
             scannedAt: Date(timeIntervalSince1970: 1),

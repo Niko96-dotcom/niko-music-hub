@@ -31,6 +31,8 @@ if [[ -n "${NMH_PUBLIC_TREE_STRICT_PLANNING:-}" ]]; then
   PUBLIC_RELEASE=true
 fi
 
+command -v rg >/dev/null 2>&1 || { echo "public-tree-hygiene requires ripgrep (rg)" >&2; exit 2; }
+
 cd "$ROOT"
 
 FILES=()
@@ -71,15 +73,23 @@ for file in "${FILES[@]}"; do
   fi
 done
 
-SECRET_PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,})'
+SECRET_PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|github_pat_[A-Za-z0-9_]{22,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-(proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|sk_live_[A-Za-z0-9]{20,})'
 for file in "${FILES[@]}"; do
   case "$file" in
     script/public-tree-hygiene.sh|script/verify-source-distribution.py|Tests/test_source_distribution_scripts.sh|docs/release.md|docs/release-validation.md) continue ;;
   esac
   if [[ -f "$file" ]]; then
+    rg_status=0
+    # --no-filename: the report names the file itself. Only the line number is
+    # kept, so a real leaked secret is never echoed to the terminal or the
+    # release log.
+    hits="$(rg -n --no-filename "$SECRET_PATTERN" "$file")" || rg_status=$?
+    if [[ $rg_status -gt 1 ]]; then
+      FAILURES+=("$file: credential scan failed (rg exit $rg_status)")
+    fi
     while IFS= read -r hit; do
-      [[ -n "$hit" ]] && FAILURES+=("$hit: credential-shaped string")
-    done < <(rg -n -I "$SECRET_PATTERN" "$file" || true)
+      [[ -n "$hit" ]] && FAILURES+=("$file:${hit%%:*}: credential-shaped string")
+    done <<<"$hits"
   fi
 done
 
@@ -92,9 +102,14 @@ if [[ "$PUBLIC_RELEASE" == true ]]; then
       Sources/*|Tests/*|Fixtures/*|script/*) continue ;;
     esac
     if [[ -f "$file" ]]; then
+      rg_status=0
+      hits="$(rg -n --no-filename "$HOME_PATH_PATTERN" "$file")" || rg_status=$?
+      if [[ $rg_status -gt 1 ]]; then
+        FAILURES+=("$file: home-path scan failed (rg exit $rg_status)")
+      fi
       while IFS= read -r hit; do
-        [[ -n "$hit" ]] && FAILURES+=("$hit: real home-directory path must not ship in a public source tree")
-      done < <(rg -n -I "$HOME_PATH_PATTERN" "$file" || true)
+        [[ -n "$hit" ]] && FAILURES+=("$file:${hit%%:*}: real home-directory path must not ship in a public source tree")
+      done <<<"$hits"
     fi
   done
 fi

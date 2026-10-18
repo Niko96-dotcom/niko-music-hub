@@ -131,6 +131,32 @@ final class ResilientSystemAudioRecordingSessionTests: XCTestCase {
         XCTAssertEqual(result.diagnostics?.coreAudioRebuildCount, 1)
     }
 
+    func testStopDuringRouteRebuildTeardownStartsNoNewBackend() async throws {
+        let teardownEntered = expectation(description: "old backend teardown entered")
+        let latch = FirstStopLatch(onEnter: { teardownEntered.fulfill() })
+        let first = FakeRecorderBackend(
+            identity: .coreAudio,
+            behavior: .healthy(sampleRate: 44_100),
+            onStop: { await latch.holdFirstStop() }
+        )
+        let second = FakeRecorderBackend(identity: .coreAudio, behavior: .healthy(sampleRate: 44_100))
+        let fallback = FakeRecorderBackend(identity: .screenCaptureKit, behavior: .healthy(sampleRate: 48_000))
+        let session = makeSession(core: [first, second], fallback: [fallback], debounce: .milliseconds(1))
+        let url = temporaryWAV()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try await start(session, url: url)
+
+        first.emitRouteChange()
+        await fulfillment(of: [teardownEntered], timeout: 1)
+        let result = try await session.stop()
+        latch.release()
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertGreaterThan(result.frameCount, 0)
+        XCTAssertEqual(second.startCount, 0, "no new Core Audio graph after the take was finalized")
+        XCTAssertEqual(fallback.startCount, 0)
+    }
+
     func testRouteLossAfterAudioKeepsTheTake() async throws {
         // Audio is already on disk when the output route changes, and neither the
         // Core Audio rebuild nor the ScreenCaptureKit fallback can start. The take
@@ -906,6 +932,7 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
     private let behavior: Behavior
     private let onStart: @Sendable () -> Void
     private let onPCM: @Sendable () -> Void
+    private let onStop: @Sendable () async -> Void
     private let lock = NSLock()
     private var callbacks: RecorderBackendCallbacks?
     private var generation = 0
@@ -916,12 +943,14 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
         identity: RecorderCaptureBackendIdentity,
         behavior: Behavior,
         onStart: @escaping @Sendable () -> Void = {},
-        onPCM: @escaping @Sendable () -> Void = {}
+        onPCM: @escaping @Sendable () -> Void = {},
+        onStop: @escaping @Sendable () async -> Void = {}
     ) {
         self.identity = identity
         self.behavior = behavior
         self.onStart = onStart
         self.onPCM = onPCM
+        self.onStop = onStop
     }
 
     var startCount: Int { lock.withLock { _startCount } }
@@ -958,6 +987,7 @@ private final class FakeRecorderBackend: @unchecked Sendable, RecorderCaptureBac
 
     func stop() async {
         lock.withLock { _stopCount += 1 }
+        await onStop()
     }
 
     func emitRouteChange() {
@@ -1006,6 +1036,45 @@ final class PermissionProbeStub: @unchecked Sendable {
             calls += 1
             return verdict
         }
+    }
+}
+
+/// Holds only the first backend stop until released, so a later stop() can run in the gap.
+private final class FirstStopLatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private let onEnter: @Sendable () -> Void
+    private var entered = false
+    private var released = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    init(onEnter: @escaping @Sendable () -> Void) { self.onEnter = onEnter }
+
+    func holdFirstStop() async {
+        let isFirst = lock.withLock { () -> Bool in
+            let first = !entered
+            entered = true
+            return first
+        }
+        guard isFirst else { return }
+        onEnter()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumeNow = lock.withLock { () -> Bool in
+                if released { return true }
+                self.continuation = continuation
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+    }
+
+    func release() {
+        let pending = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+            released = true
+            let pending = continuation
+            continuation = nil
+            return pending
+        }
+        pending?.resume()
     }
 }
 

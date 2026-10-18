@@ -39,15 +39,17 @@ CONTENT_PATTERNS = {
     # Any home directory that is not an obvious placeholder is treated as a real
     # person's path. Fixtures use the placeholder names below on purpose.
     "personal home path": re.compile(
-        r"/Users/(?!(?:example|tester|test|music|private-user|user|you|shared|someone|placeholder)(?:/|\b))"
+        r"/Users/(?!(?:example|tester|test|music|private-user|user|you|shared|someone|placeholder)(?:/|$|[^A-Za-z0-9_.-]))"
         r"[A-Za-z0-9_.-]+(?:/|\b)",
         re.IGNORECASE,
     ),
     "private machine name": re.compile(r"\b(?:MacBook|Mac Studio)\b", re.IGNORECASE),
     "private workflow state": re.compile(r"(?:^|/)\.(?:ai|planning|cursor|deslop)(?:/|$)"),
     "credential-shaped value": re.compile(
-        r"(?:AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|"
-        r"xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9]{32,})"
+        r"(?:AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|"
+        r"xox[baprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9_]{30,}|github_pat_[A-Za-z0-9_]{22,}|"
+        r"sk-ant-[A-Za-z0-9_-]{20,}|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|"
+        r"sk_live_[A-Za-z0-9]{20,})"
     ),
 }
 FORBIDDEN_SUFFIXES = {".env", ".key", ".mobileprovision", ".p12", ".pem", ".pfx", ".xcresult"}
@@ -80,14 +82,19 @@ def scan_tree(root: Path) -> list[str]:
             continue
         if not path.is_file():
             continue
-        if path.name == ".DS_Store" or path.suffix.lower() in FORBIDDEN_SUFFIXES:
+        # Path.suffix is empty for ".env" and ".local" for ".env.local", so dotenv files need a name check.
+        name = path.name.lower()
+        is_dotenv = name == ".env" or name.startswith(".env.")
+        if path.name == ".DS_Store" or is_dotenv or path.suffix.lower() in FORBIDDEN_SUFFIXES:
             failures.append(f"{relative}: forbidden file type")
         if relative in CONTENT_PATTERN_EXEMPTIONS:
             continue
+        # Binary fixtures and non-UTF-8 text must still be scanned; latin-1 maps every byte.
+        data = path.read_bytes()
         try:
-            text = path.read_text(encoding="utf-8")
+            text = data.decode("utf-8")
         except UnicodeDecodeError:
-            continue
+            text = data.decode("latin-1")
         for label, pattern in CONTENT_PATTERNS.items():
             if pattern.search(text):
                 failures.append(f"{relative}: contains {label}")

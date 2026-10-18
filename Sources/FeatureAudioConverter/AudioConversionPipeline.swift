@@ -28,6 +28,10 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
     public func convert(_ request: ConversionRequest) async throws -> ConversionResult {
         do {
             return try await native.convert(request)
+        } catch let outputError as NativeOutputWriteError {
+            // Disk full, read-only or permission errors fail the same with FFmpeg;
+            // keep the native error so the real cause reaches the row.
+            throw outputError.underlying
         } catch {
             guard shouldAttemptFFmpegFallback(after: error) else {
                 throw error
@@ -57,7 +61,8 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
         case .missing:
             throw missingFFmpegError()
         case let .unusable(message):
-            throw AudioConversionError.conversionFailed("FFmpeg is unavailable: \(message)")
+            // Helper-unavailable category keeps the Choose FFmpeg recovery; the row shows fixed copy.
+            throw AudioConversionError.missingFFmpeg(message: "FFmpeg is unavailable: \(message)")
         }
     }
 
@@ -66,6 +71,8 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
             return false
         }
         guard let conversionError = error as? AudioConversionError else {
+            // Output-side failures arrive as NativeOutputWriteError and never get here;
+            // anything else is a source AVFoundation could not read, which FFmpeg may.
             return true
         }
 

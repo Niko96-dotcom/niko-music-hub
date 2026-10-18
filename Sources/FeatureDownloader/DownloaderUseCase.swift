@@ -149,7 +149,12 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
                     outputs: []
                 ))
             }
-            let title = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Playlist mode prints one title per entry; name the job after the first.
+            let title = result.standardOutput
+                .split(whereSeparator: \.isNewline)
+                .lazy
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .first { !$0.isEmpty } ?? ""
             simulateTitle = title.isEmpty ? Self.fallbackJobTitle(for: url) : title
         } catch let error as DownloadUseCaseError {
             throw error
@@ -422,7 +427,8 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
 
     static func fallbackJobTitle(for url: URL) -> String {
         let path = url.path
-        if path == "/watch" || path.isEmpty || url.lastPathComponent == "watch" {
+        let genericComponents: Set<String> = ["/", "watch", "playlist"]
+        if path.isEmpty || genericComponents.contains(url.lastPathComponent) {
             return url.host ?? "media"
         }
         return url.lastPathComponent

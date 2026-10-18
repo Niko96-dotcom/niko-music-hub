@@ -5,8 +5,12 @@ public enum PreviewRankingExplainability: Sendable {
     private static let ranker = PreviewConfidenceRanker()
 
     /// When equal scores made version/extension/duration the main pick, returns a short operator callout.
-    public static func tiebreakCallout(winner: PreviewCandidate, runnerUp: PreviewCandidate) -> String? {
-        let factor = ranker.decidingFactor(winner: winner, runnerUp: runnerUp)
+    public static func tiebreakCallout(
+        winner: PreviewCandidate,
+        runnerUp: PreviewCandidate,
+        projectContext: PreviewRankingProjectContext? = nil
+    ) -> String? {
+        let factor = ranker.decidingFactor(winner: winner, runnerUp: runnerUp, projectContext: projectContext)
         switch factor {
         case .songSuitability:
             return "Full song preferred over source media or a technical export"
@@ -22,6 +26,8 @@ public enum PreviewRankingExplainability: Sendable {
             let winnerVersion = winner.detectedVersionNumber.map { "v\($0)" } ?? "unknown"
             let runnerVersion = runnerUp.detectedVersionNumber.map { "v\($0)" } ?? "unknown"
             return "Equal score — version \(winnerVersion) beat \(runnerVersion)"
+        case .titleMatch:
+            return "Equal score — filename matches the project title more closely"
         case .extensionFormat:
             return "Equal score — preferred \(winner.fileExtension) over \(runnerUp.fileExtension)"
         case .duration:
@@ -31,16 +37,22 @@ public enum PreviewRankingExplainability: Sendable {
         }
     }
 
-    public static func tiebreakCallout(for rankedPreviews: [PreviewCandidate]) -> String? {
+    public static func tiebreakCallout(
+        for rankedPreviews: [PreviewCandidate],
+        projectContext: PreviewRankingProjectContext? = nil
+    ) -> String? {
         guard rankedPreviews.count >= 2,
               let winner = rankedPreviews.first else {
             return nil
         }
-        return tiebreakCallout(winner: winner, runnerUp: rankedPreviews[1])
+        return tiebreakCallout(winner: winner, runnerUp: rankedPreviews[1], projectContext: projectContext)
     }
 
     public static func tiebreakCallout(for song: Song) -> String? {
-        tiebreakCallout(for: song.previewCandidates)
+        tiebreakCallout(
+            for: song.previewCandidates,
+            projectContext: PreviewRankingProjectContext.from(projectVersions: song.projectVersions)
+        )
     }
     private static let displayOrderPrefixes = [
         "maturity:",

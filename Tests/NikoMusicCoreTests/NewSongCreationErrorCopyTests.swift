@@ -14,6 +14,7 @@ final class NewSongCreationErrorCopyTests: XCTestCase {
             .templateUnreadable,
             .templateOverlap,
             .templateConflict("notes.txt"),
+            .templateUnsupportedItem("link.cpr"),
             .templateCopyFailed,
             .stagingFailed,
             .stagingValidationFailed,
@@ -27,6 +28,14 @@ final class NewSongCreationErrorCopyTests: XCTestCase {
         XCTAssertEqual(
             NewSongCreationErrorCopy.errorDescription(for: .folderExists, name: name),
             "A folder named “Neon Hook” already exists in New Song Drafts. Choose another name."
+        )
+        XCTAssertEqual(
+            NewSongCreationErrorCopy.errorDescription(for: .folderExists, name: "  Neon Hook \n"),
+            "A folder named “Neon Hook” already exists in New Song Drafts. Choose another name."
+        )
+        XCTAssertFalse(
+            NewSongCreationErrorCopy.errorDescription(for: .templateUnsupportedItem("link.cpr"), name: name)
+                .contains("already exists")
         )
         XCTAssertEqual(
             NewSongCreationErrorCopy.errorDescription(for: .archiveRootIsReadOnly, name: name),

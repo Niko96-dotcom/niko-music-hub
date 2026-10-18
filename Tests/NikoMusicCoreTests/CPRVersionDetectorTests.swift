@@ -89,4 +89,14 @@ final class CPRVersionDetectorTests: XCTestCase {
         XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song 3 [2026-09-04] mix.cpr"), 3)
         XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song [2026-09-04 175705] mix.cpr"))
     }
+
+    func testDayFirstDatesAndBPMAreNotVersions() {
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Beat 140 BPM.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Beat_92bpm.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 04-09-2026.cpr"))
+        XCTAssertNil(CPRVersionDetector.parseVersionNumber(from: "Song 04_09_26.cpr"))
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Beat 140 BPM 3.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song 3 04-09-2026.cpr"), 3)
+        XCTAssertEqual(CPRVersionDetector.parseVersionNumber(from: "Song-02.cpr"), 2)
+    }
 }

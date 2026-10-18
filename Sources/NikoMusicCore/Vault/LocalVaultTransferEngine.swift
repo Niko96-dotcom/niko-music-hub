@@ -787,8 +787,8 @@ public actor LocalVaultTransferEngine {
                     // interruptions from a prior process are normalized to
                     // recoveryRequired at launch and never reach this branch.
                     try Task.checkCancellation()
+                    activeRemovalStarted = true
                     if fileManager.fileExists(atPath: record.sourceURL.path) {
-                        activeRemovalStarted = true
                         try fileManager.removeItem(at: record.sourceURL)
                     }
                     try advance(&record, to: .evictingProviderCache)
@@ -883,7 +883,11 @@ public actor LocalVaultTransferEngine {
             let reason = failureReason(for: error)
             record.error = VaultTransferError(origin: origin, reason: reason, message: (error as? LocalizedError)?.errorDescription ?? String(describing: error))
             let destructiveOrigin = origin == .removingActiveCopy || origin == .evictingProviderCache
-            if removalAdmissionDenied {
+            if removalAdmissionDenied || (origin == .removingActiveCopy && !activeRemovalStarted) {
+                // No destructive call ran (for example the final source check
+                // saw a new save), so the Active copy was kept. Never route this
+                // to interrupted-removal recovery, which would replace newer
+                // Active work with the older Vault copy.
                 record.state = .archiveVerified
             } else {
                 record.state = reason == .occupiedDestination || destructiveOrigin

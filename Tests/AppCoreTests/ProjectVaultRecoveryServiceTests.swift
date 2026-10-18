@@ -31,9 +31,26 @@ final class ProjectVaultRecoveryServiceTests: XCTestCase {
         let held = try ProjectVaultMutationFileLease(url: leaseURL)
         defer { held.release() }
         XCTAssertThrowsError(try service.exportRecoveryBundle(to: fixture.root.appendingPathComponent("bundle"))) { error in
-            XCTAssertEqual(error as? ProjectVaultRuntimeError, .mutationInProgress)
+            XCTAssertEqual(error as? ProjectVaultRecoveryServiceError, .vaultBusy)
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.root.appendingPathComponent("bundle").path))
+    }
+
+    func testExportWithUnreadableSettingsThrowsServiceErrorAndCreatesNothing() throws {
+        let fixture = try Fixture(tracker: tracker)
+        defer { fixture.remove() }
+        try fixture.seedDatabase()
+        let service = ProjectVaultRecoveryService(
+            database: fixture.database,
+            settingsStore: UnreadableSettingsStore()
+        )
+        let bundleURL = fixture.root.appendingPathComponent("bundle", isDirectory: true)
+        XCTAssertThrowsError(try service.exportRecoveryBundle(to: bundleURL)) { error in
+            guard case .settingsUnreadable? = error as? ProjectVaultRecoveryServiceError else {
+                return XCTFail("expected settingsUnreadable, got \(error)")
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: bundleURL.path))
     }
 
     func testExportWritesBundleAndLeavesSourceUntouched() throws {
@@ -58,6 +75,21 @@ final class ProjectVaultRecoveryServiceTests: XCTestCase {
             XCTAssertEqual(error as? ProjectVaultRecoveryBundle.BundleError, .bundleOccupied(bundleURL.path))
         }
         XCTAssertEqual(try bundleHashes(at: bundleURL), before)
+    }
+
+    func testExportRefusesDestinationInsideAMusicRoot() throws {
+        let fixture = try Fixture(tracker: tracker)
+        defer { fixture.remove() }
+        try fixture.seedDatabase()
+        let service = fixture.service()
+        for root in [fixture.activeRoot, fixture.archiveRoot] {
+            try FileManager.default.createDirectory(at: root.fallbackURL, withIntermediateDirectories: true)
+            let bundleURL = root.fallbackURL.appendingPathComponent("bundle", isDirectory: true)
+            XCTAssertThrowsError(try service.exportRecoveryBundle(to: bundleURL)) { error in
+                XCTAssertEqual(error as? ProjectVaultRecoveryServiceError, .destinationInsideMusicRoot)
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: bundleURL.path))
+        }
     }
 
     func testExportWithoutDatabaseThrowsAndCreatesNothing() throws {
@@ -225,6 +257,22 @@ final class ProjectVaultRecoveryServiceTests: XCTestCase {
             lock.withLock {
                 update(&stored)
             }
+        }
+    }
+
+    private struct UnreadableSettingsStore: SettingsStore {
+        struct Unreadable: Error {}
+
+        func loadSettings() throws -> AppSettings {
+            throw Unreadable()
+        }
+
+        func saveSettings(_ settings: AppSettings) throws {
+            throw Unreadable()
+        }
+
+        func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws {
+            throw Unreadable()
         }
     }
 

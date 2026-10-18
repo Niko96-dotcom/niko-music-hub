@@ -85,6 +85,9 @@ final class ArchiveScanOrchestrator {
         activeIncrementalTask?.cancel()
         if activeScanGeneration != nil {
             // A full scan owns `isScanning`; it consumes `userCancelRequested` itself.
+            // Drop queued watcher work so `finishScan`'s drain cannot restart scanning.
+            pendingIncrementalPaths.removeAll()
+            fullRescanPending = false
             return
         }
         if let canceled = activeIncrementalGeneration {
@@ -434,7 +437,7 @@ final class ArchiveScanOrchestrator {
                   activeIncrementalGeneration == request.id,
                   host.rootGeneration == request.generation,
                   host.roots.standardizedArchivePaths == request.roots.standardizedArchivePaths else { return }
-            host.setBackgroundStatusMessage("Incremental rescan failed: \(error.localizedDescription)")
+            host.setBackgroundStatusMessage("Incremental rescan failed. Details are in the diagnostics log.")
             host.diagnostics.log(.error, "Incremental archive rescan failed: \(error)")
         }
     }

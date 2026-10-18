@@ -62,7 +62,7 @@ struct ToolSidebarView: View {
         .onMoveCommand { direction in
             if let next = ToolSidebarSelection.move(
                 direction: direction,
-                metadata: registry.metadata,
+                metadata: ToolSidebarSelection.arrowKeyOrder(registry.metadata),
                 selectedID: selectedToolID
             ) {
                 selectedToolID = next

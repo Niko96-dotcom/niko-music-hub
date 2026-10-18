@@ -156,6 +156,18 @@ final class HubShellSessionTests: XCTestCase {
         XCTAssertTrue(try settings.loadSettings().showMenuBarExtra)
     }
 
+    func testShowMenuBarExtraKeepsLiveStateWhenSaveFails() throws {
+        let session = HubShellSession(
+            preferences: MockPreferenceStore(),
+            settingsStore: SaveFailingSettingsStore()
+        )
+        XCTAssertTrue(session.showMenuBarExtra)
+
+        session.setShowMenuBarExtra(false)
+        XCTAssertTrue(session.showMenuBarExtra)
+        XCTAssertTrue(session.menuBarExtra.isInserted)
+    }
+
     func testRestoreSelectedToolID() throws {
         let store = MockPreferenceStore()
         let registry = try ToolRegistry(features: [
@@ -267,6 +279,16 @@ private final class MockPreferenceStore: PreferenceStore, @unchecked Sendable {
     }
 }
 
+private struct SaveFailingSettingsStore: SettingsStore {
+    enum SaveFailure: Error {
+        case paused
+    }
+
+    func loadSettings() throws -> AppSettings { .default }
+    func saveSettings(_ settings: AppSettings) throws { throw SaveFailure.paused }
+    func updateSettings(_ update: @Sendable (inout AppSettings) -> Void) throws { throw SaveFailure.paused }
+}
+
 private struct StubRestoreFeature: ToolFeature {
     let metadata: ToolMetadata
 
@@ -297,5 +319,17 @@ extension HubShellSessionTests {
         XCTAssertFalse(session.isSetupPresented)
         session.presentSetup(forRequest: 2)
         XCTAssertTrue(session.isSetupPresented)
+    }
+
+    func testArchiveSearchFocusRequestIsClaimedOncePerSequence() {
+        let session = HubShellSession(preferences: MockPreferenceStore())
+        // No request yet (router counter starts at 0).
+        XCTAssertFalse(session.claimArchiveSearchFocusRequest(0))
+        XCTAssertTrue(session.claimArchiveSearchFocusRequest(1))
+        // A reopened window reads the router's unchanged counter; it must not
+        // take search focus again.
+        XCTAssertFalse(session.claimArchiveSearchFocusRequest(1))
+        XCTAssertTrue(session.claimArchiveSearchFocusRequest(2))
+        XCTAssertFalse(session.claimArchiveSearchFocusRequest(2))
     }
 }

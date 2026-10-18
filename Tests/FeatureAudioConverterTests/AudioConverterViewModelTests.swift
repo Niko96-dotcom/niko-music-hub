@@ -334,6 +334,27 @@ final class AudioConverterViewModelTests: XCTestCase {
         }
     }
 
+    func testGenericFailureLogsRealCauseWithFileNameToDiagnostics() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = try makeFile(named: "DiskFull.wav", in: directory)
+        let converter = RecordingViewModelConverter { _ in
+            throw AudioConversionError.conversionFailed("No space left on device XYZ")
+        }
+        let diagnostics = RecordingDiagnostics()
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter, diagnostics: diagnostics)
+        viewModel.addFileURLs([source])
+
+        _ = await viewModel.convertQueuedRows()
+
+        XCTAssertEqual(viewModel.rows.first?.statusText, AudioConverterCopy.genericFailure)
+        XCTAssertTrue(
+            diagnostics.messages.contains { $0.contains("DiskFull.wav") && $0.contains("No space left on device XYZ") },
+            "Diagnostics should keep the real cause: \(diagnostics.messages)"
+        )
+    }
+
     func testStopAfterCurrentStateHandoff() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -396,6 +417,41 @@ final class AudioConverterViewModelTests: XCTestCase {
             "Verified WAV must remain after stop-after-current"
         )
         XCTAssertFalse(viewModel.canRequestStopAfterCurrent)
+    }
+
+    func testReAddingSkippedFilesRequeuesTheirRowsInPlace() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "First.wav", in: directory)
+        let second = try makeFile(named: "Second.wav", in: directory)
+        var viewModel: AudioConverterViewModel!
+        let converter = RecordingViewModelConverter { request in
+            if request.sourceURL == first {
+                await MainActor.run {
+                    viewModel.requestStopAfterCurrent()
+                }
+            }
+            return makeResult(for: request)
+        }
+        viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([first, second])
+        _ = await viewModel.convertQueuedRows()
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .skipped])
+        XCTAssertFalse(viewModel.canConvertToWAV)
+        let skippedID = viewModel.rows[1].id
+
+        viewModel.addFileURLs([first, second])
+
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .queued])
+        XCTAssertEqual(viewModel.rows[1].id, skippedID)
+        XCTAssertEqual(viewModel.rows[1].statusText, AudioConverterCopy.ready)
+        XCTAssertTrue(viewModel.canConvertToWAV)
+
+        _ = await viewModel.convertQueuedRows()
+
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .verified])
+        XCTAssertEqual(converter.requests.map(\.sourceURL), [first, second])
     }
 
     func testStopAfterThisFileHonestyCopy() throws {
@@ -981,12 +1037,32 @@ final class AudioConverterViewModelTests: XCTestCase {
             "AudioConverterCopy.stopAfterThisFile",
             "viewModel.presetSummaryText",
             "AudioConverterCopy.ready",
-            "Verified WAV ready",
+            "AudioConverterCopy.verified",
             "Choose FFmpeg",
             "Reveal in Finder"
         ].forEach {
             XCTAssertTrue(source.contains($0), "Missing copy: \($0)")
         }
+    }
+
+    func testAudioConverterViewShowsRowStatusForVerifiedAndSkippedRows() throws {
+        let source = try String(
+            contentsOfFile: "Sources/FeatureAudioConverter/AudioConverterView.swift",
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(
+            source.contains("return \"Skipped\""),
+            "A canceled row must show the row's own status text (\"Canceled\"), not a fixed \"Skipped\""
+        )
+        XCTAssertFalse(
+            source.contains("return \"Verified WAV ready\""),
+            "A verified row with a handoff warning must not show a plain \"Verified WAV ready\""
+        )
+        XCTAssertTrue(
+            source.contains("AudioConverterCopy.verifiedWithHandoffWarning"),
+            "The row must show the handoff-warning copy when hasHandoffWarning is set"
+        )
     }
 
     func testAudioConverterViewContainsEditablePresetControls() throws {
@@ -1028,7 +1104,8 @@ final class AudioConverterViewModelTests: XCTestCase {
         },
         settingsStore: (any SettingsStore)? = nil,
         outputInboxStore: any OutputInboxStore = FixtureOutputInboxStore(),
-        ffmpegHealthChecker: FFmpegHealthChecker = FFmpegHealthChecker()
+        ffmpegHealthChecker: FFmpegHealthChecker = FFmpegHealthChecker(),
+        diagnostics: any Diagnostics = FixtureDiagnostics()
     ) -> AudioConverterViewModel {
         let settingsStore = settingsStore ?? FixtureSettingsStore(
             settings: AppSettings(outputFolder: StoredFolderLocation(url: outputFolder))
@@ -1040,7 +1117,7 @@ final class AudioConverterViewModelTests: XCTestCase {
             outputInboxStore: outputInboxStore,
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),
-            diagnostics: FixtureDiagnostics()
+            diagnostics: diagnostics
         )
         return AudioConverterViewModel(
             context: context,
@@ -1177,6 +1254,19 @@ private struct FixtureFileActions: FileActions {
 
 private struct FixtureDiagnostics: Diagnostics {
     func log(_ level: DiagnosticLevel, _ message: String) {}
+}
+
+private final class RecordingDiagnostics: Diagnostics, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedMessages: [String] = []
+
+    var messages: [String] {
+        lock.withLock { storedMessages }
+    }
+
+    func log(_ level: DiagnosticLevel, _ message: String) {
+        lock.withLock { storedMessages.append(message) }
+    }
 }
 
 private struct FakeExternalProcessRunner: ExternalProcessRunning {

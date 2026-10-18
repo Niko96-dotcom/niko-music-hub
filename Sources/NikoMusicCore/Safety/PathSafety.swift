@@ -33,11 +33,18 @@ public struct PathSafety: @unchecked Sendable {
         let candidate = path.standardizedFileURL.path
         for root in allowedRoots {
             let rootPath = root.standardizedFileURL.path
-            if candidate == rootPath || candidate.hasPrefix(rootPath + "/") {
+            if candidate == rootPath || candidate.hasPrefix(Self.childPrefix(of: rootPath)) {
                 return true
             }
         }
         return false
+    }
+
+    /// The prefix every path strictly below `rootPath` starts with. The
+    /// filesystem root "/" already ends in a separator, so appending another
+    /// would give "//" and match nothing.
+    static func childPrefix(of rootPath: String) -> String {
+        rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
     }
 
     /// Containment check that resolves symlinks on both sides before comparing.
@@ -51,7 +58,7 @@ public struct PathSafety: @unchecked Sendable {
         let candidate = resolvedURLAllowingMissingTail(path).path
         for root in roots {
             let rootPath = resolvedURLAllowingMissingTail(root).path
-            if candidate == rootPath || candidate.hasPrefix(rootPath + "/") {
+            if candidate == rootPath || candidate.hasPrefix(Self.childPrefix(of: rootPath)) {
                 return true
             }
         }
@@ -99,7 +106,9 @@ public struct PathSafety: @unchecked Sendable {
     public func resolvedPathsOverlapIgnoringCase(_ lhs: URL, _ rhs: URL) -> Bool {
         let left = resolvedURLAllowingMissingTail(lhs).path.lowercased()
         let right = resolvedURLAllowingMissingTail(rhs).path.lowercased()
-        return left == right || left.hasPrefix(right + "/") || right.hasPrefix(left + "/")
+        return left == right
+            || left.hasPrefix(Self.childPrefix(of: right))
+            || right.hasPrefix(Self.childPrefix(of: left))
     }
 
     /// The resolved path `isResolvedContained` compares for `url`.
@@ -107,11 +116,21 @@ public struct PathSafety: @unchecked Sendable {
         resolvedURLAllowingMissingTail(url).path
     }
 
-    private func resolvedURLAllowingMissingTail(_ url: URL) -> URL {
+    /// The kernel's own symlink hop limit (MAXSYMLINKS); stops link loops.
+    private static let maxSymlinkHops = 32
+
+    /// True when a node exists at `path`, without following a final symlink.
+    /// `fileExists` follows links, so a dangling link would look missing.
+    private static func nodeExists(atPath path: String) -> Bool {
+        var information = stat()
+        return path.withCString { Darwin.lstat($0, &information) } == 0
+    }
+
+    private func resolvedURLAllowingMissingTail(_ url: URL, symlinkHops: Int = 0) -> URL {
         var existingAncestor = url.standardizedFileURL
         var missingComponents: [String] = []
 
-        while !fileManager.fileExists(atPath: existingAncestor.path) {
+        while !Self.nodeExists(atPath: existingAncestor.path) {
             let parent = existingAncestor.deletingLastPathComponent()
             guard parent.path != existingAncestor.path else { break }
             let component = existingAncestor.lastPathComponent
@@ -121,7 +140,23 @@ public struct PathSafety: @unchecked Sendable {
             existingAncestor = parent
         }
 
-        var resolved = PathResolutionProbe.resolvingSymlinks(existingAncestor)
+        var resolved: URL
+        if !fileManager.fileExists(atPath: existingAncestor.path),
+           symlinkHops < Self.maxSymlinkHops,
+           let destination = try? fileManager.destinationOfSymbolicLink(atPath: existingAncestor.path) {
+            // A dangling symlink: a write through it creates its target, so
+            // resolve the target instead of treating the link name as missing.
+            let target: URL
+            if destination.hasPrefix("/") {
+                target = URL(fileURLWithPath: destination)
+            } else {
+                let linkParent = PathResolutionProbe.resolvingSymlinks(existingAncestor.deletingLastPathComponent())
+                target = linkParent.appendingPathComponent(destination)
+            }
+            resolved = resolvedURLAllowingMissingTail(target, symlinkHops: symlinkHops + 1)
+        } else {
+            resolved = PathResolutionProbe.resolvingSymlinks(existingAncestor)
+        }
         for component in missingComponents.reversed() {
             resolved.appendPathComponent(component, isDirectory: false)
         }

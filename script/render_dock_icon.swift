@@ -154,7 +154,12 @@ guard args.count >= 3 else {
 }
 
 var options = Options(sourcePath: args[1], outputPath: args[2])
-if args.count >= 4, let scale = Double(args[3]) {
+if args.count >= 4 {
+    guard let scale = Double(args[3]), scale > 0, scale <= 1 else {
+        fputs("render_dock_icon: glyphScale must be a number in (0, 1] with a decimal point, got '\(args[3])'\n", stderr)
+        fputs("Usage: render_dock_icon <source.png> <output.png> [glyphScale]\n", stderr)
+        exit(64)
+    }
     options.glyphScale = scale
 }
 

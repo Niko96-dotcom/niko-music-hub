@@ -137,6 +137,15 @@ final class PreviewDeliverySelectionTests: XCTestCase {
         XCTAssertEqual(PreviewSongIdentity.parse("ARTIST - 404 DEMO V2.wav")?.displayTitle, "ARTIST - 404")
     }
 
+    func testVersionOrStageOnlyDeliveryTitleDoesNotReplaceStrongFolderName() {
+        XCTAssertEqual(PreviewSongIdentity.unstructuredDeliveryTitle("V2 Mix.wav"), "V2")
+        for file in ["V2 Mix.wav", "Version 3 Master.wav", "Mix 2 master.wav", "Demo 2 mix.wav", "Mix v2.wav"] {
+            XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Sunset Drive", mainPreview: candidate(file)), "Sunset Drive", file)
+        }
+        XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Sunset Drive", mainPreview: candidate("Sunset master.wav")), "Sunset")
+        XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Sunset Drive", mainPreview: candidate("404 DEMO V1.mp3")), "404")
+    }
+
     func testNumberedDAWTakesAreNotArtistTitleDeliveriesRegardlessOfTrackLabel() {
         for file in ["Pro-other - 01-01%20Good%20Old%20Days.wav", "Piano - 01-01%20Other%20Song.wav",
                      "MAIN LEAD - 00-01.wav", "HARM 2 L - 00_Voice.wav", "DLX FX - 05.wav",

@@ -172,6 +172,13 @@ doctor() {
   fi
 
   require_command "Swift" swift
+  local rg_path
+  rg_path="$(command_path rg)"
+  if [[ -n "$rg_path" ]]; then
+    ok "ripgrep: $rg_path"
+  else
+    fail "ripgrep (rg) is missing. Install it with brew install ripgrep; the public-tree hygiene scan requires it."
+  fi
   local swift_version
   swift_version="$(swift --version 2>/dev/null | head -n 1 || true)"
   if [[ "$swift_version" == *"Swift version 6"* ]]; then

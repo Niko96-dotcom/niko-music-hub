@@ -359,7 +359,11 @@ struct ArchiveCatalogCoordinator {
         let built = buildDiagnostics(result: mergedResult, roots: roots, scannedAt: scannedAt)
         return IncrementalFilesystemApplyResult(
             songs: withMetadata.songs,
-            diagnostics: ArchiveScanDiagnosticsBuilder.mergeIncremental(prior: priorDiagnostics, built: built),
+            diagnostics: ArchiveScanDiagnosticsBuilder.mergeIncremental(
+                prior: priorDiagnostics,
+                built: built,
+                rescanned: incremental.resolution
+            ),
             incrementalSongCount: incremental.result.songs.count,
             firstUpdatedTitle: incremental.result.songs.first?.displayTitle,
             scannedAt: scannedAt,
@@ -372,11 +376,11 @@ struct ArchiveCatalogCoordinator {
         changedPaths: [URL],
         roots: [URL],
         existingSongs: [Song]
-    ) async throws -> (result: ScanResult, affectedSongIDs: Set<String>) {
+    ) async throws -> (result: ScanResult, affectedSongIDs: Set<String>, resolution: ArchiveSongFolderResolver.Resolution) {
         try Task.checkCancellation()
         let resolution = ArchiveSongFolderResolver.resolve(changedPaths: changedPaths, roots: roots)
         guard !resolution.isEmpty else {
-            return (ScanResult(), [])
+            return (ScanResult(), [], resolution)
         }
         let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
         let scanTask = Task.detached(priority: .userInitiated) {
@@ -394,7 +398,7 @@ struct ArchiveCatalogCoordinator {
             resolution: resolution,
             existing: existingSongs
         )
-        return (result, affectedSongIDs)
+        return (result, affectedSongIDs, resolution)
     }
 
     nonisolated static func mergeIncrementalScan(
@@ -759,7 +763,7 @@ struct ArchiveCatalogCoordinator {
                 snapshot = try archiveIndexStore.loadLatest()
             } catch {
                 return (
-                    .failed("Archive cache could not be loaded: \(error.localizedDescription)"),
+                    .failed("Archive cache could not be loaded. Details are in the diagnostics log."),
                     ["Archive cache load failed: \(error)"],
                     [],
                     false
@@ -893,7 +897,7 @@ struct ArchiveCatalogCoordinator {
                 persistWarning = SongMetadataIntegrityCopy.corrupt(sorted.map { integrity.name(for: $0) })
             } catch {
                 diagnostics.log(.error, "Song metadata save failed: \(error)")
-                persistWarning = "Song metadata could not be saved: \(error.localizedDescription)"
+                persistWarning = "Song metadata could not be saved. Your edit is shown but may be lost on the next launch."
             }
         }
         if blockWarnings.isEmpty { return persistWarning }
@@ -911,17 +915,17 @@ struct ArchiveCatalogCoordinator {
             songs: SongCatalogDeduplicator.uniqueByID(songs),
             scannedAt: scannedAt
         )
-        let failure = await Task.detached(priority: .utility) { () -> (log: String, warning: String)? in
+        let failure = await Task.detached(priority: .utility) { () -> String? in
             do {
                 try archiveIndexStore.save(snapshot)
                 return nil
             } catch {
-                return ("\(error)", error.localizedDescription)
+                return "\(error)"
             }
         }.value
         guard let failure else { return nil }
-        diagnostics.log(.error, "Archive cache save failed: \(failure.log)")
-        return "Archive cache could not be saved: \(failure.warning)"
+        diagnostics.log(.error, "Archive cache save failed: \(failure)")
+        return "Archive cache could not be saved. The next launch may need a full scan."
     }
 }
 

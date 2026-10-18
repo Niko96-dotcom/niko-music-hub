@@ -17,7 +17,7 @@ public enum NewSongCreationErrorCopy: Sendable {
             guard !trimmed.isEmpty else {
                 return "A folder with that name already exists in New Song Drafts. Choose another name."
             }
-            return "A folder named “\(name)” already exists in New Song Drafts. Choose another name."
+            return "A folder named “\(trimmed)” already exists in New Song Drafts. Choose another name."
         case .archiveRootIsReadOnly:
             return "The draft was not created because the output folder is inside an archive root. Choose another folder in Settings > Output, then try again."
         case .destinationUnavailable:
@@ -30,6 +30,8 @@ public enum NewSongCreationErrorCopy: Sendable {
             return "That template folder overlaps the destination. Choose a different template folder."
         case .templateConflict(let filename):
             return "The template could not be copied because “\(filename)” already exists in the destination. Choose another name or template."
+        case .templateUnsupportedItem(let filename):
+            return "The template could not be copied because “\(filename)” is a link or special file. Remove it from the template or choose another template."
         case .templateCopyFailed:
             return "The template could not be copied. Choose another template or create the draft without one."
         case .stagingFailed:

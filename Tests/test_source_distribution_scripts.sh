@@ -17,7 +17,7 @@ assert_fail() {
 assert_contains() {
   local file="$1"
   local value="$2"
-  grep -Fq "$value" "$file" || { echo "expected '$value' in $file" >&2; exit 1; }
+  grep -Fq -- "$value" "$file" || { echo "expected '$value' in $file" >&2; exit 1; }
 }
 
 COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
@@ -164,8 +164,48 @@ assert_contains "$TMP/sale-bad-date.err" "approved_at_utc"
 restore_approval
 "$ROOT/script/validate-source-sale-approval.py" --approval "$APPROVAL" --commit "$COMMIT" >/dev/null
 
+echo "== export flags that take a value reject a missing, empty, or flag value =="
+assert_fail export-approval-missing-value "$ROOT/script/export-source-sale.sh" --approval
+assert_contains "$TMP/export-approval-missing-value.err" "--approval requires a value"
+assert_contains "$TMP/export-approval-missing-value.err" "usage:"
+assert_fail export-output-dir-flag-value "$ROOT/script/export-source-sale.sh" --output-dir --approval "$APPROVAL"
+assert_contains "$TMP/export-output-dir-flag-value.err" "--output-dir requires a value"
+assert_fail export-output-dir-empty "$ROOT/script/export-source-sale.sh" --candidate --output-dir ""
+assert_contains "$TMP/export-output-dir-empty.err" "--output-dir requires a value"
+
 echo "== source scanner rejects PII, credentials, and private workflow state =="
 assert_contains "$ROOT/script/export-source-sale.sh" "  RELEASE_ARCHITECTURES"
+# Exported tests and release scripts read these files, so the buyer tree must ship them.
+for exported_dependency in Package.resolved SPARKLE_PUBLIC_ED_KEY script/install-local.sh \
+  script/local-build-identity.sh script/validate-update-feed.py; do
+  grep -Fxq "  $exported_dependency" "$ROOT/script/export-source-sale.sh" || {
+    echo "expected '$exported_dependency' in EXPORT_PATHS" >&2
+    exit 1
+  }
+done
+# Every repo script that an exported test names must be exported too, or the buyer's CI fails.
+/usr/bin/python3 - "$ROOT" <<'PY'
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+text = (root / "script/export-source-sale.sh").read_text(encoding="utf-8")
+block = re.search(r"^EXPORT_PATHS=\(\n(.*?)^\)", text, re.S | re.M).group(1)
+exported = [line.strip() for line in block.splitlines() if line.strip()]
+# Named only in a comment; no exported test reads it.
+comment_only = {"script/performance/vault-recovery.swift"}
+def covered(rel):
+    return any(rel == path or rel.startswith(path + "/") for path in exported)
+missing = set()
+for test in (root / "Tests").rglob("*"):
+    if not test.is_file():
+        continue
+    body = test.read_text(encoding="utf-8", errors="replace")
+    for rel in re.findall(r"script/[A-Za-z0-9_./-]*[A-Za-z0-9_]", body):
+        if rel not in comment_only and (root / rel).exists() and not covered(rel):
+            missing.add(f"{rel} (named in {test.relative_to(root)})")
+if missing:
+    print("exported tests need files that EXPORT_PATHS leaves out:", *sorted(missing), sep="\n  ", file=sys.stderr)
+    sys.exit(1)
+PY
 SCAN="$TMP/scan"
 mkdir -p "$SCAN"
 printf 'safe source\n' >"$SCAN/safe.txt"
@@ -174,11 +214,30 @@ printf '/Users/jane/private\n' >"$SCAN/personal.txt"
 assert_fail personal-path "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
 assert_contains "$TMP/personal-path.out" "personal home path"
 rm "$SCAN/personal.txt"
+printf '/Users/user/x\n' >"$SCAN/placeholder.txt"
+"$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only >/dev/null
+rm "$SCAN/placeholder.txt"
+printf '/Users/test.jane/private\n' >"$SCAN/personal.txt"
+assert_fail personal-path-prefixed "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
+assert_contains "$TMP/personal-path-prefixed.out" "personal home path"
+rm "$SCAN/personal.txt"
+printf 'RIFF\377\376\000/Users/jane/Media/take.wav\000' >"$SCAN/project.cpr"
+assert_fail personal-path-binary "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
+assert_contains "$TMP/personal-path-binary.out" "project.cpr: contains personal home path"
+rm "$SCAN/project.cpr"
 mkdir -p "$SCAN/.planning"
 printf 'private\n' >"$SCAN/.planning/state.md"
 assert_fail planning-state "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
 assert_contains "$TMP/planning-state.out" "forbidden private/build path"
 rm -rf "$SCAN/.planning"
+mkdir -p "$SCAN/Sources"
+printf 'NOTARY_PASSWORD=x\n' >"$SCAN/Sources/.env"
+assert_fail dotenv "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
+assert_contains "$TMP/dotenv.out" "Sources/.env: forbidden file type"
+mv "$SCAN/Sources/.env" "$SCAN/Sources/.env.local"
+assert_fail dotenv-local "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
+assert_contains "$TMP/dotenv-local.out" "Sources/.env.local: forbidden file type"
+rm -rf "$SCAN/Sources"
 printf '%s\n' '-----BEGIN PRIVATE KEY-----' >"$SCAN/key.txt"
 assert_fail private-key "$ROOT/script/verify-source-distribution.py" --tree "$SCAN" --scan-only
 assert_contains "$TMP/private-key.out" "credential-shaped value"

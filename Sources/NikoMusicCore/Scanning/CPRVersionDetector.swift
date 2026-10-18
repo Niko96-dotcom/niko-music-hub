@@ -287,6 +287,17 @@ public struct ProjectVersionDetector: @unchecked Sendable {
             with: " ",
             options: .regularExpression
         )
+        // Day-first dates (DD-MM-YYYY, DD_MM_YY) and tempo tags ("140 BPM").
+        result = result.replacingOccurrences(
+            of: #"(?<![0-9])\d{1,2}[-_]\d{1,2}[-_](\d{4}|\d{2})(?![0-9])"#,
+            with: " ",
+            options: .regularExpression
+        )
+        result = result.replacingOccurrences(
+            of: #"(?i)(?<![0-9])\d{1,3}[\s_-]*bpm(?![a-z])"#,
+            with: " ",
+            options: .regularExpression
+        )
         return result
     }
 }

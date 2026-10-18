@@ -140,7 +140,7 @@ public enum ArchiveDiagnosticsExporter {
             }
             if let notes = selectedSongContext.sidecarNotesLine {
                 let redacted = DiagnosticsPathRedactor.redactPathsInText(notes, homeDirectory: homeDirectory)
-                lines.append("selected_song_notes=\(redacted)")
+                lines.append("selected_song_notes=\(singleLineValue(redacted))")
             }
             if let mainPreviewSummary = selectedSongContext.mainPreviewSummary {
                 lines.append("main_preview_summary=\(mainPreviewSummary)")
@@ -168,5 +168,13 @@ public enum ArchiveDiagnosticsExporter {
         }
 
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// Escapes line breaks so a multi-line value stays on its single `key=` line.
+    static func singleLineValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\r\n", with: "\\n")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\n")
     }
 }

@@ -88,7 +88,8 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
         // Playlist request omits single-video flag and caps entries.
         let downloadArguments = try XCTUnwrap(downloadRunner.requests.first?.arguments)
         XCTAssertFalse(downloadArguments.contains("--no-playlist"))
-        XCTAssertTrue(downloadArguments.contains("--max-downloads"))
+        XCTAssertFalse(downloadArguments.contains("--max-downloads"))
+        XCTAssertTrue(downloadArguments.contains("--playlist-items"))
 
         // viewModel.job is the initial queued snapshot; inspect the terminal
         // real JobRunner snapshot by ID for the failed mixed job.

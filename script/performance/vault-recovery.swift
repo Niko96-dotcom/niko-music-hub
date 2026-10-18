@@ -245,6 +245,10 @@ struct VaultRecoveryBenchmark {
 
             // Catalog reconciliation: half merge at same location, half new with
             // matching folder name (creates reviews). Pure in-memory, no copies.
+            // Odd scales split as `half` merged and `scale - half` new, so the
+            // count checks below use `newCount`, not `scale / 2`.
+            let half = scale / 2
+            let newCount = scale - half
             let existingEntries: [ProjectCatalogEntry] = (0..<scale).map { i in
                 let loc = ProjectLocation(rootID: rootActiveID, relativePath: "project-\(i)", kind: .active, lastSeenAt: baseDate)
                 let evidence = ProjectIdentityEvidence(folderName: "Project \(i)",
@@ -254,14 +258,14 @@ struct VaultRecoveryBenchmark {
                 return ProjectCatalogEntry(record: ProjectRecord(id: stableID, canonicalTitle: "Project \(i)", locations: [loc]), evidence: evidence)
             }
             let observations: [ProjectCatalogObservation] = (0..<scale).map { i in
-                if i < scale / 2 {
+                if i < half {
                     let loc = ProjectLocation(rootID: rootActiveID, relativePath: "project-\(i)", kind: .active, lastSeenAt: baseDate)
                     let evidence = ProjectIdentityEvidence(folderName: "Project \(i)",
                         cubaseFiles: Set([ProjectFileIdentity(name: "Song \(i).cpr", byteCount: Int64(1000 + i), modifiedAt: baseDate)]),
                         selectedContentHashes: Set([fakeSHA(i)]))
                     return ProjectCatalogObservation(canonicalTitle: "Project \(i)", location: loc, evidence: evidence)
                 } else {
-                    let source = i - scale / 2
+                    let source = i - half
                     let loc = ProjectLocation(rootID: rootArchiveID, relativePath: "project-new-\(i)", kind: .archive, lastSeenAt: baseDate)
                     let evidence = ProjectIdentityEvidence(folderName: "Project \(source)",
                         cubaseFiles: Set([ProjectFileIdentity(name: "Other \(i).cpr", byteCount: Int64(2000 + i), modifiedAt: baseDate)]))
@@ -270,9 +274,9 @@ struct VaultRecoveryBenchmark {
             }
             let reconciler = ProjectCatalogReconciler()
             let reconciledOnce = try reconciler.reconcile(existing: existingEntries, observations: observations, observedAt: baseDate)
-            precondition(reconciledOnce.entries.count == scale + scale / 2, "catalog reconcile entry count mismatch")
+            precondition(reconciledOnce.entries.count == scale + newCount, "catalog reconcile entry count mismatch")
             precondition(!reconciledOnce.reviews.isEmpty, "expected name-match reviews")
-            precondition(reconciledOnce.reviews.count == scale / 2, "catalog review count mismatch")
+            precondition(reconciledOnce.reviews.count == newCount, "catalog review count mismatch")
             try measure("catalog_reconcile_\(scale)", {
                 try reconciler.reconcile(existing: existingEntries, observations: observations, observedAt: baseDate)
             }, output: { reconciled in
@@ -283,7 +287,7 @@ struct VaultRecoveryBenchmark {
                 // identity/order/data: existing IDs must match exactly, counts and
                 // name-match reviews are asserted, and review UUIDs/dates are
                 // excluded (only count, pair keys, reason and resolution feed the digest).
-                precondition(reconciled.entries.count == scale + scale / 2, "catalog reconcile entry count changed")
+                precondition(reconciled.entries.count == scale + newCount, "catalog reconcile entry count changed")
                 precondition(reconciled.reviews.count == reconciledOnce.reviews.count, "catalog review count changed")
                 precondition(!reconciled.reviews.isEmpty, "expected name-match reviews")
                 let existingIDs = Set(existingEntries.map { $0.record.id })

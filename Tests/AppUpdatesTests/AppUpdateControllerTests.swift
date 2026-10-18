@@ -57,4 +57,17 @@ final class AppUpdateControllerTests: XCTestCase {
 
         XCTAssertFalse(controller.automaticallyChecksForUpdates)
     }
+
+    /// A nil-error cycle end covers dismissed, skipped and scheduled updates,
+    /// so it must never claim "up to date" or drop a staged relaunch prompt.
+    func testCleanCycleEndNeverReportsUpToDate() {
+        XCTAssertEqual(
+            AppUpdateController.statusAfterCleanCycle(current: .updateAvailable(version: "2.0")),
+            .idle
+        )
+        XCTAssertEqual(
+            AppUpdateController.statusAfterCleanCycle(current: .readyToRelaunch(version: "2.0")),
+            .readyToRelaunch(version: "2.0")
+        )
+    }
 }

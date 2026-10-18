@@ -306,10 +306,11 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
 
     private static func meterPeak(from buffer: AVAudioPCMBuffer) -> Float {
         guard let channels = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
+        let stride = buffer.stride
         var peak: Float = 0
         for channel in 0..<Int(buffer.format.channelCount) {
             for frame in 0..<Int(buffer.frameLength) {
-                peak = max(peak, abs(channels[channel][frame]))
+                peak = max(peak, abs(channels[channel][frame * stride]))
             }
         }
         return min(peak, 1)
@@ -319,10 +320,11 @@ final class RecorderPCMWriterPipeline: @unchecked Sendable {
         guard let channels = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
         let sampleCount = Int(buffer.frameLength) * Int(buffer.format.channelCount)
         guard sampleCount > 0 else { return 0 }
+        let stride = buffer.stride
         var sum: Float = 0
         for channel in 0..<Int(buffer.format.channelCount) {
             for frame in 0..<Int(buffer.frameLength) {
-                sum += abs(channels[channel][frame])
+                sum += abs(channels[channel][frame * stride])
             }
         }
         return min(sum / Float(sampleCount), 1)

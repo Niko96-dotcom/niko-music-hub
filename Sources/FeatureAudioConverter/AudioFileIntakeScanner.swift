@@ -13,10 +13,22 @@ public struct AudioFileIntakeScanner {
         var supportedFiles: [ScannedAudioFile] = []
         var unsupportedFiles: [UnsupportedAudioFile] = []
         var notices: [AudioFileIntakeNotice] = []
+        // One missing or unreadable entry must not drop the good files next to it.
+        var unreadableCount = 0
 
         for url in urls {
-            if try isDirectory(url) {
-                let folderResult = try scanFolder(url)
+            guard let urlIsDirectory = try? isDirectory(url) else {
+                unreadableCount += 1
+                continue
+            }
+            if urlIsDirectory {
+                let folderResult: AudioFileIntakeResult
+                do {
+                    folderResult = try scanFolder(url, unreadableCount: &unreadableCount)
+                } catch {
+                    unreadableCount += 1
+                    continue
+                }
                 supportedFiles.append(contentsOf: folderResult.supportedFiles)
                 unsupportedFiles.append(contentsOf: folderResult.unsupportedFiles)
                 notices.append(contentsOf: folderResult.notices)
@@ -27,6 +39,10 @@ public struct AudioFileIntakeScanner {
             }
         }
 
+        if unreadableCount > 0 {
+            notices.append(.unreadableItemsSkipped(count: unreadableCount))
+        }
+
         return AudioFileIntakeResult(
             supportedFiles: supportedFiles,
             unsupportedFiles: unsupportedFiles,
@@ -34,7 +50,7 @@ public struct AudioFileIntakeScanner {
         )
     }
 
-    private func scanFolder(_ folderURL: URL) throws -> AudioFileIntakeResult {
+    private func scanFolder(_ folderURL: URL, unreadableCount: inout Int) throws -> AudioFileIntakeResult {
         let children = try fileManager.contentsOfDirectory(
             at: folderURL,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -47,7 +63,11 @@ public struct AudioFileIntakeScanner {
         var ignoredSubfolderCount = 0
 
         for child in children {
-            if try isDirectory(child) {
+            guard let childIsDirectory = try? isDirectory(child) else {
+                unreadableCount += 1
+                continue
+            }
+            if childIsDirectory {
                 ignoredSubfolderCount += 1
             } else if let file = supportedFile(for: child) {
                 supportedFiles.append(file)
@@ -130,4 +150,5 @@ public struct UnsupportedAudioFile: Identifiable, Equatable, Sendable {
 
 public enum AudioFileIntakeNotice: Equatable, Sendable {
     case subfoldersIgnored(folderURL: URL, count: Int)
+    case unreadableItemsSkipped(count: Int)
 }

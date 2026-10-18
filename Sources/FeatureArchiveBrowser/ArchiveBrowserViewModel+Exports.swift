@@ -172,8 +172,19 @@ extension ArchiveBrowserViewModel {
 
     func openMainPreview(for song: Song) throws {
         guard let id = song.mainPreviewCandidateID,
-              let candidate = song.previewCandidates.first(where: { $0.id == id }) else { return }
-        let resolved = try resolveRevealURL(candidate.filePath, for: song)
+              let candidate = song.previewCandidates.first(where: { $0.id == id }) else {
+            setStatusMessage("No main preview was found for this song.")
+            return
+        }
+        let resolved: URL
+        do {
+            resolved = try resolveRevealURL(candidate.filePath, for: song)
+        } catch let error as MusicItemOpenerError {
+            diagnostics.scoped(to: .archive).log(.error, "Open preview failed: \(error.localizedDescription)")
+            setStatusMessage(musicItemOpenerStatusMessage(error))
+            openError = musicItemOpenerStatusMessage(error)
+            throw error
+        }
         if runtime.dryRunOpen {
             let path = resolved.path
             lastDryRunLog = path

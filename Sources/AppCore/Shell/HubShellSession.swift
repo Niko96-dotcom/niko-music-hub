@@ -212,8 +212,15 @@ public final class HubShellSession: ObservableObject {
     /// unconditional publish + defaults write there fed preferencesDidChange churn.
     public func setShowMenuBarExtra(_ visible: Bool) {
         guard visible != showMenuBarExtra else { return }
+        // Save first, like the Settings toggle: a failed save (settings paused
+        // for repair) must not leave the live extra out of step with settings.
+        do {
+            try settingsStore?.updateSettings { $0.showMenuBarExtra = visible }
+        } catch {
+            commandsLogger.error("Menu bar extra change not saved: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         applyShowMenuBarExtra(visible)
-        try? settingsStore?.updateSettings { $0.showMenuBarExtra = visible }
     }
 
     /// Update the live extra without writing settings (Settings already persisted).
@@ -235,6 +242,20 @@ public final class HubShellSession: ObservableObject {
         guard request > appliedHelperSetupRequest else { return }
         appliedHelperSetupRequest = request
         presentSetup()
+    }
+
+    /// Last `QuickAccessRouter.archiveSearchFocusRequest` already applied. Kept
+    /// here for the same reason as `appliedHelperSetupRequest`: the router's
+    /// counter only grows, so a reopened main window reads the old value and
+    /// must not take search focus again.
+    private var appliedArchiveSearchFocusRequest: UInt64 = 0
+
+    /// Claims an archive search focus request once per router request sequence.
+    /// Returns `true` when the caller should focus the search field.
+    public func claimArchiveSearchFocusRequest(_ request: UInt64) -> Bool {
+        guard request > appliedArchiveSearchFocusRequest else { return false }
+        appliedArchiveSearchFocusRequest = request
+        return true
     }
 
     public func dismissSetup() {

@@ -93,6 +93,8 @@ final class YtDlpDownloaderTests: XCTestCase {
         XCTAssertTrue(arguments.contains("--no-overwrites"))
         XCTAssertTrue(arguments.contains("--print"))
         XCTAssertTrue(arguments.contains("after_move:NIKO_MUSIC_HUB_FILE:%(filepath)s"))
+        // `--print` alone makes yt-dlp quiet, which hides the skip-marker line.
+        XCTAssertTrue(arguments.contains("--no-quiet"))
         let outputFlagIndex = try XCTUnwrap(arguments.firstIndex(of: "-o"))
         XCTAssertTrue(arguments[outputFlagIndex + 1].contains("%(id)s"))
     }

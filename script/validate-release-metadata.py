@@ -34,7 +34,11 @@ def _norm_location(value: str) -> str:
     text = value.strip()
     if text.startswith("git+"):
         text = text[4:]
-    text = text.split("@")[0]
+    # Strip only a trailing "@<revision>"; an "@" in userinfo or an SSH
+    # "user@host:path" location is followed by "/" or ":" and must stay.
+    base, sep, suffix = text.rpartition("@")
+    if sep and suffix and "/" not in suffix and ":" not in suffix:
+        text = base
     if text.endswith(".git"):
         text = text[:-4]
     return text.rstrip("/")

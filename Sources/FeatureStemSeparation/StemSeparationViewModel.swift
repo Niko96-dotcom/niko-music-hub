@@ -21,6 +21,10 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     @Published public private(set) var statusMessage = ""
     @Published public private(set) var errorMessage: String?
     @Published public private(set) var helperNeedsSetup = false
+    /// Why an installed helper can't be used, from the last health check.
+    /// Nil when the helper is missing or ready. Drops and job errors never
+    /// change it, so the setup card keeps the real cause.
+    @Published public private(set) var helperSetupDiagnostic: String?
     @Published public private(set) var results: [OutputInboxItem] = []
 
     public let supportedPresets = StemSeparationPreset.allCases
@@ -66,7 +70,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public var canStartYouTube: Bool {
-        !isRunning && normalizedYouTubeURL() != nil && youtubeWorkflow != nil
+        !isRunning && normalizedYouTubeURL() != nil && youtubeWorkflow != nil && !helperNeedsSetup
     }
 
     public var canCancel: Bool {
@@ -211,6 +215,9 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public func startYouTubeSeparation() {
         guard !isRunning else { return }
+        // Return in the URL field calls this directly; do not download audio
+        // that the missing stem helper cannot separate.
+        guard !helperNeedsSetup else { return }
         guard let sourceURL = normalizedYouTubeURL() else {
             errorMessage = "Paste a valid YouTube URL."
             helperRelatedErrorActive = false
@@ -316,6 +323,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         switch health {
         case .missing:
             helperNeedsSetup = true
+            helperSetupDiagnostic = nil
             errorMessage = StemSeparationHelperCopy.missingBody
             helperRelatedErrorActive = true
         case .ready:
@@ -324,25 +332,32 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
                 helperRelatedErrorActive = false
             }
             helperNeedsSetup = false
+            helperSetupDiagnostic = nil
         case let .unusable(message):
             helperNeedsSetup = true
-            errorMessage = Self.startFailureMessage(from: message)
+            helperSetupDiagnostic = Self.startFailureMessage(from: message)
+            errorMessage = helperSetupDiagnostic
             helperRelatedErrorActive = true
         case .modelCacheMissing:
             helperNeedsSetup = true
-            errorMessage = StemSeparationHelperCopy.missingBody
+            helperSetupDiagnostic = StemSeparationHelperCopy.modelCacheMissingBody
+            errorMessage = helperSetupDiagnostic
             helperRelatedErrorActive = true
         }
     }
 
     static func startFailureMessage(from message: String) -> String {
-        let firstLine = message
+        let lines = message
             .split(whereSeparator: { $0 == "\n" || $0 == "\r" })
-            .first
-            .map(String.init)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmed = (firstLine?.isEmpty == false ? firstLine! : message.trimmingCharacters(in: .whitespacesAndNewlines))
-        let limited = String(trimmed.prefix(200))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        // A Python crash starts with "Traceback (most recent call last):";
+        // the exception line at the end names the real cause.
+        let cause = DemucsMLXBackend.exceptionLine(in: lines)
+            ?? lines.first { !DemucsMLXBackend.isTracebackFrameLine($0) }
+            ?? lines.first
+            ?? message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let limited = String(DemucsMLXBackend.redactPaths(in: cause).prefix(200))
         return "demucs-mlx could not start: \(limited)"
     }
 

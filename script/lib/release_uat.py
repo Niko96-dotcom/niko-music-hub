@@ -23,25 +23,46 @@ are rejected coherently.
 
 from __future__ import annotations
 
+import datetime
 import re
 
-TIMESTAMP_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+TIMESTAMP_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+
+
+def is_utc_timestamp(value: object) -> bool:
+    """True when value is a complete ISO-8601 UTC timestamp (YYYY-MM-DDTHH:MM:SSZ).
+
+    Uses fullmatch (so a trailing newline is rejected; ``$`` would accept it)
+    and then parses the value, so impossible calendar dates such as
+    2026-13-45T25:61:61Z are rejected too.
+    """
+    if not isinstance(value, str) or not TIMESTAMP_RE.fullmatch(value):
+        return False
+    try:
+        datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return False
+    return True
 
 
 def is_placeholder_or_blank(value: object) -> bool:
     """True when an executor-owned free-text field is still a template value.
 
     AI agent/session identifiers are accepted; TODO, TODO_*, REPLACE_WITH_*,
-    blank, and whitespace-only values are rejected.
+    blank, and whitespace-only values are rejected. The sentinel comparison
+    is case-insensitive (``todo_name`` is still a template value) and keyed
+    on the ``TODO_`` / ``REPLACE_WITH_`` prefixes, so a real name such as
+    ``TODOROV-STUDIO`` is not refused.
     """
     if not isinstance(value, str):
         return True
     stripped = value.strip()
     if not stripped:
         return True
-    if stripped == "TODO" or stripped.startswith("TODO"):
+    upper = stripped.upper()
+    if upper == "TODO" or upper.startswith("TODO_"):
         return True
-    if stripped.startswith("REPLACE_WITH_"):
+    if upper.startswith("REPLACE_WITH_"):
         return True
     return False
 
@@ -62,6 +83,8 @@ def validate_uat(
     impersonates a human. Schema, exact ten-check, and fail-closed
     (pending/failed reject) semantics are unchanged.
     """
+    if not isinstance(payload, dict):
+        raise SystemExit("release UAT evidence must be a JSON object")
     # schema_version must be exact int 1: type(schema) is int and
     # schema == 1. Rejects "1", True/False (bool is not int), and 1.0
     # (float; 1.0 == 1 in Python, so an equality-only check would pass it).
@@ -97,7 +120,7 @@ def validate_uat(
             f"(UAT evidence needs a real approved_by value (was {approver!r}))"
         )
     approved_at = payload.get("approved_at_utc")
-    if not isinstance(approved_at, str) or not TIMESTAMP_RE.match(approved_at):
+    if not is_utc_timestamp(approved_at):
         raise SystemExit(
             f"release UAT approved_at_utc must be an ISO-8601 UTC timestamp "
             f"(UAT approved_at_utc must be an ISO-8601 UTC timestamp (was {approved_at!r}))"

@@ -65,4 +65,11 @@ final class ProjectVaultDiagnosticsExporterUniqueNameTests: XCTestCase {
             "A file named “project-vault-diagnostics-2026-09-15.txt” already exists in this folder. Replacing it cannot be undone from Niko Music Hub."
         )
     }
+
+    func testMusicRootRefusalCopyCoversEveryRootRole() {
+        XCTAssertEqual(
+            ProjectVaultDiagnosticsExportCopy.archiveRootRecoveryMessage,
+            "Diagnostics export failed: the chosen location is inside one of your music folders (Active, Archive or library). Choose a folder outside your music folders and try again."
+        )
+    }
 }

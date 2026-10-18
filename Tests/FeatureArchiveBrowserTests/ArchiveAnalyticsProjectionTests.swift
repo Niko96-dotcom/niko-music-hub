@@ -85,14 +85,43 @@ final class ArchiveAnalyticsProjectionTests: XCTestCase {
         ]
 
         let snapshot = ArchiveAnalyticsProjection.snapshot(
-            songs: [], history: history, now: now, calendar: utcCalendar
+            songs: [song("/tmp/a", status: .done), song("/tmp/b", status: .prod)],
+            history: history, now: now, calendar: utcCalendar
         )
 
         let prod = snapshot.stageDwell.first { $0.status == .prod }
         XCTAssertEqual(prod?.sampleCount, 2)
         XCTAssertEqual(prod.map { $0.averageDays.rounded() }, 3)
+        XCTAssertEqual(snapshot.earliestHistoryEntry, date(2026, 7, 5))
+    }
+
+    func testStageDwellSkipsOpenDoneAndSongsNotInCatalog() {
+        let now = date(2026, 7, 11)
+        let history = [
+            // Done a year ago: the open Done interval must not count.
+            WorkflowStatusChange(songID: "/tmp/a", fromStatus: nil, toStatus: .done, changedAt: date(2025, 7, 11)),
+            // Closed Done interval (re-opened later) still counts.
+            WorkflowStatusChange(songID: "/tmp/b", fromStatus: nil, toStatus: .done, changedAt: date(2026, 7, 1)),
+            WorkflowStatusChange(songID: "/tmp/b", fromStatus: .done, toStatus: .prod, changedAt: date(2026, 7, 3)),
+            // Hidden and removed songs must not count.
+            WorkflowStatusChange(songID: "/tmp/hidden", fromStatus: nil, toStatus: .prod, changedAt: date(2025, 1, 1)),
+            WorkflowStatusChange(songID: "/tmp/gone", fromStatus: nil, toStatus: .prod, changedAt: date(2025, 1, 1)),
+        ]
+
+        let snapshot = ArchiveAnalyticsProjection.snapshot(
+            songs: [
+                song("/tmp/a", status: .done),
+                song("/tmp/b", status: .prod),
+                song("/tmp/hidden", status: .prod, isIgnored: true),
+            ],
+            history: history, now: now, calendar: utcCalendar
+        )
+
         let done = snapshot.stageDwell.first { $0.status == .done }
         XCTAssertEqual(done?.sampleCount, 1)
-        XCTAssertEqual(snapshot.earliestHistoryEntry, date(2026, 7, 5))
+        XCTAssertEqual(done.map { $0.averageDays.rounded() }, 2)
+        let prod = snapshot.stageDwell.first { $0.status == .prod }
+        XCTAssertEqual(prod?.sampleCount, 1)
+        XCTAssertEqual(prod.map { $0.averageDays.rounded() }, 8)
     }
 }

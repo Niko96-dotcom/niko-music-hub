@@ -251,13 +251,14 @@ public struct YtDlpDownloader: DownloadRunning {
                     if let streamingRunner = runner as? any StreamingExternalProcessRunning {
                         return try await streamingRunner.run(
                             processRequest,
-                            onStandardOutput: { collector.consume($0) },
-                            onStandardError: { collector.consume($0) }
+                            onStandardOutput: { collector.consume($0, from: .standardOutput) },
+                            onStandardError: { collector.consume($0, from: .standardError) }
                         )
                     } else {
                         let result = try await runner.run(processRequest)
-                        collector.consume(result.standardOutput)
-                        collector.consume(result.standardError)
+                        collector.consume(result.standardOutput, from: .standardOutput)
+                        collector.finishPendingLine(of: .standardOutput)
+                        collector.consume(result.standardError, from: .standardError)
                         return result
                     }
                 }

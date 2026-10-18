@@ -157,7 +157,7 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
 
         XCTAssertEqual(
             diagnostics.summaryLine,
-            "Scanned 3 songs · 2 song(s) with 3 warning(s) — Alpha Song, Zebra Song · nothing skipped at roots"
+            "Scanned 3 songs · 2 songs with 3 warnings — Alpha Song, Zebra Song · nothing skipped at roots"
         )
     }
 
@@ -254,7 +254,7 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
 
         XCTAssertEqual(
             diagnostics.summaryLine,
-            "Scanned 8 songs · 8 song(s) with 8 warning(s) — Song 1, Song 2, Song 3, Song 4, Song 5 and 3 more · nothing skipped at roots"
+            "Scanned 8 songs · 8 songs with 8 warnings — Song 1, Song 2, Song 3, Song 4, Song 5 and 3 more · nothing skipped at roots"
         )
     }
 
@@ -277,7 +277,7 @@ final class ArchiveScanDiagnosticsTests: XCTestCase {
 
         XCTAssertEqual(
             diagnostics.exportSummaryLine(homeDirectory: home),
-            "roots: ~/Music/Cubase, /Volumes/Archive · Scanned 5 songs · 1 song(s) with 2 warning(s) — Broken Song · 1 skipped at roots"
+            "roots: ~/Music/Cubase, /Volumes/Archive · Scanned 5 songs · 1 song with 2 warnings — Broken Song · 1 skipped at roots"
         )
     }
 }

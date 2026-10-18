@@ -20,6 +20,24 @@ final class SkippedEntrySearchMatcherTests: XCTestCase {
         XCTAssertTrue(SkippedEntrySearchMatcher.search("cafe missing", in: [entry]).isEmpty)
     }
 
+    func testFuzzyMatchRejectsSpreadLettersAndExactReasonRanksAboveFuzzyLabel() throws {
+        let spread = SkippedScanEntry(
+            kind: .unreadableChild,
+            label: "Drum Edits Mono",
+            reason: "cannot read folder"
+        )
+        XCTAssertTrue(SkippedEntrySearchMatcher.search("demo", in: [spread]).isEmpty)
+
+        let reasonHit = SkippedScanEntry(
+            kind: .unreadableChild,
+            label: "Drum Edits Mono",
+            reason: "demo bounce unreadable"
+        )
+        let match = try XCTUnwrap(SkippedEntrySearchMatcher.search("demo", in: [reasonHit]).first)
+        XCTAssertEqual(match.details.map(\.kind), [.reasonContains])
+        XCTAssertEqual(match.score, 55)
+    }
+
     func testFindsLooseFileByLabelToken() throws {
         try CubaseFixtures.ensureGenerated()
         let scanner = CubaseArchiveScanner()

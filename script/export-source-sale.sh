@@ -22,9 +22,13 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --approval) APPROVAL="${2:-}"; shift 2 ;;
+    --approval)
+      [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || { echo "--approval requires a value" >&2; usage; exit 2; }
+      APPROVAL="$2"; shift 2 ;;
     --candidate) CANDIDATE=true; shift ;;
-    --output-dir) OUTPUT_DIR="${2:-}"; shift 2 ;;
+    --output-dir)
+      [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || { echo "--output-dir requires a value" >&2; usage; exit 2; }
+      OUTPUT_DIR="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
   esac
@@ -64,12 +68,14 @@ EXPORT_PATHS=(
   CHANGELOG.md
   CONTRIBUTING.md
   LICENSE
+  Package.resolved
   Package.swift
   README.md
   RELEASE_ARCHITECTURES
   Resources
   SBOM.spdx.json
   SOURCE_PROVENANCE.md
+  SPARKLE_PUBLIC_ED_KEY
   Sources
   THIRD_PARTY_NOTICES.md
   Tests
@@ -98,18 +104,24 @@ EXPORT_PATHS=(
   script/extract-release-notes.sh
   script/fixtures
   script/generate-release-record.py
+  script/install-local.sh
   script/lib
   script/live_smoke_stem_separation.sh
+  script/local-build-identity.sh
+  script/prove-bookmark-relaunch.sh
   script/public-tree-hygiene.sh
   script/release-all.sh
   script/release-env.sh
   script/release-preflight.sh
+  script/release-version-allowlist.txt
   script/release-version-verify.sh
   script/ui_probe.swift
   script/validate-release-approval.sh
   script/validate-release-artifact.sh
+  script/validate-release-metadata.py
   script/validate-release-uat.sh
   script/validate-source-sale-approval.py
+  script/validate-update-feed.py
   script/verify-installed-release.sh
   script/verify-source-distribution.py
 )

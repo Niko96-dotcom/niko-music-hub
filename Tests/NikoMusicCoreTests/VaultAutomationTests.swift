@@ -89,7 +89,7 @@ final class VaultAutomationTests: XCTestCase {
         }
     }
 
-    func testEveryBusyOrUncertainActivityProbePostponesWithoutArchiving() async {
+    func testEveryBusyOrUncertainActivityProbePostponesWithoutArchiving() async throws {
         let cases: [(VaultActivityStatus, VaultActivityStatus, VaultActivityStatus, VaultAutomationPostponement)] = [
             (.busy, .clear, .clear, .cubaseRunning),
             (.uncertain("cubase-probe"), .clear, .clear, .uncertainActivity("cubase-probe")),
@@ -109,7 +109,7 @@ final class VaultAutomationTests: XCTestCase {
                 now: { fixedNow }
             )
 
-            let results = await scheduler.run(candidates: [candidate(lastActivityDaysAgo: 31)])
+            let results = try await scheduler.run(candidates: [candidate(lastActivityDaysAgo: 31)])
 
             XCTAssertEqual(results, [.postponed(candidateID, expected)])
             let archiveCalls = await archiver.archiveCallCount()
@@ -119,7 +119,7 @@ final class VaultAutomationTests: XCTestCase {
         }
     }
 
-    func testActivityBecomingBusyAfterCopyRetainsActiveCopy() async {
+    func testActivityBecomingBusyAfterCopyRetainsActiveCopy() async throws {
         let archiver = RecordingAutomaticArchiver()
         let probe = SequencedActivityProbe(cubase: [.clear, .busy], openFiles: [.clear], writes: [.clear])
         let fixedNow = now
@@ -130,13 +130,51 @@ final class VaultAutomationTests: XCTestCase {
             now: { fixedNow }
         )
 
-        let results = await scheduler.run(candidates: [candidate(lastActivityDaysAgo: 31)])
+        let results = try await scheduler.run(candidates: [candidate(lastActivityDaysAgo: 31)])
 
         XCTAssertEqual(results, [.postponed(candidateID, .cubaseRunning)])
         let archiveCalls = await archiver.archiveCallCount()
         let removalCalls = await archiver.removalCallCount()
         XCTAssertEqual(archiveCalls, 1)
         XCTAssertEqual(removalCalls, 0)
+    }
+
+    func testStoppedArchiveIsRethrownAndFailuresUseLocalizedCopy() async throws {
+        let fixedNow = now
+        let stops: [any Error] = [CancellationError(), VaultTransferInterruption()]
+        for stop in stops {
+            let archiver = ThrowingAutomaticArchiver(error: stop)
+            let scheduler = VaultAutomationScheduler(
+                policy: enabledPolicy,
+                activityProbe: FixedActivityProbe(cubase: .clear, openFiles: .clear, writes: .clear),
+                archiver: archiver,
+                now: { fixedNow }
+            )
+            do {
+                let results = try await scheduler.run(candidates: [
+                    candidate(lastActivityDaysAgo: 31), candidate(lastActivityDaysAgo: 31)
+                ])
+                XCTFail("Expected \(stop) to be rethrown, got \(results)")
+            } catch {
+                XCTAssertEqual(String(describing: type(of: error)), String(describing: type(of: stop)))
+            }
+            let archiveCalls = await archiver.archiveCallCount()
+            XCTAssertEqual(archiveCalls, 1)
+        }
+
+        let failing = ThrowingAutomaticArchiver(error: LocalVaultTransferError.sourceMutated)
+        let scheduler = VaultAutomationScheduler(
+            policy: enabledPolicy,
+            activityProbe: FixedActivityProbe(cubase: .clear, openFiles: .clear, writes: .clear),
+            archiver: failing,
+            now: { fixedNow }
+        )
+        let results = try await scheduler.run(candidates: [candidate(lastActivityDaysAgo: 31)])
+        guard case let .failed(failure) = results.first else {
+            return XCTFail("Expected a failure, got \(results)")
+        }
+        XCTAssertEqual(failure.message, LocalVaultTransferError.sourceMutated.errorDescription)
+        XCTAssertNotEqual(failure.message, "sourceMutated")
     }
 
     func testUnattendedFixtureAutomationArchivesAndRemovesActiveOnlyAfterPersistedVerification() async throws {
@@ -158,7 +196,7 @@ final class VaultAutomationTests: XCTestCase {
             now: { fixedNow }
         )
 
-        let results = await scheduler.run(candidates: [
+        let results = try await scheduler.run(candidates: [
             VaultAutomationCandidate(
                 projectID: candidateID,
                 sourceURL: fixture.source,
@@ -439,6 +477,26 @@ private actor RecordingAutomaticArchiver: VaultAutomaticArchiving {
 
     func archiveCallCount() -> Int { archiveCalls }
     func removalCallCount() -> Int { removalCalls }
+}
+
+private actor ThrowingAutomaticArchiver: VaultAutomaticArchiving {
+    private let error: any Error
+    private var archiveCalls = 0
+
+    init(error: any Error) {
+        self.error = error
+    }
+
+    func archive(projectID: ProjectID, sourceURL: URL) async throws -> VaultTransferRecord {
+        archiveCalls += 1
+        throw error
+    }
+
+    func removeActiveCopy(after archivedRecord: VaultTransferRecord) async throws -> VaultTransferRecord {
+        throw error
+    }
+
+    func archiveCallCount() -> Int { archiveCalls }
 }
 
 private struct AutomationFixture {

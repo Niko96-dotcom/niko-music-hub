@@ -40,18 +40,42 @@ final class WAVOutputVerifierTests: XCTestCase {
         }
     }
 
+    func testRejectsFloatWAVWhenIntegerPCMIsExpected() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let url = directory.appendingPathComponent("float.wav")
+        try writeTestWAV(
+            to: url,
+            sampleRate: 44100,
+            bitDepth: 32,
+            channelCount: 2,
+            isFloat: true
+        )
+
+        XCTAssertThrowsError(
+            try WAVOutputVerifier().verify(
+                url: url,
+                expectedSpec: WAVOutputSpec(sampleRate: 44100, bitDepth: 32, channelCount: 2)
+            )
+        ) { error in
+            XCTAssertEqual(error as? WAVOutputVerificationError, .nonWAVOrPCM(url))
+        }
+    }
+
     private func writeTestWAV(
         to url: URL,
         sampleRate: Int,
         bitDepth: Int,
-        channelCount: AVAudioChannelCount
+        channelCount: AVAudioChannelCount,
+        isFloat: Bool = false
     ) throws {
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: Double(sampleRate),
             AVNumberOfChannelsKey: Int(channelCount),
             AVLinearPCMBitDepthKey: bitDepth,
-            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsFloatKey: isFloat,
             AVLinearPCMIsBigEndianKey: false,
             AVLinearPCMIsNonInterleaved: false
         ]

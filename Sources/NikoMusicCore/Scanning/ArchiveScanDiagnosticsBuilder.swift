@@ -28,23 +28,44 @@ public enum ArchiveScanDiagnosticsBuilder {
     }
 
     /// Merges incremental-scan diagnostics with a prior full-scan snapshot.
+    /// Prior entries for the folders and roots in `rescanned` are replaced by what the
+    /// incremental pass reported, so a folder that now scans cleanly stops showing as skipped.
     public static func mergeIncremental(
         prior: ArchiveScanDiagnostics?,
-        built: ArchiveScanDiagnostics
+        built: ArchiveScanDiagnostics,
+        rescanned: ArchiveSongFolderResolver.Resolution = ArchiveSongFolderResolver.Resolution()
     ) -> ArchiveScanDiagnostics {
         guard let prior else { return built }
+        let rescannedRoots = rescanned.rootsForRootLevelScan.map(\.standardizedFileURL)
+        let rescannedLabels = Set(
+            rescanned.songFolders.map(\.lastPathComponent) + rescannedRoots.map(\.lastPathComponent)
+        )
+        let priorSkipped = prior.skippedEntries.filter {
+            !($0.kind == .unreadableChild && rescannedLabels.contains($0.label))
+        }
+        // Only the root-level project read is rechecked for a root; its warning goes once that read succeeds.
+        let resolvedRootWarnings = Set(rescannedRoots.compactMap { root -> String? in
+            let stillFailing = built.skippedEntries.contains {
+                $0.kind == .unreadableChild && $0.label == root.lastPathComponent
+                    && $0.reason.hasPrefix(rootLevelReadFailurePrefix)
+            }
+            return stillFailing ? nil : "\(rootLevelReadFailurePrefix): \(root.path)"
+        })
+        let priorGlobalWarnings = prior.globalWarnings.filter { !resolvedRootWarnings.contains($0) }
         return ArchiveScanDiagnostics(
             scannedAt: built.scannedAt,
             rootPaths: built.rootPaths,
             songCount: built.songCount,
             songsWithWarningsCount: built.songsWithWarningsCount,
             totalSongWarningCount: built.totalSongWarningCount,
-            globalWarnings: prior.globalWarnings.isEmpty ? built.globalWarnings : prior.globalWarnings,
+            globalWarnings: priorGlobalWarnings.isEmpty ? built.globalWarnings : priorGlobalWarnings,
             songWarningSummaries: built.songWarningSummaries,
-            skippedEntries: mergeSkippedEntries(prior: prior.skippedEntries, incremental: built.skippedEntries),
+            skippedEntries: mergeSkippedEntries(prior: priorSkipped, incremental: built.skippedEntries),
             previewRankingPanel: built.previewRankingPanel
         )
     }
+
+    private static let rootLevelReadFailurePrefix = "Could not read root-level project files"
 
     private static func mergeSkippedEntries(
         prior: [SkippedScanEntry],

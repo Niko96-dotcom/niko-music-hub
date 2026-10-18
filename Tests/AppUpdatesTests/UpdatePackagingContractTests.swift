@@ -138,6 +138,20 @@ final class UpdatePackagingContractTests: XCTestCase {
         XCTAssertTrue(feed.lowerBound < publication.lowerBound)
     }
 
+    /// Bash reads top-level code lazily, so the one-time live-vs-pinned cmp
+    /// guard only holds when the whole run is parsed before it executes.
+    func testReleaseRunIsParsedBeforeTheLiveVersusPinnedGuard() throws {
+        let release = try source("script/release-all.sh")
+
+        let mainStart = try XCTUnwrap(release.range(of: "\nmain() {\n"))
+        let guardCheck = try XCTUnwrap(release.range(of: "cmp -s \"${BASH_SOURCE[0]}\""))
+        XCTAssertTrue(mainStart.lowerBound < guardCheck.lowerBound)
+        XCTAssertTrue(
+            release.hasSuffix("\n}\n\nmain \"$@\"; exit\n"),
+            "nothing may run from the live file after main returns"
+        )
+    }
+
     /// The validator's whole reason to exist: proving the key inside the app we
     /// are about to publish is the key that signed the feed.
     func testFeedValidatorChecksTheEmbeddedKeyAndBothSignatures() throws {

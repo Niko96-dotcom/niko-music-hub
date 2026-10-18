@@ -13,6 +13,8 @@ public enum RecorderError: LocalizedError, Equatable, Sendable {
     case permissionRestricted
     case apiError(String)
     case writeError(String)
+    /// The output folder is inside a music archive root, so nothing was written.
+    case outputRefused(String)
     case settingsUnreadable
     case verificationFailed(String)
     case noAudioCaptured(String)
@@ -28,6 +30,8 @@ public enum RecorderError: LocalizedError, Equatable, Sendable {
             return "Audio capture failed: \(message)"
         case .writeError(let message):
             return "Could not save recording: \(message)"
+        case .outputRefused(let message):
+            return message
         case .settingsUnreadable:
             return "Settings couldn’t be read, so recording didn’t start. Repair them in Settings, then try again."
         case .verificationFailed(let message):

@@ -83,6 +83,30 @@ final class VaultManifestTests: XCTestCase {
         }
     }
 
+    /// Extended attributes must be read from the link itself, not through it:
+    /// an unreadable target would otherwise fail as an enumeration error and
+    /// hide the "replace the link with the real file" advice.
+    func testManifestRefusesSymbolicLinkToUnreadableTargetAsSymbolicLink() throws {
+        let root = temporaryRoot()
+        let outside = temporaryRoot().appendingPathExtension("wav")
+        defer {
+            chmod(outside.path, S_IRUSR | S_IWUSR)
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: outside)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("locked".utf8).write(to: outside)
+        XCTAssertEqual(chmod(outside.path, 0), 0)
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("locked.wav"),
+            withDestinationURL: outside
+        )
+
+        XCTAssertThrowsError(try VaultManifestBuilder().build(at: root)) {
+            XCTAssertEqual($0 as? VaultManifestError, .unsupportedSymbolicLink("locked.wav"))
+        }
+    }
+
     func testManifestHashesLargeFilesInMultipleChunksWithoutChangingDigest() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }

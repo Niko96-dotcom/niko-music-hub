@@ -25,7 +25,9 @@ enum YtDlpDownloadCommandBuilder {
         if request.playlistMode == .single {
             args.append("--no-playlist")
         } else if let maxEntries = request.playlistMode.maxEntries {
-            args.append(contentsOf: ["--max-downloads", String(maxEntries)])
+            // `--max-downloads` makes yt-dlp exit 101 when the cap is reached;
+            // `--playlist-items` caps the entries and still exits 0.
+            args.append(contentsOf: ["--playlist-items", "1:\(maxEntries)"])
         }
         args.append(contentsOf: formatArgs.extraArguments)
         if let ffmpegLocationURL = request.ffmpegLocationURL {
@@ -35,6 +37,10 @@ enum YtDlpDownloadCommandBuilder {
             "--progress-template", progressTemplate,
             "--progress-template", postProcessTemplate,
             "--print", filePrintMarker,
+            // `--print` turns quiet mode on and hides the `[download] … has
+            // already been downloaded` and Destination lines that carry
+            // output provenance; keep them.
+            "--no-quiet",
             "-P", "home:\(request.outputDirectory.path)",
             "-P", "temp:\(partialDirectory.path)",
             "-o", request.outputTemplate,
@@ -55,16 +61,21 @@ enum YtDlpDownloadCommandBuilder {
             "--force-ipv4",
             "-f", formatArgs.formatSelector,
         ]
+        let titleTemplate: String
         if playlistMode == .single {
             args.append("--no-playlist")
-        } else if let maxEntries = playlistMode.maxEntries {
-            args.append(contentsOf: ["--max-downloads", String(maxEntries)])
+            titleTemplate = "%(title)s"
+        } else {
+            // The simulate run only names the job: list one flat entry instead
+            // of extracting every entry under the short simulate timeout.
+            args.append(contentsOf: ["--flat-playlist", "--playlist-items", "1"])
+            titleTemplate = "%(playlist_title,title)s"
         }
         args.append(contentsOf: formatArgs.extraArguments)
         if let ffmpegLocationURL {
             args.append(contentsOf: ["--ffmpeg-location", ffmpegLocationURL.path])
         }
-        args.append(contentsOf: ["--print", "%(title)s", sourceURL.absoluteString])
+        args.append(contentsOf: ["--print", titleTemplate, sourceURL.absoluteString])
         return args
     }
 }

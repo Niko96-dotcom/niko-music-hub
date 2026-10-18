@@ -50,7 +50,7 @@ struct ProjectVaultRestoreSheet: View {
             }
             if let issue = request.options.destinationIssue(for: destination) {
                 Text(issue).foregroundStyle(.orange)
-                if issue == "This folder already exists. Choose another name to keep its contents.",
+                if request.options.isOccupied(destination),
                    let suggestion = request.options.suggestedUniqueRelativePath(for: destination),
                    suggestion != destination {
                     Text("“\(suggestion)” is available.")
@@ -95,12 +95,8 @@ struct ProjectVaultRestoreSheet: View {
             panelMessage = "Choose a folder inside Active Projects."
             return
         }
-        let relative = String(chosen.path.dropFirst(root.path.count + 1))
-        guard !relative.isEmpty else {
-            panelMessage = "Choose a folder inside Active Projects."
-            return
-        }
+        let relative = chosen.path == root.path ? "" : String(chosen.path.dropFirst(root.path.count + 1))
         panelMessage = nil
-        destination = relative
+        destination = request.options.destinationRelativePath(insideChosenFolder: relative)
     }
 }

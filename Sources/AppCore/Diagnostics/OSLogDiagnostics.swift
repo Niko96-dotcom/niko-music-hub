@@ -46,8 +46,8 @@ public struct OSLogDiagnostics: Diagnostics {
     }
 
     public init(categoryName: String) {
-        // For one-off categories; maps back to .general when the name matches a
-        // known case so `category` stays meaningful.
+        // For one-off categories; uses the known category when the name matches
+        // one, otherwise logs under the custom name and reports `.general`.
         if let known = DiagnosticsCategory(rawValue: categoryName) {
             self.category = known
             self.logger = HubLogging.logger(category: known)

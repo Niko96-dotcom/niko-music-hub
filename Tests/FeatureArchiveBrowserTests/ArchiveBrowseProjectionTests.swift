@@ -70,6 +70,44 @@ final class ArchiveBrowseProjectionTests: XCTestCase {
         XCTAssertEqual(result.filteredSongs.map(\.id), [older.id])
     }
 
+    func testBrowseFilterRunsBeforeTierPruningSoLowerTierMatchesSurvive() {
+        // "Demo" is a primary-tier title match but fails the filter; "Night Drive"
+        // only matches via its project file (secondary tier) and passes the filter.
+        let titleMatch = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/demo"),
+            originalFolderName: "Demo",
+            displayTitle: "Demo"
+        )
+        let fileMatch = Song(
+            folderPath: URL(fileURLWithPath: "/tmp/night-drive"),
+            originalFolderName: "Night Drive",
+            displayTitle: "Night Drive",
+            projectVersions: [
+                ProjectVersion(
+                    filePath: URL(fileURLWithPath: "/tmp/night-drive/demo_v2.cpr"),
+                    fileName: "demo_v2.cpr",
+                    modifiedAt: Date(timeIntervalSince1970: 1_000)
+                )
+            ],
+            scanWarnings: ["missing preview"]
+        )
+        let state = ArchiveBrowseState(
+            songs: [titleMatch, fileMatch],
+            showHiddenSongs: true,
+            selectedShelf: .allSongs,
+            selectedCollaboratorID: nil,
+            searchQuery: "demo",
+            browseFilter: [.hasWarnings],
+            sortMode: .titleAZ,
+            skippedScanEntries: []
+        )
+
+        let result = ArchiveBrowseProjection.project(state)
+        XCTAssertEqual(result.filteredSongs.map(\.id), [fileMatch.id])
+        let scoped = MusicSearchIndex(songs: ArchiveBrowseProjection.shelfSongs(from: state))
+        XCTAssertEqual(ArchiveBrowseProjection.project(state, searchIndex: scoped), result)
+    }
+
     func testShelfHidesIgnoredSongsUnlessShowHiddenEnabled() {
         let visible = Song(
             folderPath: URL(fileURLWithPath: "/tmp/visible"),
@@ -129,7 +167,36 @@ final class ArchiveBrowseProjectionTests: XCTestCase {
         XCTAssertTrue(body.contains("SecretTakes"))
         XCTAssertTrue(body.contains("Permission denied"))
         XCTAssertTrue(body.contains("Skipped folders (1)"))
-        XCTAssertTrue(body.contains("Settings → Archive"))
+        XCTAssertFalse(body.contains("Settings → Archive"), "Exclusions cannot fix a permission error")
+    }
+
+    func testSkippedSearchCopySeparatesEntriesAndAdvisesOnlyForExclusions() {
+        func match(_ kind: SkippedScanEntryKind, _ label: String, _ reason: String) -> SkippedEntrySearchResult {
+            SkippedEntrySearchResult(
+                entry: SkippedScanEntry(kind: kind, label: label, reason: reason),
+                score: 1,
+                details: []
+            )
+        }
+
+        let excluded = ArchiveSkippedSearchCopy.emptyStateBody(matches: [
+            match(.unreadableChild, "A", "Excluded by scan settings"),
+            match(.unreadableChild, "B", "Excluded by scan settings"),
+        ])
+        XCTAssertEqual(
+            excluded,
+            "No songs match. Skipped folders (2): A — Excluded by scan settings; B — Excluded by scan settings."
+                + " Change scan exclusions in Settings → Archive to include excluded folders."
+        )
+
+        let mixed = ArchiveSkippedSearchCopy.emptyStateBody(matches: [
+            match(.nonFolderAtRoot, "LOOSE_FILE.txt", SkippedScanEntry.standardNonFolderAtRootReason),
+            match(.unreadableChild, "Locked", "Could not read entry: You don’t have permission to view it."),
+        ])
+        XCTAssertTrue(mixed.contains("Skipped items (2)"))
+        XCTAssertTrue(mixed.contains("view it."))
+        XCTAssertFalse(mixed.contains(".."))
+        XCTAssertFalse(mixed.contains("Settings → Archive"))
     }
 
     // MARK: - Single-shelf-pass parity (scoped index vs standalone fallback)

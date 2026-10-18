@@ -412,6 +412,42 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
     }
 
+    func testKeepLocalOffRemovesRecordIDPinOfCatalogOnlySnapshot() async throws {
+        let harness = try makeHarness()
+        defer { harness.cleanup() }
+        let runtime = QueueLivePhaseVaultRuntime()
+        let restored = makeSong(in: harness.active, named: "Restored Linked Song")
+        let recordID = ProjectID()
+        // A finished restore of a linked-archive project: no transfer, so no
+        // path-indexed snapshot, but the restore pinned the project ID.
+        runtime.setServedSnapshots([
+            ProjectVaultRuntimeSnapshot(
+                record: ProjectRecord(
+                    id: recordID,
+                    canonicalTitle: restored.effectiveDisplayTitle,
+                    locations: [ProjectLocation(
+                        rootID: harness.activeID,
+                        relativePath: restored.originalFolderName,
+                        kind: .active,
+                        availability: .local
+                    )]
+                ),
+                transfer: nil
+            ),
+        ])
+        try harness.store.updateSettings { settings in
+            settings.vault.keepLocalProjectIDs.formUnion([recordID.description, restored.id])
+        }
+        let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [restored])
+        viewModel.refreshProjectVaultPresentationContext()
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertTrue(viewModel.vaultObservation.isIntentionalKeepLocalSkip(for: restored))
+
+        viewModel.setProjectKeepLocal(false, for: restored)
+        XCTAssertEqual(try harness.store.loadSettings().vault.keepLocalProjectIDs, [])
+        XCTAssertFalse(viewModel.vaultObservation.isIntentionalKeepLocalSkip(for: restored))
+    }
+
     func testDoneRuntimePinnedWithoutSettingsIsSkippedAutomatically() async throws {
         let harness = try makeHarness()
         defer { harness.cleanup() }

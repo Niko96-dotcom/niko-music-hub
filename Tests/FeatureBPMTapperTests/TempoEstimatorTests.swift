@@ -234,4 +234,32 @@ final class TempoEstimatorTests: XCTestCase {
         XCTAssertEqual(recoveredEstimate.acceptedIntervalCount, stableEstimate.acceptedIntervalCount + 1)
         XCTAssertEqual(recoveredEstimate.status, .stableEstimate)
     }
+
+    func testSteadySlowerTempoStartsNewRunInsteadOfStayingStale() throws {
+        var estimator = TempoEstimator()
+        var timestamp: TimeInterval = 0.0
+        _ = estimator.tap(at: timestamp)
+        for _ in 0..<4 {
+            timestamp += 0.5
+            _ = estimator.tap(at: timestamp)
+        }
+
+        timestamp += 0.8
+        let firstSlow = estimator.tap(at: timestamp)
+        XCTAssertEqual(firstSlow.status, .outlierIgnored)
+        XCTAssertEqual(try XCTUnwrap(firstSlow.bpm), 120.0, accuracy: 0.001)
+
+        timestamp += 0.8
+        let switched = estimator.tap(at: timestamp)
+        XCTAssertEqual(switched.status, .longPauseReset)
+        XCTAssertTrue(switched.intervalAccepted)
+        XCTAssertEqual(try XCTUnwrap(switched.bpm), 75.0, accuracy: 0.001)
+        XCTAssertEqual(switched.acceptedIntervalCount, 2)
+        XCTAssertEqual(switched.tapCount, 3)
+
+        timestamp += 0.8
+        let following = estimator.tap(at: timestamp)
+        XCTAssertTrue(following.intervalAccepted)
+        XCTAssertEqual(try XCTUnwrap(following.bpm), 75.0, accuracy: 0.001)
+    }
 }

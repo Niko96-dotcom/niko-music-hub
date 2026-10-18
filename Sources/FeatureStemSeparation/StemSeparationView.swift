@@ -36,7 +36,7 @@ public struct StemSeparationView: View {
     @ViewBuilder
     private var liveSection: some View {
         if viewModel.helperNeedsSetup {
-            StandardErrorCard(card: Self.helperMissingCard()) { action in
+            StandardErrorCard(card: Self.helperMissingCard(diagnostic: viewModel.helperSetupDiagnostic)) { action in
                 switch action {
                 case .installHelperTools:
                     viewModel.openHubSettingsHelpers()
@@ -386,12 +386,15 @@ public struct StemSeparationView: View {
         }
     }
 
-    static func helperMissingCard() -> AppErrorCard {
-        AppErrorCard(
+    /// `diagnostic` is the view model's `helperSetupDiagnostic`: nil means the
+    /// helper is missing, any text is why an installed helper can't be used.
+    static func helperMissingCard(diagnostic: String? = nil) -> AppErrorCard {
+        let diagnostic = diagnostic.flatMap { $0.isEmpty ? nil : $0 }
+        return AppErrorCard(
             category: .helperTool,
-            label: StemSeparationHelperCopy.missingLabel,
+            label: diagnostic == nil ? StemSeparationHelperCopy.missingLabel : StemSeparationHelperCopy.unusableLabel,
             icon: "tool.badge.xmark",
-            body: StemSeparationHelperCopy.missingBody,
+            body: diagnostic ?? StemSeparationHelperCopy.missingBody,
             recoveryActions: [
                 AppErrorCard.RecoveryAction(label: "Install Tools", style: .primary, action: .installHelperTools),
                 AppErrorCard.RecoveryAction(label: "Choose Path", style: .secondary, action: .chooseToolPath),

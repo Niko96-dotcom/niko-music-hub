@@ -181,6 +181,34 @@ final class RecorderPCMWriterPipelineTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
+    func testLevelMeterReadsEveryFrameOfAnInterleavedBuffer() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pipeline-interleaved-meter-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let levels = ReportedLevels()
+        let pipeline = try RecorderPCMWriterPipeline(
+            outputURL: url,
+            preset: .cubaseDefault,
+            diagnostics: RecorderSessionDiagnostics(),
+            onLevel: { levels.append($0) }
+        )
+        pipeline.activate(generation: 1)
+        let frames: AVAudioFrameCount = 256
+        let format = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 2, interleaved: true))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
+        buffer.frameLength = frames
+        let samples = try XCTUnwrap(buffer.floatChannelData)[0]
+        for index in 0..<Int(frames) * 2 { samples[index] = 0 }
+        // Only the right channel of the last frame carries signal.
+        samples[Int(frames) * 2 - 1] = 0.75
+
+        XCTAssertTrue(pipeline.accept(generation: 1, sourceFormat: format, buffer: buffer, inputByteCount: Int64(frames) * 8))
+
+        let level = try XCTUnwrap(levels.levels.last)
+        XCTAssertEqual(level.peak, 0.75, accuracy: 0.0001, "the peak sees the last interleaved sample")
+        XCTAssertEqual(level.average, 0.75 / Float(frames * 2), accuracy: 0.00001)
+    }
+
     private func makeFloatBuffer(frames: AVAudioFrameCount, value: Float = 0) throws -> AVAudioPCMBuffer {
         let format = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 2, interleaved: false))
         let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
@@ -313,4 +341,11 @@ private final class ReportedWriteErrors: @unchecked Sendable {
     private var stored: [RecorderError] = []
     var errors: [RecorderError] { lock.withLock { stored } }
     func append(_ error: RecorderError) { lock.withLock { stored.append(error) } }
+}
+
+private final class ReportedLevels: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [RecorderAudioLevel] = []
+    var levels: [RecorderAudioLevel] { lock.withLock { stored } }
+    func append(_ level: RecorderAudioLevel) { lock.withLock { stored.append(level) } }
 }

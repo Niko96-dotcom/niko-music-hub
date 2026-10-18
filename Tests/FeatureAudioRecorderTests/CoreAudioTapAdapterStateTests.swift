@@ -141,6 +141,44 @@ final class CoreAudioTapAdapterStateTests: XCTestCase {
         XCTAssertFalse(adapter.recording)
         try await waitUntil { await probe.finished }
     }
+
+    func testAutoStopFailureIsReportedOnceByNextStop() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let outputURL = tempDir.appendingPathComponent("adapter_auto_stop_failure_\(UUID().uuidString).wav")
+        let session = StopFailingSession(elapsedTime: 1)
+        let adapter = CoreAudioTapAdapter(sessionFactory: { session })
+        let probe = StreamProbe()
+
+        let stream = try await adapter.startRecording(outputURL: outputURL, preset: .cubaseDefault, maxDuration: 1)
+        let consumeTask = Task {
+            for await _ in stream {
+                await probe.recordValue()
+            }
+            await probe.recordFinished()
+        }
+        defer { consumeTask.cancel() }
+
+        try await waitUntil { await probe.finished }
+        XCTAssertFalse(adapter.recording)
+
+        do {
+            _ = try await adapter.stopRecording()
+            XCTFail("Expected stop failure")
+        } catch RecorderError.apiError(let message) {
+            XCTAssertEqual(message, "forced stop failure")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        do {
+            _ = try await adapter.stopRecording()
+            XCTFail("Expected no active recording")
+        } catch RecorderError.apiError(let message) {
+            XCTAssertEqual(message, "No active recording")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
 }
 
 private final class FailingStartSession: SystemAudioRecordingSession, @unchecked Sendable {
@@ -164,6 +202,12 @@ private final class FailingStartSession: SystemAudioRecordingSession, @unchecked
 }
 
 private final class StopFailingSession: SystemAudioRecordingSession, @unchecked Sendable {
+    private let elapsedTime: TimeInterval
+
+    init(elapsedTime: TimeInterval = 0.1) {
+        self.elapsedTime = elapsedTime
+    }
+
     func start(
         outputURL: URL,
         preset: AudioPreset,
@@ -171,7 +215,7 @@ private final class StopFailingSession: SystemAudioRecordingSession, @unchecked 
         onLevel: @escaping @Sendable (RecorderAudioLevel) -> Void,
         onEnded: @escaping @Sendable () -> Void
     ) async throws {
-        onLevel(RecorderAudioLevel(peak: 0.5, average: 0.25, elapsedTime: 0.1))
+        onLevel(RecorderAudioLevel(peak: 0.5, average: 0.25, elapsedTime: elapsedTime))
     }
 
     func stop() async throws -> RecorderResult {

@@ -90,7 +90,10 @@ public final class RecordSystemAudioUseCase: Sendable {
         // `NSString.lastPathComponent` splits on `/` without normalization,
         // so `../..` yields `..` (rejected) while `../Outside.mp3` yields
         // `Outside.mp3` (kept inside the output directory by the caller).
-        let basename = (trimmed as NSString).lastPathComponent
+        // Leading dots are dropped so the take is never hidden in Finder
+        // (".take" -> "take.wav", ".wav" -> "wav.wav").
+        let basename = String((trimmed as NSString).lastPathComponent
+            .drop(while: { $0 == "." || $0.isWhitespace }))
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !basename.isEmpty, !basename.allSatisfy({ $0 == "." }), basename != "/" else {
             return defaultOutputFilename(now: now)
@@ -123,6 +126,10 @@ public final class RecordSystemAudioUseCase: Sendable {
             let stem = Self.lexicalDeletingPathExtension(base)
             guard !stem.isEmpty, stem != ".", stem != ".." else {
                 return "\(base).wav"
+            }
+            // "Take.wav.mp3" -> "Take.wav", not "Take.wav.wav".
+            if stem.lowercased().hasSuffix(".wav") {
+                return stem
             }
             return "\(stem).wav"
         }

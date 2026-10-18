@@ -413,7 +413,7 @@ final class LocalVaultDurabilityFaultTests: XCTestCase {
             at: verified.destinationURL
         )
         let persisted = try XCTUnwrap(store.record(id: verified.id))
-        XCTAssertEqual(persisted.state, .recoveryRequired, "post-admission proof failure must stay truthfully recoverable")
+        XCTAssertEqual(persisted.state, .archiveVerified, "post-admission proof failure removed nothing, so it must not claim an interrupted removal")
         XCTAssertEqual(persisted.error?.origin, .removingActiveCopy)
     }
 
@@ -512,7 +512,11 @@ final class LocalVaultDurabilityFaultTests: XCTestCase {
         XCTAssertTrue(hook.fired, "the hook must fire inside the final source verify")
         XCTAssertGreaterThanOrEqual(hook.armedSourceHashCount, 2, "the project file was hashed before the change")
         XCTAssertEqual(outcome.error as? LocalVaultTransferError, .sourceMutated)
-        XCTAssertEqual(outcome.persisted.state, .recoveryRequired)
+        XCTAssertEqual(
+            outcome.persisted.state, .archiveVerified,
+            "removal never started, so Recover must not be offered to replace the new save with the older Vault copy"
+        )
+        XCTAssertEqual(outcome.persisted.error?.origin, .removingActiveCopy)
         XCTAssertEqual(outcome.persisted.error?.reason, .sourceMutated)
         XCTAssertEqual(try? Data(contentsOf: project), savedBytes, "the Active copy keeps the new save")
     }
@@ -534,7 +538,7 @@ final class LocalVaultDurabilityFaultTests: XCTestCase {
 
         XCTAssertTrue(hook.fired, "the hook must fire inside the final source verify")
         XCTAssertEqual(outcome.error as? LocalVaultTransferError, .sourceMutated)
-        XCTAssertEqual(outcome.persisted.state, .recoveryRequired)
+        XCTAssertEqual(outcome.persisted.state, .archiveVerified)
         XCTAssertEqual(try? Data(contentsOf: project), savedBytes, "an in-place save keeps the Active copy")
     }
 
@@ -551,7 +555,7 @@ final class LocalVaultDurabilityFaultTests: XCTestCase {
 
         XCTAssertTrue(hook.fired, "the hook must fire inside the final source verify")
         XCTAssertEqual(outcome.error as? LocalVaultTransferError, .sourceMutated)
-        XCTAssertEqual(outcome.persisted.state, .recoveryRequired)
+        XCTAssertEqual(outcome.persisted.state, .archiveVerified)
         XCTAssertEqual(outcome.persisted.error?.reason, .sourceMutated)
         XCTAssertEqual(try? Data(contentsOf: created), createdBytes, "a file with no Vault copy stays in Active")
     }
@@ -571,7 +575,7 @@ final class LocalVaultDurabilityFaultTests: XCTestCase {
 
         XCTAssertTrue(hook.fired, "the hook must fire inside the final source verify")
         XCTAssertEqual(outcome.error as? LocalVaultTransferError, .sourceMutated)
-        XCTAssertEqual(outcome.persisted.state, .recoveryRequired)
+        XCTAssertEqual(outcome.persisted.state, .archiveVerified)
         XCTAssertEqual(outcome.persisted.error?.reason, .sourceMutated)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.source.appendingPathComponent("Artist Song.cpr").path))
         XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: take.path), outside.path)

@@ -781,12 +781,21 @@ public actor LocalVaultRestoreEngine {
         let verifiedTerminalStates: Set<VaultTransferState> = [
             .archiveVerified, .archivedLocal, .archivedOnlineOnly,
         ]
+        // Store read and persist errors are transient: rethrow them without a
+        // failure reason so retry and launch recovery can pick the record up.
+        let loadedTransfer: VaultTransferRecord?
+        if let projectionStore, let archiveTransferID = record.archiveTransferID {
+            loadedTransfer = try projectionStore.record(id: archiveTransferID)
+        } else {
+            loadedTransfer = nil
+        }
+        let adoptedSupplement: VaultProjectionSupplement?
         do {
-            guard let projectionStore,
+            guard projectionStore != nil,
                   let archiveTransferID = record.archiveTransferID,
                   let recordedState = record.archiveTransferState,
                   verifiedTerminalStates.contains(recordedState),
-                  let archiveTransfer = try projectionStore.record(id: archiveTransferID),
+                  let archiveTransfer = loadedTransfer,
                   archiveTransfer.id == archiveTransferID,
                   archiveTransfer.projectID == record.projectID,
                   verifiedTerminalStates.contains(archiveTransfer.state),
@@ -802,15 +811,15 @@ public actor LocalVaultRestoreEngine {
 
             switch (record.projectionSupplement, archiveTransfer.projectionSupplement) {
             case (nil, nil):
-                break
+                adoptedSupplement = nil
             case (nil, let authoritativeSupplement?):
                 try authoritativeSupplement.validate(against: record.manifest)
                 try authoritativeSupplement.validate(against: archiveManifest)
-                record.projectionSupplement = authoritativeSupplement
-                try persist(&record)
+                adoptedSupplement = authoritativeSupplement
             case (let supplement?, let authoritativeSupplement?) where supplement == authoritativeSupplement:
                 try supplement.validate(against: record.manifest)
                 try supplement.validate(against: archiveManifest)
+                adoptedSupplement = nil
             default:
                 throw LocalVaultRestoreError.archiveTransferBindingUnavailable
             }
@@ -818,6 +827,10 @@ public actor LocalVaultRestoreEngine {
             record.failureReason = .archiveTransferBindingUnavailable
             try persist(&record)
             throw LocalVaultRestoreError.archiveTransferBindingUnavailable
+        }
+        if let adoptedSupplement {
+            record.projectionSupplement = adoptedSupplement
+            try persist(&record)
         }
     }
 

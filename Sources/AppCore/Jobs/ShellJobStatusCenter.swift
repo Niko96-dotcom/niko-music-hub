@@ -120,20 +120,22 @@ public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
 
     /// Publishes the listed rows only; an unlisted registration (a recorder
     /// take) leaves `jobs` unchanged and so re-evaluates no view.
+    /// The list is read on main, not before the hop: a list read off main and
+    /// queued could overwrite a newer one that main published in between.
     private func republish() {
-        let merged = lock.withLock {
-            runnerJobs + extraJobs.keys.sorted().compactMap { extraJobs[$0] }.filter(\.listed)
-        }
         if Thread.isMainThread {
-            publish(merged)
+            publish()
         } else {
             DispatchQueue.main.async { [weak self] in
-                self?.publish(merged)
+                self?.publish()
             }
         }
     }
 
-    private func publish(_ merged: [ShellJobStatus]) {
+    private func publish() {
+        let merged = lock.withLock {
+            runnerJobs + extraJobs.keys.sorted().compactMap { extraJobs[$0] }.filter(\.listed)
+        }
         guard merged != jobs else { return }
         jobs = merged
     }

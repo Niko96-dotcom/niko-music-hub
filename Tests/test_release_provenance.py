@@ -703,6 +703,86 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("hardened", result.stderr)
 
+    def test_uat_placeholder_check_is_case_insensitive_and_prefix_exact(self) -> None:
+        # Sentinels are TODO, TODO_*, REPLACE_WITH_* in any case; a real
+        # value that merely starts with the letters "TODO" is not a sentinel.
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            uat = tmp / "uat.json"
+            for placeholder in ("todo", "todo_name", "Todo_Executor", "replace_with_name", "Replace_With_Me"):
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=placeholder: payload.__setitem__("approved_by", value))
+                result = run_cmd(uat_args(uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"approved_by={placeholder!r}")
+                self.assertIn("real approved_by", result.stderr)
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=placeholder: payload.__setitem__("machine", value))
+                result = run_cmd(uat_args(uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"machine={placeholder!r}")
+                self.assertIn("tested machine description", result.stderr)
+            for real in ("TODOROV-STUDIO", "Todorov MacBook Pro"):
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=real: payload.__setitem__("machine", value))
+                result = run_cmd(uat_args(uat))
+                self.assertEqual(result.returncode, 0, msg=f"machine={real!r}: {result.stderr}")
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=real: payload.__setitem__("approved_by", value))
+                result = run_cmd(uat_args(uat))
+                self.assertEqual(result.returncode, 0, msg=f"approved_by={real!r}: {result.stderr}")
+
+    def test_uat_rejects_trailing_newline_and_impossible_timestamps(self) -> None:
+        # approved_at_utc must be a complete, real ISO-8601 UTC timestamp:
+        # `$` would accept a trailing newline, and a digit-shape regex alone
+        # accepts impossible calendar dates.
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            for bad in (
+                TIMESTAMP + "\n",
+                "2026-13-45T25:61:61Z",
+                "0000-00-00T00:00:00Z",
+                "2026-02-30T12:00:00Z",
+                "2026-10-16T12:00:00+00:00",
+                "",
+                1760000000,
+                None,
+            ):
+                uat = tmp / "uat.json"
+                write_uat(uat)
+                mutate_json(uat, lambda payload, value=bad: payload.__setitem__("approved_at_utc", value))
+                result = run_cmd(uat_args(uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"approved_at_utc={bad!r}")
+                self.assertIn("approved_at_utc", result.stderr)
+            # Control: the canonical timestamp still passes.
+            uat = tmp / "uat.json"
+            write_uat(uat)
+            result = run_cmd(uat_args(uat))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+    def test_uat_rejects_non_object_payload_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            uat = tmp / "uat.json"
+            for bad in ([], "approved", 1, None):
+                uat.write_text(json.dumps(bad) + "\n", encoding="utf-8")
+                result = run_cmd(uat_args(uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"payload={bad!r}")
+                self.assertIn("must be a JSON object", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_approval_rejects_impossible_gate_completed_utc(self) -> None:
+        # Gate completed_utc goes through the same shared timestamp check.
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = pathlib.Path(raw)
+            for bad in (TIMESTAMP + "\n", "2026-13-45T25:61:61Z"):
+                artifact, manifest, uat, approval = build_valid_bundle(tmp)
+                mutate_json(
+                    approval,
+                    lambda payload, value=bad: payload["gates"][0].__setitem__("completed_utc", value),
+                )
+                result = run_cmd(approval_args(approval, artifact, manifest, uat))
+                self.assertNotEqual(result.returncode, 0, msg=f"completed_utc={bad!r}")
+                self.assertIn("completed_utc", result.stderr)
+
     def test_uat_rejects_bool_and_float_schema(self) -> None:
         # Strict schema: type(schema) is int and schema == 1. Bool True and
         # float 1.0 both equal 1 in Python but must not pass.

@@ -100,6 +100,9 @@ if rg -n '/' "$SHA_FILE" >/dev/null; then
   echo "checksum file must contain artifact basenames only: $SHA_FILE" >&2
   exit 1
 fi
+[[ "$(awk 'END {print NR}' "$SHA_FILE")" == "1" ]] || { echo "checksum file must contain exactly one line: $SHA_FILE" >&2; exit 1; }
+SHA_FILE_NAME="$(awk '{name = $2; sub(/^\*/, "", name); print name}' "$SHA_FILE")"
+[[ "$SHA_FILE_NAME" == "$ARTIFACT_BASENAME" ]] || { echo "checksum file names '$SHA_FILE_NAME', not the artifact $ARTIFACT_BASENAME" >&2; exit 1; }
 (cd "$ARTIFACT_DIR" && shasum -a 256 -c "$(basename "$SHA_FILE")")
 ACTUAL_SHA="$(awk '{print $1}' "$SHA_FILE")"
 [[ "$(manifest_value artifact_sha256)" == "$ACTUAL_SHA" ]] || { echo "manifest artifact_sha256 mismatch" >&2; exit 1; }
@@ -189,7 +192,7 @@ ACTUAL_ARCHITECTURES="$(lipo -archs "$BINARY" | tr ' ' '\n' | sed '/^[[:space:]]
 if [[ "$MODE" == "public" ]]; then
   codesign --verify --deep --strict --verbose=2 "$APP"
   SIGN_OUTPUT="$(codesign -dv --verbose=4 "$APP" 2>&1 || true)"
-  if ! grep -Fq "Authority=$SIGNING_IDENTITY" <<<"$SIGN_OUTPUT"; then
+  if ! grep -Fxq "Authority=$SIGNING_IDENTITY" <<<"$SIGN_OUTPUT"; then
     echo "public artifact signing identity does not match manifest" >&2
     exit 1
   fi

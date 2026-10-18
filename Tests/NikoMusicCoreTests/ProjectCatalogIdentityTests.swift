@@ -417,6 +417,120 @@ final class ProjectCatalogIdentityTests: XCTestCase {
         )
     }
 
+    /// A review names two projects. Linking two of three matching entries merges
+    /// only those two; the third, which the person never saw, stays in question
+    /// and keeps its record until its own pair is reviewed.
+    func testLinkDecisionAboutTwoOfThreeMatchesNeverFoldsInTheThird() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let evidence = preciseEvidence()
+        let first = ProjectID(rawValue: UUID(uuidString: "dddddddd-0000-4000-8000-000000000001")!)
+        let second = ProjectID(rawValue: UUID(uuidString: "dddddddd-0000-4000-8000-000000000002")!)
+        let third = ProjectID(rawValue: UUID(uuidString: "dddddddd-0000-4000-8000-000000000003")!)
+        var thirdEntry = entry(id: third.rawValue.uuidString, path: "Mirror 3", evidence: evidence)
+        thirdEntry.record.pinned = true
+        thirdEntry.record.workflowState = .done
+        let copies = [
+            entry(id: first.rawValue.uuidString, path: "Mirror", evidence: evidence),
+            entry(id: second.rawValue.uuidString, path: "Mirror 2", evidence: evidence),
+            thirdEntry,
+        ]
+        var link = ProjectIdentityReview(
+            existingProjectID: first,
+            candidateProjectID: second,
+            reason: "3 library entries match these project files."
+        )
+        link.resolution = .link
+        let observed = observation(rootID: archiveRootID, path: "2026/Mirror", kind: .archive, evidence: evidence)
+
+        XCTAssertThrowsError(try reconciler.reconcile(
+            existing: copies,
+            existingReviews: [link],
+            observations: [observed],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )) { error in
+            XCTAssertEqual(
+                error as? ProjectCatalogReconciler.Ambiguity,
+                .multipleStrongMatches([first, third]),
+                "the linked pair collapses; the unreviewed entry is still in question"
+            )
+        }
+
+        var separate = ProjectIdentityReview(
+            existingProjectID: first,
+            candidateProjectID: third,
+            reason: "2 library entries match these project files."
+        )
+        separate.resolution = .keepSeparate
+        let result = try reconciler.reconcile(
+            existing: copies,
+            existingReviews: [link, separate],
+            observations: [observed],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )
+
+        XCTAssertEqual(result.entries.count, 3, "keeper, the separate third entry, and a new entry for the observation")
+        XCTAssertNil(result.entries.first { $0.record.id == second })
+        let keeper = try XCTUnwrap(result.entries.first { $0.record.id == first })
+        XCTAssertEqual(Set(keeper.record.locations.map(\.relativePath)), ["Mirror", "Mirror 2"])
+        XCTAssertEqual(result.metadataMigrations[second.description], first)
+        XCTAssertEqual(result.entries.first { $0.record.id == third }, thirdEntry, "the entry the person never reviewed stays as it was")
+        XCTAssertNil(result.metadataMigrations[third.description])
+    }
+
+    /// Three entries for one folder: Keep Separate for one pair must not hand the
+    /// folder to that candidate and unclaim the entry nobody reviewed. Once every
+    /// pair was kept separate, the candidate no review turned down owns the folder.
+    func testThreeEntriesAtOneFolderNeedEveryPairReviewedBeforeKeepSeparateApplies() throws {
+        let reconciler = ProjectCatalogReconciler()
+        let evidence = preciseEvidence()
+        let first = ProjectID(rawValue: UUID(uuidString: "cccccccc-0000-4000-8000-000000000011")!)
+        let second = ProjectID(rawValue: UUID(uuidString: "cccccccc-0000-4000-8000-000000000012")!)
+        let third = ProjectID(rawValue: UUID(uuidString: "cccccccc-0000-4000-8000-000000000013")!)
+        let duplicates = [first, second, third].map {
+            entry(id: $0.rawValue.uuidString, path: "Mirror", evidence: evidence)
+        }
+        func separate(_ existing: ProjectID, _ candidate: ProjectID) -> ProjectIdentityReview {
+            var review = ProjectIdentityReview(
+                existingProjectID: existing,
+                candidateProjectID: candidate,
+                reason: "3 library entries point to this folder."
+            )
+            review.resolution = .keepSeparate
+            return review
+        }
+        let observed = observation(rootID: activeRootID, path: "Mirror", kind: .active, evidence: evidence)
+
+        XCTAssertThrowsError(try reconciler.reconcile(
+            existing: duplicates,
+            existingReviews: [separate(first, second)],
+            observations: [observed],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )) { error in
+            XCTAssertEqual(
+                error as? ProjectCatalogReconciler.Ambiguity,
+                .duplicateLocation([first, second, third])
+            )
+        }
+
+        let result = try reconciler.reconcile(
+            existing: duplicates,
+            existingReviews: [separate(first, second), separate(first, third), separate(second, third)],
+            observations: [observed],
+            markUnobservedMissing: false,
+            observedAt: observedAt
+        )
+
+        XCTAssertEqual(result.entries.map(\.record.id), [first, second, third])
+        XCTAssertEqual(result.entries.map { $0.record.locations.first?.availability }, [.missing, .missing, .local])
+        XCTAssertEqual(
+            result.metadataMigrations["root://\(activeRootID.uuidString.lowercased())/Mirror"],
+            third
+        )
+    }
+
     private func preciseEvidence() -> ProjectIdentityEvidence {
         ProjectIdentityEvidence(
             folderName: "Mirror",

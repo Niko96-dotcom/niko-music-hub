@@ -85,7 +85,13 @@ public struct MusicSearchIndex: Sendable {
         searchResults(query).map(\.song)
     }
 
-    public func searchResults(_ query: String) -> [MusicSearchResult] {
+    /// `include` drops songs before tier pruning, so a caller-side filter
+    /// (e.g. browse filters) cannot remove the only best-tier match and
+    /// leave valid lower-tier matches suppressed.
+    public func searchResults(
+        _ query: String,
+        where include: (Song) -> Bool = { _ in true }
+    ) -> [MusicSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
@@ -93,6 +99,7 @@ public struct MusicSearchIndex: Sendable {
         guard !tokens.isEmpty else { return [] }
 
         let scored: [(result: MusicSearchResult, tier: MusicSearchMatchTier)] = entries.compactMap { entry in
+            guard include(entry.song) else { return nil }
             let details = MusicSearchMatcher.matchDetails(precomputed: entry.fields, queryTokens: tokens)
             let score = details.reduce(0) { $0 + $1.score }
             guard score > 0 else { return nil }

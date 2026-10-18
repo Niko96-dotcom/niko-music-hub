@@ -69,16 +69,17 @@ extension LiveProjectVaultRuntime {
             }
         }
         let separateIDs = Set(separateActiveEntries.map { $0.record.id })
+        let reviews = try catalogStore.loadReviews()
         let reconciliation: ProjectCatalogReconciliation
         do {
             reconciliation = try ProjectCatalogReconciler().reconcile(
                 existing: existing.filter { !separateIDs.contains($0.record.id) },
-                existingReviews: try catalogStore.loadReviews(),
+                existingReviews: reviews,
                 observations: [ProjectCatalogObservation(canonicalTitle: song.effectiveDisplayTitle, location: location, evidence: evidence)],
                 markUnobservedMissing: false
             )
         } catch let ambiguity as ProjectCatalogReconciler.Ambiguity {
-            pendingIdentityReview = identityReview(for: ambiguity)
+            pendingIdentityReview = identityReview(for: ambiguity, reviews: reviews)
             throw ProjectVaultRuntimeError.identityAmbiguous(
                 title: song.effectiveDisplayTitle,
                 reason: ambiguity.description
@@ -100,12 +101,16 @@ extension LiveProjectVaultRuntime {
         return updated.entries[index]
     }
 
-    private func identityReview(for ambiguity: ProjectCatalogReconciler.Ambiguity) -> ProjectIdentityReview {
+    private func identityReview(
+        for ambiguity: ProjectCatalogReconciler.Ambiguity,
+        reviews: [ProjectIdentityReview]
+    ) -> ProjectIdentityReview {
         switch ambiguity {
-        case .duplicateLocation(let ids):
+        case .duplicateLocation(let ids), .multipleStrongMatches(let ids):
+            let pair = Self.undecidedPair(in: ids, reviews: reviews)
             return ProjectIdentityReview(
-                existingProjectID: ids[0],
-                candidateProjectID: ids.count > 1 ? ids[1] : ProjectID(),
+                existingProjectID: pair.existing,
+                candidateProjectID: pair.candidate,
                 reason: ambiguity.description
             )
         case .locationEvidenceMismatch(let id):
@@ -114,12 +119,24 @@ extension LiveProjectVaultRuntime {
                 candidateProjectID: ProjectID(),
                 reason: ambiguity.description
             )
-        case .multipleStrongMatches(let ids):
-            return ProjectIdentityReview(
-                existingProjectID: ids[0],
-                candidateProjectID: ids.count > 1 ? ids[1] : ProjectID(),
-                reason: ambiguity.description
-            )
         }
+    }
+
+    /// A review names two projects, so a conflict of three or more is reviewed
+    /// pair by pair: the first two of `ids` without a resolved review between
+    /// them. Falls back to the first two when every pair was already decided.
+    static func undecidedPair(
+        in ids: [ProjectID],
+        reviews: [ProjectIdentityReview]
+    ) -> (existing: ProjectID, candidate: ProjectID) {
+        let decided = Set(reviews.filter { $0.resolution != .pending }.map {
+            Set([$0.existingProjectID, $0.candidateProjectID])
+        })
+        for (offset, existing) in ids.enumerated() {
+            for candidate in ids[(offset + 1)...] where !decided.contains([existing, candidate]) {
+                return (existing, candidate)
+            }
+        }
+        return (ids[0], ids.count > 1 ? ids[1] : ProjectID())
     }
 }

@@ -245,7 +245,7 @@ public enum NewSongFolderCreator {
             }
 
             if values.isSymbolicLink == true {
-                throw CreationError.templateConflict(childRelativePath)
+                throw CreationError.templateUnsupportedItem(childRelativePath)
             } else if values.isDirectory == true {
                 var destinationIsDirectory: ObjCBool = false
                 if fileManager.fileExists(atPath: destination.path, isDirectory: &destinationIsDirectory) {
@@ -275,7 +275,7 @@ public enum NewSongFolderCreator {
                     throw CreationError.templateCopyFailed
                 }
             } else {
-                throw CreationError.templateConflict(childRelativePath)
+                throw CreationError.templateUnsupportedItem(childRelativePath)
             }
         }
     }
@@ -315,6 +315,7 @@ public enum NewSongFolderCreator {
         case templateUnreadable
         case templateOverlap
         case templateConflict(String)
+        case templateUnsupportedItem(String)
         case templateCopyFailed
         case stagingFailed
         case stagingValidationFailed

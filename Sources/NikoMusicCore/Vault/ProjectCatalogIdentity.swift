@@ -250,23 +250,26 @@ public struct ProjectCatalogReconciler: Sendable {
             // entries order so ambiguity payloads and order-dependent merges match
             // the original full scans exactly.
             let locationKey = LocationKey(rootID: observation.location.rootID, relativePath: observation.location.relativePath)
-            let sameLocation: [Int] = {
-                guard let ids = indexes.locationToIDs[locationKey] else { return [] }
-                return ids.compactMap { indexes.idToIndex[$0] }.sorted()
-            }()
-            let strongMatches: [Int] = {
-                var ids = Set<ProjectID>()
-                for hash in observation.evidence.selectedContentHashes {
-                    if let hit = indexes.hashToIDs[hash] {
-                        ids.formUnion(hit)
-                    }
-                }
-                if !observation.evidence.cubaseFiles.isEmpty,
-                   let hit = indexes.filesToIDs[observation.evidence.cubaseFiles] {
-                    ids.formUnion(hit)
-                }
-                return ids.compactMap { indexes.idToIndex[$0] }.sorted()
-            }()
+            var sameLocation = indexes.sameLocationIndexes(for: locationKey)
+            var strongMatches = indexes.strongMatchIndexes(for: observation.evidence)
+            // A review names two projects. In a conflict of three or more, the
+            // pairs a person already linked are merged first; the rest is decided
+            // only by reviews that cover it (see `duplicateDecision`), never by a
+            // decision about two of them.
+            while true {
+                let conflicting = conflictingIndexes(sameLocation: sameLocation, strongMatches: strongMatches)
+                guard conflicting.count > 2,
+                      mergeConfirmedLinks(
+                          among: conflicting.map { entries[$0].record.id },
+                          reviews: reviews,
+                          entries: &entries,
+                          indexes: &indexes,
+                          migrations: &migrations
+                      )
+                else { break }
+                sameLocation = indexes.sameLocationIndexes(for: locationKey)
+                strongMatches = indexes.strongMatchIndexes(for: observation.evidence)
+            }
 
             if sameLocation.count > 1 {
                 let conflictingIDs = sameLocation.map { entries[$0].record.id }
@@ -395,6 +398,27 @@ public struct ProjectCatalogReconciler: Sendable {
         var filesToIDs: [Set<ProjectFileIdentity>: Set<ProjectID>] = [:]
         var folderNameToIDs: [String: Set<ProjectID>] = [:]
         var reviewPairs: Set<Set<ProjectID>> = []
+
+        /// Entries claiming the exact location, in entries order.
+        func sameLocationIndexes(for key: LocationKey) -> [Int] {
+            guard let ids = locationToIDs[key] else { return [] }
+            return ids.compactMap { idToIndex[$0] }.sorted()
+        }
+
+        /// Entries with a shared content hash or the exact file-identity set, in entries order.
+        func strongMatchIndexes(for evidence: ProjectIdentityEvidence) -> [Int] {
+            var ids = Set<ProjectID>()
+            for hash in evidence.selectedContentHashes {
+                if let hit = hashToIDs[hash] {
+                    ids.formUnion(hit)
+                }
+            }
+            if !evidence.cubaseFiles.isEmpty,
+               let hit = filesToIDs[evidence.cubaseFiles] {
+                ids.formUnion(hit)
+            }
+            return ids.compactMap { idToIndex[$0] }.sorted()
+        }
 
         mutating func register(_ entry: ProjectCatalogEntry, at index: Int) {
             let id = entry.record.id
@@ -555,15 +579,86 @@ public struct ProjectCatalogReconciler: Sendable {
         }
     }
 
+    /// The entries an observation cannot be assigned between: several at its
+    /// location, else several strong matches (when the claimed location, if any,
+    /// is one of them). Mirrors the order of checks in `reconcile`.
+    private func conflictingIndexes(sameLocation: [Int], strongMatches: [Int]) -> [Int] {
+        if sameLocation.count > 1 { return sameLocation }
+        if let index = sameLocation.first, !strongMatches.contains(index) { return [] }
+        return strongMatches.count > 1 ? strongMatches : []
+    }
+
+    /// Merges the pairs among `ids` that a person resolved as Link, each candidate
+    /// into its existing entry (or into whatever that entry was merged into
+    /// earlier in this pass). Returns whether anything was merged.
+    private func mergeConfirmedLinks(
+        among ids: [ProjectID],
+        reviews: [ProjectIdentityReview],
+        entries: inout [ProjectCatalogEntry],
+        indexes: inout LookupIndexes,
+        migrations: inout [String: ProjectID]
+    ) -> Bool {
+        let conflicting = Set(ids)
+        var merged = false
+        for review in reviews where review.resolution == .link
+            && conflicting.isSuperset(of: [review.existingProjectID, review.candidateProjectID]) {
+            guard let keeper = currentID(for: review.existingProjectID, indexes: indexes, migrations: migrations),
+                  let source = currentID(for: review.candidateProjectID, indexes: indexes, migrations: migrations),
+                  keeper != source
+            else { continue }
+            mergeLinkedMatches(ids: [keeper, source], into: keeper, entries: &entries, indexes: &indexes, migrations: &migrations)
+            merged = true
+        }
+        return merged
+    }
+
+    /// Follows merges made earlier in this pass: an ID whose entry was folded
+    /// into another resolves to that entry's ID; an unknown ID resolves to nil.
+    private func currentID(
+        for id: ProjectID,
+        indexes: LookupIndexes,
+        migrations: [String: ProjectID]
+    ) -> ProjectID? {
+        var current = id
+        var seen: Set<ProjectID> = []
+        while indexes.idToIndex[current] == nil {
+            guard seen.insert(current).inserted, let next = migrations[current.description] else { return nil }
+            current = next
+        }
+        return current
+    }
+
+    /// A review decides exactly the two projects it names. A conflict of two is
+    /// decided by their review. A conflict of three or more (confirmed links are
+    /// already merged) is decided only once every pair in it was kept separate;
+    /// a decision about two of them never merges or unclaims the others, which
+    /// the person has not seen.
     private func duplicateDecision(
         for conflictingIDs: [ProjectID],
         in reviews: [ProjectIdentityReview]
     ) -> ProjectIdentityReview? {
         let conflicting = Set(conflictingIDs)
-        return reviews.first { review in
+        if let exact = reviews.first(where: { review in
             review.resolution != .pending
+                && Set([review.existingProjectID, review.candidateProjectID]) == conflicting
+        }) {
+            return exact
+        }
+        guard conflicting.count > 2 else { return nil }
+        let separate = reviews.filter { review in
+            review.resolution == .keepSeparate
                 && conflicting.isSuperset(of: [review.existingProjectID, review.candidateProjectID])
         }
+        let decidedPairs = Set(separate.map { Set([$0.existingProjectID, $0.candidateProjectID]) })
+        for (offset, first) in conflictingIDs.enumerated() {
+            for second in conflictingIDs[(offset + 1)...] where !decidedPairs.contains([first, second]) {
+                return nil
+            }
+        }
+        // Keep Separate hands the folder to the candidate; prefer the one no
+        // review turned down as the existing side.
+        let turnedDown = Set(separate.map(\.existingProjectID))
+        return separate.first { !turnedDown.contains($0.candidateProjectID) } ?? separate.first
     }
 
     private func applyMismatchDecision(

@@ -116,6 +116,10 @@ public actor HelperToolInstaller {
     private let downloader: any HelperDownloading
     private let processRunner: any StreamingExternalProcessRunning
     private let fileManager: FileManager
+    /// Staging names of attempts still running. Installs can interleave at
+    /// suspension points (a cancelled attempt still unwinds while its
+    /// replacement runs), so sweeps skip every folder a live attempt owns.
+    private var activeAttempts: Set<String> = []
 
     public init(
         locator: HelperToolLocator,
@@ -133,6 +137,8 @@ public actor HelperToolInstaller {
         _ bundle: HelperToolBundle,
         progress: @escaping @Sendable (HelperInstallProgress) -> Void
     ) async throws {
+        // Killed or crashed attempts never ran their cleanup.
+        removeAbandonedAttempts(in: locator.managedRoot.appendingPathComponent(".staging", isDirectory: true))
         switch bundle {
         case .downloadAndConvert:
             try await installDownloadAndConvert(progress: progress)
@@ -154,7 +160,10 @@ public actor HelperToolInstaller {
     ) async throws {
         let staging = freshStagingDirectory()
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
-        defer { try? fileManager.removeItem(at: staging) }
+        defer {
+            try? fileManager.removeItem(at: staging)
+            activeAttempts.remove(staging.lastPathComponent)
+        }
         let stagingBin = staging.appendingPathComponent("bin", isDirectory: true)
         try fileManager.createDirectory(at: stagingBin, withIntermediateDirectories: true)
 
@@ -339,7 +348,10 @@ public actor HelperToolInstaller {
     ) async throws {
         let staging = freshStagingDirectory()
         try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
-        defer { try? fileManager.removeItem(at: staging) }
+        defer {
+            try? fileManager.removeItem(at: staging)
+            activeAttempts.remove(staging.lastPathComponent)
+        }
 
         let uvDownloadEnd = 0.10
         let demucsInstallFraction = 0.10
@@ -494,6 +506,8 @@ public actor HelperToolInstaller {
         try fileManager.createSymbolicLink(at: entryPoint, withDestinationURL: demucsBin)
         try installExecutable(from: entryPoint, to: locator.managedExecutableURL(for: .demucsMlx))
         published = true
+        // The entry point no longer reaches earlier environments.
+        removeAbandonedAttempts(in: attemptRoot.deletingLastPathComponent())
 
         progress(HelperInstallProgress(phase: "Done", fractionCompleted: 1))
     }
@@ -501,9 +515,19 @@ public actor HelperToolInstaller {
     // MARK: - Helpers
 
     private func freshStagingDirectory() -> URL {
-        locator.managedRoot
+        let name = UUID().uuidString
+        activeAttempts.insert(name)
+        return locator.managedRoot
             .appendingPathComponent(".staging", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent(name, isDirectory: true)
+    }
+
+    /// Removes every attempt folder in `directory` that no live attempt owns.
+    private func removeAbandonedAttempts(in directory: URL) {
+        guard let names = try? fileManager.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where !activeAttempts.contains(name) {
+            try? fileManager.removeItem(at: directory.appendingPathComponent(name))
+        }
     }
 
     private func checksumURL(for finalURL: URL) -> URL {

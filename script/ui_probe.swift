@@ -32,7 +32,7 @@ func usage() {
           --window-title TITLE         require this exact window name (default: any titled window)
           --min-width N                minimum window width in points (default: 400)
           --min-height N               minimum window height in points (default: 300)
-          --check-visible              exit 0 when a matching window exists
+          --check-visible              exit 0 when a matching window is on screen
           --capture PATH               write PNG of matched window to PATH
           --require-nonempty-capture   with --capture: fail if file is missing or smaller than --min-capture-bytes
           --min-capture-bytes N        minimum PNG size for --require-nonempty-capture (default: 4096)
@@ -219,6 +219,11 @@ func findMatchingWindow(
             // Untitled layer-0 windows are AppKit helpers (menu bar / status
             // strips), never the shell.
             guard !name.isEmpty, intValue(window[kCGWindowLayer as String]) == 0 else { continue }
+        }
+        if case .checkVisible = options.mode {
+            // .optionAll also lists minimized, ordered-out and other-Space
+            // windows; only an on-screen window proves visibility.
+            guard (window[kCGWindowIsOnscreen as String] as? Bool) == true else { continue }
         }
         guard let size = bounds(from: window) else { continue }
         guard size.width >= Double(options.minWidth), size.height >= Double(options.minHeight) else {

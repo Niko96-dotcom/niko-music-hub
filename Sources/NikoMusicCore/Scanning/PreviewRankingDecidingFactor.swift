@@ -7,6 +7,7 @@ public enum PreviewRankingDecidingFactor: String, Sendable, Equatable, Codable {
     case score
     case productionMaturity
     case version
+    case titleMatch
     case extensionFormat
     case duration
     case recency

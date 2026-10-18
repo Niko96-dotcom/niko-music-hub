@@ -154,6 +154,18 @@ final class MenuBarSourceTests: XCTestCase {
         XCTAssertFalse(dock.contains("Quit Niko Music Hub"))
     }
 
+    func testDockRevealFrontsOnlyTheMainWindow() throws {
+        let dock = try SourceTestSupport.read("Sources/NikoMusicHub/Dock/HubDockMenu.swift")
+        XCTAssertTrue(dock.contains("HubMainWindowIdentity.identifierRawValue"))
+        XCTAssertFalse(dock.contains("first(where: { $0.canBecomeMain })"))
+        let app = try SourceTestSupport.read("Sources/NikoMusicHub/NikoMusicHubApp.swift")
+        let helpScene = try XCTUnwrap(app.range(of: "HubHelpWindow()"))
+        XCTAssertTrue(
+            app[helpScene.upperBound...].prefix(200).contains(".hubOpensMainWindowFromDock()"),
+            "The Help window must observe Dock reveals so a live openWindow exists when only Help is open"
+        )
+    }
+
     // MARK: - Private helpers
 
     private func menuBarMenuViewSource() throws -> String {

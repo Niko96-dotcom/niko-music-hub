@@ -29,6 +29,21 @@ extension ArchiveBrowserViewModel {
         metadataEditing.updateAliases(for: song, aliasesText: aliasesText)
     }
 
+    /// Outcome-reporting single-field edits for the detail form: a `.refused`
+    /// save changed nothing, so the form keeps its draft dirty instead of
+    /// showing text that was never stored.
+    func commitVirtualTitle(for song: Song, title: String) -> MetadataCommitOutcome {
+        metadataEditing.commitVirtualTitle(for: song, title: title)
+    }
+
+    func commitAppNote(for song: Song, note: String) -> MetadataCommitOutcome {
+        metadataEditing.commitAppNote(for: song, note: note)
+    }
+
+    func commitAliases(for song: Song, aliasesText: String) -> MetadataCommitOutcome {
+        metadataEditing.commitAliases(for: song, aliasesText: aliasesText)
+    }
+
     /// Single-commit title/aliases/note edit. Normalization happens once in
     /// the owner; this stays a thin delegate so autosave and undo share one
     /// commit path.
@@ -37,7 +52,7 @@ extension ArchiveBrowserViewModel {
         virtualTitle: String,
         aliasesText: String,
         appNote: String
-    ) {
+    ) -> MetadataCommitOutcome {
         metadataEditing.applySongNotes(
             for: song,
             virtualTitle: virtualTitle,
@@ -214,6 +229,12 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    func unignoreCPRVersion(for song: Song, versionID: String) {
+        _ = applyMetadataMerge(for: song) { metadata, _ in
+            metadata.ignoredCPRVersionIDs.removeAll { $0 == versionID }
+        }
+    }
+
     func setSongHidden(_ song: Song, hidden: Bool) {
         _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.isIgnored = hidden
@@ -258,7 +279,14 @@ extension ArchiveBrowserViewModel {
         scheduleIndexPersist(afterNanoseconds: 0)
         selectSong(created)
         if created.effectiveLatestCPR != nil {
-            try openLatestCPR(for: created)
+            // The song exists on disk and in the catalog now. A failed open is
+            // reported by openLatestCPR (status line and openError) and must not
+            // make the caller treat the creation as failed.
+            do {
+                try openLatestCPR(for: created)
+            } catch {
+                diagnostics.scoped(to: .archive).log(.error, "Created song, but opening its project failed")
+            }
         } else {
             setStatusMessage(
                 "Created draft \(created.originalFolderName). No project file (.cpr or .als) yet; folder is ready at \(created.folderPath.path)."

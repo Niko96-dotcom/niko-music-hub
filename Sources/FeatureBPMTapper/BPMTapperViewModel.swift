@@ -19,6 +19,9 @@ public final class BPMTapperViewModel: ObservableObject {
     @Published public private(set) var adjustment: BPMAdjustment = .original
     @Published public private(set) var historyEntries: [BPMHistoryEntry] = []
     @Published public private(set) var copyConfirmation: String?
+    /// History row whose value was copied last; drives the per-row badge and
+    /// clears with the other transient messages.
+    @Published public private(set) var copiedHistoryEntryID: UUID?
     @Published public private(set) var saveConfirmation: String?
     @Published public private(set) var errorText: String?
     /// B1: true while the persisted history is unreadable. Keeps Clear
@@ -120,6 +123,7 @@ public final class BPMTapperViewModel: ObservableObject {
         guard let displayedBPM else { return }
         clipboard.copyPlainNumber(formatBPM(displayedBPM))
         copyConfirmation = "BPM copied"
+        copiedHistoryEntryID = nil
         saveConfirmation = nil
         if !hasCorruptHistory {
             errorText = nil
@@ -128,6 +132,7 @@ public final class BPMTapperViewModel: ObservableObject {
 
     public func saveDisplayedBPM() {
         guard let displayedBPM, let rawBPM else { return }
+        copiedHistoryEntryID = nil
         let entry = BPMHistoryEntry(
             bpm: displayedBPM,
             rawTappedBPM: rawBPM,
@@ -147,6 +152,12 @@ public final class BPMTapperViewModel: ObservableObject {
             hasCorruptHistory = true
             errorText = Self.corruptHistoryMessage
             saveConfirmation = nil
+        } catch BPMHistoryStoreError.corruptBackupFailed {
+            // The malformed bytes stay live, so keep the corrupt-history copy
+            // that matches the "Unreadable" card and its Clear action.
+            hasCorruptHistory = true
+            errorText = Self.corruptHistoryMessage
+            saveConfirmation = nil
         } catch {
             errorText = Self.saveFailureMessage
             saveConfirmation = nil
@@ -156,6 +167,7 @@ public final class BPMTapperViewModel: ObservableObject {
     public func copySavedBPM(_ entry: BPMHistoryEntry) {
         clipboard.copyPlainNumber(formatBPM(entry.bpm))
         copyConfirmation = "BPM copied"
+        copiedHistoryEntryID = entry.id
         saveConfirmation = nil
         if !hasCorruptHistory {
             errorText = nil
@@ -178,6 +190,7 @@ public final class BPMTapperViewModel: ObservableObject {
     }
 
     public func clearHistory() {
+        copiedHistoryEntryID = nil
         do {
             // clearEntries is decode-free, so this recovers from corruption.
             // The current tap run (estimator, rawBPM, tapCount) is untouched.
@@ -253,6 +266,7 @@ public final class BPMTapperViewModel: ObservableObject {
 
     private func clearTransientMessages() {
         copyConfirmation = nil
+        copiedHistoryEntryID = nil
         saveConfirmation = nil
         // Corrupt-history copy stays visible across taps, resets, copies, and
         // adjustment changes until Clear History or a successful Save repairs
@@ -263,6 +277,15 @@ public final class BPMTapperViewModel: ObservableObject {
     }
 
     private func formatBPM(_ bpm: Double) -> String {
-        String(Int(bpm.rounded()))
+        Self.formattedBPM(bpm)
+    }
+
+    /// Decoded history values are not range-checked, so guard the `Int`
+    /// conversion: a non-finite or huge value would otherwise trap.
+    nonisolated static func formattedBPM(_ bpm: Double) -> String {
+        guard bpm.isFinite, abs(bpm) < 10_000 else {
+            return "--"
+        }
+        return String(Int(bpm.rounded()))
     }
 }

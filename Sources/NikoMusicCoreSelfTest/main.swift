@@ -12,23 +12,28 @@ func parseOptions() -> CLIOptions {
     var realRoot: URL?
     var readOnly = false
     var args = CommandLine.arguments.dropFirst()
+    func usageError(_ message: String) -> Never {
+        fputs("\(message)\nusage: NikoMusicCoreSelfTest [--fixture-root <path>] [--real-root <path> [--read-only]]\n", stderr)
+        exit(2)
+    }
+    func takeValue(for flag: String) -> String {
+        guard let value = args.first, !value.hasPrefix("--") else {
+            usageError("missing value for \(flag)")
+        }
+        args = args.dropFirst()
+        return value
+    }
     while let arg = args.first {
         args = args.dropFirst()
         switch arg {
         case "--fixture-root":
-            if let path = args.first {
-                args = args.dropFirst()
-                fixtureRoot = URL(fileURLWithPath: path, isDirectory: true)
-            }
+            fixtureRoot = URL(fileURLWithPath: takeValue(for: arg), isDirectory: true)
         case "--real-root":
-            if let path = args.first {
-                args = args.dropFirst()
-                realRoot = URL(fileURLWithPath: path, isDirectory: true)
-            }
+            realRoot = URL(fileURLWithPath: takeValue(for: arg), isDirectory: true)
         case "--read-only":
             readOnly = true
         default:
-            break
+            usageError("unknown argument: \(arg)")
         }
     }
     return CLIOptions(fixtureRoot: fixtureRoot, realRoot: realRoot, readOnly: readOnly)

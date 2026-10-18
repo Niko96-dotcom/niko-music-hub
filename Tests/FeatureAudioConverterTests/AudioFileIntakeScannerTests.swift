@@ -51,6 +51,21 @@ final class AudioFileIntakeScannerTests: XCTestCase {
         XCTAssertEqual(result.notices, [.subfoldersIgnored(folderURL: directory, count: 1)])
     }
 
+    func testMissingEntryIsCountedAndGoodFilesStillScan() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let goodFile = try makeFile(named: "Good.wav", in: directory)
+        let missingFile = directory.appendingPathComponent("Deleted After Selection.wav", isDirectory: false)
+        let scanner = AudioFileIntakeScanner()
+
+        let result = try scanner.scan([missingFile, goodFile])
+
+        XCTAssertEqual(result.supportedFiles.map(\.url), [goodFile])
+        XCTAssertTrue(result.unsupportedFiles.isEmpty)
+        XCTAssertEqual(result.notices, [.unreadableItemsSkipped(count: 1)])
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("OutsideCubaseHubIntakeTests-\(UUID().uuidString)", isDirectory: true)

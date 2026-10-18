@@ -388,6 +388,56 @@ struct StemSeparationViewModelTests {
         #expect(vm.helperNeedsSetup == true)
         #expect(vm.canStart == false)
         #expect(vm.errorMessage == StemSeparationHelperCopy.missingBody)
+        #expect(vm.helperSetupDiagnostic == nil)
+    }
+
+    @Test
+    func youtubeStartIsRefusedWhileHelperNeedsSetup() async throws {
+        let emptyLocator = HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: [],
+            isExecutable: { _ in false }
+        )
+        let settingsStore = FakeSettingsStore()
+        let inbox = FakeOutputInboxStore()
+        let runner = JobRunner()
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let workflow = YouTubeStemSeparationWorkflow(
+            downloader: FakeViewModelYouTubeAudioDownloader(),
+            stemService: service,
+            jobRunner: runner
+        )
+        let context = ToolContext(
+            registeredToolCount: 7,
+            settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
+            outputInboxStore: inbox,
+            jobRunner: runner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics()
+        )
+        let vm = StemSeparationViewModel(
+            context: context,
+            service: service,
+            youtubeWorkflow: workflow,
+            healthChecker: DemucsMLXHealthChecker(locator: emptyLocator)
+        )
+        vm.youtubeURLText = "https://youtu.be/test"
+        #expect(vm.canStartYouTube == true)
+        vm.refreshHelperHealth()
+        for _ in 0..<100 where vm.helperNeedsSetup == false {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        #expect(vm.helperNeedsSetup == true)
+        #expect(vm.canStartYouTube == false)
+
+        vm.startYouTubeSeparation()
+
+        #expect(vm.isRunning == false)
+        #expect(vm.currentJobID == nil)
+        #expect(runner.listJobs().isEmpty)
     }
 
     @Test
@@ -429,6 +479,35 @@ struct StemSeparationViewModelTests {
         }
         #expect(vm.helperNeedsSetup == true)
         #expect(vm.errorMessage == "demucs-mlx could not start: boom line1")
+
+        #expect(vm.helperSetupDiagnostic == "demucs-mlx could not start: boom line1")
+
+        // Drops change errorMessage but must not change the card's cause.
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/notes.txt")])
+        #expect(vm.helperSetupDiagnostic == "demucs-mlx could not start: boom line1")
+        _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
+        #expect(vm.errorMessage == nil)
+        #expect(vm.helperSetupDiagnostic == "demucs-mlx could not start: boom line1")
+
+        let card = StemSeparationView.helperMissingCard(diagnostic: vm.helperSetupDiagnostic)
+        #expect(card.label == StemSeparationHelperCopy.unusableLabel)
+        #expect(card.body == "demucs-mlx could not start: boom line1")
+        let missingCard = StemSeparationView.helperMissingCard(diagnostic: nil)
+        #expect(missingCard.label == StemSeparationHelperCopy.missingLabel)
+        #expect(missingCard.body == StemSeparationHelperCopy.missingBody)
+    }
+
+    @Test
+    func startFailureMessage_namesPythonExceptionLineAndRedactsHome() {
+        let home = NSHomeDirectory()
+        let traceback = """
+        Traceback (most recent call last):
+          File "\(home)/.local/bin/demucs-mlx", line 5, in <module>
+            from demucs_mlx.cli import main
+        ModuleNotFoundError: No module named 'mlx' (from \(home)/.local/lib)
+        """
+        let message = StemSeparationViewModel.startFailureMessage(from: traceback)
+        #expect(message == "demucs-mlx could not start: ModuleNotFoundError: No module named 'mlx' (from ~/.local/lib)")
     }
 
     @Test

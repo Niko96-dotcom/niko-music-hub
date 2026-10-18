@@ -84,8 +84,6 @@ required_checks = [c for c in sys.argv[13].split(",") if c]
 sys.path.insert(0, sys.argv[14])
 import release_uat
 
-TIMESTAMP_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
-
 def load_bytes(path):
     try:
         raw = path.read_bytes()
@@ -241,7 +239,7 @@ for gate in gates:
     if not isinstance(gate, dict) or not all(gate.get(field) for field in ("name", "command", "result", "completed_utc")):
         raise SystemExit("approval gate records require name, command, result, and completed_utc")
     completed = gate.get("completed_utc")
-    if not isinstance(completed, str) or not TIMESTAMP_RE.match(completed):
+    if not release_uat.is_utc_timestamp(completed):
         raise SystemExit(
             f"approval gate {gate.get('name')!r} completed_utc must be ISO-8601 UTC (was {completed!r})"
         )

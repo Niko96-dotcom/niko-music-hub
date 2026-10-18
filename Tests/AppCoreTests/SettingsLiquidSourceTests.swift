@@ -72,6 +72,39 @@ final class SettingsLiquidSourceTests: XCTestCase {
         }
     }
 
+    /// Choosing a vault root reloads the stored settings first. When that load
+    /// fails, the folder is not at fault: the view must show the plain repair
+    /// sentence and keep "That folder cannot be used" for VaultRootManager only.
+    func testChooseRootDoesNotBlameFolderForUnreadableSettings() throws {
+        let vault = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/ProjectVaultSettingsView.swift",
+            encoding: .utf8
+        )
+        guard let start = vault.range(of: "private func chooseRoot(") else {
+            XCTFail("chooseRoot not found")
+            return
+        }
+        let rest = vault[start.upperBound...]
+        guard let end = rest.range(of: "\n    private func ") else {
+            XCTFail("chooseRoot body end not found")
+            return
+        }
+        let body = rest[..<end.lowerBound]
+
+        XCTAssertTrue(body.contains("SettingsRepairModel.pausedMessage"), "unreadable settings must show the repair sentence")
+        XCTAssertTrue(body.contains("That folder cannot be used"), "VaultRootManager errors keep the folder message")
+
+        guard let load = body.range(of: "settingsStore.loadSettings()"),
+              let replace = body.range(of: "replacingRoot(") else {
+            XCTFail("chooseRoot must load settings and call replacingRoot")
+            return
+        }
+        XCTAssertTrue(
+            body[load.upperBound..<replace.lowerBound].contains("catch"),
+            "loadSettings() must be caught separately from replacingRoot so a decoding error is not reported as a bad folder"
+        )
+    }
+
     private func settingsSource() throws -> String {
         try String(
             contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",

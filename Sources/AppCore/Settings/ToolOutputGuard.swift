@@ -14,8 +14,20 @@ import NikoMusicCore
 public struct ToolOutputGuard: Sendable {
     let protectedRoots: [URL]
 
-    public init(settings: AppSettings) {
-        protectedRoots = settings.outputProtectedRoots
+    /// Each root's stored path and, when it has a bookmark, where the bookmark points now
+    /// (stale or not), so a root renamed or moved in Finder stays protected.
+    public init(
+        settings: AppSettings,
+        bookmarks: any SecurityScopedBookmarkResolving = FoundationSecurityScopedBookmarks()
+    ) {
+        var roots = settings.outputProtectedRoots
+        for root in settings.musicRoots {
+            if let bookmark = root.securityScopedBookmark,
+               let current = bookmarks.currentLocation(ofBookmark: bookmark) {
+                roots.append(current)
+            }
+        }
+        protectedRoots = roots
     }
 
     /// Throws `OutputWriteGuardError.outputInsideArchiveRoot` when `folder`, or what it

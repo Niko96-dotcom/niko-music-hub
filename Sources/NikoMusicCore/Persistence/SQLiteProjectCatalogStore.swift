@@ -50,6 +50,30 @@ public struct SQLiteProjectCatalogStore: ActiveProjectLocationPersisting, @unche
         }
     }
 
+    /// Replaces every stored review with the same id or the same unordered project pair with
+    /// `review`, in one transaction. `project_catalog` is not touched, so a concurrent
+    /// `persistActiveLocation` cannot be overwritten by a stale catalog snapshot.
+    public func persistReviewResolution(_ review: ProjectIdentityReview) throws {
+        let pair = Set([review.existingProjectID, review.candidateProjectID])
+        try database.withConnection { db in
+            try begin(db)
+            do {
+                let persisted = try loadJSONRows(db: db, sql: "SELECT review_json FROM project_identity_review ORDER BY review_id;", as: ProjectIdentityReview.self)
+                var next = persisted.filter { existing in
+                    existing.id != review.id
+                        && Set([existing.existingProjectID, existing.candidateProjectID]) != pair
+                }
+                next.append(review)
+                let rows = try next.map { ($0.id.uuidString.lowercased(), try encode($0)) }
+                try replaceRows(db: db, table: "project_identity_review", key: "review_id", value: "review_json", rows: rows)
+                try commit(db)
+            } catch {
+                sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+                throw error
+            }
+        }
+    }
+
     public func persistActiveLocation(projectID: ProjectID, location: ProjectLocation) throws {
         try database.withConnection { db in
             try begin(db)
@@ -140,6 +164,9 @@ public struct SQLiteProjectCatalogStore: ActiveProjectLocationPersisting, @unche
             try updateKey(table: "song_metadata", key: "song_id", from: legacyID, to: projectID.description, db: db)
             if try tableExists("song_status_history", db: db) {
                 try updateKey(table: "song_status_history", key: "song_id", from: legacyID, to: projectID.description, db: db)
+            }
+            if try tableExists("song_metadata_repair_backup", db: db) {
+                try updateKey(table: "song_metadata_repair_backup", key: "song_id", from: legacyID, to: projectID.description, db: db)
             }
         }
     }

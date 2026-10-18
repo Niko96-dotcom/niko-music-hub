@@ -668,6 +668,52 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(gate.wasCancelled)
     }
 
+    func testCanceledFullScanDropsQueuedWatcherFullRescan() async throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cancel-scan-overflow-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let gate = CancellationAwareScanGate()
+        let scanCalls = LockedScanCallCount()
+        let watcher = TestArchiveRootWatcher()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: watcher,
+            scanOverride: { _ in
+                scanCalls.increment()
+                return try await gate.wait()
+            }
+        )
+        viewModel.roots = [root]
+        viewModel.restartArchiveRootWatching()
+
+        let scanTask = Task { await viewModel.scan() }
+        let startDeadline = Date().addingTimeInterval(2)
+        while !gate.isWaiting, Date() < startDeadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(gate.isWaiting)
+        XCTAssertTrue(viewModel.isScanning)
+
+        // FSEvents overflow during the full scan queues a full rescan.
+        watcher.simulateFilesystemOverflow()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        viewModel.cancelScan()
+        try await waitUntil("user cancel cleared isScanning") { !viewModel.isScanning }
+        await scanTask.value
+
+        // Give a queued drain time to start a replacement full scan.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(scanCalls.value, 1)
+        XCTAssertFalse(viewModel.isScanning)
+        XCTAssertEqual(viewModel.statusBaseMessage, CancelCopy.scanCanceled)
+    }
+
     func testArchiveRootPersistenceFailureIsVisible() throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
@@ -790,6 +836,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.songs.map(\.displayTitle), ["Cache Song"])
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive cache could not be saved") == true)
+        XCTAssertFalse(viewModel.statusMessage?.contains("forced persistence failure") == true, "raw error text must stay in diagnostics")
     }
 
     func testMetadataSaveFailureIsVisibleWithoutDiscardingEdit() async throws {
@@ -810,6 +857,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let edited = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
         XCTAssertEqual(edited.effectiveDisplayTitle, "Visible Edit")
         XCTAssertTrue(viewModel.statusMessage?.contains("Song metadata could not be saved") == true)
+        XCTAssertFalse(viewModel.statusMessage?.contains("forced persistence failure") == true, "raw error text must stay in diagnostics")
     }
 
     func testCorruptSQLiteRowEditBlockedThroughViewModel() throws {
@@ -1588,6 +1636,39 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         reloaded.setSearchQuery("", immediate: true)
         reloaded.toggleBrowseFilter(.workflowStatus(.waitingFeedback))
         XCTAssertEqual(reloaded.filteredSongs.map(\.id), [merged.id])
+    }
+
+    func testHiddenProjectVersionCanBeShownAgain() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-unhide-cpr-vm-\(UUID().uuidString).sqlite")
+        let indexStore = try SQLiteArchiveIndexStore(databaseURL: databaseURL)
+        let metadataStore = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveIndexStore: indexStore,
+            songMetadataStore: metadataStore,
+            archiveRootWatcher: NoopArchiveRootWatcher()
+        )
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { !$0.projectVersions.isEmpty })
+        let version = try XCTUnwrap(song.projectVersions.first)
+
+        viewModel.ignoreCPRVersion(for: song, versionID: version.id)
+        let hidden = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        XCTAssertTrue(hidden.ignoredCPRVersionIDs.contains(version.id))
+        XCTAssertFalse(hidden.visibleProjectVersions.contains { $0.id == version.id })
+
+        viewModel.unignoreCPRVersion(for: hidden, versionID: version.id)
+        let shown = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        XCTAssertFalse(shown.ignoredCPRVersionIDs.contains(version.id))
+        XCTAssertTrue(shown.visibleProjectVersions.contains { $0.id == version.id })
+        XCTAssertEqual(try metadataStore.loadAll()[song.id]?.ignoredCPRVersionIDs.contains(version.id), false)
     }
 
     func testMarkingDoneArchivesTheUpdatedWorkflowSnapshot() async throws {
@@ -3185,6 +3266,45 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.lastDryRunLog?.hasSuffix("Template Song/Starter.cpr") == true)
     }
 
+    func testCreateNewSongReturnsCreatedSongWhenTemplateOpenFails() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        let archiveRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-open-fail-archive-\(UUID().uuidString)", isDirectory: true)
+        let draftRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-open-fail-drafts-\(UUID().uuidString)", isDirectory: true)
+        let templateRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-song-open-fail-template-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: archiveRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: templateRoot, withIntermediateDirectories: true)
+        FileManager.default.createFile(
+            atPath: templateRoot.appendingPathComponent("Starter.cpr").path,
+            contents: Data("fixture".utf8)
+        )
+        defer {
+            try? FileManager.default.removeItem(at: archiveRoot)
+            try? FileManager.default.removeItem(at: draftRoot)
+            try? FileManager.default.removeItem(at: templateRoot)
+        }
+        let workspace = NewSongRefusingWorkspace()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            archiveRootWatcher: NoopArchiveRootWatcher(),
+            runtime: MusicHubRuntimeEnvironment(environment: [:]),
+            scanOverride: nil,
+            workspaceOpener: workspace
+        )
+        viewModel.roots = [archiveRoot]
+
+        let created = try viewModel.createNewSong(
+            request: NewSongRequest(name: "No Cubase Here", root: draftRoot, templateFolder: templateRoot)
+        )
+
+        XCTAssertEqual(workspace.openCount, 1)
+        XCTAssertEqual(created.effectiveLatestCPR?.fileName, "Starter.cpr")
+        XCTAssertTrue(viewModel.songs.contains(where: { $0.id == created.id }))
+        XCTAssertTrue(viewModel.openError?.contains("Could not open Starter.cpr") == true)
+    }
+
     func testCreateNewSongWithoutCPRExplainsCreatedDraft() throws {
         unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
         setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", "1", 1)
@@ -4086,6 +4206,39 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(revealed.urls[0].path.hasSuffix(".cpr"))
     }
 
+    func testOpenMainPreviewReportsMissingAndAbsentPreview() async throws {
+        try CubaseFixtures.ensureGenerated()
+        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+
+        let revealed = RevealedURLBox()
+        let context = TestToolContext.make(fileActions: CapturingTestFileActions(revealed: revealed))
+        let viewModel = ArchiveBrowserViewModel(context: context)
+        await viewModel.scan()
+        let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
+
+        var noPreview = neon
+        noPreview.mainPreviewCandidateID = nil
+        try viewModel.openMainPreview(for: noPreview)
+        XCTAssertTrue(viewModel.statusMessage?.contains("No main preview was found for this song.") ?? false)
+
+        let missingURL = neon.folderPath.appendingPathComponent("Mixdown/deleted-after-scan.wav")
+        let missing = PreviewCandidate(
+            filePath: missingURL,
+            fileName: missingURL.lastPathComponent,
+            folderRole: .mixdown,
+            modifiedAt: Date(),
+            detectedRole: .mainMix
+        )
+        var deletedPreview = neon
+        deletedPreview.previewCandidates = [missing]
+        deletedPreview.mainPreviewCandidateID = missing.id
+        XCTAssertThrowsError(try viewModel.openMainPreview(for: deletedPreview))
+        XCTAssertTrue(viewModel.statusMessage?.contains("Path does not exist:") ?? false)
+        XCTAssertNotNil(viewModel.openError)
+        XCTAssertTrue(revealed.urls.isEmpty)
+    }
+
     func testRevealInFinderRejectsOutsideAllowedRoots() async throws {
         let parent = try makeRevealFixtureDirectory()
         defer { try? FileManager.default.removeItem(at: parent) }
@@ -4769,6 +4922,23 @@ private struct ProjectVaultViewModelFixture {
     }
 }
 
+private final class LockedScanCallCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+}
+
 private final class CancellationAwareScanGate: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<ScanResult, Error>?
@@ -5100,6 +5270,20 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
     func retryCallCount() -> Int { retryCalls }
     func restoreCallCount() -> Int { restoreCalls }
     func restoreRetryIDs() -> [UUID] { restoreRetryCalls }
+}
+
+/// Stands in for a Mac without Cubase: every open is refused.
+private final class NewSongRefusingWorkspace: WorkspaceOpening, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedOpenCount = 0
+    var openCount: Int { lock.withLock { storedOpenCount } }
+
+    func open(_ url: URL) -> Bool {
+        lock.withLock { storedOpenCount += 1 }
+        return false
+    }
+
+    func revealInFinder(_ url: URL) {}
 }
 
 private final class ThrowingArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable {

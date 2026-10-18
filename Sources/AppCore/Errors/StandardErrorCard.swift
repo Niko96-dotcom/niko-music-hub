@@ -79,8 +79,12 @@ public struct StandardErrorCard: View {
     }
 
     private func executeRecovery(_ action: AppErrorCard.RecoveryActionType) {
+        // A caller-supplied handler owns every action; the built-in side
+        // effects below run only when no handler is given, so one click
+        // never opens System Settings or Terminal twice.
         if let onRecovery {
             onRecovery(action)
+            return
         }
         switch action {
         case .openSystemSettings:

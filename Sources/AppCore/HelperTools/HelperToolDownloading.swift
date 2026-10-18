@@ -22,8 +22,10 @@ public struct URLSessionHelperDownloader: HelperDownloading, Sendable {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await URLSession.shared.data(for: request)
-        } catch is CancellationError {
-            throw CancellationError()
+        } catch {
+            // URLSession reports network failures and task cancellation as URLError.
+            try Task.checkCancellation()
+            throw HelperInstallError.downloadFailed("\(url.lastPathComponent): \(error.localizedDescription)")
         }
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else {
@@ -48,8 +50,10 @@ public struct URLSessionHelperDownloader: HelperDownloading, Sendable {
         let (bytes, response): (URLSession.AsyncBytes, URLResponse)
         do {
             (bytes, response) = try await URLSession.shared.bytes(for: request)
-        } catch is CancellationError {
-            throw CancellationError()
+        } catch {
+            // URLSession reports network failures and task cancellation as URLError.
+            try Task.checkCancellation()
+            throw HelperInstallError.downloadFailed("\(url.lastPathComponent): \(error.localizedDescription)")
         }
         guard let http = response as? HTTPURLResponse else {
             throw HelperInstallError.downloadFailed("\(url.lastPathComponent): unexpected response")

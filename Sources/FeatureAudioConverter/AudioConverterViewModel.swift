@@ -91,6 +91,27 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     public func addFileURLs(_ urls: [URL]) {
         do {
             let intake = try scanner.scan(urls)
+            // Re-adding a skipped or failed file puts its row back in the queue,
+            // so a stopped, canceled or refused batch can run again in place.
+            if !isConverting {
+                let requeueURLs = Set(intake.supportedFiles.map { $0.url.standardizedFileURL })
+                rows = rows.map { row in
+                    guard row.state == .skipped || row.state == .failed,
+                          row.isConvertible,
+                          requeueURLs.contains(row.sourceURL.standardizedFileURL) else {
+                        return row
+                    }
+                    return AudioConverterRow(
+                        id: row.id,
+                        sourceURL: row.sourceURL,
+                        sourceType: row.sourceType,
+                        plannedOutputName: plannedOutputName(for: row.sourceURL),
+                        state: .queued,
+                        statusText: AudioConverterCopy.ready,
+                        progress: 0
+                    )
+                }
+            }
             var knownURLs = Set(rows.map { $0.sourceURL.standardizedFileURL })
             let newSupported = intake.supportedFiles.filter { file in
                 let key = file.url.standardizedFileURL
@@ -241,6 +262,14 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             }
             publishShellJobStatus()
             let failedCount = outcomes.filter { if case .failed(_, _) = $0.status { true } else { false } }.count
+            // The row shows plain copy only; the real per-file cause goes to diagnostics.
+            for outcome in outcomes {
+                guard case let .failed(message, _) = outcome.status else { continue }
+                context.diagnostics.scoped(to: .converter).log(
+                    .error,
+                    "Conversion of \(outcome.file.sourceURL.lastPathComponent) failed: \(message)"
+                )
+            }
             context.diagnostics.scoped(to: .converter).log(
                 .info,
                 "Conversion finished (files=\(outcomes.count), failed=\(failedCount), canceled=\(canceledCount))"
@@ -480,6 +509,8 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         switch notice {
         case let .subfoldersIgnored(_, count):
             return "\(CountCopy.count(count, "subfolder")) ignored"
+        case let .unreadableItemsSkipped(count):
+            return "\(CountCopy.count(count, "unreadable item")) skipped"
         }
     }
 

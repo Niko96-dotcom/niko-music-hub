@@ -158,7 +158,7 @@ struct ArchiveDiagnosticsPanelView: View {
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Colors.accent)
                 .lineLimit(2)
-                ForEach(skippedSearchContext.matches, id: \.label) { match in
+                ForEach(Array(skippedSearchContext.matches.enumerated()), id: \.offset) { _, match in
                     let matchLine = ArchiveDiagnosticsSkippedSearchPanelContext.panelMatchLine(
                         label: match.label,
                         summary: match.summary

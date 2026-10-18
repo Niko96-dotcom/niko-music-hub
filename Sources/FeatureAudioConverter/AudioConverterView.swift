@@ -420,13 +420,16 @@ public struct AudioConverterView: View {
         case .converting:
             return "Converting to Cubase-ready WAV"
         case .verified:
-            return "Verified WAV ready"
+            return row.hasHandoffWarning
+                ? AudioConverterCopy.verifiedWithHandoffWarning
+                : AudioConverterCopy.verified
         case .failed:
             return row.statusText
         case .unsupported:
             return row.statusText
         case .skipped:
-            return "Skipped"
+            // "Skipped" (Stop After This File) or "Canceled"; the view model decides.
+            return row.statusText
         }
     }
 

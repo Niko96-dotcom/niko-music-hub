@@ -251,6 +251,61 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
     }
 
+    func testUnresolvedActiveRootIsNotDuplicatedByRepeatedRootChanges() throws {
+        let fixture = try ActiveRecoveryFixture()
+        defer { fixture.tearDown() }
+        let activeDir = try fixture.makeDirectory(prefix: "nmh-active-nodup-active")
+        let archiveDir = try fixture.makeDirectory(prefix: "nmh-active-nodup-archive")
+        let otherDir = try fixture.makeDirectory(prefix: "nmh-active-nodup-other")
+        defer {
+            try? FileManager.default.removeItem(at: activeDir)
+            try? FileManager.default.removeItem(at: archiveDir)
+            try? FileManager.default.removeItem(at: otherDir)
+        }
+
+        let activeID = UUID()
+        let archiveID = UUID()
+        try fixture.store.updateSettings { settings in
+            settings.musicRoots = [
+                StoredMusicRoot(
+                    id: activeID,
+                    role: .active,
+                    displayName: "Active",
+                    pathFallback: activeDir.standardizedFileURL.path,
+                    securityScopedBookmark: Data([0xA1])
+                ),
+                StoredMusicRoot(
+                    id: archiveID,
+                    role: .archive,
+                    displayName: "Archive",
+                    pathFallback: archiveDir.standardizedFileURL.path,
+                    securityScopedBookmark: nil
+                ),
+            ]
+            settings.vault.isEnabled = true
+            settings.vault.activeRootID = activeID
+            settings.vault.archiveRootID = archiveID
+            settings.archiveOnboardingCompleted = true
+        }
+
+        let provider = ActiveRecoveryBookmarkProvider()
+        provider.extraURL = otherDir
+        let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
+        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
+
+        // Adding and removing an unrelated root persists each time; the stale
+        // Active root must stay a single entry.
+        viewModel.addRoots([otherDir], bookmarksByURL: [otherDir: Data([0xD1])])
+        XCTAssertEqual(try fixture.store.loadSettings().musicRoots.filter { $0.id == activeID }.count, 1)
+        viewModel.removeRoot(otherDir)
+        viewModel.persistRoots()
+
+        let persisted = try fixture.store.loadSettings()
+        XCTAssertEqual(persisted.musicRoots.filter { $0.id == activeID }.count, 1)
+        XCTAssertEqual(persisted.musicRoots.first(where: { $0.id == activeID })?.role, .active)
+        XCTAssertEqual(Set(persisted.musicRoots.map(\.id)).count, persisted.musicRoots.count)
+    }
+
     func testPersistenceFailurePreservesActionableRecovery() throws {
         let fixture = try ActiveRecoveryFixture()
         defer { fixture.tearDown() }

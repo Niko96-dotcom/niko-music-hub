@@ -48,6 +48,41 @@ final class PreviewRankingTiebreakTests: XCTestCase {
         XCTAssertEqual(callout, "Equal score — longer preview (3:20) beat 3:00")
     }
 
+    func testDecidingFactorIsTitleMatchWhenTitleTokensDecidedTheRanking() {
+        let titled = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/fixture/Mixdown/Neon Hook.mp3"),
+            fileName: "Neon Hook.mp3",
+            folderRole: .mixdown,
+            modifiedAt: baseDate,
+            detectedRole: .mainMix,
+            fileExtension: "mp3",
+            detectedVersionNumber: nil,
+            durationSeconds: 180
+        )
+        let other = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/fixture/Mixdown/Blue Sky.wav"),
+            fileName: "Blue Sky.wav",
+            folderRole: .mixdown,
+            modifiedAt: baseDate,
+            detectedRole: .mainMix,
+            fileExtension: "wav",
+            detectedVersionNumber: nil,
+            durationSeconds: 180
+        )
+        let context = PreviewRankingProjectContext(anchorCPRVersion: 0, titleTokens: ["neon", "hook"])
+        let ranked = ranker.rank([other, titled], projectContext: context)
+        XCTAssertEqual(ranked.map(\.fileName), ["Neon Hook.mp3", "Blue Sky.wav"])
+        XCTAssertEqual(ranked[0].confidenceScore, ranked[1].confidenceScore)
+        XCTAssertEqual(
+            ranker.decidingFactor(winner: ranked[0], runnerUp: ranked[1], projectContext: context),
+            .titleMatch
+        )
+        XCTAssertEqual(
+            PreviewRankingExplainability.tiebreakCallout(for: ranked, projectContext: context),
+            "Equal score — filename matches the project title more closely"
+        )
+    }
+
     func testMainPreviewSummaryIncludesTiebreakCalloutForEqualScoreDurationPick() {
         let longer = candidate(name: "Song long.wav", duration: 200)
         let shorter = candidate(name: "Song short.wav", duration: 180)

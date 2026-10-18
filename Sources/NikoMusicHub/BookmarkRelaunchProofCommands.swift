@@ -76,7 +76,14 @@ enum BookmarkRelaunchProofCommands {
             guard validator.canonicalURL(for: resolved) == validator.canonicalURL(for: expectedURL) else {
                 throw ProofError.resolvedPathMismatch(role)
             }
-            _ = SecurityScopedRootAccess(url: resolved)
+            // Prove access, not only path resolution: read the root while the scope is held.
+            let access = SecurityScopedRootAccess(url: resolved)
+            do {
+                _ = try FileManager.default.contentsOfDirectory(at: access.url, includingPropertiesForKeys: nil)
+            } catch {
+                throw ProofError.unreadableRoot(role, error)
+            }
+            withExtendedLifetime(access) {}
         }
     }
 }
@@ -86,5 +93,6 @@ private enum ProofError: Error {
     case unsupportedMode(String)
     case missingPersistedRoot(MusicRootRole)
     case resolvedPathMismatch(MusicRootRole)
+    case unreadableRoot(MusicRootRole, Error)
 }
 #endif

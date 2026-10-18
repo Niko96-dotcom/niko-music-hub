@@ -92,8 +92,8 @@ run() {
 }
 
 # Submit to the notary service, retrying only transport failures. A verdict of
-# Invalid is final: fetch Apple's log next to the release output so the reason is
-# in the record instead of buried in a browser session.
+# Invalid or Rejected is final: fetch Apple's log next to the release output so
+# the reason is in the record instead of buried in a browser session.
 notarize() {
   local label="$1" file="$2" attempt output submission_id
   for attempt in 1 2 3; do
@@ -106,7 +106,7 @@ notarize() {
     if grep -q 'status: Accepted' <<<"$output"; then
       return 0
     fi
-    if grep -q 'status: Invalid' <<<"$output"; then
+    if grep -Eq 'status: (Invalid|Rejected)' <<<"$output"; then
       submission_id="$(grep -m1 -E '^ *id: ' <<<"$output" | awk '{print $2}')"
       if [[ -n "$submission_id" ]]; then
         xcrun notarytool log "$submission_id" --keychain-profile "$NMH_NOTARY_PROFILE" \
@@ -449,6 +449,11 @@ run_candidate_install_smoke() {
   log "install smoke ($label): exact candidate installation verified"
 }
 
+# Bash reads a script one command at a time, so an in-place edit of this file
+# during a run would change the top-level commands still to come. Wrapping the
+# run in main() makes bash parse all of it before any of it executes, so the
+# live-vs-pinned cmp guard below covers every command that runs after it.
+main() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --local-only) MODE="local-only"; shift ;;
@@ -457,7 +462,9 @@ while [[ $# -gt 0 ]]; do
     --dry-run-publish) DRY_RUN_PUBLISH=true; shift ;;
     --skip-tests) SKIP_TESTS=true; shift ;;
     --emergency-skip-tests) EMERGENCY_SKIP_TESTS=true; shift ;;
-    --reason) EMERGENCY_REASON="${2:-}"; shift 2 ;;
+    --reason)
+      [[ $# -ge 2 && "$2" != --* ]] || { echo "--reason requires a value" >&2; usage; exit 2; }
+      EMERGENCY_REASON="$2"; shift 2 ;;
     --install-smoke) INSTALL_SMOKE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
@@ -771,6 +778,9 @@ if [[ "$MODE" == "public" ]]; then
   fi
 fi
 LOG_FILE="${LOG_FILE:-$RELEASE_DIR/release.log}"
+# NMH_RELEASE_LOG may name a subdirectory of RELEASE_DIR, which the wipe above
+# removed along with everything else.
+mkdir -p "$(dirname "$LOG_FILE")"
 : >"$LOG_FILE"
 
 log "release identity"
@@ -1116,3 +1126,6 @@ $([[ "$INSTALL_SMOKE" != true ]] && echo "- Exact candidate installation smoke w
 REPORT
 
 echo "release finished: $REPORT"
+}
+
+main "$@"; exit

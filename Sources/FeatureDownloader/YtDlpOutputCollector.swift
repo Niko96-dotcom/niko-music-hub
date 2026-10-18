@@ -21,6 +21,13 @@ struct YtDlpCollectedOutput: Equatable, Sendable {
     var isAlreadyExisting: Bool
 }
 
+/// The process pipe a chunk came from. Raw pipe reads are not split at line
+/// ends, so each stream keeps its own pending line.
+enum YtDlpOutputStream: Sendable {
+    case standardOutput
+    case standardError
+}
+
 final class YtDlpOutputCollector: @unchecked Sendable {
     static let defaultMaximumPendingLineBytes = 16 * 1_024
     // A playlist is currently capped at 25 downloads. Leave room for several
@@ -37,8 +44,8 @@ final class YtDlpOutputCollector: @unchecked Sendable {
     private let maximumPendingLineBytes: Int
     private let maximumCandidatePaths: Int
     private let lock = NSLock()
-    private var pending = ""
-    private var isDiscardingOversizedLine = false
+    private var pending: [YtDlpOutputStream: String] = [:]
+    private var isDiscardingOversizedLine: Set<YtDlpOutputStream> = []
     private var candidatePaths: [String] = []
     private var candidatePathSet: Set<String> = []
     private var freshCandidatePaths: Set<String> = []
@@ -63,11 +70,19 @@ final class YtDlpOutputCollector: @unchecked Sendable {
         self.maximumCandidatePaths = max(1, maximumCandidatePaths)
     }
 
-    func consume(_ chunk: String) {
+    func consume(_ chunk: String, from stream: YtDlpOutputStream = .standardOutput) {
         guard !chunk.isEmpty else { return }
         onActivity?()
         lock.withLock {
-            consumeLocked(chunk)
+            consumeLocked(chunk, from: stream)
+        }
+    }
+
+    /// Processes an unterminated last line of `stream`, so the next stream's
+    /// output cannot join it.
+    func finishPendingLine(of stream: YtDlpOutputStream) {
+        lock.withLock {
+            finishPendingLineLocked(stream)
         }
     }
 
@@ -85,7 +100,8 @@ final class YtDlpOutputCollector: @unchecked Sendable {
     /// `maximumCandidatePaths`.
     func finishCollecting() throws -> [YtDlpCollectedOutput] {
         try lock.withLock {
-            finishPendingLineLocked()
+            finishPendingLineLocked(.standardOutput)
+            finishPendingLineLocked(.standardError)
             if didExceedCandidateLimit {
                 throw YtDlpOutputCollectorError.candidateLimitExceeded(maximum: maximumCandidatePaths)
             }
@@ -104,34 +120,33 @@ final class YtDlpOutputCollector: @unchecked Sendable {
         }
     }
 
-    private func consumeLocked(_ chunk: String) {
+    private func consumeLocked(_ chunk: String, from stream: YtDlpOutputStream) {
         var remaining = chunk[...]
         while let newline = remaining.firstIndex(where: \.isNewline) {
-            appendToPendingLineLocked(remaining[..<newline])
-            finishPendingLineLocked()
+            appendToPendingLineLocked(remaining[..<newline], stream: stream)
+            finishPendingLineLocked(stream)
             remaining = remaining[remaining.index(after: newline)...]
         }
-        appendToPendingLineLocked(remaining)
+        appendToPendingLineLocked(remaining, stream: stream)
     }
 
-    private func appendToPendingLineLocked(_ fragment: Substring) {
-        guard !isDiscardingOversizedLine else { return }
-        let availableBytes = maximumPendingLineBytes - pending.utf8.count
+    private func appendToPendingLineLocked(_ fragment: Substring, stream: YtDlpOutputStream) {
+        guard !isDiscardingOversizedLine.contains(stream) else { return }
+        let current = pending[stream, default: ""]
+        let availableBytes = maximumPendingLineBytes - current.utf8.count
         guard fragment.utf8.count <= availableBytes else {
-            pending = ""
-            isDiscardingOversizedLine = true
+            pending[stream] = nil
+            isDiscardingOversizedLine.insert(stream)
             return
         }
-        pending.append(contentsOf: fragment)
+        pending[stream, default: ""].append(contentsOf: fragment)
     }
 
-    private func finishPendingLineLocked() {
-        defer {
-            pending = ""
-            isDiscardingOversizedLine = false
-        }
-        guard !isDiscardingOversizedLine, !pending.isEmpty else { return }
-        processLocked(pending)
+    private func finishPendingLineLocked(_ stream: YtDlpOutputStream) {
+        let line = pending.removeValue(forKey: stream) ?? ""
+        let wasDiscarding = isDiscardingOversizedLine.remove(stream) != nil
+        guard !wasDiscarding, !line.isEmpty else { return }
+        processLocked(line)
     }
 
     private func processLocked(_ line: String) {

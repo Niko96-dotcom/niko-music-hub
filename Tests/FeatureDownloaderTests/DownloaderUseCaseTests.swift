@@ -146,6 +146,30 @@ final class DownloaderUseCaseTests: XCTestCase {
         XCTAssertEqual(jobRunner.lastTitle, "Download: Me at the zoo")
     }
 
+    func testPlaylistSimulateUsesFirstTitleLineForJobName() async throws {
+        let simulateRunner = TitleSimulateRunner(title: "\nFirst Song\nSecond Song\nThird Song\n")
+        let jobRunner = SpyJobRunner()
+        let useCase = DownloaderUseCase(
+            downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
+            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            jobRunner: jobRunner,
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: simulateRunner,
+            locator: ytDlpLocator()
+        )
+
+        let url = URL(string: "https://www.youtube.com/playlist?list=PLfixture")!
+        _ = try await useCase.simulateAndEnqueue(
+            url: url,
+            options: DownloadJobOptions(
+                sourceURL: url,
+                outputDirectory: URL(fileURLWithPath: "/tmp/out")
+            )
+        )
+
+        XCTAssertEqual(jobRunner.lastTitle, "Download: First Song")
+    }
+
     func testInternalTimeoutWordingNeverRetries() async throws {
         let downloader = InternalTimeoutMessageDownloader()
         let useCase = DownloaderUseCase(
@@ -420,7 +444,7 @@ final class DownloaderUseCaseTests: XCTestCase {
         XCTAssertEqual(DownloaderUseCase.parseProgress(from: "NIKO_PROGRESS: 50.0%"), 0.5)
     }
 
-    func testPlaylistModeOmitsNoPlaylistFlag() {
+    func testPlaylistModeOmitsNoPlaylistFlag() throws {
         let request = DownloadRequest(
             ytDlpURL: URL(fileURLWithPath: "/usr/local/bin/yt-dlp"),
             sourceURL: URL(string: "https://example.com/playlist?list=abc")!,
@@ -432,7 +456,25 @@ final class DownloaderUseCaseTests: XCTestCase {
             partialDirectory: request.outputDirectory.appendingPathComponent(".nmh-partial-test", isDirectory: true)
         )
         XCTAssertFalse(args.contains("--no-playlist"))
-        XCTAssertTrue(args.contains("--max-downloads"))
+        // `--max-downloads` makes yt-dlp exit 101 at the cap, which fails the job.
+        XCTAssertFalse(args.contains("--max-downloads"))
+        let itemsIndex = try XCTUnwrap(args.firstIndex(of: "--playlist-items"))
+        XCTAssertEqual(args[itemsIndex + 1], "1:\(DownloadPlaylistMode.playlist.maxEntries!)")
+
+        let simulateArgs = YtDlpDownloadCommandBuilder.simulateArguments(
+            formatSelection: request.formatSelection,
+            sourceURL: request.sourceURL,
+            ffmpegLocationURL: nil,
+            playlistMode: .playlist
+        )
+        XCTAssertFalse(simulateArgs.contains("--max-downloads"))
+        // The simulate run only names the job, so it lists one flat entry
+        // instead of extracting the whole playlist under its short timeout.
+        XCTAssertTrue(simulateArgs.contains("--flat-playlist"))
+        let simulateItemsIndex = try XCTUnwrap(simulateArgs.firstIndex(of: "--playlist-items"))
+        XCTAssertEqual(simulateArgs[simulateItemsIndex + 1], "1")
+        let simulatePrintIndex = try XCTUnwrap(simulateArgs.firstIndex(of: "--print"))
+        XCTAssertEqual(simulateArgs[simulatePrintIndex + 1], "%(playlist_title,title)s")
     }
 
     func testAudioPostProcessingRequestCarriesConfiguredFFmpegLocationAndHelperPath() async throws {

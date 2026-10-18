@@ -256,7 +256,9 @@ public final class SQLiteArchiveDatabase: @unchecked Sendable {
     private static func openConnection(at databaseURL: URL) throws -> OpaquePointer {
         var db: OpaquePointer?
         guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else {
-            throw StoreError.open(message(db))
+            let failure = message(db)
+            if let db { sqlite3_close(db) }
+            throw StoreError.open(failure)
         }
         do {
             sqlite3_busy_timeout(db, 5_000)
@@ -271,7 +273,9 @@ public final class SQLiteArchiveDatabase: @unchecked Sendable {
     private static func configureWAL(at databaseURL: URL) throws {
         var db: OpaquePointer?
         guard sqlite3_open(databaseURL.path, &db) == SQLITE_OK, let db else {
-            throw StoreError.open(message(db))
+            let failure = message(db)
+            if let db { sqlite3_close(db) }
+            throw StoreError.open(failure)
         }
         sqlite3_busy_timeout(db, 5_000)
         defer { sqlite3_close(db) }

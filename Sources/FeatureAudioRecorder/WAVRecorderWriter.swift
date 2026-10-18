@@ -73,11 +73,12 @@ public final class WAVRecorderWriter: @unchecked Sendable {
         )
     }
 
+    /// Recorded time, from the frames written to disk. Wall time since `init` would also
+    /// count backend startup and route rebuilds, which add no audio to the file.
     public var currentTime: TimeInterval {
         lock.lock()
         defer { lock.unlock() }
-        guard let start = startTime else { return 0 }
-        return Date().timeIntervalSince(start)
+        return Double(_writtenFrameCount) / Double(preset.sampleRate)
     }
 
     public var writtenFrameCount: Int64 {

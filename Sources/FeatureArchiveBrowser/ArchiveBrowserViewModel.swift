@@ -445,7 +445,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         runtime: MusicHubRuntimeEnvironment = .current,
         bookmarkProvider: any SecurityScopedBookmarkProviding = FoundationSecurityScopedBookmarks(),
         scanOverride: (([URL]) async throws -> ScanResult)?,
-        incrementalRescanHold: (() async -> Void)? = nil
+        incrementalRescanHold: (() async -> Void)? = nil,
+        workspaceOpener: (any WorkspaceOpening)? = nil
     ) {
         self.settingsStore = context.settingsStore
         self.appSettings = context.appSettings
@@ -473,7 +474,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.browseRefreshDriver = ArchiveBrowseRefreshDriver(debounceNanoseconds: browseSearchDebounceNanoseconds)
         let dryRunOnly = runtime.dryRunOpen
         self.opener = MusicItemOpener(
-            workspace: dryRunOnly ? nil : AppKitWorkspaceOpener(),
+            workspace: dryRunOnly ? nil : (workspaceOpener ?? AppKitWorkspaceOpener()),
             log: { [diagnostics] message in
                 diagnostics.log(.info, message)
             }

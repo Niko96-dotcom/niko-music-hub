@@ -6,20 +6,23 @@ import SwiftUI
 struct SongStatusHistoryList: View {
     let history: [WorkflowStatusChange]
 
-    private struct Row: Identifiable {
+    struct Row: Identifiable {
         let id: String
         let change: WorkflowStatusChange
     }
 
     /// Rows keyed by timestamp plus an ordinal among same-instant changes, so
-    /// identity stays stable across inserts and never collides.
-    private var rows: [Row] {
+    /// identity stays stable across inserts and never collides. `history`
+    /// arrives oldest first; ordinals are assigned in that order, then the
+    /// rows are reversed so the newest change is shown first.
+    var rows: [Row] {
         var ordinals: [Date: Int] = [:]
-        return history.map { change in
+        let oldestFirst = history.map { change in
             let ordinal = ordinals[change.changedAt, default: 0]
             ordinals[change.changedAt] = ordinal + 1
             return Row(id: "\(change.changedAt.timeIntervalSinceReferenceDate)#\(ordinal)", change: change)
         }
+        return oldestFirst.reversed()
     }
 
     var body: some View {

@@ -631,6 +631,38 @@ class PipelineProvenanceTests(unittest.TestCase):
             self.assertFalse(run_dir.exists())
             self.assertTrue(release_dir.is_dir())
 
+    def test_cleanup_removes_worktree_when_pinned_source_fails_before_record(self) -> None:
+        # A failure after `git worktree add` but before snapshot-provenance.json
+        # exists must not leave a registered pinned-source worktree behind:
+        # the EXIT-trap cleanup must still accept and remove the run dir.
+        with tempfile.TemporaryDirectory() as raw:
+            base = pathlib.Path(raw)
+            repo = init_fixture_repo(base)
+            pinned = git(repo, "rev-parse", "HEAD")
+            release_dir = base / "dist" / "release"
+            release_dir.mkdir(parents=True)
+            short = git(repo, "rev-parse", "--short=12", "HEAD")
+            init_result = run_bash_fn("nmh_snapshot_init_run_dir", [str(release_dir), short])
+            self.assertEqual(init_result.returncode, 0, msg=init_result.stderr)
+            run_dir = pathlib.Path(init_result.stdout.strip())
+            self.addCleanup(shutil.rmtree, run_dir, True)
+
+            # Make the provenance record step fail after the worktree exists:
+            # the record path is a directory, so the Python writer cannot write it.
+            (run_dir / "snapshot-provenance.json").mkdir()
+            create = run_bash_fn("nmh_snapshot_create_pinned_source", [str(repo), pinned, str(run_dir)])
+            self.assertNotEqual(create.returncode, 0)
+            self.assertIn("failed to write snapshot provenance record", create.stderr)
+            self.assertTrue((run_dir / "pinned-source" / ".git").is_file())
+            self.assertIn("pinned-source", git(repo, "worktree", "list", "--porcelain"))
+
+            cleanup = run_bash_fn("nmh_snapshot_cleanup", [str(run_dir), str(run_dir.parent)])
+            self.assertEqual(cleanup.returncode, 0, msg=cleanup.stderr)
+            self.assertFalse(run_dir.exists())
+            self.assertNotIn("pinned-source", git(repo, "worktree", "list", "--porcelain"))
+            self.assertTrue(release_dir.is_dir())
+            self.assertTrue((repo / "VERSION").is_file())
+
 
 class PipelineOrchestrationTests(unittest.TestCase):
     """Behavioral orchestration: run the actual release-all.sh in a fixture.

@@ -261,6 +261,78 @@ struct DemucsMLXBackendTests {
     }
 
     @Test
+    func separate_nonzeroExit_showsPlainSentenceWithLastCauseLineOnly() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(
+            exitCode: 1,
+            outputLines: [],
+            errorLines: [
+                "Downloading model weights...",
+                "Tracks: 25%|██ | 1/4 [00:01<00:03, 1track/s]",
+                "Traceback (most recent call last):",
+                "  File \"/Users/niko/.venv/demucs_mlx/model.py\", line 88, in load_model",
+                "ModelDownloadError: could not fetch weights",
+                "Tracks: 50%|████ | 2/4 [00:02<00:02, 1track/s]"
+            ]
+        )
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        #expect(result == .failed(
+            message: "Stem separation failed (demucs-mlx exit code 1): ModelDownloadError: could not fetch weights"
+        ))
+    }
+
+    @Test
+    func separate_nonzeroExit_keepsExceptionLineThatMentionsAPhaseWord() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(
+            exitCode: 1,
+            outputLines: [],
+            errorLines: [
+                "Traceback (most recent call last):",
+                "  File \"\(NSHomeDirectory())/.venv/demucs_mlx/model.py\", line 88, in load_model",
+                "RuntimeError: error loading model weights from \(NSHomeDirectory())/.cache/htdemucs"
+            ]
+        )
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        #expect(result == .failed(
+            message: "Stem separation failed (demucs-mlx exit code 1): "
+                + "RuntimeError: error loading model weights from ~/.cache/htdemucs"
+        ))
+    }
+
+    @Test
+    func separate_nonzeroExitWithOnlyProgressOutput_showsPlainSentence() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(exitCode: 2, outputLines: [], errorLines: ["10%", "40%"])
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let result = await backend.separate(request: request) { _, _ in }
+
+        #expect(result == .failed(message: "Stem separation failed (demucs-mlx exit code 2)."))
+    }
+
+    @Test
     func separate_unexpectedOutputLayout_returnsFailed() async {
         let outputFolder = makeOutputFolder()
         let request = StemSeparationBackendRequest(
@@ -315,6 +387,49 @@ struct DemucsMLXBackendTests {
         let messages = messageCollector.messages
 
         #expect(messages.contains { $0.contains("elapsed") })
+    }
+
+    @Test
+    func separate_modelDownloadIsOwnPhaseAndPathPercentIsNotProgress() async {
+        let request = StemSeparationBackendRequest(
+            inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
+            outputFolderURL: makeOutputFolder(),
+            preset: .fast4
+        )
+        let settings = HelperToolSettings(demucsMlx: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx"))
+        let runner = FakeStreamingRunner(
+            exitCode: 0,
+            outputLines: [
+                "Loading model htdemucs...",
+                "Downloading model weights...",
+                "25%",
+                "100%",
+                "Separating track /Users/music/Song 100%.wav",
+                "0%",
+                "50%"
+            ],
+            errorLines: []
+        )
+        let backend = makeBackend(settings: settings, runner: runner)
+
+        let progressCollector = ProgressCollector()
+        let messages = MessageCollector()
+        _ = await backend.separate(request: request) { progress, message in
+            progressCollector.add(progress)
+            messages.add(message ?? "")
+        }
+
+        #expect(progressCollector.values == [0, 0, 0.25, 1.0, 0, 0, 0.5])
+        let phases = messages.messages.map { $0.components(separatedBy: " | ").first ?? "" }
+        #expect(phases == [
+            "Loading model…",
+            "Downloading model…",
+            "Downloading model…",
+            "Downloading model…",
+            "Separating stems…",
+            "Separating stems…",
+            "Separating stems…"
+        ])
     }
 
     @Test
