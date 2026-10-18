@@ -247,7 +247,7 @@ final class HubShellChromeSourceTests: XCTestCase {
             .compactMap { Range($0.range(at: 1), in: sharedSlot).map { String(sharedSlot[$0]) } }
             // Widest tempo MixdownBPMEstimator returns (40…220, one decimal).
             .map { $0.replacingOccurrences(of: "\\(bpm)", with: "220.0") }
-        XCTAssertEqual(literals.count, 3, "expected the BPM, analyzing and no-tempo lines: \(literals)")
+        XCTAssertEqual(literals.count, 4, "expected the BPM, analyzing, no-tempo and not-saved lines: \(literals)")
         XCTAssertFalse(literals.contains { $0.contains("\\(") }, "unmeasured interpolation: \(literals)")
 
         // Typography.micro() = .caption (NSFont caption1) at .medium weight.
@@ -259,6 +259,25 @@ final class HubShellChromeSourceTests: XCTestCase {
             let width = (line as NSString).size(withAttributes: [.font: micro]).width
             XCTAssertLessThanOrEqual(width, 60, "\"\(line)\" is \(width)pt; it clips beside the inbox row actions")
         }
+    }
+
+    func testOutputInboxBPMWriteFailureStaysOnItsRow() throws {
+        let source = try shellSource("OutputInboxInspectorView.swift")
+
+        // `inboxError` mirrors `refreshModel.lastError` and is only cleared by
+        // `onChange` when that value changes. A clean refresh sets nil again
+        // (nil → nil never fires), so a BPM write error written there replaced
+        // the whole list with "could not be loaded" until the panel was rebuilt.
+        XCTAssertFalse(source.contains("inboxError = error.localizedDescription"))
+        XCTAssertEqual(
+            source.components(separatedBy: "inboxError = ").count - 1, 1,
+            "inboxError may only mirror refreshModel.lastError"
+        )
+
+        // The failure stays on its row (like "No tempo") and is logged.
+        XCTAssertTrue(source.contains("bpmNotSavedItemIDs.insert(itemID)"))
+        XCTAssertTrue(source.contains("context.diagnostics.log(.error, \"Output Inbox BPM save failed:"))
+        XCTAssertTrue(source.contains("Text(\"Not saved\")"))
     }
 
     func testOutputInboxBPMAnalysisTracksInFlightItemsIndividually() throws {

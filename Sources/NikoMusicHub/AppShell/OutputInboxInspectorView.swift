@@ -18,6 +18,10 @@ struct OutputInboxInspectorView: View {
     /// Rows whose last "Analyze BPM" found no tempo. View state only: a new
     /// analysis clears it, nothing is written to the inbox.
     @State private var noTempoItemIDs: Set<OutputInboxItem.ID> = []
+    /// Rows whose last BPM write failed. View state only, like `noTempoItemIDs`:
+    /// `inboxError` mirrors `refreshModel.lastError` and is only cleared when that
+    /// value changes, so a write error stored there hid the whole list.
+    @State private var bpmNotSavedItemIDs: Set<OutputInboxItem.ID> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(context: ToolContext) {
@@ -320,6 +324,11 @@ struct OutputInboxInspectorView: View {
             Text("No tempo")
                 .font(HubDesignSystem.Typography.micro())
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+        } else if bpmNotSavedItemIDs.contains(item.id) {
+            Text("Not saved")
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Colors.warning)
+                .help("The BPM couldn’t be saved to the Output Inbox. Try Analyze BPM again.")
         } else if item.status == .failed {
             Text("Failed")
                 .font(HubDesignSystem.Typography.micro())
@@ -394,6 +403,7 @@ struct OutputInboxInspectorView: View {
         guard !analyzingItemIDs.contains(item.id) else { return }
         analyzingItemIDs.insert(item.id)
         noTempoItemIDs.remove(item.id)
+        bpmNotSavedItemIDs.remove(item.id)
         let itemID = item.id
         let fileURL = item.fileURL
         // MainActor task (UI updates stay on the main actor) awaiting one detached
@@ -428,7 +438,10 @@ struct OutputInboxInspectorView: View {
                     requestInboxRefresh()
                 }
             } catch {
-                inboxError = error.localizedDescription
+                // A failed write is this row's problem, not a failed inbox load:
+                // the list stays visible and the next analysis of the row clears it.
+                bpmNotSavedItemIDs.insert(itemID)
+                context.diagnostics.log(.error, "Output Inbox BPM save failed: \(error)")
             }
         }
     }
