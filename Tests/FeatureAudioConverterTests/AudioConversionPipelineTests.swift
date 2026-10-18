@@ -180,28 +180,22 @@ final class AudioConversionPipelineTests: XCTestCase {
         }
     }
 
-    func testOutputWriteFailureKeepsNativeErrorWithoutFFmpegFallback() async throws {
-        let request = makeRequest(sourceName: "Disk Full.wav")
-        let diskFull = NSError(
-            domain: NSCocoaErrorDomain,
-            code: NSFileWriteOutOfSpaceError,
-            userInfo: [NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))]
-        )
-        let native = FakeAudioConverter(result: .failure(diskFull))
+    func testUnreadableSourceErrorFallsBackToFFmpeg() async throws {
+        let request = makeRequest(sourceName: "Read Error.wav")
+        let readError = NSError(domain: NSPOSIXErrorDomain, code: Int(EIO))
+        let native = FakeAudioConverter(result: .failure(readError))
         let factory = RecordingFFmpegFactory(
-            converter: FakeAudioConverter(result: .failure(AudioConversionError.conversionFailed("unused")))
+            converter: FakeAudioConverter(result: .failure(AudioConversionError.conversionFailed("ffmpeg ran")))
         )
         let pipeline = makePipeline(native: native, factory: factory)
 
         do {
             _ = try await pipeline.convert(request)
-            XCTFail("Expected native write error")
-        } catch {
-            let nsError = error as NSError
-            XCTAssertEqual(nsError.domain, NSCocoaErrorDomain)
-            XCTAssertEqual(nsError.code, NSFileWriteOutOfSpaceError)
+            XCTFail("Expected the FFmpeg result")
+        } catch let error as AudioConversionError {
+            XCTAssertEqual(error, .conversionFailed("ffmpeg ran"))
         }
-        XCTAssertEqual(factory.callCount, 0)
+        XCTAssertEqual(factory.callCount, 1)
     }
 
     func testReadOnlyOutputFolderKeepsNativeErrorWithoutFFmpegFallback() async throws {
