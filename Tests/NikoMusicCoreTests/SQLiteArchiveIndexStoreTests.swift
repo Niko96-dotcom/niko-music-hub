@@ -25,6 +25,43 @@ final class SQLiteArchiveIndexStoreTests: XCTestCase {
         XCTAssertEqual(loaded, snapshot)
     }
 
+    func testLargeCatalogSavesTheSerialEncodingInOrderAndRoundTrips() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("archive-index-\(UUID().uuidString).sqlite")
+        let store = try SQLiteArchiveIndexStore(databaseURL: databaseURL)
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        // Far past the parallel threshold, with whole-second dates (the index stores whole seconds).
+        let songs = (0..<400).map { index -> Song in
+            let folder = URL(fileURLWithPath: "/tmp/Parallel Save \(index)", isDirectory: true)
+            let version = ProjectVersion(
+                filePath: folder.appendingPathComponent("Song \(index).cpr"), fileName: "Song \(index).cpr",
+                modifiedAt: base.addingTimeInterval(Double(index) * 3_600), detectedVersionNumber: index % 5)
+            return Song(folderPath: folder, originalFolderName: "Parallel Save \(index)", displayTitle: "Parallel Save \(index)",
+                        projectVersions: [version], latestCPR: version, aliases: index % 7 == 0 ? ["alias \(index)"] : [])
+        }
+        let snapshot = ArchiveIndexSnapshot(roots: ["/archive"], songs: songs, scannedAt: base)
+        try store.save(snapshot)
+        XCTAssertEqual(try XCTUnwrap(try store.loadLatest()), snapshot)
+
+        // The stored rows are byte-for-byte what one serial encoder writes, in catalog order.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        let expected = try songs.map { String(decoding: try encoder.encode($0), as: UTF8.self) }
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(databaseURL.path, &db), SQLITE_OK)
+        defer { sqlite3_close(db) }
+        var statement: OpaquePointer?
+        XCTAssertEqual(sqlite3_prepare_v2(db, "SELECT song_json FROM archive_snapshot_song ORDER BY position ASC;", -1, &statement, nil), SQLITE_OK)
+        defer { sqlite3_finalize(statement) }
+        var stored: [String] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            stored.append(String(cString: sqlite3_column_text(statement, 0)))
+        }
+        XCTAssertEqual(stored, expected)
+    }
+
     func testLoadLatestWhenEmptyReturnsNil() throws {
         let databaseURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("archive-index-\(UUID().uuidString).sqlite")

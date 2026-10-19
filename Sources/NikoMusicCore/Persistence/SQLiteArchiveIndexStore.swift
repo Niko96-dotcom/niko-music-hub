@@ -15,12 +15,17 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
 
     public init(database: SQLiteArchiveDatabase) throws {
         self.database = database
-        self.encoder = JSONEncoder()
-        self.encoder.dateEncodingStrategy = .iso8601
-        // Deterministic serialization so unchanged songs compare equal against stored rows.
-        self.encoder.outputFormatting = [.sortedKeys]
+        self.encoder = Self.makeEncoder()
         self.decoder = Self.makeDecoder()
         try prepareDatabase()
+    }
+
+    private static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        // Deterministic serialization so unchanged songs compare equal against stored rows.
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
     }
 
     private static func makeDecoder() -> JSONDecoder {
@@ -54,14 +59,14 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         guard let rootsJSON = String(data: rootsData, encoding: .utf8) else {
             throw StoreError.encode("utf8")
         }
-        var songRows: [(id: String, json: String)] = []
-        songRows.reserveCapacity(snapshot.songs.count)
-        for song in snapshot.songs {
-            let songData = try encoder.encode(song)
+        // Every save serializes the whole catalog to find the rows that changed. Songs are independent,
+        // so they encode on several cores (each with its own encoder); row order is the catalog order.
+        let songRows: [(id: String, json: String)] = try ParallelMap.map(snapshot.songs) { song in
+            let songData = try Self.makeEncoder().encode(song)
             guard let songJSON = String(data: songData, encoding: .utf8) else {
                 throw StoreError.encode("utf8")
             }
-            songRows.append((song.id, songJSON))
+            return (song.id, songJSON)
         }
         let scannedText = ISO8601DateFormatter().string(from: snapshot.scannedAt)
         try database.withConnection { db in
