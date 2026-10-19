@@ -40,6 +40,25 @@ final class ArchiveBrowseSortEquivalenceTests: XCTestCase {
         XCTAssertEqual(ArchiveBrowseSortMode.sort(songs, mode: .recentCPR).count, songs.count)
     }
 
+    func testQuietSongsAndTheirCountMatchTheTupleSort() {
+        var songs = makeSongs(count: 600)
+        let statuses: [ProjectWorkflowStatus?] = [nil, .done] + ProjectWorkflowStatus.allCases.filter { $0 != .done }.map { Optional($0) }
+        for index in songs.indices { songs[index].workflowStatus = statuses[index % statuses.count] }
+        let now = Date(timeIntervalSince1970: 1_600_000_000 + 90 * 86_400)
+        let cutoff = now.addingTimeInterval(-TimeInterval(ArchiveShelfRanker.quietSongThresholdDays) * 86_400)
+        let reference = songs
+            .compactMap { song -> (Song, Date)? in
+                guard let status = song.workflowStatus, status != .done else { return nil }
+                guard let latest = ArchiveShelfRanker.latestCPRActivity(for: song), latest <= cutoff else { return nil }
+                return (song, latest)
+            }
+            .sorted { $0.1 < $1.1 }
+            .map(\.0)
+        XCTAssertFalse(reference.isEmpty)
+        XCTAssertEqual(ArchiveShelfRanker.quietSongs(songs, now: now).map(\.id), reference.map(\.id))
+        XCTAssertEqual(ArchiveShelfRanker.quietSongCount(songs, now: now), reference.count)
+    }
+
     func testCollaboratorSuggestionsMatchTheUnhoistedLoop() {
         let collaborators = ["Lena", "Max Muster", "Jo", "Ünal Çelik", "Mira"].map {
             Collaborator(id: "id-\($0)", displayName: $0, updatedAt: Date(timeIntervalSince1970: 1_600_000_000))

@@ -64,15 +64,25 @@ public enum ArchiveShelfRanker {
     /// Unfinished songs (status set, not Done) whose newest visible CPR is
     /// older than the quiet threshold — most stuck first.
     public static func quietSongs(_ songs: [Song], now: Date = Date()) -> [Song] {
+        var keyed: [(index: Int, date: Date)] = []
+        for (index, song) in songs.enumerated() {
+            if let latest = quietActivity(of: song, now: now) { keyed.append((index, latest)) }
+        }
+        keyed.sort { $0.date < $1.date }
+        return keyed.map { songs[$0.index] }
+    }
+
+    /// `quietSongs(songs, now:).count` without ordering or copying the songs (the analytics overview).
+    public static func quietSongCount(_ songs: [Song], now: Date = Date()) -> Int {
+        songs.reduce(0) { $0 + (quietActivity(of: $1, now: now) == nil ? 0 : 1) }
+    }
+
+    /// The song's newest CPR date when it is unfinished and older than the quiet threshold.
+    private static func quietActivity(of song: Song, now: Date) -> Date? {
         let cutoff = now.addingTimeInterval(-TimeInterval(quietSongThresholdDays) * 86_400)
-        return songs
-            .compactMap { song -> (Song, Date)? in
-                guard let status = song.workflowStatus, status != .done else { return nil }
-                guard let latest = latestCPRActivity(for: song), latest <= cutoff else { return nil }
-                return (song, latest)
-            }
-            .sorted { $0.1 < $1.1 }
-            .map(\.0)
+        guard let status = song.workflowStatus, status != .done else { return nil }
+        guard let latest = latestCPRActivity(for: song), latest <= cutoff else { return nil }
+        return latest
     }
 
     public static func filter(

@@ -70,7 +70,7 @@ enum ArchiveAnalyticsProjection {
         overview.finished = songs.count { $0.workflowStatus == .done }
         overview.noStatus = songs.count { $0.workflowStatus == nil }
         overview.inProgress = overview.totalSongs - overview.finished - overview.noStatus
-        overview.quiet = ArchiveShelfRanker.quietSongs(songs, now: now).count
+        overview.quiet = ArchiveShelfRanker.quietSongCount(songs, now: now)
         let triaged = overview.totalSongs - overview.noStatus
         overview.finishRate = triaged > 0 ? Double(overview.finished) / Double(triaged) : nil
         return overview
