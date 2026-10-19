@@ -10,7 +10,8 @@ import NikoMusicCore
 //       [--runs N] [--warmups N] [phase ...]
 //
 // Phases (default: all): snapshot-load, metadata-load, cache-load, scan, cache-save,
-// status-history, analytics-history, inbox-load.
+// status-history, analytics-history, inbox-load. In-memory phases on the cached catalog (named, not in the
+// default set): sort-recent, board-projection, intelligence, analytics, search-index, search.
 //
 // The database is COPIED to a temporary folder first; the original and the archive are only read.
 // Output is one JSON object on stdout (medians, spread, run count) and a human table on stderr.
@@ -82,6 +83,15 @@ private func digest<T: Encodable>(_ value: T) -> String {
     guard let data = try? encoder.encode(value) else { return "encode-failed" }
     var hash: UInt64 = 14_695_981_039_346_656_037
     for byte in data { hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211 }
+    return String(hash, radix: 16)
+}
+
+private func digest(strings: [String]) -> String {
+    var hash: UInt64 = 14_695_981_039_346_656_037
+    for string in strings {
+        for byte in string.utf8 { hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211 }
+        hash = (hash ^ 0x0A) &* 1_099_511_628_211
+    }
     return String(hash, radix: 16)
 }
 
@@ -158,8 +168,67 @@ struct ArchiveStartupBenchmark {
         }
 
         var snapshotSongs: [Song] = []
+        // The catalog for the in-memory phases: the cached snapshot, loaded once outside any timing.
+        var catalogCache: [Song]?
+        func catalog() throws -> [Song] {
+            if let catalogCache { return catalogCache }
+            let loaded = try indexStore.loadLatest()?.songs ?? []
+            catalogCache = loaded
+            return loaded
+        }
+        let fixedNow = Date(timeIntervalSince1970: 1_790_000_000)
         for phase in phases {
             switch phase {
+            case "sort-recent":
+                let songs = try catalog()
+                var sorted: [Song] = []
+                let samples = try repeatSync { sorted = ArchiveBrowseSortMode.sort(songs, mode: .recentCPR) }
+                record("sort-recent", samples, detail: ["songs": "\(sorted.count)", "digest": digest(strings: sorted.map(\.id))])
+            case "board-projection":
+                let ordered = ArchiveBrowseSortMode.sort(try catalog(), mode: .recentCPR)
+                var columns: [ArchiveBoardColumn] = []
+                let samples = try repeatSync { columns = ArchiveBoardProjection.columns(from: ordered) }
+                record("board-projection", samples, detail: [
+                    "columns": "\(columns.count)",
+                    "digest": digest(strings: columns.flatMap { [$0.id] + $0.songs.map(\.id) })
+                ])
+            case "intelligence":
+                let songs = try catalog()
+                var suggestions: [CollaboratorSuggestion] = []
+                var duplicates: [DuplicateSongHint] = []
+                var missing = MissingAudioReport(songs: [])
+                let samples = try repeatSync {
+                    suggestions = ArchiveIntelligence.collaboratorSuggestions(songs: songs, collaborators: collaborators)
+                    duplicates = ArchiveIntelligence.duplicateSongHints(songs: songs)
+                    missing = ArchiveIntelligence.missingAudioReport(songs: songs, maximumRetainedOrphanAudioPaths: 0)
+                }
+                record("intelligence", samples, detail: [
+                    "suggestions": "\(suggestions.count)", "duplicates": "\(duplicates.count)",
+                    "digest": digest(strings: suggestions.map(\.id) + duplicates.map(\.normalizedTitle) + [String(describing: missing)])
+                ])
+            case "analytics":
+                let songs = try catalog()
+                let history = try metadataStore.loadAllStatusHistory()
+                var snapshot = ArchiveAnalyticsSnapshot()
+                let samples = try repeatSync {
+                    snapshot = ArchiveAnalyticsProjection.snapshot(songs: songs, history: history, now: fixedNow)
+                }
+                record("analytics-snapshot", samples, detail: ["digest": digest(strings: [String(describing: snapshot)])])
+            case "search-index":
+                let songs = try catalog()
+                var index = MusicSearchIndex()
+                let samples = try repeatSync { index = MusicSearchIndex(songs: songs) }
+                record("search-index-build", samples, detail: ["songs": "\(index.songs.count)"])
+            case "search":
+                let index = MusicSearchIndex(songs: try catalog())
+                for query in ["amber", "neon moth", "hollow signal", "harbor v3", "qqqq zzzz"] {
+                    var results: [MusicSearchResult] = []
+                    let samples = try repeatSync { results = index.searchResults(query) }
+                    record("search \(query)", samples, detail: [
+                        "results": "\(results.count)",
+                        "digest": digest(strings: results.map { "\($0.song.id)|\($0.score)|\($0.matchSummary)" })
+                    ])
+                }
             case "snapshot-load":
                 var loaded: [Song] = []
                 let samples = try repeatSync {
