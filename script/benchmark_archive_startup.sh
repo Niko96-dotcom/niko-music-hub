@@ -6,6 +6,8 @@
 #   script/benchmark_archive_startup.sh launch --archive <CubaseArchive> --database <archive-index.sqlite> [--scenarios a,b]
 #       one in-process launch plus timed interactions in a hosted ArchiveBrowserView
 #       (script/performance/archive-launch.swift)
+#   script/benchmark_archive_startup.sh tools [--runs N]
+#       first-open cost of each tool screen (script/performance/archive-tools.swift)
 # Set NMH_BENCH_BINARY_SUFFIX=-name to keep the built binary as <tool>-name (for before/after pairs).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -17,9 +19,16 @@ swift build -c release --target FeatureArchiveBrowser -Xswiftc -enable-testing >
 BIN_DIR="$(swift build -c release --show-bin-path)"
 mkdir -p .build/performance-startup
 TOOL=startup
-if [[ "${1:-}" == "launch" || "${1:-}" == "startup" ]]; then TOOL="$1"; shift; fi
+if [[ "${1:-}" == "launch" || "${1:-}" == "startup" || "${1:-}" == "tools" ]]; then TOOL="$1"; shift; fi
+MODULES=(FeatureArchiveBrowser AppCore NikoMusicCore)
+if [[ "$TOOL" == "tools" ]]; then
+  MODULES+=(FeatureBPMTapper FeatureAudioConverter FeatureAudioRecorder FeatureDownloader FeatureStemSeparation)
+  for module in FeatureBPMTapper FeatureAudioConverter FeatureAudioRecorder FeatureDownloader FeatureStemSeparation; do
+    swift build -c release --target "$module" -Xswiftc -enable-testing >&2
+  done
+fi
 OBJECTS=()
-for module in FeatureArchiveBrowser AppCore NikoMusicCore; do
+for module in "${MODULES[@]}"; do
   if [[ -f "$BIN_DIR/$module.o" ]]; then
     # Single-object layout: one module object next to its swiftmodule.
     OBJECTS+=("$BIN_DIR/$module.o")
