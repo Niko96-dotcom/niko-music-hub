@@ -26,6 +26,29 @@ final class ParallelMapTests: XCTestCase {
         }
     }
 
+    func testASingleThreadBudgetRunsOnTheCallingThread() {
+        let caller = Thread.current
+        nonisolated(unsafe) var sawOtherThread = false
+        _ = ParallelMap.map(Array(0..<500), minimumParallelCount: 2, maximumThreads: 1) { value -> Int in
+            if Thread.current != caller { sawOtherThread = true }
+            return value
+        }
+        XCTAssertFalse(sawOtherThread)
+    }
+
+    func testThreadBudgetIsNotExceeded() {
+        let lock = NSLock()
+        nonisolated(unsafe) var running = 0
+        nonisolated(unsafe) var peak = 0
+        _ = ParallelMap.map(Array(0..<400), minimumParallelCount: 2, maximumThreads: 3) { value -> Int in
+            lock.withLock { running += 1; peak = max(peak, running) }
+            Thread.sleep(forTimeInterval: 0.0005)
+            lock.withLock { running -= 1 }
+            return value
+        }
+        XCTAssertLessThanOrEqual(lock.withLock { peak }, 3)
+    }
+
     func testRethrowsTheFailureWithTheLowestIndex() {
         struct Failure: Error, Equatable { let index: Int }
         let input = Array(0..<4_000)

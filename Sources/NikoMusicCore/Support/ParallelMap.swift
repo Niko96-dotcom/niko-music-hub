@@ -5,27 +5,26 @@ import Foundation
 /// the wall time changes. Small inputs and single-core machines run on the calling thread.
 ///
 /// `transform` runs on several threads at once, so it must not touch unsynchronized shared state.
-/// The first failure (lowest index) is rethrown after the running chunks stop.
+/// Threads claim the next elements as they finish, so songs of very different size balance out. The
+/// first failure (lowest index) is rethrown after the running threads stop.
 ///
-/// Foundation's JSON and string work contends on runtime metadata locks, so wall time stops improving
-/// well before every core of a large Mac is busy; `maximumWorkers` keeps the rest of the app and other
-/// processes responsive.
+/// More threads is not always faster: Foundation's JSON and string work contends on runtime metadata
+/// locks, and many threads opening files at once make the kernel spend more time contending than
+/// reading. `maximumThreads` is therefore a per-call budget, not "all cores".
 enum ParallelMap {
     static let defaultMinimumParallelCount = 64
-    static let defaultMaximumWorkers = 8
+    static let defaultMaximumThreads = 8
 
     static func map<Input, Output>(
         _ input: [Input],
         minimumParallelCount: Int = defaultMinimumParallelCount,
-        maximumWorkers: Int = defaultMaximumWorkers,
+        maximumThreads: Int = defaultMaximumThreads,
         _ transform: (Input) throws -> Output
     ) throws -> [Output] {
-        let workers = min(ProcessInfo.processInfo.activeProcessorCount, maximumWorkers)
-        guard workers > 1, input.count >= max(2, minimumParallelCount) else {
+        let threads = min(ProcessInfo.processInfo.activeProcessorCount, maximumThreads, input.count)
+        guard threads > 1, input.count >= max(2, minimumParallelCount) else {
             return try input.map(transform)
         }
-        // More chunks than workers evens out songs of very different size.
-        let chunkCount = min(input.count, workers * 4)
         let slots = UnsafeMutablePointer<Output?>.allocate(capacity: input.count)
         slots.initialize(repeating: nil, count: input.count)
         defer {
@@ -34,12 +33,9 @@ enum ParallelMap {
         }
         let failure = FirstFailure()
         withoutActuallyEscaping(transform) { transform in
-            let job = Job(
-                input: input, slots: slots, transform: transform, failure: failure,
-                chunkSize: (input.count + chunkCount - 1) / chunkCount
-            )
-            DispatchQueue.concurrentPerform(iterations: chunkCount) { chunk in
-                job.run(chunk: chunk)
+            let job = Job(input: input, slots: slots, transform: transform, failure: failure, cursor: Cursor())
+            DispatchQueue.concurrentPerform(iterations: threads) { _ in
+                job.run()
             }
         }
         if let error = failure.error { throw error }
@@ -56,11 +52,12 @@ enum ParallelMap {
     static func map<Input, Output>(
         _ input: [Input],
         minimumParallelCount: Int = defaultMinimumParallelCount,
-        maximumWorkers: Int = defaultMaximumWorkers,
+        maximumThreads: Int = defaultMaximumThreads,
         _ transform: (Input) -> Output
     ) -> [Output] {
         do {
-            return try map(input, minimumParallelCount: minimumParallelCount, maximumWorkers: maximumWorkers) { (element: Input) throws -> Output in
+            return try map(input, minimumParallelCount: minimumParallelCount, maximumThreads: maximumThreads) {
+                (element: Input) throws -> Output in
                 transform(element)
             }
         } catch {
@@ -69,22 +66,19 @@ enum ParallelMap {
     }
 }
 
-/// One `map` call's shared state. Chunks write disjoint slots of `slots` and only read `input`, so
-/// sharing it across the worker threads is safe; `transform` is the caller's contract (see above).
+/// One `map` call's shared state. Threads write disjoint slots of `slots` and only read `input`, so
+/// sharing it across them is safe; `transform` is the caller's contract (see above).
 private struct Job<Input, Output>: @unchecked Sendable {
     let input: [Input]
     let slots: UnsafeMutablePointer<Output?>
     let transform: (Input) throws -> Output
     let failure: FirstFailure
-    let chunkSize: Int
+    let cursor: Cursor
 
-    func run(chunk: Int) {
-        let start = chunk * chunkSize
-        let end = min(input.count, start + chunkSize)
-        guard start < end else { return }
-        for index in start..<end {
+    func run() {
+        while let index = cursor.next(limit: input.count) {
             if failure.hasFailed(before: index) { return }
-            // Each element may autorelease Foundation objects (JSON, regular expressions).
+            // Each element may autorelease Foundation objects (JSON, regular expressions, file URLs).
             do {
                 try autoreleasepool { slots[index] = try transform(input[index]) }
             } catch {
@@ -95,13 +89,27 @@ private struct Job<Input, Output>: @unchecked Sendable {
     }
 }
 
+/// Hands out element indexes in increasing order, one at a time.
+private final class Cursor: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    func next(limit: Int) -> Int? {
+        lock.withLock {
+            guard value < limit else { return nil }
+            defer { value += 1 }
+            return value
+        }
+    }
+}
+
 private final class FirstFailure: @unchecked Sendable {
     private let lock = NSLock()
     private var lowest: (index: Int, error: Error)?
 
     var error: Error? { lock.withLock { lowest?.error } }
 
-    /// Chunks only need to stop for a failure at a lower index than the one they are about to run.
+    /// A thread only needs to stop for a failure at a lower index than the one it is about to run.
     func hasFailed(before index: Int) -> Bool {
         lock.withLock { lowest.map { $0.index < index } ?? false }
     }

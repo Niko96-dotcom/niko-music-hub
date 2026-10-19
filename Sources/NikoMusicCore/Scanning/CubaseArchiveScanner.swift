@@ -93,61 +93,52 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             let rootLevelCPRPaths = Set(rootLevelVersions.map { $0.filePath.standardizedFileURL.path })
             songs.append(contentsOf: rootLevelSongs(from: rootLevelVersions))
 
+            // Classify every root entry first (one stat each), then scan the song folders. Song folders
+            // are independent, so a large archive scans them on several cores; outcomes are merged back
+            // in directory order, which leaves `songs`, `skippedEntries` and `unusableSongFolderIDs`
+            // exactly as a one-folder-at-a-time walk built them.
+            var entries: [RootEntry] = []
+            entries.reserveCapacity(children.count)
+            var songFolders: [URL] = []
             for child in children {
                 try Task.checkCancellation()
                 let values: URLResourceValues
                 do {
                     values = try child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 } catch {
-                    skippedEntries.append(
+                    entries.append(.skipped(
                         SkippedScanEntry(
                             kind: .unreadableChild,
                             label: child.lastPathComponent,
                             reason: "Could not read entry: \(error.localizedDescription)"
                         )
-                    )
+                    ))
                     continue
                 }
                 if values.isSymbolicLink == true {
-                    skippedEntries.append(
+                    entries.append(.skipped(
                         SkippedScanEntry(
                             kind: .unreadableChild,
                             label: child.lastPathComponent,
                             reason: "Skipped symbolic-link folder at archive root"
                         )
-                    )
+                    ))
                     continue
                 }
                 if values.isDirectory == true {
                     let folderName = child.lastPathComponent
                     if ScanExclusionPolicy.shouldSkipFolder(named: folderName, terms: exclusionTerms) {
-                        skippedEntries.append(
+                        entries.append(.skipped(
                             SkippedScanEntry(
                                 kind: .unreadableChild,
                                 label: folderName,
                                 reason: "Excluded by scan settings"
                             )
-                        )
+                        ))
                         continue
                     }
-                    do {
-                        if let song = try scanSongFolder(child) {
-                            songs.append(song)
-                        }
-                    } catch is CancellationError {
-                        throw CancellationError()
-                    } catch {
-                        if let songBaseError = error as? ScanError, songBaseError.isSongBaseFailure {
-                            unusableSongFolderIDs.insert(child.standardizedFileURL.path)
-                        }
-                        skippedEntries.append(
-                            SkippedScanEntry(
-                                kind: .unreadableChild,
-                                label: child.lastPathComponent,
-                                reason: "Could not scan folder: \(error.localizedDescription)"
-                            )
-                        )
-                    }
+                    entries.append(.songFolder)
+                    songFolders.append(child)
                     continue
                 }
 
@@ -155,13 +146,30 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                     continue
                 }
 
-                skippedEntries.append(
+                entries.append(.skipped(
                     SkippedScanEntry(
                         kind: .nonFolderAtRoot,
                         label: child.lastPathComponent,
                         reason: SkippedScanEntry.standardNonFolderAtRootReason
                     )
-                )
+                ))
+            }
+
+            var outcomes = try scanSongFolders(songFolders).makeIterator()
+            for entry in entries {
+                switch entry {
+                case .skipped(let skipped):
+                    skippedEntries.append(skipped)
+                case .songFolder:
+                    guard let outcome = outcomes.next() else { preconditionFailure("A song folder has no scan outcome") }
+                    switch outcome {
+                    case .song(let song):
+                        if let song { songs.append(song) }
+                    case .failed(let skipped, let unusablePath):
+                        if let unusablePath { unusableSongFolderIDs.insert(unusablePath) }
+                        skippedEntries.append(skipped)
+                    }
+                }
             }
         }
 
@@ -178,6 +186,66 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             skippedEntries: skippedEntries,
             unusableSongFolderIDs: unusableSongFolderIDs
         )
+    }
+
+    /// One archive-root entry in directory order: either already decided, or a song folder whose
+    /// scan outcome is taken from the next slot of the batch scan.
+    private enum RootEntry {
+        case skipped(SkippedScanEntry)
+        case songFolder
+    }
+
+    private enum FolderOutcome {
+        case song(Song?)
+        /// `unusablePath` is set when the song base itself failed, so the incremental merge drops the card.
+        case failed(SkippedScanEntry, unusablePath: String?)
+    }
+
+    /// Folders scanned per batch; cancellation is checked between batches.
+    private static let scanBatchSize = 128
+    /// Below this many song folders the serial walk is as fast and simpler.
+    private static let parallelScanMinimumFolders = 16
+    /// Threads scanning song folders at once. Each folder is dozens of file opens and header reads; past
+    /// a handful of threads the kernel spends the gain on contention (see `ParallelMap`).
+    private static let scanThreads = 8
+
+    private func scanOutcome(of folder: URL) throws -> FolderOutcome {
+        do {
+            return .song(try scanSongFolder(folder))
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            let unusablePath = (error as? ScanError)?.isSongBaseFailure == true ? folder.standardizedFileURL.path : nil
+            return .failed(
+                SkippedScanEntry(
+                    kind: .unreadableChild,
+                    label: folder.lastPathComponent,
+                    reason: "Could not scan folder: \(error.localizedDescription)"
+                ),
+                unusablePath: unusablePath
+            )
+        }
+    }
+
+    /// Outcomes in the order of `folders`. The race hooks run test code that assumes one folder at a
+    /// time, so a scanner with a hook installed keeps the serial walk.
+    private func scanSongFolders(_ folders: [URL]) throws -> [FolderOutcome] {
+        guard raceHooks.entryListed == nil, raceHooks.songWalked == nil,
+              folders.count >= Self.parallelScanMinimumFolders else {
+            return try folders.map { folder in try autoreleasepool { try scanOutcome(of: folder) } }
+        }
+        var outcomes: [FolderOutcome] = []
+        outcomes.reserveCapacity(folders.count)
+        var start = 0
+        while start < folders.count {
+            try Task.checkCancellation()
+            let end = min(folders.count, start + Self.scanBatchSize)
+            outcomes.append(contentsOf: try ParallelMap.map(
+                Array(folders[start..<end]), minimumParallelCount: 2, maximumThreads: Self.scanThreads
+            ) { try scanOutcome(of: $0) })
+            start = end
+        }
+        return outcomes
     }
 
     /// Rescan only song folders and/or root-level CPR groups affected by filesystem changes.

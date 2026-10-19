@@ -8,7 +8,7 @@ import Foundation
 public enum PreviewAutoSelectionNormalizer {
     /// Each song normalizes independently, so a large catalog runs across all cores. Order is preserved.
     public static func normalized(_ songs: [Song]) -> [Song] {
-        ParallelMap.map(songs) { normalized($0) }
+        ParallelMap.map(songs, maximumThreads: 12) { normalized($0) }
     }
 
     public static func normalized(_ song: Song) -> Song {
