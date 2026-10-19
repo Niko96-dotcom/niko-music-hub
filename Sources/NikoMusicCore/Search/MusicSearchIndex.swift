@@ -11,16 +11,18 @@ public struct MusicSearchIndex: Sendable {
 
     public init(songs: [Song] = []) {
         self.songs = songs
-        self.entries = songs.map {
-            IndexedEntry(song: $0, fields: MusicSearchMatcher.precompute(song: $0))
-        }
+        self.entries = Self.indexedEntries(for: songs)
     }
 
     public mutating func rebuild(from songs: [Song]) {
         self.songs = songs
-        self.entries = songs.map {
-            IndexedEntry(song: $0, fields: MusicSearchMatcher.precompute(song: $0))
-        }
+        self.entries = Self.indexedEntries(for: songs)
+    }
+
+    /// Normalizing every searchable field of every song is independent per song, so a large catalog
+    /// is indexed on several cores. Order is the order of `songs`.
+    private static func indexedEntries(for songs: [Song]) -> [IndexedEntry] {
+        ParallelMap.map(songs) { IndexedEntry(song: $0, fields: MusicSearchMatcher.precompute(song: $0)) }
     }
 
     /// Incremental sync to the current shelf/catalog. Reuses normalized rows
@@ -35,7 +37,7 @@ public struct MusicSearchIndex: Sendable {
             self.entries = []
             return
         }
-        if songs == self.songs {
+        if songs.equalsConcurrently(self.songs) {
             return
         }
         var reusableByID: [String: IndexedEntry] = [:]
@@ -43,20 +45,18 @@ public struct MusicSearchIndex: Sendable {
         for entry in entries where reusableByID[entry.song.id] == nil {
             reusableByID[entry.song.id] = entry
         }
-        var nextEntries: [IndexedEntry] = []
-        nextEntries.reserveCapacity(songs.count)
-        for song in songs {
-            if let cached = reusableByID[song.id] {
+        // Each song decides independently (reuse, refresh the song only, or re-normalize), reading
+        // the lookup; the comparisons and normalization run on several cores for a large catalog.
+        let reusable = reusableByID
+        let nextEntries = ParallelMap.map(songs) { song -> IndexedEntry in
+            if let cached = reusable[song.id] {
                 if cached.song == song {
-                    nextEntries.append(cached)
+                    return cached
                 } else if Self.searchableFieldsEqual(cached.song, song) {
-                    nextEntries.append(IndexedEntry(song: song, fields: cached.fields))
-                } else {
-                    nextEntries.append(IndexedEntry(song: song, fields: MusicSearchMatcher.precompute(song: song)))
+                    return IndexedEntry(song: song, fields: cached.fields)
                 }
-            } else {
-                nextEntries.append(IndexedEntry(song: song, fields: MusicSearchMatcher.precompute(song: song)))
             }
+            return IndexedEntry(song: song, fields: MusicSearchMatcher.precompute(song: song))
         }
         self.songs = songs
         self.entries = nextEntries
@@ -98,7 +98,9 @@ public struct MusicSearchIndex: Sendable {
         let tokens = MusicSearchMatcher.tokens(from: trimmed)
         guard !tokens.isEmpty else { return [] }
 
-        let scored: [(result: MusicSearchResult, tier: MusicSearchMatchTier)] = entries.compactMap { entry in
+        // Every song is scored independently, so a large catalog is matched on several cores; the
+        // survivors keep the index order, then the same tier pruning and sort below apply.
+        let scored: [(result: MusicSearchResult, tier: MusicSearchMatchTier)] = ParallelMap.map(entries) { entry in
             guard include(entry.song) else { return nil }
             let details = MusicSearchMatcher.matchDetails(precomputed: entry.fields, queryTokens: tokens)
             let score = details.reduce(0) { $0 + $1.score }
@@ -107,7 +109,7 @@ public struct MusicSearchIndex: Sendable {
             let tier = details.map(\.kind.tier).max() ?? .primary
             let result = MusicSearchResult(song: entry.song, score: score, details: details)
             return (result, tier)
-        }
+        }.compactMap { $0 }
         // Return only the best tier that has at least one result.
         guard let bestTier = scored.map({ $0.tier }).min() else { return [] }
         return scored
