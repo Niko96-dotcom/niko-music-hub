@@ -28,7 +28,7 @@ git checkout "$commit" -- Sources
 for tool in startup launch; do
   # --runs 1 with one cheap phase/scenario: the wrapper builds, links and runs the binary once.
   extra=(snapshot-load)
-  [[ "$tool" == "launch" ]] && extra=(--scenarios open --runs 1 --timeout 600)
+  [[ "$tool" == "launch" ]] && extra=(--scenarios open --runs 1 --timeout 1)
   NMH_BENCH_BINARY_SUFFIX="-$tag" script/benchmark_archive_startup.sh "$tool" \
     --archive "$archive" --database "$database" "${extra[@]}" >/dev/null
 done
