@@ -182,12 +182,12 @@ struct ArchiveStartupBenchmark {
             case "sort-recent":
                 let songs = try catalog()
                 var sorted: [Song] = []
-                let samples = try repeatSync { sorted = ArchiveBrowseSortMode.sort(songs, mode: .recentCPR) }
+                let samples = repeatSync { sorted = ArchiveBrowseSortMode.sort(songs, mode: .recentCPR) }
                 record("sort-recent", samples, detail: ["songs": "\(sorted.count)", "digest": digest(strings: sorted.map(\.id))])
             case "board-projection":
                 let ordered = ArchiveBrowseSortMode.sort(try catalog(), mode: .recentCPR)
                 var columns: [ArchiveBoardColumn] = []
-                let samples = try repeatSync { columns = ArchiveBoardProjection.columns(from: ordered) }
+                let samples = repeatSync { columns = ArchiveBoardProjection.columns(from: ordered) }
                 record("board-projection", samples, detail: [
                     "columns": "\(columns.count)",
                     "digest": digest(strings: columns.flatMap { [$0.id] + $0.songs.map(\.id) })
@@ -197,7 +197,7 @@ struct ArchiveStartupBenchmark {
                 var suggestions: [CollaboratorSuggestion] = []
                 var duplicates: [DuplicateSongHint] = []
                 var missing = MissingAudioReport(songs: [])
-                let samples = try repeatSync {
+                let samples = repeatSync {
                     suggestions = ArchiveIntelligence.collaboratorSuggestions(songs: songs, collaborators: collaborators)
                     duplicates = ArchiveIntelligence.duplicateSongHints(songs: songs)
                     missing = ArchiveIntelligence.missingAudioReport(songs: songs, maximumRetainedOrphanAudioPaths: 0)
@@ -210,20 +210,20 @@ struct ArchiveStartupBenchmark {
                 let songs = try catalog()
                 let history = try metadataStore.loadAllStatusHistory()
                 var snapshot = ArchiveAnalyticsSnapshot()
-                let samples = try repeatSync {
+                let samples = repeatSync {
                     snapshot = ArchiveAnalyticsProjection.snapshot(songs: songs, history: history, now: fixedNow)
                 }
                 record("analytics-snapshot", samples, detail: ["digest": digest(strings: [String(describing: snapshot)])])
             case "search-index":
                 let songs = try catalog()
                 var index = MusicSearchIndex()
-                let samples = try repeatSync { index = MusicSearchIndex(songs: songs) }
+                let samples = repeatSync { index = MusicSearchIndex(songs: songs) }
                 record("search-index-build", samples, detail: ["songs": "\(index.songs.count)"])
             case "search":
                 let index = MusicSearchIndex(songs: try catalog())
                 for query in ["amber", "neon moth", "hollow signal", "harbor v3", "qqqq zzzz"] {
                     var results: [MusicSearchResult] = []
-                    let samples = try repeatSync { results = index.searchResults(query) }
+                    let samples = repeatSync { results = index.searchResults(query) }
                     record("search \(query)", samples, detail: [
                         "results": "\(results.count)",
                         "digest": digest(strings: results.map { "\($0.song.id)|\($0.score)|\($0.matchSummary)" })
