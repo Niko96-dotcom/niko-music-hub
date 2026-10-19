@@ -25,15 +25,16 @@ enum ArchiveBoardProjection {
             if preservingOrder {
                 return ArchiveBoardColumn(status: status, songs: matching)
             }
-            let members = matching
-                // CPR selection walks version/ignore lists. Derive the date once
-                // per member instead of repeating that walk in every comparison.
-                .map { (song: $0, date: ArchiveShelfRanker.latestCPRActivity(for: $0) ?? .distantPast) }
+            // CPR selection walks version/ignore lists. Derive the date once per member
+            // instead of repeating that walk in every comparison, and sort (index, date)
+            // pairs: moving `(Song, Date)` tuples copied and retained every song's arrays.
+            let keyed = matching.enumerated().map { (index: $0.offset, date: ArchiveShelfRanker.latestCPRActivity(for: $0.element) ?? .distantPast) }
+            let members = keyed
                 .sorted { lhs, rhs in
                     if lhs.date != rhs.date { return lhs.date > rhs.date }
-                    return lhs.song.effectiveDisplayTitle.localizedCaseInsensitiveCompare(rhs.song.effectiveDisplayTitle) == .orderedAscending
+                    return matching[lhs.index].effectiveDisplayTitle.localizedCaseInsensitiveCompare(matching[rhs.index].effectiveDisplayTitle) == .orderedAscending
                 }
-                .map(\.song)
+                .map { matching[$0.index] }
             return ArchiveBoardColumn(status: status, songs: members)
         }
     }
