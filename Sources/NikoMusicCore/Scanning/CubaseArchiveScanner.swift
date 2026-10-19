@@ -201,8 +201,12 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         case failed(SkippedScanEntry, unusablePath: String?)
     }
 
-    /// Folders scanned per batch; cancellation is checked between batches.
-    private static let scanBatchSize = 128
+    /// Folders per batch; cancellation is checked between batches. The size adapts to how long a batch
+    /// takes: large batches keep every thread busy on fast storage, small ones keep a cancel prompt
+    /// when each folder is slow (a network volume or a cloud drive).
+    private static let minimumScanBatchSize = 32
+    private static let maximumScanBatchSize = 256
+    private static let targetScanBatchSeconds = 0.15
     /// Below this many song folders the serial walk is as fast and simpler.
     private static let parallelScanMinimumFolders = 16
     /// Threads scanning song folders at once. Each folder is dozens of file opens and header reads; past
@@ -237,12 +241,22 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         var outcomes: [FolderOutcome] = []
         outcomes.reserveCapacity(folders.count)
         var start = 0
+        var batchSize = Self.minimumScanBatchSize
         while start < folders.count {
             try Task.checkCancellation()
-            let end = min(folders.count, start + Self.scanBatchSize)
+            let end = min(folders.count, start + batchSize)
+            let began = ContinuousClock.now
             outcomes.append(contentsOf: try ParallelMap.map(
                 Array(folders[start..<end]), minimumParallelCount: 2, maximumThreads: Self.scanThreads
             ) { try scanOutcome(of: $0) })
+            let elapsed = began.duration(to: .now)
+            let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+            if seconds > 0 {
+                let scaled = Double(batchSize) * Self.targetScanBatchSeconds / seconds
+                batchSize = min(Self.maximumScanBatchSize, max(Self.minimumScanBatchSize, Int(scaled)))
+            } else {
+                batchSize = Self.maximumScanBatchSize
+            }
             start = end
         }
         return outcomes
