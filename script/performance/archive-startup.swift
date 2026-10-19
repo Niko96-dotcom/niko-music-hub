@@ -100,6 +100,7 @@ struct ArchiveStartupBenchmark {
         var runs = 7
         var warmups = 1
         var phases: [String] = []
+        var inboxCount = 2_000
         var arguments = Array(CommandLine.arguments.dropFirst())[...]
         while let argument = arguments.popFirst() {
             switch argument {
@@ -107,6 +108,7 @@ struct ArchiveStartupBenchmark {
             case "--database": databasePath = arguments.popFirst()
             case "--runs": runs = Int(arguments.popFirst() ?? "") ?? runs
             case "--warmups": warmups = Int(arguments.popFirst() ?? "") ?? warmups
+            case "--inbox-count": inboxCount = Int(arguments.popFirst() ?? "") ?? inboxCount
             default: phases.append(argument)
             }
         }
@@ -235,11 +237,11 @@ struct ArchiveStartupBenchmark {
                 let samples = try repeatSync { history = try metadataStore.loadAllStatusHistory() }
                 record("status-history-all", samples, detail: ["rows": "\(history.count)", "digest": digest(history)])
             case "inbox-load":
-                // Output Inbox history: 2,000 real small files, steady state (all available).
+                // Output Inbox history: `--inbox-count` (default 2,000) real small files, steady state (all available).
                 let files = work.appendingPathComponent("inbox-files")
                 try fm.createDirectory(at: files, withIntermediateDirectories: true)
                 var items: [OutputInboxItem] = []
-                for index in 0..<2_000 {
+                for index in 0..<inboxCount {
                     let url = files.appendingPathComponent(String(format: "take-%05d.wav", index))
                     try Data(repeating: UInt8(index & 0xFF), count: 64).write(to: url)
                     items.append(OutputInboxItem(

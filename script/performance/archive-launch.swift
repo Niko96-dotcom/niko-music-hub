@@ -114,7 +114,8 @@ struct ArchiveLaunchBenchmark {
         var archivePath: String?
         var databasePath: String?
         var timeout = 300.0
-        var scenarios: Set<String> = ["launch", "open", "scroll", "search", "detail", "apply", "analytics"]
+        var runsOverride: Int?
+        var scenarios: Set<String> = ["launch", "open", "scroll", "wheel", "search", "detail", "apply", "analytics"]
         var arguments = Array(CommandLine.arguments.dropFirst())[...]
         if arguments.first == "launch" { arguments.removeFirst() }
         while let argument = arguments.popFirst() {
@@ -122,6 +123,7 @@ struct ArchiveLaunchBenchmark {
             case "--archive": archivePath = arguments.popFirst()
             case "--database": databasePath = arguments.popFirst()
             case "--timeout": timeout = Double(arguments.popFirst() ?? "") ?? timeout
+            case "--runs": runsOverride = Int(arguments.popFirst() ?? "")
             case "--scenarios": scenarios = Set((arguments.popFirst() ?? "").split(separator: ",").map(String.init))
             default:
                 FileHandle.standardError.write(Data("unknown argument \(argument)\n".utf8))
@@ -257,8 +259,10 @@ struct ArchiveLaunchBenchmark {
 
         // Interactions.
         var rows: [[String: Any]] = []
-        func measure(_ name: String, runs: Int = 7, warmups: Int = 1,
+        func measure(_ name: String, runs requestedRuns: Int = 7, warmups: Int = 1,
                      prepare: (Int) -> Void = { _ in }, operation: (Int) -> Void) {
+            let runs = runsOverride ?? requestedRuns
+            FileHandle.standardError.write(Data("measuring \(name)\n".utf8))
             var wall: [Double] = []
             var cpu: [Double] = []
             var stall: [Double] = []
@@ -321,6 +325,40 @@ struct ArchiveLaunchBenchmark {
             }
             measure("open_list", prepare: { _ in model.viewMode = .board; render() }) { _ in
                 model.viewMode = .list; render()
+            }
+        }
+        if scenarios.contains("wheel") {
+            // Wheel-style scrolling in the tallest column (board) or the list: 40 steps of 120 pt, at the
+            // top, halfway down and near the oldest songs. Per-step cost is model-free layout + display.
+            func tallestScrollView() -> NSScrollView? {
+                scrollViews().max { ($0.documentView?.frame.height ?? 0) < ($1.documentView?.frame.height ?? 0) }
+            }
+            for mode in [ArchiveBrowserViewModel.ArchiveViewMode.list, .board] {
+                let label = mode == .list ? "list" : "board"
+                model.viewMode = mode; model.selectedSong = nil; render(); settle(0.5)
+                for (name, depth) in [("top", 0.0), ("middle", 0.5), ("oldest", 0.93)] {
+                    guard let target = tallestScrollView(), let document = target.documentView else { continue }
+                    let travel = max(0, document.frame.height - target.contentView.bounds.height)
+                    target.contentView.scroll(to: NSPoint(x: 0, y: travel * depth))
+                    target.reflectScrolledClipView(target.contentView)
+                    render(); settle(0.3)
+                    var steps: [Double] = []
+                    for _ in 0..<40 {
+                        guard let scrollView = tallestScrollView() else { break }
+                        let y = scrollView.contentView.bounds.origin.y + 120
+                        let start = CACurrentMediaTime()
+                        scrollView.contentView.scroll(to: NSPoint(x: 0, y: y))
+                        scrollView.reflectScrolledClipView(scrollView.contentView)
+                        render()
+                        steps.append((CACurrentMediaTime() - start) * 1000)
+                    }
+                    let sorted = steps.sorted()
+                    let p95 = sorted.isEmpty ? 0 : sorted[min(sorted.count - 1, Int(Double(sorted.count) * 0.95))]
+                    rows.append(["scenario": "wheel_\(label)_\(name)", "median_ms": median(steps), "max_ms": sorted.last ?? 0,
+                                 "p95_ms": p95, "min_ms": sorted.first ?? 0, "samples_ms": steps])
+                    FileHandle.standardError.write(Data(String(format: "%-34@ median %9.2f ms (p95 %9.2f max %9.2f)\n",
+                        "wheel_\(label)_\(name)" as NSString, median(steps), p95, sorted.last ?? 0).utf8))
+                }
             }
         }
         if scenarios.contains("scroll") {
