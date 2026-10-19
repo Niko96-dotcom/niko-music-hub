@@ -19,9 +19,14 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         self.encoder.dateEncodingStrategy = .iso8601
         // Deterministic serialization so unchanged songs compare equal against stored rows.
         self.encoder.outputFormatting = [.sortedKeys]
-        self.decoder = JSONDecoder()
-        self.decoder.dateDecodingStrategy = .iso8601
+        self.decoder = Self.makeDecoder()
         try prepareDatabase()
+    }
+
+    private static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .fastISO8601
+        return decoder
     }
 
     public init(
@@ -126,19 +131,24 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         guard sqlite3_prepare_v2(db, songsSQL, -1, &songsStatement, nil) == SQLITE_OK else {
             throw StoreError.prepare(message(db))
         }
-        var songs: [Song] = []
+        // Reading the rows is quick; decoding tens of MB of JSON is not. Rows are independent, so they
+        // are read in order and decoded on all cores, with the result in the original row order.
+        var rows: [Data] = []
         while true {
             let stepResult = sqlite3_step(songsStatement)
             switch stepResult {
             case SQLITE_ROW:
                 break
             case SQLITE_DONE:
+                let songs = try ParallelMap.map(rows) { row in
+                    try Self.makeDecoder().decode(Song.self, from: row)
+                }
                 return ArchiveIndexSnapshot(roots: roots, songs: songs, scannedAt: scannedAt)
             default:
                 throw StoreError.step(message(db))
             }
             guard let songCString = sqlite3_column_text(songsStatement, 0) else { continue }
-            songs.append(try decoder.decode(Song.self, from: Data(String(cString: songCString).utf8)))
+            rows.append(Data(String(cString: songCString).utf8))
         }
     }
 

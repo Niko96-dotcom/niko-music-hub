@@ -6,15 +6,21 @@ import Foundation
 ///
 /// `transform` runs on several threads at once, so it must not touch unsynchronized shared state.
 /// The first failure (lowest index) is rethrown after the running chunks stop.
+///
+/// Foundation's JSON and string work contends on runtime metadata locks, so wall time stops improving
+/// well before every core of a large Mac is busy; `maximumWorkers` keeps the rest of the app and other
+/// processes responsive.
 enum ParallelMap {
     static let defaultMinimumParallelCount = 64
+    static let defaultMaximumWorkers = 8
 
     static func map<Input, Output>(
         _ input: [Input],
         minimumParallelCount: Int = defaultMinimumParallelCount,
+        maximumWorkers: Int = defaultMaximumWorkers,
         _ transform: (Input) throws -> Output
     ) throws -> [Output] {
-        let workers = ProcessInfo.processInfo.activeProcessorCount
+        let workers = min(ProcessInfo.processInfo.activeProcessorCount, maximumWorkers)
         guard workers > 1, input.count >= max(2, minimumParallelCount) else {
             return try input.map(transform)
         }
@@ -50,10 +56,11 @@ enum ParallelMap {
     static func map<Input, Output>(
         _ input: [Input],
         minimumParallelCount: Int = defaultMinimumParallelCount,
+        maximumWorkers: Int = defaultMaximumWorkers,
         _ transform: (Input) -> Output
     ) -> [Output] {
         do {
-            return try map(input, minimumParallelCount: minimumParallelCount) { (element: Input) throws -> Output in
+            return try map(input, minimumParallelCount: minimumParallelCount, maximumWorkers: maximumWorkers) { (element: Input) throws -> Output in
                 transform(element)
             }
         } catch {
