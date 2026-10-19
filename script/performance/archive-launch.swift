@@ -114,7 +114,7 @@ struct ArchiveLaunchBenchmark {
         var archivePath: String?
         var databasePath: String?
         var timeout = 300.0
-        var scenarios: Set<String> = ["launch", "open", "scroll", "search", "detail", "analytics"]
+        var scenarios: Set<String> = ["launch", "open", "scroll", "search", "detail", "apply", "analytics"]
         var arguments = Array(CommandLine.arguments.dropFirst())[...]
         if arguments.first == "launch" { arguments.removeFirst() }
         while let argument = arguments.popFirst() {
@@ -372,6 +372,26 @@ struct ArchiveLaunchBenchmark {
                 }
             }
             model.viewMode = .board; model.selectedSong = nil; render(); settle()
+        }
+        if scenarios.contains("apply") {
+            // A rescan that finds the archive unchanged (the usual launch): merge the scan result with the
+            // stored metadata, then publish it to the view model on the main actor.
+            let scanned = ScanResult(songs: model.scannedSongs, globalWarnings: [], skippedEntries: [])
+            measure("apply_merge_scan_result", runs: 5) { _ in
+                _ = model.catalog.applyFullScanResult(
+                    result: scanned, roots: model.roots, collaborators: model.collaborators, scannedAt: Date())
+            }
+            let update = model.catalog.applyFullScanResult(
+                result: scanned, roots: model.roots, collaborators: model.collaborators, scannedAt: Date())
+            model.viewMode = .board; render(); settle(0.3)
+            measure("apply_catalog_update_board", runs: 5, prepare: { _ in settle(0.4) }) { _ in
+                model.applyCatalogScanUpdate(update, roots: model.roots); render()
+            }
+            model.viewMode = .list; render(); settle(0.3)
+            measure("apply_catalog_update_list", runs: 5, prepare: { _ in settle(0.4) }) { _ in
+                model.applyCatalogScanUpdate(update, roots: model.roots); render()
+            }
+            model.viewMode = .board; render()
         }
         if scenarios.contains("analytics") {
             measure("analytics_open", prepare: { _ in model.viewMode = .board; render() }) { _ in
