@@ -162,12 +162,15 @@ public enum ArchiveIntelligence {
         collaborators: [Collaborator]
     ) -> [CollaboratorSuggestion] {
         guard !collaborators.isEmpty else { return [] }
+        // A collaborator's name tokens do not depend on the song; folding them once per collaborator
+        // instead of once per song x collaborator is most of this pass on a large archive.
+        let nameTokensByCollaborator = collaborators.map { tokenize($0.displayName) }
         var suggestions: [CollaboratorSuggestion] = []
         for song in songs where !song.isIgnored {
             let folderTokens = tokenize(song.originalFolderName)
-            for collaborator in collaborators {
+            for (collaboratorIndex, collaborator) in collaborators.enumerated() {
                 guard !song.collaboratorIDs.contains(collaborator.id) else { continue }
-                let nameTokens = tokenize(collaborator.displayName)
+                let nameTokens = nameTokensByCollaborator[collaboratorIndex]
                 guard !nameTokens.isEmpty, nameTokens.allSatisfy({ folderTokens.contains($0) }) else { continue }
                 suggestions.append(
                     CollaboratorSuggestion(

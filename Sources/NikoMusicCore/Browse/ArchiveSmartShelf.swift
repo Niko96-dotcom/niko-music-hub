@@ -23,24 +23,25 @@ public enum ArchiveSmartShelf: String, CaseIterable, Sendable, Codable {
 public enum ArchiveShelfRanker {
     /// Songs with the newest mixdown-like preview activity first (SPEC §10).
     public static func recentlyBounced(_ songs: [Song]) -> [Song] {
-        songs
-            .compactMap { song -> (Song, Date)? in
-                guard let date = latestMixdownActivity(for: song) else { return nil }
-                return (song, date)
-            }
-            .sorted { $0.1 > $1.1 }
-            .map(\.0)
+        newestFirst(songs, by: latestMixdownActivity(for:))
     }
 
     /// Songs with the newest `.cpr` modification first (SPEC §10).
     public static func recentCPRActivity(_ songs: [Song]) -> [Song] {
-        songs
-            .compactMap { song -> (Song, Date)? in
-                guard let date = latestCPRActivity(for: song) else { return nil }
-                return (song, date)
-            }
-            .sorted { $0.1 > $1.1 }
-            .map(\.0)
+        newestFirst(songs, by: latestCPRActivity(for:))
+    }
+
+    /// Songs that have a date, newest first, equal dates in their original order. Sorts (index, date)
+    /// pairs and gathers the songs once: sorting `(Song, Date)` tuples copied and retained every song's
+    /// arrays on each move, which was most of a 10,000-song re-sort.
+    private static func newestFirst(_ songs: [Song], by date: (Song) -> Date?) -> [Song] {
+        var keyed: [(index: Int, date: Date)] = []
+        keyed.reserveCapacity(songs.count)
+        for (index, song) in songs.enumerated() {
+            if let date = date(song) { keyed.append((index, date)) }
+        }
+        keyed.sort { $0.date > $1.date }
+        return keyed.map { songs[$0.index] }
     }
 
     /// Songs with stems-like exports detected.

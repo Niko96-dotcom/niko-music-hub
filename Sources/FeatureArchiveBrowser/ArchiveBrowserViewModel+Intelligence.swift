@@ -37,18 +37,28 @@ extension ArchiveBrowserViewModel {
                 try? await Task.sleep(nanoseconds: 350_000_000)
                 guard !Task.isCancelled else { return }
             }
-            let suggestions = ArchiveIntelligence.collaboratorSuggestions(
-                songs: snapshotSongs,
-                collaborators: snapshotCollaborators
-            )
-            let duplicates = ArchiveIntelligence.duplicateSongHints(songs: snapshotSongs)
-            // The live panel renders only the summary counts. Keeping this at a
-            // zero orphan-path budget avoids a recursive filesystem walk and makes
-            // the debounced task its complete, cancellable refresh lifecycle.
-            let missing = ArchiveIntelligence.missingAudioReport(
-                songs: snapshotSongs,
-                maximumRetainedOrphanAudioPaths: 0
-            )
+            // Pure functions of the snapshot, a few hundred milliseconds on a large archive: computed
+            // off the main actor and applied here, so a scan landing never freezes the window.
+            let work = Task.detached(priority: .utility) {
+                let suggestions = ArchiveIntelligence.collaboratorSuggestions(
+                    songs: snapshotSongs,
+                    collaborators: snapshotCollaborators
+                )
+                let duplicates = ArchiveIntelligence.duplicateSongHints(songs: snapshotSongs)
+                // The live panel renders only the summary counts. Keeping this at a
+                // zero orphan-path budget avoids a recursive filesystem walk and makes
+                // the debounced task its complete, cancellable refresh lifecycle.
+                let missing = ArchiveIntelligence.missingAudioReport(
+                    songs: snapshotSongs,
+                    maximumRetainedOrphanAudioPaths: 0
+                )
+                return (suggestions, duplicates, missing)
+            }
+            let (suggestions, duplicates, missing) = await withTaskCancellationHandler {
+                await work.value
+            } onCancel: {
+                work.cancel()
+            }
             guard let self, !Task.isCancelled else { return }
             // Dismissals live until the next scan / result reset: filter at
             // apply time against the live set so even a refresh scheduled
