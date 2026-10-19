@@ -362,8 +362,13 @@ the cache load and ~1 for the scan), the in-process timeline above is the steadi
   with deadlines, and a refresh superseded by a newer one is cancelled as before.
 - **Interactions were measured through hosted views, not on screen.** Layout, display and `CATransaction.flush()` are
   included; compositor and input latency are not, and I could not take screenshots or drive the real window.
-- **Process.** `ModuleBoundarySourceTests` (Core may not import `Dispatch`) failed in the first version of the helper
-  files; I folded the one-line fix into the commits that introduced them with a `git filter-branch` over my own
-  commits so that no commit violates it. Each commit was checked with the test suites for the code it touched; the full
-  `./script/ci.sh` (779 XCTest cases, the Swift Testing suites, the CLI and release-engineering gates) was run on the
-  final commit, not on every intermediate one.
+- **Process and verification.** `ModuleBoundarySourceTests` (Core may not import `Dispatch`) failed in the first version of
+  the helper files; I folded the one-line fix into the commits that introduced them with a `git filter-branch` over my
+  own commits so that no commit violates it. Each commit was checked with the test suites for the code it touched (and
+  built in the A/B setup); the full `./script/ci.sh` was run on the final commit `fd4a2be`: exit 0, 779 XCTest cases
+  (2 skipped, 0 failures), 93 Swift Testing cases, the CLI, release-engineering and public-tree gates, no compiler
+  warnings (every target builds with `-warnings-as-errors`). Four `SystemAudioCapturePermissionProbeTests` /
+  `SystemAudioTapInputLayoutTests` cases are timing-sensitive (10 ms fake-tap ticks) and fail in the agent shell
+  (utility QoS, timer coalescing) with the **original** `Sources/` and `Tests/` as well; the same suites pass from
+  Terminal.app, which is where the gate that counts was run. `./script/e2e_user_smoke.sh` was not run (release gate, and it
+  needs UI automation this shell does not have).
