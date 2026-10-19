@@ -74,6 +74,17 @@ private func currentFootprintMiB() -> Double {
     return result == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : 0
 }
 
+/// FNV-1a over the sorted-key JSON of a value: a regression signature for "same output as before".
+private func digest<T: Encodable>(_ value: T) -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    encoder.dateEncodingStrategy = .iso8601
+    guard let data = try? encoder.encode(value) else { return "encode-failed" }
+    var hash: UInt64 = 14_695_981_039_346_656_037
+    for byte in data { hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211 }
+    return String(hash, radix: 16)
+}
+
 private struct SilentDiagnostics: Diagnostics {
     func log(_ level: DiagnosticLevel, _ message: String) {}
 }
@@ -145,11 +156,11 @@ struct ArchiveStartupBenchmark {
         for phase in phases {
             switch phase {
             case "snapshot-load":
-                var count = 0
+                var loaded: [Song] = []
                 let samples = try repeatSync {
-                    count = try indexStore.loadLatest()?.songs.count ?? 0
+                    loaded = try indexStore.loadLatest()?.songs ?? []
                 }
-                record("snapshot-load", samples, detail: ["songs": "\(count)"])
+                record("snapshot-load", samples, detail: ["songs": "\(loaded.count)", "digest": digest(loaded)])
             case "metadata-load":
                 var count = 0
                 let samples = try repeatSync {
@@ -157,19 +168,20 @@ struct ArchiveStartupBenchmark {
                 }
                 record("metadata-load", samples, detail: ["rows": "\(count)"])
             case "cache-load":
-                var count = 0
+                var loaded: [Song] = []
                 for _ in 0..<warmups { _ = await coordinator.loadCachedSongsReportDetached(roots: [archive], collaborators: collaborators) }
                 var samples: [Timing] = []
                 for _ in 0..<runs {
                     samples.append(await timedAsync {
                         let report = await coordinator.loadCachedSongsReportDetached(roots: [archive], collaborators: collaborators)
-                        if case .loaded(let songs, _) = report.result { count = songs.count }
+                        if case .loaded(let songs, _) = report.result { loaded = songs }
                     })
                 }
-                record("cache-load", samples, detail: ["songs": "\(count)"])
+                record("cache-load", samples, detail: ["songs": "\(loaded.count)", "digest": digest(loaded)])
             case "scan":
                 var count = 0
                 var skipped = 0
+                var scanDigest = ""
                 let footprintBefore = currentFootprintMiB()
                 let samples = try repeatSync {
                     let result = try MusicArchiveScanner().scan(roots: [archive])
@@ -177,8 +189,9 @@ struct ArchiveStartupBenchmark {
                     skipped = result.skippedEntries.count
                     snapshotSongs = result.songs
                 }
+                scanDigest = digest(snapshotSongs)
                 record("scan", samples, detail: [
-                    "songs": "\(count)", "skipped": "\(skipped)",
+                    "songs": "\(count)", "skipped": "\(skipped)", "digest": scanDigest,
                     "peak_rss_mib": String(format: "%.0f", peakRSSMiB()),
                     "footprint_before_mib": String(format: "%.0f", footprintBefore)
                 ])
@@ -208,16 +221,16 @@ struct ArchiveStartupBenchmark {
                     ("new", ids[max(0, ids.count - 10)])
                 ]
                 for (label, id) in sampled {
-                    var rows = 0
+                    var rows: [WorkflowStatusChange] = []
                     let samples = try repeatSync {
-                        for _ in 0..<50 { rows = try metadataStore.statusHistory(forSongID: id).count }
+                        for _ in 0..<50 { rows = try metadataStore.statusHistory(forSongID: id) }
                     }
-                    record("status-history-x50-\(label)", samples, detail: ["rows": "\(rows)"])
+                    record("status-history-x50-\(label)", samples, detail: ["rows": "\(rows.count)", "digest": digest(rows)])
                 }
             case "analytics-history":
-                var rows = 0
-                let samples = try repeatSync { rows = try metadataStore.loadAllStatusHistory().count }
-                record("status-history-all", samples, detail: ["rows": "\(rows)"])
+                var history: [WorkflowStatusChange] = []
+                let samples = try repeatSync { history = try metadataStore.loadAllStatusHistory() }
+                record("status-history-all", samples, detail: ["rows": "\(history.count)", "digest": digest(history)])
             case "inbox-load":
                 // Output Inbox history: 2,000 real small files, steady state (all available).
                 let files = work.appendingPathComponent("inbox-files")

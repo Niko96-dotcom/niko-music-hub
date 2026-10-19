@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Headless startup-path benchmark: snapshot decode, metadata load, scan, cache save, status history, inbox.
-#   script/benchmark_archive_startup.sh --archive <CubaseArchive> --database <archive-index.sqlite> [--runs N] [phase ...]
-# Reads the archive and a COPY of the database; see script/performance/archive-startup.swift.
+# Startup-path benchmarks for a large archive. Both read the archive and a COPY of the database.
+#   script/benchmark_archive_startup.sh [startup] --archive <CubaseArchive> --database <archive-index.sqlite> [--runs N] [phase ...]
+#       headless: snapshot decode, metadata load, cache load, scan, cache save, status history, inbox
+#       (script/performance/archive-startup.swift)
+#   script/benchmark_archive_startup.sh launch --archive <CubaseArchive> --database <archive-index.sqlite> [--scenarios a,b]
+#       one in-process launch plus timed interactions in a hosted ArchiveBrowserView
+#       (script/performance/archive-launch.swift)
+# Set NMH_BENCH_BINARY_SUFFIX=-name to keep the built binary as <tool>-name (for before/after pairs).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app/Contents/Developer ]]; then
@@ -11,6 +16,8 @@ fi
 swift build -c release --target FeatureArchiveBrowser -Xswiftc -enable-testing >&2
 BIN_DIR="$(swift build -c release --show-bin-path)"
 mkdir -p .build/performance-startup
+TOOL=startup
+if [[ "${1:-}" == "launch" || "${1:-}" == "startup" ]]; then TOOL="$1"; shift; fi
 OBJECTS=()
 for module in FeatureArchiveBrowser AppCore NikoMusicCore; do
   if [[ -f "$BIN_DIR/$module.o" ]]; then
@@ -30,8 +37,9 @@ PYOBJECTS
     )
   fi
 done
+OUTPUT=".build/performance-startup/archive-$TOOL${NMH_BENCH_BINARY_SUFFIX:-}"
 swiftc -O -parse-as-library -I "$BIN_DIR/Modules" -I "$BIN_DIR" \
-  script/performance/archive-startup.swift \
+  "script/performance/archive-$TOOL.swift" \
   "${OBJECTS[@]}" -lsqlite3 \
-  -o .build/performance-startup/archive-startup
-exec .build/performance-startup/archive-startup "$@"
+  -o "$OUTPUT"
+exec "$OUTPUT" "$@"
