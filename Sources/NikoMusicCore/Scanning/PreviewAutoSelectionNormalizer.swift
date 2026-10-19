@@ -6,8 +6,9 @@ import Foundation
 /// derived data, so an improved detector must be able to replace legacy classifications
 /// without changing a user's manual choice or resurfacing an ignored candidate.
 public enum PreviewAutoSelectionNormalizer {
+    /// Each song normalizes independently, so a large catalog runs across all cores. Order is preserved.
     public static func normalized(_ songs: [Song]) -> [Song] {
-        songs.map(normalized)
+        ParallelMap.map(songs) { normalized($0) }
     }
 
     public static func normalized(_ song: Song) -> Song {
