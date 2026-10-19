@@ -2,12 +2,22 @@ import Foundation
 import NikoMusicCore
 
 /// One kanban column on the archive board.
+///
+/// SwiftUI compares a column's value with the previous one at several levels of the board for every
+/// update (the column view, its drop host's render key, the song list). On a 10,000-song board that is
+/// a deep comparison of thousands of songs each time, so `==` runs on several threads and
+/// `ArchiveBoardProjectionCache` hands back the previous column when nothing in it changed, which makes
+/// the later comparisons same-storage identity checks.
 struct ArchiveBoardColumn: Equatable, Identifiable {
     /// `nil` status is the leading "No Status" triage column.
     let status: ProjectWorkflowStatus?
     var songs: [Song]
 
     var id: String { status?.rawValue ?? "no_status" }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.status == rhs.status && lhs.songs.equalsConcurrently(rhs.songs)
+    }
 
     var title: String { status?.displayTitle ?? "No Status" }
 

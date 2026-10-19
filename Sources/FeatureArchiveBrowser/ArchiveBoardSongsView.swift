@@ -16,7 +16,7 @@ struct ArchiveBoardSongsView: View, Equatable {
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.selectedSongID == rhs.selectedSongID
             && lhs.viewModel === rhs.viewModel
-            && lhs.songs == rhs.songs
+            && lhs.songs.equalsConcurrently(rhs.songs)
             && lhs.vaultPresentations == rhs.vaultPresentations
             && lhs.vaultActivity == rhs.vaultActivity
     }

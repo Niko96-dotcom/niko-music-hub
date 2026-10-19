@@ -30,7 +30,13 @@ final class ArchiveBoardProjectionCache: ObservableObject {
 
         cachedPreservingOrder = preservingOrder
         cachedSongs = songs
-        columns = ArchiveBoardProjection.columns(from: songs, preservingOrder: preservingOrder)
+        // A column that did not change keeps its previous value (and array storage): every later
+        // comparison of it by SwiftUI is then a same-storage check instead of a walk over its songs.
+        let previous = Dictionary(columns.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        columns = ArchiveBoardProjection.columns(from: songs, preservingOrder: preservingOrder).map { next in
+            if let old = previous[next.id], old == next { return old }
+            return next
+        }
         projectionGeneration &+= 1
         return true
     }
