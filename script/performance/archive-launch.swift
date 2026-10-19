@@ -108,6 +108,9 @@ private func median(_ values: [Double]) -> Double {
 @MainActor
 struct ArchiveLaunchBenchmark {
     static func main() throws {
+        // The app's main thread runs at user-interactive QoS; a shell-launched process starts at utility,
+        // which the scheduler may place on efficiency cores. Match the app.
+        pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0)
         var archivePath: String?
         var databasePath: String?
         var timeout = 300.0

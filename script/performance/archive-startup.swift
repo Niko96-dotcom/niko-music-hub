@@ -91,7 +91,10 @@ private struct SilentDiagnostics: Diagnostics {
 
 @main
 struct ArchiveStartupBenchmark {
+    /// The app runs its cache load and scan as user-initiated tasks; a shell-launched process starts at
+    /// utility QoS, which the scheduler may place on efficiency cores. Match the app.
     static func main() async throws {
+        pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0)
         var archivePath: String?
         var databasePath: String?
         var runs = 7
