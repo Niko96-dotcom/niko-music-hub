@@ -60,7 +60,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             // selection change. Build that immutable lookup before publishing a
             // new catalog so card rendering never needs to decode settings or
             // canonicalize filesystem paths.
-            guard newValue != songs else { return }
+            guard !newValue.equalsConcurrently(songs) else { return }
             songsByID = Dictionary(
                 newValue.map { ($0.id, $0) },
                 uniquingKeysWith: { _, latest in latest }

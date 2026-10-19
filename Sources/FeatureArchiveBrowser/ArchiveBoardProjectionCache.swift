@@ -26,7 +26,7 @@ final class ArchiveBoardProjectionCache: ObservableObject {
     /// the view model until one side changes it.
     @discardableResult
     func refresh(with songs: [Song], preservingOrder: Bool = false) -> Bool {
-        guard songs != cachedSongs || preservingOrder != cachedPreservingOrder else { return false }
+        guard !songs.equalsConcurrently(cachedSongs) || preservingOrder != cachedPreservingOrder else { return false }
 
         cachedPreservingOrder = preservingOrder
         cachedSongs = songs

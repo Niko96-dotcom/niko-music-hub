@@ -10,7 +10,7 @@ extension ArchiveBrowserViewModel {
     /// inspect archive paths, but never starts a scan or reloads settings.
     func rebuildProjectVaultCatalog() {
         let projected = projectVaultCatalog(from: scannedSongs)
-        guard projected.scannedSongs != scannedSongs || projected.visibleSongs != songs else { return }
+        guard !projected.scannedSongs.equalsConcurrently(scannedSongs) || !projected.visibleSongs.equalsConcurrently(songs) else { return }
         mutateCatalog {
             scannedSongs = projected.scannedSongs
             songs = projected.visibleSongs
