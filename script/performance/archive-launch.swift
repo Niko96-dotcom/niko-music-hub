@@ -115,7 +115,7 @@ struct ArchiveLaunchBenchmark {
         var databasePath: String?
         var timeout = 300.0
         var runsOverride: Int?
-        var scenarios: Set<String> = ["launch", "open", "scroll", "wheel", "search", "detail", "browse", "apply", "analytics"]
+        var scenarios: Set<String> = ["launch", "open", "scroll", "wheel", "search", "detail", "browse", "stage", "apply", "analytics"]
         var arguments = Array(CommandLine.arguments.dropFirst())[...]
         if arguments.first == "launch" { arguments.removeFirst() }
         while let argument = arguments.popFirst() {
@@ -439,6 +439,45 @@ struct ArchiveLaunchBenchmark {
                     model.toggleBrowseFilter(.hasStems); render()
                 }
                 model.mutateBrowseInputs { model.browseFilter = [] }; render()
+            }
+        }
+        if scenarios.contains("eqcheck") {
+            let first = model.filteredSongs
+            let second = ArchiveBrowseProjection.project(model.browseState()).filteredSongs
+            measure("eq_filtered_vs_reprojected", runs: 5) { _ in _ = (first == second) }
+            let columnsA = ArchiveBoardProjection.columns(from: first)
+            let columnsB = ArchiveBoardProjection.columns(from: first)
+            measure("eq_columns_reprojected", runs: 5) { _ in _ = (columnsA == columnsB) }
+            let live = model.songs
+            measure("eq_songs_vs_scanned", runs: 5) { _ in _ = (live == model.scannedSongs) }
+            func sharedPreviews(_ x: [Song], _ y: [Song]) -> Int {
+                var shared = 0
+                for (left, right) in zip(x, y) where left.id == right.id {
+                    let same = left.previewCandidates.withUnsafeBufferPointer { l in
+                        right.previewCandidates.withUnsafeBufferPointer { r in l.baseAddress == r.baseAddress }
+                    }
+                    if same { shared += 1 }
+                }
+                return shared
+            }
+            let sortedLive = ArchiveBrowseSortMode.sort(live, mode: .recentCPR)
+            FileHandle.standardError.write(Data("shared preview storage: filtered/reprojected \(sharedPreviews(first, second)) of \(first.count); songs/sorted \(sharedPreviews(live.sorted { $0.id < $1.id }, sortedLive.sorted { $0.id < $1.id })) ; songs/scanned \(sharedPreviews(live, model.scannedSongs))\n".utf8))
+        }
+        if scenarios.contains("stage") {
+            // Moving a card: change the workflow status of an old and a recent song the way the board's
+            // drop and the context menu do (SQLite write, catalog replace, browse re-projection, layout).
+            for mode in [ArchiveBrowserViewModel.ArchiveViewMode.board, .list] {
+                let label = mode == .board ? "board" : "list"
+                model.viewMode = mode; model.selectedSong = nil
+                model.setSortMode(.recentCPR); model.selectShelf(.allSongs); render(); settle(0.5)
+                for (kind, target) in [("old", oldest), ("recent", newest)] {
+                    guard let target else { continue }
+                    measure("stage_change_\(label)_\(kind)", prepare: { _ in settle(0.6) }) { index in
+                        guard let live = model.songs.first(where: { $0.id == target.id }) else { return }
+                        model.updateWorkflowStatus(for: live, status: index % 2 == 0 ? .songstarterBeat : .song)
+                        render()
+                    }
+                }
             }
         }
         if scenarios.contains("apply") {

@@ -214,6 +214,16 @@ struct ArchiveStartupBenchmark {
                     snapshot = ArchiveAnalyticsProjection.snapshot(songs: songs, history: history, now: fixedNow)
                 }
                 record("analytics-snapshot", samples, detail: ["digest": digest(strings: [String(describing: snapshot)])])
+            case "equality-shared":
+                // Equal catalogs: one whose songs share storage with the original (a re-sorted or re-filtered
+                // copy, as every browse projection makes) and one decoded again from the snapshot.
+                let songs = try catalog()
+                let reordered = Array(songs.reversed()).reversed().map { $0 }
+                let samplesShared = repeatSync { _ = (songs == reordered) }
+                record("equality-shared-storage", samplesShared, detail: ["songs": "\(songs.count)"])
+                let decoded = try indexStore.loadLatest()?.songs ?? []
+                let samplesDecoded = repeatSync { _ = (songs == decoded) }
+                record("equality-decoded-copy", samplesDecoded, detail: ["songs": "\(decoded.count)"])
             case "search-index":
                 let songs = try catalog()
                 var index = MusicSearchIndex()
