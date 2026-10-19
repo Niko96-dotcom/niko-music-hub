@@ -32,8 +32,13 @@ public struct SongTitleResolver: Sendable {
         "instr", "instrumental", "acapella", "stem", "stems", "ref", "reference",
     ]
 
-    private static let uuidFilenamePattern =
-        #"^[0-9a-f]{8}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{12}$"#
+    private static let uuidFilename =
+        CompiledRegex(#"^[0-9a-f]{8}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{4}[-\s]?[0-9a-f]{12}$"#)
+    private static let shortVersionLabel = CompiledRegex(#"\bv\d+\b"#, caseInsensitive: true)
+    private static let longVersionLabel = CompiledRegex(#"\bversion\s*\d+\b"#, caseInsensitive: true)
+    private static let trailingVersion = CompiledRegex(#"\s*[-–—]?\s*[vV]\s*\d+\s*$"#)
+    private static let trailingNumber = CompiledRegex(#"\s+\d+\s*$"#)
+    private static let versionWord = CompiledRegex(#"^v\d+$"#)
 
     public init() {}
 
@@ -112,16 +117,8 @@ public struct SongTitleResolver: Sendable {
 
     func inferredTitle(fromPreviewFileName fileName: String) -> String? {
         var stem = (fileName as NSString).deletingPathExtension
-        stem = stem.replacingOccurrences(
-            of: #"\bv\d+\b"#,
-            with: "",
-            options: [.regularExpression, .caseInsensitive]
-        )
-        stem = stem.replacingOccurrences(
-            of: #"\bversion\s*\d+\b"#,
-            with: "",
-            options: [.regularExpression, .caseInsensitive]
-        )
+        stem = Self.shortVersionLabel.replacingMatches(in: stem, with: "")
+        stem = Self.longVersionLabel.replacingMatches(in: stem, with: "")
 
         let words = stem
             .replacingOccurrences(of: "_", with: " ")
@@ -175,16 +172,8 @@ public struct SongTitleResolver: Sendable {
             }
         }
 
-        titlePart = titlePart.replacingOccurrences(
-            of: #"\s*[-–—]?\s*[vV]\s*\d+\s*$"#,
-            with: "",
-            options: .regularExpression
-        )
-        titlePart = titlePart.replacingOccurrences(
-            of: #"\s+\d+\s*$"#,
-            with: "",
-            options: .regularExpression
-        )
+        titlePart = Self.trailingVersion.replacingMatches(in: titlePart, with: "")
+        titlePart = Self.trailingNumber.replacingMatches(in: titlePart, with: "")
         titlePart = titlePart.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !titlePart.isEmpty else { return nil }
         return titleCase(titlePart)
@@ -209,7 +198,7 @@ public struct SongTitleResolver: Sendable {
 
     private func isTrustworthyPreviewForTitle(_ preview: PreviewCandidate) -> Bool {
         let lower = preview.fileName.lowercased()
-        if lower.range(of: Self.uuidFilenamePattern, options: .regularExpression) != nil {
+        if Self.uuidFilename.hasMatch(in: lower) {
             return false
         }
         if preview.confidenceReasons.contains("duration:too-short") {
@@ -274,7 +263,7 @@ public struct SongTitleResolver: Sendable {
         let remaining = words.filter { word in
             !Self.stripTokenSet.contains(word)
                 && word != "version"
-                && word.range(of: #"^v\d+$"#, options: .regularExpression) == nil
+                && !Self.versionWord.hasMatch(in: word)
         }
         if remaining.contains(where: { $0.contains(where: \.isLetter) }) {
             return true

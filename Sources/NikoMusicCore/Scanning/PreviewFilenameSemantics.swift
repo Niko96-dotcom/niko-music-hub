@@ -6,6 +6,8 @@ import Foundation
 /// title such as "Vocaloid" as a vocal stem while still recognizing metadata tags like
 /// `(Cover) (Vocals)`.
 enum PreviewFilenameSemantics {
+    private static let videoLabel = CompiledRegex(#"(?i)\b(?:official(?:\s+music)?|lyrics?)\s+video\b"#)
+
     /// Eligibility precedes scoring: export age/version/format cannot turn a
     /// stem, reference or DAW handoff into the main song when a full mix exists.
     static func isSongPreview(_ candidate: PreviewCandidate) -> Bool {
@@ -14,7 +16,7 @@ enum PreviewFilenameSemantics {
               !isPartialExport(in: candidate.fileName),
               !PreviewSongIdentity.isTechnicalExport(candidate.fileName),
               roleTokens(in: candidate.fileName).isDisjoint(with: ["ref", "reference"]),
-              candidate.fileName.range(of: #"(?i)\b(?:official(?:\s+music)?|lyrics?)\s+video\b"#, options: .regularExpression) == nil else {
+              !videoLabel.hasMatch(in: candidate.fileName) else {
             return false
         }
         return candidate.folderRole == .root || candidate.folderRole == .mixdown

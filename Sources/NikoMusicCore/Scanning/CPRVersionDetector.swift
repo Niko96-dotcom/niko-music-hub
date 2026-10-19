@@ -275,29 +275,18 @@ public struct ProjectVersionDetector: @unchecked Sendable {
     /// YYYY-MM-DD (with -/_ separators). Years, compact dates, timestamps and
     /// clock times need no stripping: bare 4+ digit tokens are already excluded
     /// as versions and times contain colons.
+    private static let bracketedDate = CompiledRegex(#"[\[\(]\s*\d{4}[-_]\d{1,2}[-_]\d{1,2}(\s+\d{1,6}([:\-]\d{2}){0,2})?\s*[\]\)]"#)
+    private static let isoDate = CompiledRegex(#"(19|20)\d{2}[-_]\d{1,2}[-_]\d{1,2}"#)
+    private static let dayFirstDate = CompiledRegex(#"(?<![0-9])\d{1,2}[-_]\d{1,2}[-_](\d{4}|\d{2})(?![0-9])"#)
+    private static let tempoTag = CompiledRegex(#"(?i)(?<![0-9])\d{1,3}[\s_-]*bpm(?![a-z])"#)
+
     private static func scopeWithoutRecognizedDates(from stem: String) -> String {
         var result = stem
-        result = result.replacingOccurrences(
-            of: #"[\[\(]\s*\d{4}[-_]\d{1,2}[-_]\d{1,2}(\s+\d{1,6}([:\-]\d{2}){0,2})?\s*[\]\)]"#,
-            with: " ",
-            options: .regularExpression
-        )
-        result = result.replacingOccurrences(
-            of: #"(19|20)\d{2}[-_]\d{1,2}[-_]\d{1,2}"#,
-            with: " ",
-            options: .regularExpression
-        )
+        result = bracketedDate.replacingMatches(in: result, with: " ")
+        result = isoDate.replacingMatches(in: result, with: " ")
         // Day-first dates (DD-MM-YYYY, DD_MM_YY) and tempo tags ("140 BPM").
-        result = result.replacingOccurrences(
-            of: #"(?<![0-9])\d{1,2}[-_]\d{1,2}[-_](\d{4}|\d{2})(?![0-9])"#,
-            with: " ",
-            options: .regularExpression
-        )
-        result = result.replacingOccurrences(
-            of: #"(?i)(?<![0-9])\d{1,3}[\s_-]*bpm(?![a-z])"#,
-            with: " ",
-            options: .regularExpression
-        )
+        result = dayFirstDate.replacingMatches(in: result, with: " ")
+        result = tempoTag.replacingMatches(in: result, with: " ")
         return result
     }
 }
