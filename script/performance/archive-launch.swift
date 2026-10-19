@@ -115,7 +115,7 @@ struct ArchiveLaunchBenchmark {
         var databasePath: String?
         var timeout = 300.0
         var runsOverride: Int?
-        var scenarios: Set<String> = ["launch", "open", "scroll", "wheel", "search", "detail", "apply", "analytics"]
+        var scenarios: Set<String> = ["launch", "open", "scroll", "wheel", "search", "detail", "browse", "apply", "analytics"]
         var arguments = Array(CommandLine.arguments.dropFirst())[...]
         if arguments.first == "launch" { arguments.removeFirst() }
         while let argument = arguments.popFirst() {
@@ -410,6 +410,36 @@ struct ArchiveLaunchBenchmark {
                 }
             }
             model.viewMode = .board; model.selectedSong = nil; render(); settle()
+        }
+        if scenarios.contains("browse") {
+            // Re-sorting and re-filtering the whole catalog: every sort mode and smart shelf, in the board and the list.
+            for mode in [ArchiveBrowserViewModel.ArchiveViewMode.board, .list] {
+                let label = mode == .board ? "board" : "list"
+                model.viewMode = mode; model.selectedSong = nil
+                model.setSortMode(.recentCPR); model.selectShelf(.allSongs); render(); settle(0.4)
+                for sort in ArchiveBrowseSortMode.allCases where sort != .recentCPR {
+                    measure("browse_\(label)_sort_\(sort.rawValue)", prepare: { _ in
+                        model.setSortMode(.recentCPR); render()
+                    }) { _ in
+                        model.setSortMode(sort); render()
+                    }
+                }
+                model.setSortMode(.recentCPR); render(); settle(0.3)
+                for shelf in [ArchiveSmartShelf.recentlyBounced, .hasStems, .quietSongs] {
+                    measure("browse_\(label)_shelf_\(shelf.rawValue)", prepare: { _ in
+                        model.selectShelf(.allSongs); render()
+                    }) { _ in
+                        model.selectShelf(shelf); render()
+                    }
+                }
+                model.selectShelf(.allSongs); render(); settle(0.3)
+                measure("browse_\(label)_filter_has_stems", prepare: { _ in
+                    model.mutateBrowseInputs { model.browseFilter = [] }; render()
+                }) { _ in
+                    model.toggleBrowseFilter(.hasStems); render()
+                }
+                model.mutateBrowseInputs { model.browseFilter = [] }; render()
+            }
         }
         if scenarios.contains("apply") {
             // A rescan that finds the archive unchanged (the usual launch): merge the scan result with the
