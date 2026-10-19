@@ -304,9 +304,16 @@ final class ArchiveVaultObservation: ObservableObject {
         // Old cache snapshots may contain an archive projection from a previous app
         // version. Remove those paths from the scan baseline once the vault snapshot
         // is known, even when the user keeps archived projects hidden.
-        let cleanScannedSongs = baselineSongs.filter { song in
-            let path = Self.vaultCanonicalPath(song.folderPath)
-            return !archivedDestinationPaths.contains(path) && !archivedSourcePaths.contains(path)
+        // Canonicalizing a path resolves symlinks on disk; with no archived project there is nothing to
+        // remove, so a catalog of 10,000 songs must not pay for 10,000 resolutions on every apply.
+        let cleanScannedSongs: [Song]
+        if archivedDestinationPaths.isEmpty && archivedSourcePaths.isEmpty {
+            cleanScannedSongs = baselineSongs
+        } else {
+            cleanScannedSongs = baselineSongs.filter { song in
+                let path = Self.vaultCanonicalPath(song.folderPath)
+                return !archivedDestinationPaths.contains(path) && !archivedSourcePaths.contains(path)
+            }
         }
         var archivedSongs: [Song] = []
         if showArchived, !archivedSnapshots.isEmpty {
