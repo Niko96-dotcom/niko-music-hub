@@ -365,7 +365,7 @@ the cache load and ~1 for the scan), the in-process timeline above is the steadi
 - **Process and verification.** `ModuleBoundarySourceTests` (Core may not import `Dispatch`) failed in the first version of
   the helper files; I folded the one-line fix into the commits that introduced them with a `git filter-branch` over my
   own commits so that no commit violates it. Each commit was checked with the test suites for the code it touched (and
-  built in the A/B setup); the full `./script/ci.sh` was run on the final commit `fd4a2be`: exit 0, 779 XCTest cases
+  built in the A/B setup); the full `./script/ci.sh` was run on `fd4a2be` (the last code change; the commits after it only edit this report) and again on the final commit: exit 0, 779 XCTest cases
   (2 skipped, 0 failures), 93 Swift Testing cases, the CLI, release-engineering and public-tree gates, no compiler
   warnings (every target builds with `-warnings-as-errors`). Four `SystemAudioCapturePermissionProbeTests` /
   `SystemAudioTapInputLayoutTests` cases are timing-sensitive (10 ms fake-tap ticks) and fail in the agent shell
