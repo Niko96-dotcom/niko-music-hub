@@ -66,6 +66,12 @@ Archive domain and safety. No SwiftUI/AppKit.
   Vault transfer stores).
 - `Browse/` (filters, sort, smart shelves, health report), `Intelligence/` (archive intelligence, index export),
   `Preview/` (mixdown BPM/key estimation, hook locator).
+- `Support/`: the helpers that keep a 10,000-song archive fast without changing results. `ParallelMap` and
+  `Array.equalsConcurrently` are order-preserving parallel map and equality with a per-call thread budget (use them
+  only for pure per-element work; Foundation's locale and JSON paths stop scaling past a handful of threads);
+  `FastISO8601` parses the one timestamp spelling the app writes and leaves every other spelling to Foundation.
+  `Scanning/CompiledRegex` holds fixed filename patterns compiled once. Measurements and the benchmark tools:
+  `docs/perf-bakeoff/PERF-REPORT.md`, `script/performance/`.
 
 ### `AppCore` (shared)
 
