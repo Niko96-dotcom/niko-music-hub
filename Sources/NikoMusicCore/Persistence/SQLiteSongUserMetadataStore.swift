@@ -80,10 +80,10 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
                 let collaboratorIDs: [String]
                 let ignoredCPRs: [String]
                 do {
-                    aliases = try decoder.decode([String].self, from: Data(aliasesJSON.utf8))
-                    ignoredPreviews = try decoder.decode([String].self, from: Data(ignoredPreviewJSON.utf8))
-                    collaboratorIDs = try decoder.decode([String].self, from: Data(collaboratorJSON.utf8))
-                    ignoredCPRs = try decoder.decode([String].self, from: Data(ignoredCPRJSON.utf8))
+                    aliases = try decodeStringArray(aliasesJSON)
+                    ignoredPreviews = try decodeStringArray(ignoredPreviewJSON)
+                    collaboratorIDs = try decodeStringArray(collaboratorJSON)
+                    ignoredCPRs = try decodeStringArray(ignoredCPRJSON)
                 } catch {
                     // One corrupt row must not hide the good rows, and a read
                     // must never delete or rewrite stored data: skip and report.
@@ -93,7 +93,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
                 let previewMode = PreviewSelectionMode(rawValue: modeRaw) ?? .auto
                 let cprMode = CPRSelectionMode(rawValue: cprModeRaw) ?? .auto
                 let workflowStatus = workflowStatusRaw.flatMap(ProjectWorkflowStatus.init(rawValue:))
-                let updatedAt = formatter.date(from: updatedText) ?? Date()
+                let updatedAt = FastISO8601.date(from: updatedText, fallback: formatter) ?? Date()
                 result[songID] = SongUserMetadata(
                     songID: songID,
                     virtualTitle: virtualTitle,
@@ -112,6 +112,12 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
                 )
             }
         }
+    }
+
+    /// Most rows store empty arrays; `[]` decodes to an empty array without a JSON pass.
+    private func decodeStringArray(_ json: String) throws -> [String] {
+        if json == "[]" { return [] }
+        return try decoder.decode([String].self, from: Data(json.utf8))
     }
 
     public func upsert(_ metadata: SongUserMetadata) throws {
@@ -388,7 +394,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
                         songID: String(cString: idCString),
                         fromStatus: optionalText(statement, column: 1).flatMap(ProjectWorkflowStatus.init(rawValue:)),
                         toStatus: optionalText(statement, column: 2).flatMap(ProjectWorkflowStatus.init(rawValue:)),
-                        changedAt: formatter.date(from: changedText) ?? Date()
+                        changedAt: FastISO8601.date(from: changedText, fallback: formatter) ?? Date()
                     )
                 )
             }

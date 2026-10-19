@@ -12,6 +12,11 @@ enum FastISO8601 {
         return string.withUTF8 { date(fromUTF8: $0) }
     }
 
+    /// The fast parse, then `formatter` for any other spelling: the answer `formatter.date(from:)` gives.
+    static func date(from string: String, fallback formatter: ISO8601DateFormatter) -> Date? {
+        date(from: string) ?? formatter.date(from: string)
+    }
+
     static func date(fromUTF8 bytes: UnsafeBufferPointer<UInt8>) -> Date? {
         guard bytes.count == 20,
               bytes[4] == UInt8(ascii: "-"), bytes[7] == UInt8(ascii: "-"),
