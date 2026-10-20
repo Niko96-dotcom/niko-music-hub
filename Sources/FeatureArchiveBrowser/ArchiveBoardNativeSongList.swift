@@ -39,6 +39,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
     private var entranceGeneration: UInt64 = 0
     private let interaction = ArchiveBoardNativeCardInteraction()
     private static let cellID = NSUserInterfaceItemIdentifier("archive-board-card")
+    private static let rowID = NSUserInterfaceItemIdentifier("archive-board-row")
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -184,7 +185,9 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        ArchiveBoardCardRow()
+        let view = (tableView.makeView(withIdentifier: Self.rowID, owner: nil) as? ArchiveBoardCardRow) ?? ArchiveBoardCardRow()
+        view.identifier = Self.rowID
+        return view
     }
 
     func cardFrame(for id: String) -> CGRect? {
