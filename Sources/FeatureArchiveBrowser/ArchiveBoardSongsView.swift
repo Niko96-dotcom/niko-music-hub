@@ -2,7 +2,7 @@ import AppCore
 import NikoMusicCore
 import SwiftUI
 
-/// Keep search typing and unrelated progress publications outside the lazy
+/// Keep search typing and unrelated progress publications outside the scrolling
 /// collection. Songs, selection and Vault changes still update the collection;
 /// individual cards compare their own inputs.
 struct ArchiveBoardSongsView: View, Equatable {
@@ -11,52 +11,38 @@ struct ArchiveBoardSongsView: View, Equatable {
     let vaultPresentations: [String: ProjectVaultCardPresentation]
     var vaultActivity: [String: String] = [:]
     let viewModel: ArchiveBrowserViewModel
+    let dropLayout: ArchiveBoardDropLayout
+    var isBoardVisible = true
+    var onInteract: () -> Void = {}
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.selectedSongID == rhs.selectedSongID
             && lhs.viewModel === rhs.viewModel
+            && lhs.dropLayout === rhs.dropLayout
+            && lhs.isBoardVisible == rhs.isBoardVisible
             && lhs.songs.equalsConcurrently(rhs.songs)
             && lhs.vaultPresentations == rhs.vaultPresentations
             && lhs.vaultActivity == rhs.vaultActivity
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 6) {
-                ForEach(songs, id: \.id) { song in
-                    ArchiveBoardSongCard(
-                        song: song,
-                        isSelected: selectedSongID == song.id,
-                        vaultPresentation: vaultPresentations[song.id],
-                        vaultActivityMessage: vaultActivity[song.id],
-                        viewModel: viewModel
-                    )
-                    .equatable()
-                    .background {
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: ArchiveBoardCardFramesKey.self,
-                                value: [song.id: proxy.frame(in: .named("archive-board-drop-column"))]
-                            )
-                        }
-                    }
-                    .transition(cardInsertTransition)
-                }
-            }
-        }
+        ArchiveBoardNativeSongList(
+            songs: songs,
+            selectedSongID: selectedSongID,
+            vaultPresentations: vaultPresentations,
+            vaultActivity: vaultActivity,
+            viewModel: viewModel,
+            dropLayout: dropLayout,
+            colorScheme: colorScheme,
+            reduceMotion: reduceMotion,
+            isBoardVisible: isBoardVisible,
+            onInteract: onInteract
+        )
         .onMoveCommand { direction in
             viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
         }
-    }
-
-    private var cardInsertTransition: AnyTransition {
-        reduceMotion
-            ? .identity
-            : .asymmetric(
-                insertion: .opacity.combined(with: .offset(y: 4)),
-                removal: .opacity
-            )
     }
 }
 

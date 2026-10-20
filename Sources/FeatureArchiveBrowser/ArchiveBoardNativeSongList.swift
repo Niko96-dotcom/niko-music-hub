@@ -1,0 +1,321 @@
+import AppCore
+import AppKit
+import NikoMusicCore
+import SwiftUI
+
+/// The lane's scrolling boundary. AppKit owns row reuse and the document
+/// extent; each realized row renders the existing SwiftUI card unchanged.
+struct ArchiveBoardNativeSongList: NSViewRepresentable {
+    let songs: [Song]
+    let selectedSongID: String?
+    let vaultPresentations: [String: ProjectVaultCardPresentation]
+    let vaultActivity: [String: String]
+    let viewModel: ArchiveBrowserViewModel
+    let dropLayout: ArchiveBoardDropLayout
+    let colorScheme: ColorScheme
+    let reduceMotion: Bool
+    var isBoardVisible = true
+    var onInteract: () -> Void = {}
+
+    func makeNSView(context: Context) -> ArchiveBoardNativeSongListView {
+        let view = ArchiveBoardNativeSongListView()
+        view.apply(self, animated: false)
+        return view
+    }
+
+    func updateNSView(_ view: ArchiveBoardNativeSongListView, context: Context) {
+        view.apply(self, animated: context.transaction.animation != nil && !reduceMotion)
+    }
+}
+
+final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
+    private let table = ArchiveBoardCardTable()
+    private var input: ArchiveBoardNativeSongList?
+    private var rowByID: [String: Int] = [:]
+    private var wasBoardVisible = true
+    private var documentHeight: CGFloat = 0
+    private var correctionPending = false
+    private var enteringIDs: Set<String> = []
+    private var entranceGeneration: UInt64 = 0
+    private let interaction = ArchiveBoardNativeCardInteraction()
+    private static let cellID = NSUserInterfaceItemIdentifier("archive-board-card")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        drawsBackground = false
+        borderType = .noBorder
+        hasVerticalScroller = true
+        hasHorizontalScroller = false
+        autohidesScrollers = true
+        automaticallyAdjustsContentInsets = false
+        table.style = .plain
+        table.backgroundColor = .clear
+        table.headerView = nil
+        table.focusRingType = .none
+        table.selectionHighlightStyle = .none
+        table.intercellSpacing = .zero
+        table.rowHeight = 74
+        table.usesAutomaticRowHeights = true
+        table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
+        let column = NSTableColumn(identifier: Self.cellID)
+        column.minWidth = 0
+        column.resizingMask = .autoresizingMask
+        table.addTableColumn(column)
+        table.dataSource = self
+        table.delegate = self
+        documentView = table
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+    override var acceptsFirstResponder: Bool { false }
+
+    override func reflectScrolledClipView(_ clipView: NSClipView) {
+        let height = documentView?.frame.height ?? 0
+        let shrank = height < documentHeight - 0.5
+        documentHeight = height
+        super.reflectScrolledClipView(clipView)
+        guard shrank, !correctionPending else { return }
+        correctionPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.correctionPending = false
+            let clip = self.contentView
+            let constrained = clip.constrainBoundsRect(clip.bounds)
+            if clip.bounds.minY > constrained.minY + 0.5 {
+                clip.scroll(to: constrained.origin)
+                self.reflectScrolledClipView(clip)
+            }
+        }
+    }
+
+    func apply(_ next: ArchiveBoardNativeSongList, animated: Bool) {
+        let old = input
+        let oldRows = rowByID
+        input = next
+        next.dropLayout.nativeList = self
+        interaction.perform = next.onInteract
+        if wasBoardVisible && !next.isBoardVisible {
+            var top = contentView.bounds
+            top.origin = .zero
+            contentView.scroll(to: contentView.constrainBoundsRect(top).origin)
+            reflectScrolledClipView(contentView)
+        }
+        wasBoardVisible = next.isBoardVisible
+        let nextIDs = next.songs.map(\.id)
+        let oldIDs = old?.songs.map(\.id) ?? []
+        var reloaded = false
+        if oldIDs != nextIDs {
+            rowByID = Dictionary(nextIDs.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })
+            let oldSet = Set(oldIDs)
+            let newSet = Set(nextIDs)
+            let commonOld = oldIDs.filter { newSet.contains($0) }
+            let commonNew = nextIDs.filter { oldSet.contains($0) }
+            if animated, old != nil, commonOld == commonNew {
+                enteringIDs = newSet.subtracting(oldSet)
+                entranceGeneration &+= 1
+                let generation = entranceGeneration
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+                    guard let self, self.entranceGeneration == generation else { return }
+                    self.enteringIDs = []
+                }
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.18
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    table.beginUpdates()
+                    table.removeRows(at: IndexSet(oldIDs.indices.filter { !newSet.contains(oldIDs[$0]) }), withAnimation: .effectFade)
+                    table.insertRows(at: IndexSet(nextIDs.indices.filter { !oldSet.contains(nextIDs[$0]) }), withAnimation: .effectGap)
+                    table.endUpdates()
+                }
+            } else {
+                enteringIDs = []
+                table.reloadData()
+                reloaded = true
+            }
+        }
+        // Refresh only realized rows, including selection, playback owner,
+        // metadata and Vault activity. Offscreen rows read the latest input
+        // when AppKit asks for them; no old Song values are cached in cells.
+        guard !reloaded, let old else { return }
+        var changedHeights = IndexSet()
+        if !old.songs.equalsConcurrently(next.songs) {
+            for (row, song) in next.songs.enumerated() {
+                if oldRows[song.id].map({ old.songs[$0] }) != song { changedHeights.insert(row) }
+            }
+        }
+        if old.vaultPresentations != next.vaultPresentations || old.vaultActivity != next.vaultActivity {
+            for (row, song) in next.songs.enumerated() where
+                old.vaultPresentations[song.id] != next.vaultPresentations[song.id]
+                    || old.vaultActivity[song.id] != next.vaultActivity[song.id] {
+                changedHeights.insert(row)
+            }
+        }
+        for row in table.rows(in: table.visibleRect).integerRange where next.songs.indices.contains(row) {
+            let song = next.songs[row]
+            let previousSong = oldRows[song.id].map { old.songs[$0] }
+            let contentChanged = previousSong != song
+                || old.vaultPresentations[song.id] != next.vaultPresentations[song.id]
+                || old.vaultActivity[song.id] != next.vaultActivity[song.id]
+            let selectionChanged = (old.selectedSongID == song.id) != (next.selectedSongID == song.id)
+            guard contentChanged || selectionChanged || old.viewModel !== next.viewModel
+                    || old.colorScheme != next.colorScheme || old.reduceMotion != next.reduceMotion else { continue }
+            if let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ArchiveBoardCardCell {
+                cell.setCard(card(at: row), colorScheme: next.colorScheme, isLast: row == next.songs.count - 1,
+                             interaction: interaction, width: table.tableColumns[0].width)
+            }
+            if contentChanged { changedHeights.insert(row) }
+        }
+        if !changedHeights.isEmpty { table.noteHeightOfRows(withIndexesChanged: changedHeights) }
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int { input?.songs.count ?? 0 }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { false }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard let input, input.songs.indices.contains(row) else { return nil }
+        let cell = (tableView.makeView(withIdentifier: Self.cellID, owner: nil) as? ArchiveBoardCardCell) ?? ArchiveBoardCardCell()
+        cell.identifier = Self.cellID
+        cell.setCard(card(at: row), colorScheme: input.colorScheme, isLast: row == input.songs.count - 1,
+                     insertionAnimated: enteringIDs.contains(input.songs[row].id), interaction: interaction,
+                     width: table.tableColumns[0].width)
+        return cell
+    }
+
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        ArchiveBoardCardRow()
+    }
+
+    func cardFrame(for id: String) -> CGRect? {
+        guard let row = rowByID[id],
+              let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ArchiveBoardCardCell else { return nil }
+        var ancestor = superview
+        while let view = ancestor {
+            if view is any ArchiveBoardColumnFrameSpace { return cell.cardFrame(in: view) }
+            ancestor = view.superview
+        }
+        return nil
+    }
+
+    private func card(at row: Int) -> ArchiveBoardSongCard {
+        guard let input else { preconditionFailure("A row requires current input") }
+        let song = input.songs[row]
+        return ArchiveBoardSongCard(
+            song: song,
+            isSelected: input.selectedSongID == song.id,
+            vaultPresentation: input.vaultPresentations[song.id],
+            vaultActivityMessage: input.vaultActivity[song.id],
+            viewModel: input.viewModel
+        )
+    }
+}
+
+private final class ArchiveBoardCardTable: NSTableView {
+    override var acceptsFirstResponder: Bool { false }
+}
+
+private final class ArchiveBoardCardRow: NSTableRowView {
+    override func drawBackground(in dirtyRect: NSRect) {}
+    override func drawSelection(in dirtyRect: NSRect) {}
+}
+
+final class ArchiveBoardCardCell: NSTableCellView {
+    private var host: NSHostingController<ArchiveBoardCardContent>?
+    private var bottomConstraint: NSLayoutConstraint?
+    private var heightConstraint: NSLayoutConstraint?
+    private var measuredWidth: CGFloat = 0
+    private var needsMeasurement = true
+
+    var displayedContent: ArchiveBoardCardContent? { host?.rootView }
+
+    func setCard(_ card: ArchiveBoardSongCard, colorScheme: ColorScheme, isLast: Bool,
+                 insertionAnimated: Bool = false, interaction: ArchiveBoardNativeCardInteraction, width: CGFloat) {
+        let content = ArchiveBoardCardContent(card: card, colorScheme: colorScheme,
+                                             insertionAnimated: insertionAnimated, interaction: interaction)
+        if let host {
+            host.rootView = content
+        } else {
+            let host = NSHostingController(rootView: content)
+            // We supply the measured width and natural height. The default
+            // min/ideal/max proposals would repeat those layout measurements.
+            host.sizingOptions = []
+            let hosted = host.view
+            hosted.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(hosted)
+            let bottom = hosted.bottomAnchor.constraint(equalTo: bottomAnchor)
+            let height = hosted.heightAnchor.constraint(equalToConstant: 68)
+            NSLayoutConstraint.activate([
+                hosted.leadingAnchor.constraint(equalTo: leadingAnchor),
+                hosted.trailingAnchor.constraint(equalTo: trailingAnchor),
+                hosted.topAnchor.constraint(equalTo: topAnchor),
+                bottom,
+                height,
+            ])
+            self.host = host
+            bottomConstraint = bottom
+            heightConstraint = height
+        }
+        bottomConstraint?.constant = isLast ? 0 : -6
+        needsMeasurement = true
+        measure(at: width)
+    }
+
+    override func layout() {
+        super.layout()
+        measure(at: bounds.width)
+    }
+
+    private func measure(at width: CGFloat) {
+        guard let host, width > 0, needsMeasurement || abs(width - measuredWidth) > 0.5 else { return }
+        let measured = host.sizeThatFits(in: NSSize(width: width, height: .greatestFiniteMagnitude))
+        heightConstraint?.constant = measured.height
+        measuredWidth = width
+        needsMeasurement = false
+    }
+
+    func cardFrame(in view: NSView) -> CGRect? { host.map { $0.view.convert($0.view.bounds, to: view) } }
+}
+
+struct ArchiveBoardCardContent: View {
+    let card: ArchiveBoardSongCard
+    let colorScheme: ColorScheme
+    var insertionAnimated = false
+    let interaction: ArchiveBoardNativeCardInteraction
+
+    var body: some View {
+        card.equatable()
+            .fixedSize(horizontal: false, vertical: true)
+            .modifier(ArchiveBoardCardEntrance(animated: insertionAnimated))
+            .simultaneousGesture(TapGesture().onEnded { interaction.perform() })
+            .id(card.song.id)
+            .environment(\.colorScheme, colorScheme)
+    }
+}
+
+/// Crosses the native row-hosting boundary without retaining an old callback
+/// when the parent refreshes its keyboard-focus owner.
+@MainActor
+final class ArchiveBoardNativeCardInteraction {
+    var perform: () -> Void = {}
+}
+
+private struct ArchiveBoardCardEntrance: ViewModifier {
+    let animated: Bool
+    @State private var appeared = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(animated && !appeared ? 0 : 1)
+            .offset(y: animated && !appeared ? 4 : 0)
+            .onAppear {
+                if animated { withAnimation(.easeOut(duration: 0.18)) { appeared = true } }
+            }
+    }
+}
+
+private extension NSRange {
+    var integerRange: Range<Int> {
+        location == NSNotFound ? 0..<0 : location..<(location + length)
+    }
+}

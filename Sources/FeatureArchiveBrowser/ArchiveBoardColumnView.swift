@@ -32,14 +32,15 @@ struct ArchiveBoardColumnView: View {
                 isTargeted: isDropTargeted,
                 reduceMotion: reduceMotion,
                 colorScheme: colorScheme,
-                isCompact: compactWhenEmpty
+                isCompact: compactWhenEmpty,
+                isBoardVisible: viewModel.viewMode == .board || viewModel.selectedSong == nil
             ),
             accepts: { acceptsDrop(songID: $0) },
             perform: { performDrop(songID: $0) },
             locationChanged: { onDragLocationChanged(column.id, $0) },
             ended: onDragEnded,
             targeted: { if isDropTargeted != $0 { isDropTargeted = $0 } },
-            landingFrame: { dropLayout.frames[$0] },
+            landingFrame: { dropLayout.frame(for: $0) },
             // Must return the same opaque type as `content`, so the lookup is
             // a method but the `columnContent` call stays inline.
             refreshedContent: { columnContent(currentColumn()) },
@@ -50,17 +51,80 @@ struct ArchiveBoardColumnView: View {
     }
 
     private func columnContent(_ column: ArchiveBoardColumn) -> some View {
+        ArchiveBoardColumnContent(
+            column: column,
+            viewModel: viewModel,
+            selectedSongID: viewModel.selectedSong.flatMap {
+                $0.workflowStatus == column.status ? $0.id : nil
+            },
+            vaultPresentations: viewModel.projectVaultPresentationsBySongID,
+            vaultActivity: viewModel.projectVaultActivityMessages,
+            isCompact: isCompact,
+            isDropTargeted: isDropTargeted,
+            colorScheme: colorScheme,
+            dropLayout: dropLayout,
+            isBoardVisible: viewModel.viewMode == .board || viewModel.selectedSong == nil,
+            onInteract: onInteract
+        )
+    }
+
+    private func acceptsDrop(songID: String) -> Bool {
+        guard let song = viewModel.songs.first(where: { $0.id == songID }) else { return false }
+        return viewModel.canMutateWorkflowStatus(for: song)
+    }
+
+    /// Re-check mutability here: `acceptsDrop` ran on drag-enter, and the
+    /// Done path below bypasses `applyWorkflowStatus`'s own guard.
+    private func performDrop(songID: String) {
+        guard let song = viewModel.songs.first(where: { $0.id == songID }),
+              viewModel.canMutateWorkflowStatus(for: song),
+              song.workflowStatus != column.status else { return }
+        if column.status == .done {
+            viewModel.requestWorkflowDoneArchive(for: song)
+            return
+        }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+            viewModel.applyWorkflowStatus(column.status, for: song)
+        }
+    }
+
+    /// The drop host asks for fresh content after a drop lands; re-project
+    /// from the live browse list so the lane reflects the moved card.
+    private func currentColumn() -> ArchiveBoardColumn {
+        ArchiveBoardProjection.columns(from: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
+            .first(where: { $0.id == column.id }) ?? column
+    }
+}
+
+/// A named hosting root keeps SwiftUI's dynamic-property discovery at the lane
+/// boundary small. Every changing render input is a value here, so selection,
+/// Vault activity and catalog updates still invalidate the hosted contents.
+private struct ArchiveBoardColumnContent: View {
+    let column: ArchiveBoardColumn
+    let viewModel: ArchiveBrowserViewModel
+    let selectedSongID: String?
+    let vaultPresentations: [String: ProjectVaultCardPresentation]
+    let vaultActivity: [String: String]
+    let isCompact: Bool
+    let isDropTargeted: Bool
+    let colorScheme: ColorScheme
+    let dropLayout: ArchiveBoardDropLayout
+    let isBoardVisible: Bool
+    let onInteract: () -> Void
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             columnHeader(column)
 
             ArchiveBoardSongsView(
                 songs: column.songs,
-                selectedSongID: viewModel.selectedSong.flatMap {
-                    $0.workflowStatus == column.status ? $0.id : nil
-                },
-                vaultPresentations: viewModel.projectVaultPresentationsBySongID,
-                vaultActivity: viewModel.projectVaultActivityMessages,
-                viewModel: viewModel
+                selectedSongID: selectedSongID,
+                vaultPresentations: vaultPresentations,
+                vaultActivity: vaultActivity,
+                viewModel: viewModel,
+                dropLayout: dropLayout,
+                isBoardVisible: isBoardVisible,
+                onInteract: onInteract
             )
             .equatable()
 
@@ -77,7 +141,6 @@ struct ArchiveBoardColumnView: View {
         .environment(\.colorScheme, colorScheme)
         .simultaneousGesture(TapGesture().onEnded(onInteract))
         .coordinateSpace(name: "archive-board-drop-column")
-        .onPreferenceChange(ArchiveBoardCardFramesKey.self) { dropLayout.frames = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(column.accessibilityLabel)
     }
@@ -124,30 +187,4 @@ struct ArchiveBoardColumnView: View {
         .padding(.vertical, 8)
     }
 
-    private func acceptsDrop(songID: String) -> Bool {
-        guard let song = viewModel.songs.first(where: { $0.id == songID }) else { return false }
-        return viewModel.canMutateWorkflowStatus(for: song)
-    }
-
-    /// Re-check mutability here: `acceptsDrop` ran on drag-enter, and the
-    /// Done path below bypasses `applyWorkflowStatus`'s own guard.
-    private func performDrop(songID: String) {
-        guard let song = viewModel.songs.first(where: { $0.id == songID }),
-              viewModel.canMutateWorkflowStatus(for: song),
-              song.workflowStatus != column.status else { return }
-        if column.status == .done {
-            viewModel.requestWorkflowDoneArchive(for: song)
-            return
-        }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-            viewModel.applyWorkflowStatus(column.status, for: song)
-        }
-    }
-
-    /// The drop host asks for fresh content after a drop lands; re-project
-    /// from the live browse list so the lane reflects the moved card.
-    private func currentColumn() -> ArchiveBoardColumn {
-        ArchiveBoardProjection.columns(from: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
-            .first(where: { $0.id == column.id }) ?? column
-    }
 }

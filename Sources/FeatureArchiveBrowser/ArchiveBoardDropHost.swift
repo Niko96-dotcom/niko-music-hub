@@ -28,7 +28,11 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
     }
 
     private func configure(_ view: ArchiveBoardDropHostingView<Content>) {
+        if view.renderedKey?.isBoardVisible == true, !renderKey.isBoardVisible {
+            view.resetColumnScrollPosition()
+        }
         view.renderedKey = renderKey
+        view.isHidden = !renderKey.isBoardVisible
         view.accepts = accepts
         view.perform = perform
         view.locationChanged = locationChanged
@@ -40,7 +44,7 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
     }
 }
 
-final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
+final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, ArchiveBoardColumnFrameSpace {
     var renderedKey: ArchiveBoardColumnRenderKey?
     var accepts: (String) -> Bool = { _ in false }
     var perform: (String) -> Void = { _ in }
@@ -76,6 +80,22 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
     private func acceptedID(_ sender: any NSDraggingInfo) -> String? {
         guard let id = sender.draggingPasteboard.string(forType: .string), accepts(id) else { return nil }
         return id
+    }
+
+    /// Match the former board remount's scroll reset before hiding the native
+    /// subtree; hidden hosting roots may defer their SwiftUI body updates.
+    func resetColumnScrollPosition() {
+        func reset(_ view: NSView) {
+            if let scroll = view as? NSScrollView {
+                var top = scroll.contentView.bounds
+                top.origin = .zero
+                scroll.contentView.scroll(to: scroll.contentView.constrainBoundsRect(top).origin)
+                scroll.reflectScrolledClipView(scroll.contentView)
+            } else {
+                view.subviews.forEach(reset)
+            }
+        }
+        reset(self)
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
@@ -149,7 +169,12 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content> {
 /// invalidate the board or make drag hover perform a new projection.
 @MainActor
 final class ArchiveBoardDropLayout {
+    weak var nativeList: ArchiveBoardNativeSongListView?
     var frames: [String: CGRect] = [:]
+    func frame(for id: String) -> CGRect? {
+        if let nativeList { return nativeList.cardFrame(for: id) }
+        return frames[id]
+    }
 }
 
 struct ArchiveBoardCardFramesKey: PreferenceKey {
@@ -158,6 +183,9 @@ struct ArchiveBoardCardFramesKey: PreferenceKey {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
+
+/// Marks the native coordinate space used by the column's drop target.
+protocol ArchiveBoardColumnFrameSpace: AnyObject {}
 
 struct ArchiveBoardColumnRenderKey: Equatable {
     let column: ArchiveBoardColumn
@@ -168,4 +196,5 @@ struct ArchiveBoardColumnRenderKey: Equatable {
     let reduceMotion: Bool
     let colorScheme: ColorScheme
     var isCompact: Bool = false
+    var isBoardVisible: Bool = true
 }
