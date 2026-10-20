@@ -4,7 +4,8 @@ import Foundation
 /// or classifying every song of a 10,000-song archive. The result equals `input.map(transform)`; only
 /// the wall time changes. Small inputs and single-core machines run on the calling thread.
 ///
-/// `transform` runs on several threads at once, so it must not touch unsynchronized shared state.
+/// `transform` runs on several threads at once. It is `@Sendable` and the elements are `Sendable`, so the
+/// compiler checks that it touches no unsynchronized shared state.
 /// Threads claim the next elements as they finish, so songs of very different size balance out. The
 /// first failure (lowest index) is rethrown after the running threads stop.
 ///
@@ -15,11 +16,11 @@ enum ParallelMap {
     static let defaultMinimumParallelCount = 64
     static let defaultMaximumThreads = 8
 
-    static func map<Input, Output>(
+    static func map<Input: Sendable, Output: Sendable>(
         _ input: [Input],
         minimumParallelCount: Int = defaultMinimumParallelCount,
         maximumThreads: Int = defaultMaximumThreads,
-        _ transform: (Input) throws -> Output
+        _ transform: @Sendable (Input) throws -> Output
     ) throws -> [Output] {
         let threads = min(ProcessInfo.processInfo.activeProcessorCount, maximumThreads, input.count)
         guard threads > 1, input.count >= max(2, minimumParallelCount) else {
@@ -49,11 +50,11 @@ enum ParallelMap {
     }
 
     /// Non-throwing convenience.
-    static func map<Input, Output>(
+    static func map<Input: Sendable, Output: Sendable>(
         _ input: [Input],
         minimumParallelCount: Int = defaultMinimumParallelCount,
         maximumThreads: Int = defaultMaximumThreads,
-        _ transform: (Input) -> Output
+        _ transform: @Sendable (Input) -> Output
     ) -> [Output] {
         do {
             return try map(input, minimumParallelCount: minimumParallelCount, maximumThreads: maximumThreads) {
@@ -66,12 +67,12 @@ enum ParallelMap {
     }
 }
 
-/// One `map` call's shared state. Threads write disjoint slots of `slots` and only read `input`, so
-/// sharing it across them is safe; `transform` is the caller's contract (see above).
-private struct Job<Input, Output>: @unchecked Sendable {
+/// One `map` call's shared state. `@unchecked` only because of `slots`: threads write disjoint slots
+/// and only read `input`; `input`, `transform` and `Output` are checked `Sendable`.
+private struct Job<Input: Sendable, Output: Sendable>: @unchecked Sendable {
     let input: [Input]
     let slots: UnsafeMutablePointer<Output?>
-    let transform: (Input) throws -> Output
+    let transform: @Sendable (Input) throws -> Output
     let failure: FirstFailure
     let cursor: Cursor
 

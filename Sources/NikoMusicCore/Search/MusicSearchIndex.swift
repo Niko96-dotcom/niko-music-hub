@@ -96,7 +96,7 @@ public struct MusicSearchIndex: Sendable {
     /// leave valid lower-tier matches suppressed.
     public func searchResults(
         _ query: String,
-        where include: (Song) -> Bool = { _ in true }
+        where include: @Sendable (Song) -> Bool = { _ in true }
     ) -> [MusicSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }

@@ -27,7 +27,8 @@ final class ParallelMapTests: XCTestCase {
     }
 
     func testASingleThreadBudgetRunsOnTheCallingThread() {
-        let caller = Thread.current
+        // `Thread` is not Sendable; the test only compares identity, so it captures it unchecked.
+        nonisolated(unsafe) let caller = Thread.current
         nonisolated(unsafe) var sawOtherThread = false
         _ = ParallelMap.map(Array(0..<500), minimumParallelCount: 2, maximumThreads: 1) { value -> Int in
             if Thread.current != caller { sawOtherThread = true }
