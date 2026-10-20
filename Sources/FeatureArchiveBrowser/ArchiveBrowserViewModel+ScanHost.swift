@@ -4,7 +4,9 @@ import NikoMusicCore
 
 extension ArchiveBrowserViewModel: ArchiveScanHost {
     func applyCatalogScanUpdate(_ update: ArchiveCatalogCoordinator.CatalogScanApplyResult, roots: [URL]) {
-        let uniqueIncomingSongs = SongCatalogDeduplicator.uniqueByID(update.songs)
+        let uniqueIncomingSongs = SongCatalogDeduplicator.sharingUnchangedValues(
+            SongCatalogDeduplicator.uniqueByID(update.songs), from: scannedSongs
+        )
         let previousPreviewBySongID = Dictionary(
             songs.compactMap { song -> (String, String)? in
                 guard let previewID = song.mainPreviewCandidateID else { return nil }

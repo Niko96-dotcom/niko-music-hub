@@ -20,7 +20,7 @@ public enum PreviewDetectedRole: String, Codable, Sendable, Hashable {
 
 public struct PreviewCandidate: Identifiable, Hashable, Sendable, Codable {
     public let id: String
-    public let filePath: URL
+    @ArchiveFileURL public var filePath: URL
     public let fileName: String
     public let folderRole: PreviewFolderRole
     public let modifiedAt: Date
@@ -45,7 +45,7 @@ public struct PreviewCandidate: Identifiable, Hashable, Sendable, Codable {
         confidenceScore: Double = 0,
         confidenceReasons: [String] = []
     ) {
-        self.filePath = filePath
+        self._filePath = ArchiveFileURL(wrappedValue: filePath)
         self.fileName = fileName
         self.folderRole = folderRole
         self.modifiedAt = modifiedAt

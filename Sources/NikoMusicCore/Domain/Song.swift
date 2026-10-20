@@ -2,7 +2,7 @@ import Foundation
 
 public struct Song: Identifiable, Hashable, Sendable, Codable {
     public let id: String
-    public let folderPath: URL
+    @ArchiveFileURL public var folderPath: URL
     public let originalFolderName: String
     public internal(set) var displayTitle: String
     public var projectVersions: [ProjectVersion]
@@ -106,7 +106,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         manualMainCPRID: String? = nil,
         ignoredCPRVersionIDs: [String] = []
     ) {
-        self.folderPath = folderPath
+        self._folderPath = ArchiveFileURL(wrappedValue: folderPath)
         self.originalFolderName = originalFolderName
         self.displayTitle = displayTitle
         self.projectVersions = projectVersions
@@ -174,7 +174,8 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        folderPath = try container.decode(URL.self, forKey: .folderPath)
+        let decodedFolderPath = try container.decode(URL.self, forKey: .folderPath)
+        _folderPath = ArchiveFileURL(wrappedValue: decodedFolderPath)
         originalFolderName = try container.decode(String.self, forKey: .originalFolderName)
         displayTitle = try container.decode(String.self, forKey: .displayTitle)
         projectVersions = try container.decodeIfPresent([ProjectVersion].self, forKey: .projectVersions) ?? []
@@ -195,7 +196,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         cprSelectionMode = try container.decodeIfPresent(CPRSelectionMode.self, forKey: .cprSelectionMode) ?? .auto
         manualMainCPRID = try container.decodeIfPresent(String.self, forKey: .manualMainCPRID)
         ignoredCPRVersionIDs = try container.decodeIfPresent([String].self, forKey: .ignoredCPRVersionIDs) ?? []
-        id = folderPath.standardizedFileURL.path
+        id = decodedFolderPath.standardizedFileURL.path
     }
 
     public func encode(to encoder: Encoder) throws {

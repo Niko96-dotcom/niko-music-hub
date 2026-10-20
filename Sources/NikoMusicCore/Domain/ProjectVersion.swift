@@ -2,7 +2,7 @@ import Foundation
 
 public struct ProjectVersion: Identifiable, Hashable, Sendable, Codable {
     public let id: String
-    public let filePath: URL
+    @ArchiveFileURL public var filePath: URL
     public let fileName: String
     public let modifiedAt: Date
     public let detectedVersionNumber: Int?
@@ -17,7 +17,7 @@ public struct ProjectVersion: Identifiable, Hashable, Sendable, Codable {
         modifiedAt: Date,
         detectedVersionNumber: Int? = nil
     ) {
-        self.filePath = filePath
+        self._filePath = ArchiveFileURL(wrappedValue: filePath)
         self.fileName = fileName
         self.modifiedAt = modifiedAt
         self.detectedVersionNumber = detectedVersionNumber
