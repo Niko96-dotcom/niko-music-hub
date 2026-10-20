@@ -384,9 +384,10 @@ merge, four review points were checked and three were changed:
   connected); run `script/benchmark_scan_workers.sh <archive-root>` there before release. The same sweep on
   the Studio's internal SSD, 10k synthetic songs, 2 interleaved runs: 1 worker 31.4 s, 2: 16.8 s, 4: 9.2 s,
   8: 6.3 s (medians).
-- **Background budget.** The rescan after launch and other background full scans now run at utility
-  priority with 4 workers; a scan the user starts keeps 8. This trades about 3 s of rescan time on the
-  internal SSD for half the cores during launch.
+- **Background budget.** A rescan behind cached songs that are already on screen uses 4 workers; a scan
+  the user starts and a first scan (empty board) keep 8. The first version also ran it at utility
+  priority and used the small budget for first scans: the referee measured the cached-launch ready time
+  at 12.8 s against 8.3 s and the first scan at 10.0 s against 7.4 s, so both were reverted.
 - **Sendable contracts.** The `ParallelMap` transform and the search `include` filter are `@Sendable` and the
   elements `Sendable`; the job box stays `@unchecked` only for its result slots.
 - **Cancellation inside a batch: no change needed.** The review assumed workers never see cancellation. The

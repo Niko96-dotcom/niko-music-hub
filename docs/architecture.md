@@ -73,8 +73,8 @@ Archive domain and safety. No SwiftUI/AppKit.
   `FastISO8601` parses the one timestamp spelling the app writes and leaves every other spelling to Foundation.
   `Scanning/CompiledRegex` holds fixed filename patterns compiled once. `Scanning/ScanWorkerBudget` decides how many
   song folders a full scan walks at once: the smaller of the root volume's limit (network 2, other external 4,
-  internal 8) and the caller's budget (a scan the user started: 8; the rescan after launch and other background
-  scans: 4, at utility priority). Measurements and the benchmark tools:
+  internal 8) and the caller's budget (a scan someone waits for, including a first scan: 8; a rescan behind cached
+  songs already on screen: 4). Measurements and the benchmark tools:
   `docs/performance/archive-startup-2026-10-20.md`, `script/performance/`, `script/benchmark_scan_workers.sh`
   (read-only worker sweep on a real archive disk), `script/bakeoff/` (synthetic 1k/10k archive and isolated launch).
 

@@ -205,13 +205,13 @@ struct ArchiveCatalogCoordinator {
         return try scanner.scan(roots: roots)
     }
 
-    /// A background scan (the rescan after launch, the watcher's rescans) runs at utility priority with
-    /// the background worker budget, so it leaves cores and battery to the live UI; a scan the user
-    /// started keeps the interactive budget.
+    /// A rescan behind cached songs takes the background worker budget, so it leaves cores and battery to
+    /// the live UI. Both budgets keep user-initiated priority: utility moves the walk onto the efficiency
+    /// cores and made the rescan after a cached launch about 50 % slower in the referee (2026-10-20).
     func performScanDetached(roots: [URL], budget: ScanWorkerBudget = .interactive) async throws -> ScanResult {
         try Task.checkCancellation()
         let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
-        let scanTask = Task.detached(priority: budget == .background ? .utility : .userInitiated) {
+        let scanTask = Task.detached(priority: .userInitiated) {
             try MusicArchiveScanner(exclusionTerms: exclusionTerms, workerBudget: budget).scan(roots: roots)
         }
         return try await withTaskCancellationHandler(operation: {

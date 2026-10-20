@@ -4,9 +4,9 @@ import Foundation
 ///
 /// The limit is the smaller of two numbers: what the archive root's volume handles well, and the
 /// caller's budget. A spinning or network disk turns parallel folder walks into seeks and round trips,
-/// so its limit is low; the Mac's internal SSD takes the full budget. A scan the user started waits on
-/// the result and gets the interactive budget; the rescan after launch and the watcher's rescans run
-/// in the background next to a live UI and take half of it.
+/// so its limit is low; the Mac's internal SSD takes the full budget. A scan someone waits for (started
+/// by the user, or a first scan with an empty board) gets the interactive budget; a rescan behind cached
+/// songs that are already on screen takes half of it.
 public enum ScanWorkerBudget: Sendable, Equatable {
     case interactive
     case background

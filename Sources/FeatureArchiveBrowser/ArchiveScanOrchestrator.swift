@@ -284,7 +284,10 @@ final class ArchiveScanOrchestrator {
             try Task.checkCancellation()
             return result
         }
-        return try await host.catalog.performScanDetached(roots: roots, budget: isBackground ? .background : .interactive)
+        // The smaller budget only while the cached songs are on screen: a first scan in the background
+        // still leaves the board empty until it finishes, so it takes every worker.
+        let budget: ScanWorkerBudget = isBackground && !host.scannedSongs.isEmpty ? .background : .interactive
+        return try await host.catalog.performScanDetached(roots: roots, budget: budget)
     }
 
     private func enqueueIncrementalRescan(paths: [URL]) {
