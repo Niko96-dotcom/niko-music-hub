@@ -231,6 +231,9 @@ final class ArchiveScanOrchestrator {
         )
         host.applyCatalogScanUpdate(update, roots: request.roots)
         host.diagnostics.log(.info, update.diagnostics.summaryLine)
+        // On an unchanged archive the whole result is a second copy of the catalog the view model kept.
+        OffMainRelease.discard(result.songs)
+        OffMainRelease.discard(update.songs)
     }
 
     private func beginScan(isBackground: Bool) -> ScanRequest? {
