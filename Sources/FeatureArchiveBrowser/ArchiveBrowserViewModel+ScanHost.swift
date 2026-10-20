@@ -27,8 +27,11 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         )
         let projected = projectVaultCatalog(from: uniqueIncomingSongs)
         mutateCatalog {
-            scannedSongs = projected.scannedSongs
-            songs = projected.visibleSongs
+            // A rescan that finds nothing new produces a second, equal copy of the catalog already held (the
+            // one decoded from the cached index on a normal launch). Keep the held arrays and let the new
+            // ones go, instead of carrying two copies of every song, version and preview for the whole session.
+            if !projected.scannedSongs.equalsConcurrently(scannedSongs) { scannedSongs = projected.scannedSongs }
+            if !projected.visibleSongs.equalsConcurrently(songs) { songs = projected.visibleSongs }
             scanDiagnostics = update.diagnostics
             setBackgroundStatusMessage(update.statusMessage)
         }
