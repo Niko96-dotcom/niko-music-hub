@@ -46,12 +46,44 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
     }
 
     public func loadLatest() throws -> ArchiveIndexSnapshot? {
-        try database.withConnection { db in
-            if let snapshot = try loadPerSongSnapshot(db) {
-                return snapshot
+        // All stores share one serial connection. Only the row reads hold it; the song JSON decodes
+        // after it is released, so a main-actor read at launch does not wait for tens of MB of JSON.
+        let stored = try database.withConnection { db -> StoredSnapshot? in
+            if let rows = try loadPerSongRows(db) {
+                return .perSong(rows)
             }
-            return try loadLegacyBlobSnapshot(db)
+            return try loadLegacyBlobSnapshot(db).map(StoredSnapshot.decoded)
         }
+        switch stored {
+        case .perSong(let rows):
+            // Rows are independent: decoded on all cores, in the original row order.
+            let songs = try ParallelMap.map(rows.songJSON) { row in
+                try Self.makeDecoder().decode(Song.self, from: row)
+            }
+            return ArchiveIndexSnapshot(
+                roots: rows.roots,
+                songs: songs,
+                scannedAt: rows.scannedAt,
+                previewSemanticsVersion: rows.previewSemanticsVersion
+            )
+        case .decoded(let snapshot):
+            return snapshot
+        case nil:
+            return nil
+        }
+    }
+
+    private enum StoredSnapshot {
+        case perSong(PerSongRows)
+        case decoded(ArchiveIndexSnapshot)
+    }
+
+    private struct PerSongRows {
+        let roots: [String]
+        let scannedAt: Date
+        let previewSemanticsVersion: Int?
+        /// Song JSON in stored position order.
+        let songJSON: [Data]
     }
 
     public func save(_ snapshot: ArchiveIndexSnapshot) throws {
@@ -74,7 +106,12 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
                 throw StoreError.exec(message(db))
             }
             do {
-                try upsertMeta(rootsJSON: rootsJSON, scannedText: scannedText, db: db)
+                try upsertMeta(
+                    rootsJSON: rootsJSON,
+                    scannedText: scannedText,
+                    previewSemanticsVersion: snapshot.previewSemanticsVersion,
+                    db: db
+                )
                 try syncSongRows(songRows, db: db)
                 // The per-song snapshot supersedes the single-blob era table.
                 guard sqlite3_exec(db, "DROP TABLE IF EXISTS archive_snapshot;", nil, nil, nil) == SQLITE_OK else {
@@ -106,10 +143,10 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
 
     // MARK: - Per-song snapshot
 
-    private func loadPerSongSnapshot(_ db: OpaquePointer) throws -> ArchiveIndexSnapshot? {
+    private func loadPerSongRows(_ db: OpaquePointer) throws -> PerSongRows? {
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
-        let metaSQL = "SELECT roots_json, scanned_at FROM archive_snapshot_meta WHERE id = 1;"
+        let metaSQL = "SELECT roots_json, scanned_at, preview_semantics_version FROM archive_snapshot_meta WHERE id = 1;"
         guard sqlite3_prepare_v2(db, metaSQL, -1, &statement, nil) == SQLITE_OK else {
             throw StoreError.prepare(message(db))
         }
@@ -129,6 +166,9 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         guard let scannedAt = ISO8601DateFormatter().date(from: String(cString: scannedCString)) else {
             throw StoreError.decode("invalid scanned_at")
         }
+        let previewSemanticsVersion = sqlite3_column_type(statement, 2) == SQLITE_NULL
+            ? nil
+            : Int(sqlite3_column_int64(statement, 2))
 
         var songsStatement: OpaquePointer?
         defer { sqlite3_finalize(songsStatement) }
@@ -136,8 +176,6 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         guard sqlite3_prepare_v2(db, songsSQL, -1, &songsStatement, nil) == SQLITE_OK else {
             throw StoreError.prepare(message(db))
         }
-        // Reading the rows is quick; decoding tens of MB of JSON is not. Rows are independent, so they
-        // are read in order and decoded on all cores, with the result in the original row order.
         var rows: [Data] = []
         while true {
             let stepResult = sqlite3_step(songsStatement)
@@ -145,10 +183,12 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
             case SQLITE_ROW:
                 break
             case SQLITE_DONE:
-                let songs = try ParallelMap.map(rows) { row in
-                    try Self.makeDecoder().decode(Song.self, from: row)
-                }
-                return ArchiveIndexSnapshot(roots: roots, songs: songs, scannedAt: scannedAt)
+                return PerSongRows(
+                    roots: roots,
+                    scannedAt: scannedAt,
+                    previewSemanticsVersion: previewSemanticsVersion,
+                    songJSON: rows
+                )
             default:
                 throw StoreError.step(message(db))
             }
@@ -157,21 +197,32 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         }
     }
 
-    private func upsertMeta(rootsJSON: String, scannedText: String, db: OpaquePointer) throws {
+    private func upsertMeta(
+        rootsJSON: String,
+        scannedText: String,
+        previewSemanticsVersion: Int?,
+        db: OpaquePointer
+    ) throws {
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
         let sql = """
-        INSERT INTO archive_snapshot_meta (id, roots_json, scanned_at)
-        VALUES (1, ?, ?)
+        INSERT INTO archive_snapshot_meta (id, roots_json, scanned_at, preview_semantics_version)
+        VALUES (1, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           roots_json = excluded.roots_json,
-          scanned_at = excluded.scanned_at;
+          scanned_at = excluded.scanned_at,
+          preview_semantics_version = excluded.preview_semantics_version;
         """
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
             throw StoreError.prepare(message(db))
         }
         sqlite3_bind_text(statement, 1, rootsJSON, -1, sqliteTransient)
         sqlite3_bind_text(statement, 2, scannedText, -1, sqliteTransient)
+        if let previewSemanticsVersion {
+            sqlite3_bind_int64(statement, 3, Int64(previewSemanticsVersion))
+        } else {
+            sqlite3_bind_null(statement, 3)
+        }
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw StoreError.step(message(db))
         }
@@ -310,6 +361,26 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
             guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
                 throw StoreError.exec(message(db))
             }
+            try addPreviewSemanticsVersionColumnIfNeeded(db)
+        }
+    }
+
+    /// Databases written before the preview semantics version existed lack the column; it is added
+    /// as NULL, which the launch load treats as "refresh every song".
+    private func addPreviewSemanticsVersionColumnIfNeeded(_ db: OpaquePointer) throws {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "PRAGMA table_info(archive_snapshot_meta);", -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let name = sqlite3_column_text(statement, 1), String(cString: name) == "preview_semantics_version" {
+                return
+            }
+        }
+        let alter = "ALTER TABLE archive_snapshot_meta ADD COLUMN preview_semantics_version INTEGER;"
+        guard sqlite3_exec(db, alter, nil, nil, nil) == SQLITE_OK else {
+            throw StoreError.exec(message(db))
         }
     }
 

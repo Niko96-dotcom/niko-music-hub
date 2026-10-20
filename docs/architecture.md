@@ -71,7 +71,10 @@ Archive domain and safety. No SwiftUI/AppKit.
   only for pure per-element work: the `ParallelMap` transform is `@Sendable` and its elements are `Sendable`, so the
   compiler checks that; Foundation's locale and JSON paths stop scaling past a handful of threads);
   `FastISO8601` parses the one timestamp spelling the app writes and leaves every other spelling to Foundation.
-  `Scanning/CompiledRegex` holds fixed filename patterns compiled once. `Scanning/ScanWorkerBudget` decides how many
+  `Scanning/CompiledRegex` holds fixed filename patterns compiled once. `PreviewAutoSelectionNormalizer.currentVersion`
+  is recorded in the cached snapshot; a current snapshot skips the launch re-ranking except for songs with hidden
+  previews (bump the version when detection, ranking or title resolution changes; `PreviewSemanticsVersionTests`
+  enforces it). `Scanning/ScanWorkerBudget` decides how many
   song folders a full scan walks at once: the smaller of the root volume's limit (network 2, other external 4,
   internal 8) and the caller's budget (a scan someone waits for, including a first scan: 8; a rescan behind cached
   songs already on screen: 4). Measurements and the benchmark tools:

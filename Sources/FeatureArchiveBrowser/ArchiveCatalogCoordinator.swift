@@ -779,7 +779,9 @@ struct ArchiveCatalogCoordinator {
             guard hasMetadataSources else {
                 return (
                     .loaded(
-                        songs: PreviewAutoSelectionNormalizer.normalized(uniqueSongs),
+                        songs: PreviewAutoSelectionNormalizer.normalizedForLaunch(
+                            uniqueSongs, snapshotVersion: snapshot.previewSemanticsVersion
+                        ),
                         scannedAt: snapshot.scannedAt
                     ),
                     [],
@@ -815,7 +817,9 @@ struct ArchiveCatalogCoordinator {
             )
             return (
                 .loaded(
-                    songs: PreviewAutoSelectionNormalizer.normalized(merged),
+                    songs: PreviewAutoSelectionNormalizer.normalizedForLaunch(
+                        merged, snapshotVersion: snapshot.previewSemanticsVersion
+                    ),
                     scannedAt: snapshot.scannedAt
                 ),
                 logs,
@@ -916,7 +920,9 @@ struct ArchiveCatalogCoordinator {
         let snapshot = ArchiveIndexSnapshot(
             roots: roots.map { $0.standardizedFileURL.path },
             songs: SongCatalogDeduplicator.uniqueByID(songs),
-            scannedAt: scannedAt
+            scannedAt: scannedAt,
+            // Saved songs come from a scan or a load that used the current preview semantics.
+            previewSemanticsVersion: PreviewAutoSelectionNormalizer.currentVersion
         )
         let failure = await Task.detached(priority: .utility) { () -> String? in
             do {

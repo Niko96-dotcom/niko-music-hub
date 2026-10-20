@@ -394,3 +394,20 @@ merge, four review points were checked and three were changed:
   calling thread takes part in every batch and its folder scan throws at the next folder; `ParallelMap` then
   stops every thread before its next folder. `ScanWorkerBudgetTests.testCancellationStopsInsideABatch` now
   guards that a cancelled scan stops within about one folder per thread.
+
+## Taken from other bake-off branches (2026-10-20)
+
+Two gains no other branch had measured as clearly were ported onto this branch:
+
+- **Decode after releasing the database connection** (from the Opus 5.5 branch). All SQLite stores share
+  one serial connection. `SQLiteArchiveIndexStore.loadLatest` read and decoded the whole cached catalog
+  inside it, so a main-actor read at launch waited for the decode. Now only the row reads hold the
+  connection. In the bake-off referee the Opus branch showed the window at 0.75 s against 1.10 s here.
+- **Skip the launch re-ranking when the snapshot is current** (from the DeepSeek V4.1 Flash 1017 branch).
+  The snapshot now records `PreviewAutoSelectionNormalizer.currentVersion` (new nullable column
+  `archive_snapshot_meta.preview_semantics_version`, added on open). With a current snapshot the launch
+  load normalizes only songs whose result depends on user metadata (automatic selection with hidden
+  previews); every other snapshot is refreshed in full. Unlike the original, the hidden-preview songs stay
+  normalized, so the result equals a full refresh (`PreviewSemanticsVersionTests`); a digest test over the
+  fixture archive fails until the version is bumped when detection, ranking or title resolution changes.
+  In the referee the DeepSeek branch showed first songs at 1.9 s against 2.9 s here.
