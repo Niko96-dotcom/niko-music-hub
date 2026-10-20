@@ -473,10 +473,17 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
 
     func syncRepairState() {
         guard host.currentSongs() != nil || host.currentScannedSongs() != nil else { return }
+        let corrupt = catalog.corruptSongIDs()
+        // The usual archive has no corrupt row: nothing is present to intersect, and building two id sets
+        // of the whole catalog to find that out is the whole cost.
+        if corrupt.isEmpty {
+            if !repairSongIDs.isEmpty { repairSongIDs = [] }
+            return
+        }
         let scanned = Set((host.currentScannedSongs() ?? []).map(\.id))
         let visible = Set((host.currentSongs() ?? []).map(\.id))
         let present = scanned.union(visible)
-        let ids = catalog.corruptSongIDs().intersection(present)
+        let ids = corrupt.intersection(present)
         if ids != repairSongIDs {
             repairSongIDs = ids
         }

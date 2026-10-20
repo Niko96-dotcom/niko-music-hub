@@ -7,42 +7,46 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         let uniqueIncomingSongs = SongCatalogDeduplicator.sharingUnchangedValues(
             SongCatalogDeduplicator.uniqueByID(update.songs), from: scannedSongs
         )
-        let previousPreviewBySongID = Dictionary(
-            songs.compactMap { song -> (String, String)? in
-                guard let previewID = song.mainPreviewCandidateID else { return nil }
-                return (song.id, previewID)
-            }, uniquingKeysWith: { _, latest in latest }
-        )
-        let previousPreviewModifiedAtBySongID = Dictionary(
-            songs.compactMap { song -> (String, Date)? in
-                guard let modifiedAt = mainPreviewModifiedAt(for: song) else { return nil }
-                return (song.id, modifiedAt)
-            }, uniquingKeysWith: { _, latest in latest }
-        )
-        let previousCPRBySongID = Dictionary(
-            songs.compactMap { song -> (String, (path: String, modifiedAt: Date))? in
-                guard let identity = effectiveCPRIdentity(for: song) else { return nil }
-                return (song.id, identity)
-            }, uniquingKeysWith: { _, latest in latest }
-        )
         let projected = projectVaultCatalog(from: uniqueIncomingSongs)
-        mutateCatalog {
-            // A rescan that finds nothing new produces a second, equal copy of the catalog already held (the
-            // one decoded from the cached index on a normal launch). Keep the held arrays and let the new
-            // ones go, instead of carrying two copies of every song, version and preview for the whole session.
-            if !projected.scannedSongs.equalsConcurrently(scannedSongs) { scannedSongs = projected.scannedSongs }
-            if !projected.visibleSongs.equalsConcurrently(songs) { songs = projected.visibleSongs }
+        let scannedUnchanged = projected.scannedSongs.equalsConcurrently(scannedSongs)
+        let visibleUnchanged = projected.visibleSongs.equalsConcurrently(songs)
+        // Songs the rescan changed or added, with what the catalog held for them. Whatever reacts to a song's
+        // preview or project below depends only on the song's value, so a song equal to the one held cannot
+        // invalidate anything: only these are looked at, not all 10,000 on every rescan.
+        let changedSongs = visibleUnchanged ? [] : changedSongs(in: uniqueIncomingSongs)
+        let heldBefore = Dictionary(
+            changedSongs.compactMap { song in heldSong(id: song.id).map { (song.id, $0) } },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        // A rescan that finds nothing new produces a second, equal copy of the catalog already held (the
+        // one decoded from the cached index on a normal launch). Keep the held arrays and let the new
+        // ones go, instead of carrying two copies of every song, version and preview for the whole session.
+        // When nothing the browse list reads changed either, it is not projected again.
+        let browseInputsUnchanged = scannedUnchanged && visibleUnchanged
+            && update.diagnostics.skippedEntries == (scanDiagnostics?.skippedEntries ?? [])
+        if browseInputsUnchanged {
             scanDiagnostics = update.diagnostics
             setBackgroundStatusMessage(update.statusMessage)
+            // "Until the next scan" dismissals end with the scan, so the intelligence pass still runs.
+            refreshIntelligence()
+            if viewMode == .analytics { refreshAnalytics() }
+        } else {
+            mutateCatalog {
+                if !scannedUnchanged { scannedSongs = projected.scannedSongs }
+                if !visibleUnchanged { songs = projected.visibleSongs }
+                scanDiagnostics = update.diagnostics
+                setBackgroundStatusMessage(update.statusMessage)
+            }
         }
         // Refresh or clear selection against the new catalog (keep if still present even when
         // filtered out — browse recompute will clear filtered-out selections next).
         reconcileSelectedSong(requireVisibleInFilteredList: false)
         var invalidatedSelectedSongAnalysis = false
         var didInvalidateCPRPluginSummary = false
-        for song in uniqueIncomingSongs {
-            let previewIDChanged = previousPreviewBySongID[song.id] != song.mainPreviewCandidateID
-            let previewModifiedAtChanged = previousPreviewModifiedAtBySongID[song.id] != mainPreviewModifiedAt(for: song)
+        for song in changedSongs {
+            let held = heldBefore[song.id]
+            let previewIDChanged = held?.mainPreviewCandidateID != song.mainPreviewCandidateID
+            let previewModifiedAtChanged = held.flatMap(mainPreviewModifiedAt(for:)) != mainPreviewModifiedAt(for: song)
             if previewIDChanged || previewModifiedAtChanged {
                 invalidateMixdownAnalysis(for: song.id)
                 if selectedSong?.id == song.id {
@@ -50,7 +54,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
                 }
             }
             if let currentCPR = effectiveCPRIdentity(for: song),
-               let previousCPR = previousCPRBySongID[song.id],
+               let previousCPR = held.flatMap(effectiveCPRIdentity(for:)),
                previousCPR.path != currentCPR.path || previousCPR.modifiedAt != currentCPR.modifiedAt {
                 invalidateCPRPluginSummary(for: previousCPR.path)
                 didInvalidateCPRPluginSummary = true
@@ -72,13 +76,14 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         if didInvalidateCPRPluginSummary, pluginsSectionExpanded, let selectedSong {
             refreshCPRPluginSummary(for: selectedSong)
         }
-        // Drop analysis for songs that disappeared.
-        let remainingIDs = Set(songs.map(\.id))
-        ArchiveMixdownAnalysisCoordinator.prune(
-            remainingSongIDs: remainingIDs,
-            bpmCache: &mixdownBPMBySongID,
-            keyCache: &mixdownKeyBySongID
-        )
+        // Drop analysis for songs that disappeared (none did while the catalog is unchanged).
+        if !visibleUnchanged {
+            ArchiveMixdownAnalysisCoordinator.prune(
+                remainingSongIDs: Set(songs.map(\.id)),
+                bpmCache: &mixdownBPMBySongID,
+                keyCache: &mixdownKeyBySongID
+            )
+        }
         // P0 data-loss fix: scan applies never write song metadata. Per-song edits
         // persist single rows via commitSongMetadataUpdate/createNewSong; the former
         // whole-catalog scan-time upsert overwrote stored titles/notes/status whenever

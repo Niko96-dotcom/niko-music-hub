@@ -75,6 +75,16 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     func liveSong(id: String, fallback: Song) -> Song {
         songsByID[id] ?? fallback
     }
+
+    /// The catalog's song with this id, or nil when the catalog has none.
+    func heldSong(id: String) -> Song? {
+        songsByID[id]
+    }
+
+    /// The songs of `incoming` that the catalog does not hold as they are (new or different).
+    func changedSongs(in incoming: [Song]) -> [Song] {
+        incoming.songsDiffering(from: songsByID)
+    }
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
     @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []
