@@ -44,7 +44,7 @@ struct ArchiveBrowserView: View {
                     // Keep the board's bounded native row pool across a detail
                     // visit. Visibility, hit testing and accessibility follow
                     // the route; lanes reset their scroll when detail opens.
-                    let showsBoard = viewModel.viewMode == .board || viewModel.selectedSong == nil
+                    let showsBoard = viewModel.showsBoardPage
                     ZStack {
                         ArchiveBoardView(
                             viewModel: viewModel,

@@ -33,7 +33,7 @@ struct ArchiveBoardColumnView: View {
                 reduceMotion: reduceMotion,
                 colorScheme: colorScheme,
                 isCompact: compactWhenEmpty,
-                isBoardVisible: viewModel.viewMode == .board || viewModel.selectedSong == nil
+                isBoardVisible: viewModel.showsBoardPage
             ),
             accepts: { acceptsDrop(songID: $0) },
             perform: { performDrop(songID: $0) },
@@ -63,7 +63,7 @@ struct ArchiveBoardColumnView: View {
             isDropTargeted: isDropTargeted,
             colorScheme: colorScheme,
             dropLayout: dropLayout,
-            isBoardVisible: viewModel.viewMode == .board || viewModel.selectedSong == nil,
+            isBoardVisible: viewModel.showsBoardPage,
             onInteract: onInteract
         )
     }

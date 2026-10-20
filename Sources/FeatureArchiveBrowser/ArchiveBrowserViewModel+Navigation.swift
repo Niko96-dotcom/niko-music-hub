@@ -8,6 +8,12 @@ import NikoMusicCore
 extension ArchiveBrowserViewModel {
     static let navigationToolID = ToolFeatureID("archive-browser")
 
+    /// A disappearing selection leaves the existing detail route on its board
+    /// fallback. Visibility and board-only commands must agree on that page.
+    var showsBoardPage: Bool {
+        viewMode == .board || (viewMode == .boardDetail && selectedSong == nil)
+    }
+
     /// Route token for the current page. Board selection (highlight only)
     /// is deliberately not part of the route.
     var navigationRoute: String {

@@ -9,6 +9,24 @@ import XCTest
 /// tool switch does not reuse the stale detail token.
 @MainActor
 final class ArchiveNavigationHistoryTests: XCTestCase {
+    func testCatalogRemovalKeepsBoardFallbackAndItsCommandsAvailable() {
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        let song = fixtureSong()
+        viewModel.mutateCatalog { viewModel.songs = [song] }
+        viewModel.openSongDetail(song)
+        XCTAssertFalse(viewModel.showsBoardPage)
+
+        viewModel.mutateCatalog { viewModel.songs = [] }
+        XCTAssertNil(viewModel.selectedSong)
+        XCTAssertEqual(viewModel.viewMode, .boardDetail)
+        XCTAssertTrue(viewModel.showsBoardPage)
+
+        viewModel.viewMode = .analytics
+        XCTAssertFalse(viewModel.showsBoardPage)
+        viewModel.viewMode = .list
+        XCTAssertFalse(viewModel.showsBoardPage)
+    }
+
     func testMissingDetailFallsBackToBoardAndLastRouteAgrees() {
         let context = TestToolContext.make()
         let viewModel = ArchiveBrowserViewModel(context: context)
