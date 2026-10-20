@@ -372,3 +372,24 @@ the cache load and ~1 for the scan), the in-process timeline above is the steadi
   (utility QoS, timer coalescing) with the **original** `Sources/` and `Tests/` as well; the same suites pass from
   Terminal.app, which is where the gate that counts was run. `./script/e2e_user_smoke.sh` was not run (release gate, and it
   needs UI automation this shell does not have).
+
+## Changes on merge (2026-10-20)
+
+This report comes from the October 2026 performance bake-off, where this branch ranked first. Before the
+merge, four review points were checked and three were changed:
+
+- **Folder workers per volume.** The scan used 8 workers on every disk. `ScanWorkerBudget.volumeLimit` now
+  caps them at 2 on network volumes and 4 on other external volumes (Foundation cannot tell a spinning disk
+  from an SSD), and keeps 8 on internal volumes. Not yet measured on the real archive disk (the WD was not
+  connected); run `script/benchmark_scan_workers.sh <archive-root>` there before release. The same sweep on
+  the Studio's internal SSD, 10k synthetic songs, 2 interleaved runs: 1 worker 31.4 s, 2: 16.8 s, 4: 9.2 s,
+  8: 6.3 s (medians).
+- **Background budget.** The rescan after launch and other background full scans now run at utility
+  priority with 4 workers; a scan the user starts keeps 8. This trades about 3 s of rescan time on the
+  internal SSD for half the cores during launch.
+- **Sendable contracts.** The `ParallelMap` transform and the search `include` filter are `@Sendable` and the
+  elements `Sendable`; the job box stays `@unchecked` only for its result slots.
+- **Cancellation inside a batch: no change needed.** The review assumed workers never see cancellation. The
+  calling thread takes part in every batch and its folder scan throws at the next folder; `ParallelMap` then
+  stops every thread before its next folder. `ScanWorkerBudgetTests.testCancellationStopsInsideABatch` now
+  guards that a cancelled scan stops within about one folder per thread.

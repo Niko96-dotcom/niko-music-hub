@@ -205,11 +205,14 @@ struct ArchiveCatalogCoordinator {
         return try scanner.scan(roots: roots)
     }
 
-    func performScanDetached(roots: [URL]) async throws -> ScanResult {
+    /// A background scan (the rescan after launch, the watcher's rescans) runs at utility priority with
+    /// the background worker budget, so it leaves cores and battery to the live UI; a scan the user
+    /// started keeps the interactive budget.
+    func performScanDetached(roots: [URL], budget: ScanWorkerBudget = .interactive) async throws -> ScanResult {
         try Task.checkCancellation()
         let exclusionTerms = Self.loadExclusionTerms(settingsStore: settingsStore)
-        let scanTask = Task.detached(priority: .userInitiated) {
-            try MusicArchiveScanner(exclusionTerms: exclusionTerms).scan(roots: roots)
+        let scanTask = Task.detached(priority: budget == .background ? .utility : .userInitiated) {
+            try MusicArchiveScanner(exclusionTerms: exclusionTerms, workerBudget: budget).scan(roots: roots)
         }
         return try await withTaskCancellationHandler(operation: {
             let result = try await scanTask.value

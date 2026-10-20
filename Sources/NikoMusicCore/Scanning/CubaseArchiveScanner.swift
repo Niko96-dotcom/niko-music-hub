@@ -9,19 +9,30 @@ public struct MusicArchiveScanner: @unchecked Sendable {
     private let previewRanker: PreviewConfidenceRanker
     private let sidecarNotesReader: SidecarNotesReader
     private let exclusionTerms: [String]
+    private let workerBudget: ScanWorkerBudget
     /// Test seams for filesystem races; production leaves them empty.
     var raceHooks = RaceHooks()
+    /// Benchmark seam: fixes the number of folder workers, ignoring the volume and the budget.
+    var workerLimitOverride: Int?
 
     struct RaceHooks {
         /// Runs after the song-folder walk lists an entry and before the scan resolves it.
         var entryListed: ((URL) -> Void)?
         /// Runs after a song folder's walk and before its preview files are opened.
         var songWalked: ((URL) -> Void)?
+        /// Runs on the worker thread just before a song folder is scanned. Unlike the two hooks
+        /// above it keeps the parallel walk, so tests can observe it (and cancel during it).
+        var folderWillScan: (@Sendable (URL) -> Void)?
     }
 
-    public init(fileManager: FileManager = .default, exclusionTerms: [String] = []) {
+    public init(
+        fileManager: FileManager = .default,
+        exclusionTerms: [String] = [],
+        workerBudget: ScanWorkerBudget = .interactive
+    ) {
         self.fileManager = fileManager
         self.exclusionTerms = exclusionTerms.map { $0.lowercased() }
+        self.workerBudget = workerBudget
         self.titleResolver = SongTitleResolver()
         self.projectDetector = ProjectVersionDetector(fileManager: fileManager)
         self.previewDetector = PreviewCandidateDetector(fileManager: fileManager)
@@ -155,7 +166,7 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                 ))
             }
 
-            var outcomes = try scanSongFolders(songFolders).makeIterator()
+            var outcomes = try scanSongFolders(songFolders, root: standardizedRoot).makeIterator()
             for entry in entries {
                 switch entry {
                 case .skipped(let skipped):
@@ -201,17 +212,21 @@ public struct MusicArchiveScanner: @unchecked Sendable {
         case failed(SkippedScanEntry, unusablePath: String?)
     }
 
-    /// Folders per batch; cancellation is checked between batches. The size adapts to how long a batch
-    /// takes: large batches keep every thread busy on fast storage, small ones keep a cancel prompt
-    /// when each folder is slow (a network volume or a cloud drive).
+    /// Folders per batch. The size adapts to how long a batch takes: large batches keep every thread
+    /// busy on fast storage, small ones keep progress steady when each folder is slow (a network volume
+    /// or a cloud drive). Cancellation also stops a running batch (see `scanSongFolders`).
     private static let minimumScanBatchSize = 32
     private static let maximumScanBatchSize = 256
     private static let targetScanBatchSeconds = 0.15
     /// Below this many song folders the serial walk is as fast and simpler.
     private static let parallelScanMinimumFolders = 16
-    /// Threads scanning song folders at once. Each folder is dozens of file opens and header reads; past
-    /// a handful of threads the kernel spends the gain on contention (see `ParallelMap`).
-    private static let scanThreads = 8
+    /// Threads scanning song folders at once: the smaller of what the root's volume handles well
+    /// (`ScanWorkerBudget.volumeLimit`) and the caller's budget. Each folder is dozens of file opens and
+    /// header reads; past a handful of threads the kernel spends the gain on contention (see `ParallelMap`).
+    private func scanThreads(for root: URL) -> Int {
+        if let workerLimitOverride { return max(1, workerLimitOverride) }
+        return max(1, min(ScanWorkerBudget.volumeLimit(for: root), workerBudget.maximumWorkers))
+    }
 
     private func scanOutcome(of folder: URL) throws -> FolderOutcome {
         do {
@@ -232,12 +247,22 @@ public struct MusicArchiveScanner: @unchecked Sendable {
     }
 
     /// Outcomes in the order of `folders`. The race hooks run test code that assumes one folder at a
-    /// time, so a scanner with a hook installed keeps the serial walk.
-    private func scanSongFolders(_ folders: [URL]) throws -> [FolderOutcome] {
-        guard raceHooks.entryListed == nil, raceHooks.songWalked == nil,
+    /// time, so a scanner with one of them installed keeps the serial walk.
+    private func scanSongFolders(_ folders: [URL], root: URL) throws -> [FolderOutcome] {
+        let threads = scanThreads(for: root)
+        guard raceHooks.entryListed == nil, raceHooks.songWalked == nil, threads > 1,
               folders.count >= Self.parallelScanMinimumFolders else {
-            return try folders.map { folder in try autoreleasepool { try scanOutcome(of: folder) } }
+            return try folders.map { folder in
+                try Task.checkCancellation()
+                raceHooks.folderWillScan?(folder)
+                return try autoreleasepool { try scanOutcome(of: folder) }
+            }
         }
+        // Cancellation inside a batch: the workers run on GCD threads, where `Task.isCancelled` is always
+        // false, but the calling thread takes part in every batch and its `scanSongFolder` throws at the
+        // next folder; `ParallelMap` then stops every thread before its next folder. Stopping takes at
+        // most one folder per thread (`ScanWorkerBudgetTests.testCancellationStopsInsideABatch`).
+        let folderWillScan = raceHooks.folderWillScan
         var outcomes: [FolderOutcome] = []
         outcomes.reserveCapacity(folders.count)
         var start = 0
@@ -247,8 +272,11 @@ public struct MusicArchiveScanner: @unchecked Sendable {
             let end = min(folders.count, start + batchSize)
             let began = ContinuousClock.now
             outcomes.append(contentsOf: try ParallelMap.map(
-                Array(folders[start..<end]), minimumParallelCount: 2, maximumThreads: Self.scanThreads
-            ) { try scanOutcome(of: $0) })
+                Array(folders[start..<end]), minimumParallelCount: 2, maximumThreads: threads
+            ) { folder in
+                folderWillScan?(folder)
+                return try scanOutcome(of: folder)
+            })
             let elapsed = began.duration(to: .now)
             let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
             if seconds > 0 {

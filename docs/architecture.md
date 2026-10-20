@@ -68,10 +68,15 @@ Archive domain and safety. No SwiftUI/AppKit.
   `Preview/` (mixdown BPM/key estimation, hook locator).
 - `Support/`: the helpers that keep a 10,000-song archive fast without changing results. `ParallelMap` and
   `Array.equalsConcurrently` are order-preserving parallel map and equality with a per-call thread budget (use them
-  only for pure per-element work; Foundation's locale and JSON paths stop scaling past a handful of threads);
+  only for pure per-element work: the `ParallelMap` transform is `@Sendable` and its elements are `Sendable`, so the
+  compiler checks that; Foundation's locale and JSON paths stop scaling past a handful of threads);
   `FastISO8601` parses the one timestamp spelling the app writes and leaves every other spelling to Foundation.
-  `Scanning/CompiledRegex` holds fixed filename patterns compiled once. Measurements and the benchmark tools:
-  `docs/perf-bakeoff/PERF-REPORT.md`, `script/performance/`.
+  `Scanning/CompiledRegex` holds fixed filename patterns compiled once. `Scanning/ScanWorkerBudget` decides how many
+  song folders a full scan walks at once: the smaller of the root volume's limit (network 2, other external 4,
+  internal 8) and the caller's budget (a scan the user started: 8; the rescan after launch and other background
+  scans: 4, at utility priority). Measurements and the benchmark tools:
+  `docs/performance/archive-startup-2026-10-20.md`, `script/performance/`, `script/benchmark_scan_workers.sh`
+  (read-only worker sweep on a real archive disk), `script/bakeoff/` (synthetic 1k/10k archive and isolated launch).
 
 ### `AppCore` (shared)
 

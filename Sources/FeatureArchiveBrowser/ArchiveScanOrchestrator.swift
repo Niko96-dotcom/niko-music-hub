@@ -177,7 +177,7 @@ final class ArchiveScanOrchestrator {
             let scannedAt = Date()
             let scanTask = Task { @MainActor [weak self] () throws -> ScanResult in
                 guard let self else { throw CancellationError() }
-                return try await self.performScanDetached(roots: request.roots)
+                return try await self.performScanDetached(roots: request.roots, isBackground: isBackground)
             }
             activeFullScanTask = scanTask
             if userCancelRequested {
@@ -275,7 +275,7 @@ final class ArchiveScanOrchestrator {
         host?.applyScanFailure(error)
     }
 
-    private func performScanDetached(roots: [URL]) async throws -> ScanResult {
+    private func performScanDetached(roots: [URL], isBackground: Bool) async throws -> ScanResult {
         guard let host else {
             throw CancellationError()
         }
@@ -284,7 +284,7 @@ final class ArchiveScanOrchestrator {
             try Task.checkCancellation()
             return result
         }
-        return try await host.catalog.performScanDetached(roots: roots)
+        return try await host.catalog.performScanDetached(roots: roots, budget: isBackground ? .background : .interactive)
     }
 
     private func enqueueIncrementalRescan(paths: [URL]) {
