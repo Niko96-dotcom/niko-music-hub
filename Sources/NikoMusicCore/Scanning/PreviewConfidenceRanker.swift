@@ -303,7 +303,7 @@ public struct PreviewConfidenceRanker: Sendable {
 
         var updated = candidate
         updated.confidenceScore = score
-        updated.confidenceReasons = reasons
+        updated.confidenceReasons = ConfidenceReasonPool.shared.canonical(reasons)
         let isDelivery = identity != nil && !PreviewFilenameSemantics.isPartialExport(in: candidate.fileName)
             && !PreviewSongIdentity.isTechnicalExport(candidate.fileName)
             && candidate.folderRole != .stems && candidate.folderRole != .samples && (candidate.durationSeconds ?? 30) >= 30

@@ -33,6 +33,29 @@ public struct PreviewCandidate: Identifiable, Hashable, Sendable, Codable {
     public var confidenceScore: Double
     public var confidenceReasons: [String]
 
+    private enum CodingKeys: String, CodingKey {
+        case id, filePath, fileName, folderRole, modifiedAt, detectedRole, fileExtension
+        case detectedVersionNumber, durationSeconds, namedDeliveryModifiedAt, confidenceScore, confidenceReasons
+    }
+
+    /// Decodes exactly what the synthesized decoder would, but shares the reasons list with every other candidate
+    /// that has the same one (`ConfidenceReasonPool`).
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        filePath = try container.decode(URL.self, forKey: .filePath)
+        fileName = try container.decode(String.self, forKey: .fileName)
+        folderRole = try container.decode(PreviewFolderRole.self, forKey: .folderRole)
+        modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
+        detectedRole = try container.decode(PreviewDetectedRole.self, forKey: .detectedRole)
+        fileExtension = try container.decode(String.self, forKey: .fileExtension)
+        detectedVersionNumber = try container.decodeIfPresent(Int.self, forKey: .detectedVersionNumber)
+        durationSeconds = try container.decodeIfPresent(Double.self, forKey: .durationSeconds)
+        namedDeliveryModifiedAt = try container.decodeIfPresent(Date.self, forKey: .namedDeliveryModifiedAt)
+        confidenceScore = try container.decode(Double.self, forKey: .confidenceScore)
+        confidenceReasons = ConfidenceReasonPool.shared.canonical(try container.decode([String].self, forKey: .confidenceReasons))
+    }
+
     public init(
         filePath: URL,
         fileName: String,
