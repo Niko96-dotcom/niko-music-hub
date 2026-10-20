@@ -10,7 +10,7 @@
 # and archive-launch-<tag> (the harness itself always comes from the current checkout), and puts Sources/ back
 # to HEAD. It refuses to run with uncommitted changes under Sources/ and never touches the index of anything
 # else. Run the binaries alternately (before, after, before, after ...) to cancel machine drift; see
-# docs/perf-bakeoff/PERF-REPORT.md for the commands.
+# docs/performance/archive-startup-2026-10-20.md for the commands.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
