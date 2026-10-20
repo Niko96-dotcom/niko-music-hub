@@ -11,9 +11,9 @@ struct ArchiveBrowserView: View {
     @Environment(\.hubToolIsActive) private var isActiveTool
     @State private var showNewSongSheet = false
     @FocusState private var keyboardFocus: ArchiveKeyboardFocus?
-    /// Page-level state that must survive board ⇄ list ⇄ detail mode switches,
-    /// which rebuild the mode's subtree: sidebar disclosure flags and the board
-    /// column projection.
+    /// Page-level state survives layout changes. The board's bounded card pool
+    /// also stays mounted during a detail visit, while list/analytics rebuild
+    /// their subtrees: disclosure flags and the column projection live here.
     @StateObject private var sidebarUI = ArchiveSidebarUIState()
     @StateObject private var boardProjectionCache: ArchiveBoardProjectionCache
 
@@ -40,19 +40,27 @@ struct ArchiveBrowserView: View {
 
             ZStack {
                 switch viewModel.viewMode {
-                case .board:
-                    ArchiveBoardView(
-                        viewModel: viewModel,
-                        projectionCache: boardProjectionCache,
-                        onChooseRoot: chooseRoot,
-                        keyboardFocus: $keyboardFocus
-                    )
-                        .padding(.horizontal, HubToolLayout.horizontalPadding)
-                        .padding(.top, HubToolLayout.topPadding)
-                        .padding(.bottom, HubToolLayout.bottomPadding)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                case .boardDetail:
-                    boardDetailPage
+                case .board, .boardDetail:
+                    // Keep the board's bounded native row pool across a detail
+                    // visit. Visibility, hit testing and accessibility follow
+                    // the route; lanes reset their scroll when detail opens.
+                    let showsBoard = viewModel.viewMode == .board || viewModel.selectedSong == nil
+                    ZStack {
+                        ArchiveBoardView(
+                            viewModel: viewModel,
+                            projectionCache: boardProjectionCache,
+                            onChooseRoot: chooseRoot,
+                            keyboardFocus: $keyboardFocus
+                        )
+                            .padding(.horizontal, HubToolLayout.horizontalPadding)
+                            .padding(.top, HubToolLayout.topPadding)
+                            .padding(.bottom, HubToolLayout.bottomPadding)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .opacity(showsBoard ? 1 : 0)
+                            .allowsHitTesting(showsBoard)
+                            .accessibilityHidden(!showsBoard)
+                        if !showsBoard { boardDetailPage }
+                    }
                 case .analytics:
                     ArchiveAnalyticsView(viewModel: viewModel)
                         .padding(.horizontal, HubToolLayout.horizontalPadding)
