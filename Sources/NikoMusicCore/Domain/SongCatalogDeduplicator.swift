@@ -5,8 +5,18 @@ import Foundation
 /// downstream browse and intelligence code must always receive one row per physical song path.
 public enum SongCatalogDeduplicator {
     public static func uniqueByID(_ songs: [Song]) -> [Song] {
-        var seen: Set<String> = []
-        return songs.filter { seen.insert($0.id).inserted }
+        var seen = Set<String>(minimumCapacity: songs.count)
+        guard let firstRepeat = songs.firstIndex(where: { !seen.insert($0.id).inserted }) else {
+            // The usual catalog has no repeat: hand it back as it is (no 10,000-song copy, and the same storage,
+            // which later comparisons recognize at once).
+            return songs
+        }
+        var unique = Array(songs[..<firstRepeat])
+        unique.reserveCapacity(songs.count - 1)
+        for song in songs[(firstRepeat + 1)...] where seen.insert(song.id).inserted {
+            unique.append(song)
+        }
+        return unique
     }
 
     /// Cache loading and scanning independently allocate the same catalog.

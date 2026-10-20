@@ -30,4 +30,26 @@ final class SongCatalogDeduplicationTests: XCTestCase {
             displayTitle: title
         )
     }
+
+    func testUniqueCatalogIsReturnedAsItIsWithTheSameStorage() {
+        let songs = (0..<50).map {
+            Song(folderPath: URL(fileURLWithPath: "/tmp/dedupe-same/\($0)"), originalFolderName: "S\($0)", displayTitle: "S\($0)")
+        }
+        let result = SongCatalogDeduplicator.uniqueByID(songs)
+        XCTAssertEqual(result, songs)
+        XCTAssertTrue(songs.withUnsafeBufferPointer { a in result.withUnsafeBufferPointer { b in a.baseAddress == b.baseAddress } })
+    }
+
+    func testRepeatsAnywhereKeepTheFirstOccurrenceInCatalogOrder() {
+        func song(_ name: String, note: String? = nil) -> Song {
+            Song(folderPath: URL(fileURLWithPath: "/tmp/dedupe-order/\(name)"), originalFolderName: name, displayTitle: name, appNote: note)
+        }
+        let input = [song("a"), song("b", note: "first b"), song("c"), song("b", note: "second b"), song("d"), song("a", note: "second a"), song("e")]
+        let result = SongCatalogDeduplicator.uniqueByID(input)
+        XCTAssertEqual(result.map(\.originalFolderName), ["a", "b", "c", "d", "e"])
+        XCTAssertEqual(result[1].appNote, "first b")
+        XCTAssertNil(result[0].appNote)
+        XCTAssertEqual(SongCatalogDeduplicator.uniqueByID([song("x"), song("x")]).count, 1)
+        XCTAssertEqual(SongCatalogDeduplicator.uniqueByID([]).count, 0)
+    }
 }
