@@ -48,17 +48,28 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
     public func loadLatest() throws -> ArchiveIndexSnapshot? {
         // All stores share one serial connection. Only the row reads hold it; the song JSON decodes
         // after it is released, so a main-actor read at launch does not wait for tens of MB of JSON.
-        let stored = try database.withConnection { db -> StoredSnapshot? in
+        let memo = database.snapshotRowsMemo
+        let stored = try database.withConnection { db -> (snapshot: StoredSnapshot, memoGeneration: UInt64, dataVersion: Int64?)? in
+            let generation = memo.generation
+            let version = try? dataVersion(db)
             if let rows = try loadPerSongRows(db) {
-                return .perSong(rows)
+                return (.perSong(rows), generation, version)
             }
-            return try loadLegacyBlobSnapshot(db).map(StoredSnapshot.decoded)
+            return try loadLegacyBlobSnapshot(db).map { (StoredSnapshot.decoded($0), generation, version) }
         }
-        switch stored {
+        switch stored?.snapshot {
         case .perSong(let rows):
             // Rows are independent: decoded on all cores, in the original row order.
             let songs = try ParallelMap.map(rows.songJSON) { row in
                 try Self.makeDecoder().decode(Song.self, from: row)
+            }
+            // A snapshot of the current preview semantics is what the launch load keeps as it is (it renormalizes
+            // only songs with hidden previews), so the decoded songs share their storage with the live catalog and
+            // remembering them costs no second copy. An older snapshot is rewritten song by song at launch: the
+            // first save writes it in full and records what it wrote.
+            if let stored, let version = stored.dataVersion,
+               rows.previewSemanticsVersion == PreviewAutoSelectionNormalizer.currentVersion {
+                memo.replace(songs: songs, dataVersion: version, ifGeneration: stored.memoGeneration)
             }
             return ArchiveIndexSnapshot(
                 roots: rows.roots,
@@ -91,44 +102,58 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         guard let rootsJSON = String(data: rootsData, encoding: .utf8) else {
             throw StoreError.encode("utf8")
         }
-        // Every save serializes the whole catalog to find the rows that changed. Songs are independent,
-        // so they encode on several cores (each with its own encoder); row order is the catalog order.
-        let songRows: [(id: String, json: String)] = try ParallelMap.map(snapshot.songs) { song in
-            let songData = try Self.makeEncoder().encode(song)
-            guard let songJSON = String(data: songData, encoding: .utf8) else {
-                throw StoreError.encode("utf8")
-            }
-            return (song.id, songJSON)
-        }
         let scannedText = ISO8601DateFormatter().string(from: snapshot.scannedAt)
-        try database.withConnection { db in
-            guard sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK else {
-                throw StoreError.exec(message(db))
-            }
-            do {
-                try upsertMeta(
-                    rootsJSON: rootsJSON,
-                    scannedText: scannedText,
-                    previewSemanticsVersion: snapshot.previewSemanticsVersion,
-                    db: db
-                )
-                try syncSongRows(songRows, db: db)
-                // The per-song snapshot supersedes the single-blob era table.
-                guard sqlite3_exec(db, "DROP TABLE IF EXISTS archive_snapshot;", nil, nil, nil) == SQLITE_OK else {
+        let songs = snapshot.songs
+        // Saving used to encode every song to JSON just to let SQLite discard the rows that came out equal:
+        // for 10,000 songs that is about 110 MB of text built and thrown away after every scan and every
+        // edit. The memo remembers what the song rows hold, so only songs that differ are encoded.
+        let memo = database.snapshotRowsMemo
+        let known = memo.current()
+        let diff = known.flatMap { SongRowDiff(known: $0.songs, next: songs) }
+        do {
+            try database.withConnection { db in
+                guard sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK else {
                     throw StoreError.exec(message(db))
                 }
-            } catch {
-                _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
-                throw error
+                do {
+                    try upsertMeta(
+                        rootsJSON: rootsJSON,
+                        scannedText: scannedText,
+                        previewSemanticsVersion: snapshot.previewSemanticsVersion,
+                        db: db
+                    )
+                    // The rows hold `known` only while no other save replaced the memo and no other connection
+                    // (another process) changed the database since it was recorded. Otherwise every row is
+                    // checked against a fresh encoding, as before.
+                    if let known, let diff, memo.generation == known.generation,
+                       try dataVersion(db) == known.dataVersion {
+                        try applyRowDiff(diff, songs: songs, db: db)
+                    } else {
+                        try syncAllSongRows(songs, db: db)
+                    }
+                    // The per-song snapshot supersedes the single-blob era table.
+                    guard sqlite3_exec(db, "DROP TABLE IF EXISTS archive_snapshot;", nil, nil, nil) == SQLITE_OK else {
+                        throw StoreError.exec(message(db))
+                    }
+                } catch {
+                    _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+                    throw error
+                }
+                guard sqlite3_exec(db, "COMMIT;", nil, nil, nil) == SQLITE_OK else {
+                    _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+                    throw StoreError.exec(message(db))
+                }
+                memo.replace(songs: songs, dataVersion: try dataVersion(db))
             }
-            guard sqlite3_exec(db, "COMMIT;", nil, nil, nil) == SQLITE_OK else {
-                _ = sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
-                throw StoreError.exec(message(db))
-            }
+        } catch {
+            // What the rows hold is no longer known.
+            memo.invalidate()
+            throw error
         }
     }
 
     public func clear() throws {
+        database.snapshotRowsMemo.invalidate()
         try database.withConnection { db in
             let sql = """
             DELETE FROM archive_snapshot_meta;
@@ -228,37 +253,96 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         }
     }
 
-    private func syncSongRows(_ songRows: [(id: String, json: String)], db: OpaquePointer) throws {
-        let newIDs = Set(songRows.map(\.id))
+    /// Songs encoded per batch. The JSON of a batch is the only song text alive at once, instead of the whole catalog's.
+    private static let rowBatchSize = 256
+
+    private static let upsertSongSQL = """
+    INSERT INTO archive_snapshot_song (song_id, song_json, position)
+    VALUES (?, ?, ?)
+    ON CONFLICT(song_id) DO UPDATE SET
+      song_json = excluded.song_json,
+      position = excluded.position
+    WHERE archive_snapshot_song.song_json IS NOT excluded.song_json
+       OR archive_snapshot_song.position IS NOT excluded.position;
+    """
+
+    /// Writes every song: rows that already hold the same JSON and position stay untouched, so they never
+    /// dirty pages. Songs are independent, so each batch encodes on several cores (each with its own
+    /// encoder); row order is the catalog order.
+    private func syncAllSongRows(_ songs: [Song], db: OpaquePointer) throws {
+        let newIDs = Set(songs.map(\.id))
         for staleID in try storedSongIDs(db).subtracting(newIDs) {
             try deleteSongRow(id: staleID, db: db)
         }
+        try upsertSongRows(songs, positions: Array(songs.indices), db: db)
+    }
 
+    /// Writes only what differs from the rows the memo describes: songs that are new or changed (encoded and
+    /// upserted), songs that kept their content but moved (position only), and songs that are gone.
+    private func applyRowDiff(_ diff: SongRowDiff, songs: [Song], db: OpaquePointer) throws {
+        for staleID in diff.removedIDs {
+            try deleteSongRow(id: staleID, db: db)
+        }
+        try upsertSongRows(diff.changedIndices.map { songs[$0] }, positions: diff.changedIndices, db: db)
+        guard !diff.movedIndices.isEmpty else { return }
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
-        // The WHERE clause keeps unchanged rows untouched so they never dirty pages.
-        let sql = """
-        INSERT INTO archive_snapshot_song (song_id, song_json, position)
-        VALUES (?, ?, ?)
-        ON CONFLICT(song_id) DO UPDATE SET
-          song_json = excluded.song_json,
-          position = excluded.position
-        WHERE archive_snapshot_song.song_json IS NOT excluded.song_json
-           OR archive_snapshot_song.position IS NOT excluded.position;
-        """
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+        guard sqlite3_prepare_v2(db, "UPDATE archive_snapshot_song SET position = ? WHERE song_id = ?;", -1, &statement, nil) == SQLITE_OK else {
             throw StoreError.prepare(message(db))
         }
-        for (position, row) in songRows.enumerated() {
+        for index in diff.movedIndices {
             sqlite3_reset(statement)
             sqlite3_clear_bindings(statement)
-            sqlite3_bind_text(statement, 1, row.id, -1, sqliteTransient)
-            sqlite3_bind_text(statement, 2, row.json, -1, sqliteTransient)
-            sqlite3_bind_int64(statement, 3, Int64(position))
+            sqlite3_bind_int64(statement, 1, Int64(index))
+            sqlite3_bind_text(statement, 2, songs[index].id, -1, sqliteTransient)
             guard sqlite3_step(statement) == SQLITE_DONE else {
                 throw StoreError.step(message(db))
             }
         }
+    }
+
+    private func upsertSongRows(_ songs: [Song], positions: [Int], db: OpaquePointer) throws {
+        guard !songs.isEmpty else { return }
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, Self.upsertSongSQL, -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        var start = 0
+        while start < songs.count {
+            let end = min(start + Self.rowBatchSize, songs.count)
+            let rows: [(id: String, json: String)] = try ParallelMap.map(Array(songs[start..<end])) { song in
+                let songData = try Self.makeEncoder().encode(song)
+                guard let songJSON = String(data: songData, encoding: .utf8) else {
+                    throw StoreError.encode("utf8")
+                }
+                return (song.id, songJSON)
+            }
+            for (offset, row) in rows.enumerated() {
+                sqlite3_reset(statement)
+                sqlite3_clear_bindings(statement)
+                sqlite3_bind_text(statement, 1, row.id, -1, sqliteTransient)
+                sqlite3_bind_text(statement, 2, row.json, -1, sqliteTransient)
+                sqlite3_bind_int64(statement, 3, Int64(positions[start + offset]))
+                guard sqlite3_step(statement) == SQLITE_DONE else {
+                    throw StoreError.step(message(db))
+                }
+            }
+            start = end
+        }
+    }
+
+    /// `PRAGMA data_version`: unchanged by this connection's own commits, different after another connection's.
+    private func dataVersion(_ db: OpaquePointer) throws -> Int64 {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "PRAGMA data_version;", -1, &statement, nil) == SQLITE_OK else {
+            throw StoreError.prepare(message(db))
+        }
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw StoreError.step(message(db))
+        }
+        return sqlite3_column_int64(statement, 0)
     }
 
     private func storedSongIDs(_ db: OpaquePointer) throws -> Set<String> {

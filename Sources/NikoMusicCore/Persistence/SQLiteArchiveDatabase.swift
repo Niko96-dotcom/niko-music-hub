@@ -42,6 +42,8 @@ public final class SQLiteArchiveDatabase: @unchecked Sendable {
     private let fileManager: FileManager
     private let recoverySeam: SQLiteRecoverySyncSeam
     private let accessQueue = DispatchQueue(label: "com.niko.music-hub.sqlite-archive-database")
+    /// The songs the archive index rows hold, so a save can skip the songs that did not change.
+    let snapshotRowsMemo = SnapshotRowsMemo()
     private var connection: OpaquePointer?
     /// Device/inode of the file the current connection actually opened,
     /// captured after open (and after one-time VACUUM, which may rewrite the
