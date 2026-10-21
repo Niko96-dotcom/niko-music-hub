@@ -268,11 +268,11 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
         XCTAssertNotNil(viewModel.projectVaultOperationMessages[song.id])
         XCTAssertEqual(
             viewModel.projectVaultQueueMessage(for: song),
-            "Archived and verified. Find this song in Show archived projects to restore it."
+            "Archived and verified. Find this song in Show archived songs to restore it."
         )
         XCTAssertEqual(
             viewModel.projectVaultOperationMessages[song.id],
-            "Archived and verified. Find this song in Show archived projects to restore it."
+            "Archived and verified. Find this song in Show archived songs to restore it."
         )
 
         // Cleanup: no poll after complete. The queue task is gone and the

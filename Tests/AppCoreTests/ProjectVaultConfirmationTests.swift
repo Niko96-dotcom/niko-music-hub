@@ -11,14 +11,14 @@ final class ProjectVaultConfirmationTests: XCTestCase {
                 songTitle: title,
                 independentBackupConfirmed: true
             ),
-            "Niko Music Hub will copy “Test Song” to Project Vault and verify the copy. It will then permanently delete this song’s folder in Active Projects. Deleted files do not go to the Trash. You can later use Restore & Open to copy a verified generation back into Active Projects. Settings currently records that you protect the Archive with an independent backup."
+            "Niko Music Hub will create or reuse a copy of “Test Song” in Project Vault and verify it. It will then permanently delete this song’s folder in Active Projects. Deleted files do not go to the Trash. You can later use Restore & Open to copy a verified generation back into Active Projects. Settings currently records that you protect the Archive with an independent backup."
         )
         XCTAssertEqual(
             ProjectVaultConfirmationCopy.archiveNowMessage(
                 songTitle: title,
                 independentBackupConfirmed: false
             ),
-            "Niko Music Hub will copy “Test Song” to Project Vault and verify the copy. Removing the Active Projects folder also requires the independent-backup setting. If that setting is off, the copy is kept and the Active folder stays. If that folder ever goes missing, Restore & Open brings it back."
+            "Niko Music Hub will create or reuse a copy of “Test Song” in Project Vault and verify it. Removing the Active Projects folder also requires the independent-backup setting. If that setting is off, the copy is kept and the Active folder stays. If that folder ever goes missing, Restore & Open brings it back."
         )
     }
 

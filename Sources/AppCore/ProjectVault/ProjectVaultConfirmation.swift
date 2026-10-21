@@ -65,12 +65,12 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         independentBackupConfirmed: Bool
     ) -> String {
         if willRemoveActiveCopy {
-            return "Niko Music Hub will copy “\(songTitle)” to Project Vault and verify the copy. It will then permanently delete this song’s folder in Active Projects. Deleted files do not go to the Trash. You can later use Restore & Open to copy a verified generation back into Active Projects. Settings currently records that you protect the Archive with an independent backup."
+            return "Niko Music Hub will create or reuse a copy of “\(songTitle)” in Project Vault and verify it. It will then permanently delete this song’s folder in Active Projects. Deleted files do not go to the Trash. You can later use Restore & Open to copy a verified generation back into Active Projects. Settings currently records that you protect the Archive with an independent backup."
         }
         if !independentBackupConfirmed {
-            return "Niko Music Hub will copy “\(songTitle)” to Project Vault and verify the copy. Removing the Active Projects folder also requires the independent-backup setting. If that setting is off, the copy is kept and the Active folder stays. If that folder ever goes missing, Restore & Open brings it back."
+            return "Niko Music Hub will create or reuse a copy of “\(songTitle)” in Project Vault and verify it. Removing the Active Projects folder also requires the independent-backup setting. If that setting is off, the copy is kept and the Active folder stays. If that folder ever goes missing, Restore & Open brings it back."
         }
-        return "Niko Music Hub will copy “\(songTitle)” to Project Vault and verify the copy. The Active Projects folder stays in place. If that folder ever goes missing, Restore & Open brings it back."
+        return "Niko Music Hub will create or reuse a copy of “\(songTitle)” in Project Vault and verify it. The Active Projects folder stays in place. If that folder ever goes missing, Restore & Open brings it back."
     }
 
     /// Compatibility overload. Preserved so existing call sites compile;

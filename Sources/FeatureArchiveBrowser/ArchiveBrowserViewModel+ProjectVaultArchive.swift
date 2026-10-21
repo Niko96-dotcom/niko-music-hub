@@ -477,7 +477,7 @@ extension ArchiveBrowserViewModel {
                 let activeRetained = FileManager.default.fileExists(atPath: livePath.path)
                 model.setProjectVaultStatusMessage(activeRetained
                     ? "Backup copy verified. The project remains in Active Projects."
-                    : "Archived and verified. Find this song in Show archived projects to restore it.")
+                    : "Archived and verified. Find this song in Show archived songs to restore it.")
                 return true
             } catch is CancellationError {
                 _ = await model.refreshProjectVaultSnapshots()
