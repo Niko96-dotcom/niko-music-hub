@@ -106,3 +106,29 @@ final class ArchiveBoardScrollActivity {
 
     isolated deinit { timer?.invalidate() }
 }
+
+/// One attached board viewport or lane owns this subscription. Exact senders
+/// avoid callbacks for other tools, hosted controls, and ordinary view layout.
+@MainActor
+final class ArchiveBoardScrollObservation: NSObject {
+    private let activity: ArchiveBoardScrollActivity
+
+    init(scrollView: NSScrollView, activity: ArchiveBoardScrollActivity) {
+        self.activity = activity
+        super.init()
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(scrolled(_:)),
+                           name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        center.addObserver(self, selector: #selector(scrolled(_:)),
+                           name: NSScrollView.didLiveScrollNotification, object: scrollView)
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        center.addObserver(self, selector: #selector(scrolled(_:)),
+                           name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+    }
+
+    @objc private func scrolled(_ notification: Notification) {
+        activity.recordActivity()
+    }
+
+    isolated deinit { NotificationCenter.default.removeObserver(self) }
+}

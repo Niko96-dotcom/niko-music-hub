@@ -6,6 +6,81 @@ import XCTest
 
 @MainActor
 final class ArchiveBoardHorizontalScrollTests: XCTestCase {
+    func testUnrelatedScrollAndBoundsNotificationsDoNotMarkBoardAsScrolling() throws {
+        let fixture = makeFixture()
+        defer { fixture.window.close() }
+        let activity = fixture.controller.activity
+        let unrelated = NSScrollView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
+        // Even a hosted control inside the document is not a registered lane.
+        // Descendant filtering after a process-wide callback is insufficient.
+        let document = try XCTUnwrap(fixture.scroll.documentView)
+        for parent in [NSView(), document] {
+            parent.addSubview(unrelated)
+            activity.endIfIdle(at: Date.distantFuture)
+            postScrollNotifications(unrelated)
+            XCTAssertFalse(activity.isScrolling)
+            unrelated.removeFromSuperview()
+        }
+    }
+
+    func testOnlyOwnedViewportAndLaneSendersMarkScrollingAndDetachRemovesObservers() throws {
+        let fixture = makeFixture()
+        defer { fixture.window.close() }
+        let activity = fixture.controller.activity
+        let document = try XCTUnwrap(fixture.scroll.documentView)
+        let laneHost = try XCTUnwrap(document.subviews.first)
+        let lane = try XCTUnwrap(descendants(laneHost).compactMap { $0 as? ArchiveBoardNativeSongListView }.first)
+        for scroll in [fixture.scroll as NSScrollView, lane] {
+            XCTAssertTrue(scroll.contentView.postsBoundsChangedNotifications)
+            for (name, sender) in scrollNotifications(scroll) {
+                activity.endIfIdle(at: Date.distantFuture)
+                NotificationCenter.default.post(name: name, object: sender)
+                XCTAssertTrue(activity.isScrolling, "Missing owned sender for \(name)")
+            }
+        }
+        laneHost.removeFromSuperview()
+        activity.endIfIdle(at: Date.distantFuture)
+        postScrollNotifications(lane)
+        XCTAssertFalse(activity.isScrolling, "Removed lane must stop observing")
+        document.addSubview(laneHost)
+        activity.endIfIdle(at: Date.distantFuture)
+        postScrollNotifications(lane)
+        XCTAssertTrue(activity.isScrolling, "Reattached lane must resume observing")
+
+        fixture.window.contentView = nil
+        activity.endIfIdle(at: Date.distantFuture)
+        postScrollNotifications(fixture.scroll)
+        postScrollNotifications(lane)
+        XCTAssertFalse(activity.isScrolling, "Detached board and lanes must stop observing")
+        fixture.window.contentView = fixture.scroll
+        activity.endIfIdle(at: Date.distantFuture)
+        postScrollNotifications(fixture.scroll)
+        XCTAssertTrue(activity.isScrolling, "Reattached viewport must resume observing")
+    }
+
+    func testScrollObservationIsReleasedAndUnregistersOnDeinit() {
+        let activity = ArchiveBoardScrollActivity()
+        let scroll = NSScrollView()
+        var observation: ArchiveBoardScrollObservation? = ArchiveBoardScrollObservation(scrollView: scroll, activity: activity)
+        weak let released = observation
+        observation = nil
+        XCTAssertNil(released)
+        postScrollNotifications(scroll)
+        XCTAssertFalse(activity.isScrolling)
+    }
+
+    private func scrollNotifications(_ scroll: NSScrollView) -> [(Notification.Name, NSView)] {
+        [(NSScrollView.willStartLiveScrollNotification, scroll),
+         (NSScrollView.didLiveScrollNotification, scroll),
+         (NSView.boundsDidChangeNotification, scroll.contentView)]
+    }
+
+    private func postScrollNotifications(_ scroll: NSScrollView) {
+        for (name, sender) in scrollNotifications(scroll) {
+            NotificationCenter.default.post(name: name, object: sender)
+        }
+    }
+
     func testHorizontalOffsetMovesDocumentWithoutReplacingExistingColumnHosts() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }
@@ -179,6 +254,10 @@ final class ArchiveBoardHorizontalScrollTests: XCTestCase {
         XCTAssertFalse(column.contains("@ObservedObject"), "One observation boundary must supply lane values across the hosting root")
         XCTAssertTrue(lanes.contains("@ObservedObject var viewModel"))
         let viewport = try String(contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveBoardHorizontalScroll.swift", encoding: .utf8)
+        let activity = try String(contentsOfFile: "Sources/FeatureArchiveBrowser/ArchiveBoardScrollActivity.swift", encoding: .utf8)
+        for source in [viewport, activity] {
+            XCTAssertFalse(source.contains("object: nil"), "Board scroll observations must subscribe to exact owned senders")
+        }
         XCTAssertTrue(viewport.contains("withTransaction(context.transaction)"), "Accepted-drop motion must cross the native hosting boundary")
         for path in ["ArchiveBoardView.swift", "ArchiveCardPlayButton.swift"] {
             let source = try String(contentsOfFile: "Sources/FeatureArchiveBrowser/" + path, encoding: .utf8)

@@ -23,6 +23,31 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         XCTAssertEqual(fixture.list.horizontalScrollElasticity, .none)
     }
 
+    func testReusedLaneUnregistersOldBoardActivityAndObservesCurrentOwner() {
+        let old = ArchiveBoardScrollController()
+        let current = ArchiveBoardScrollController()
+        let fixture = makeFixture(boardScroll: old)
+        defer { fixture.window.close() }
+        fixture.list.apply(ArchiveBoardNativeSongList(
+            songs: fixture.songs, selectedSongID: nil, vaultPresentations: [:], vaultActivity: [:],
+            viewModel: fixture.model, dropLayout: fixture.layout, colorScheme: .light, reduceMotion: true,
+            boardScroll: current
+        ), animated: false)
+        old.activity.endIfIdle(at: Date.distantFuture)
+        current.activity.endIfIdle(at: Date.distantFuture)
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: fixture.list)
+        XCTAssertFalse(old.activity.isScrolling)
+        XCTAssertTrue(current.activity.isScrolling)
+
+        fixture.list.apply(ArchiveBoardNativeSongList(
+            songs: fixture.songs, selectedSongID: nil, vaultPresentations: [:], vaultActivity: [:],
+            viewModel: fixture.model, dropLayout: fixture.layout, colorScheme: .light, reduceMotion: true
+        ), animated: false)
+        current.activity.endIfIdle(at: Date.distantFuture)
+        NotificationCenter.default.post(name: NSView.boundsDidChangeNotification, object: fixture.list.contentView)
+        XCTAssertFalse(current.activity.isScrolling, "A lane without a board owner must unsubscribe")
+    }
+
     func testEndOfLongLaneIsRealizedAndCardSpacingHasNoTableInsets() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }

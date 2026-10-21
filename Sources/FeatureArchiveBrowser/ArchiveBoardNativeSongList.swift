@@ -32,6 +32,7 @@ struct ArchiveBoardNativeSongList: NSViewRepresentable {
 final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource, NSTableViewDelegate {
     private let table = ArchiveBoardCardTable()
     private var input: ArchiveBoardNativeSongList?
+    private var scrollObservation: ArchiveBoardScrollObservation?
     private var rowByID: [String: Int] = [:]
     private var wasBoardVisible = true
     private var documentHeight: CGFloat = 0
@@ -83,6 +84,23 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
         super.scrollWheel(with: event)
     }
 
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil { scrollObservation = nil }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        observeScrollActivity()
+    }
+
+    private func observeScrollActivity() {
+        scrollObservation = nil
+        if window != nil, let activity = input?.boardScroll?.activity {
+            scrollObservation = ArchiveBoardScrollObservation(scrollView: self, activity: activity)
+        }
+    }
+
     override func reflectScrolledClipView(_ clipView: NSClipView) {
         let height = documentView?.frame.height ?? 0
         let shrank = height < documentHeight - 0.5
@@ -106,6 +124,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
         let old = input
         let oldRows = rowByID
         input = next
+        if old?.boardScroll !== next.boardScroll { observeScrollActivity() }
         next.dropLayout.nativeList = self
         interaction.perform = next.onInteract
         if wasBoardVisible && !next.isBoardVisible {

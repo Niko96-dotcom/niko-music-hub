@@ -43,6 +43,7 @@ final class ArchiveBoardHorizontalScrollView: NSScrollView, ArchiveBoardDocument
     private var orderedIDs: [String] = []
     private var naturalWidth: CGFloat = 0
     private var positioned = false
+    private var scrollObservation: ArchiveBoardScrollObservation?
     private var isRightToLeft = false
 
     init(controller: ArchiveBoardScrollController) {
@@ -59,12 +60,7 @@ final class ArchiveBoardHorizontalScrollView: NSScrollView, ArchiveBoardDocument
         verticalScrollElasticity = .none
         documentView = boardDocument
         controller.scrollView = self
-        NotificationCenter.default.addObserver(self, selector: #selector(liveScroll(_:)),
-                                               name: NSScrollView.willStartLiveScrollNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(liveScroll(_:)),
-                                               name: NSScrollView.didLiveScrollNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(clipMoved(_:)),
-                                               name: NSView.boundsDidChangeNotification, object: nil)
+
     }
 
     @available(*, unavailable)
@@ -78,6 +74,7 @@ final class ArchiveBoardHorizontalScrollView: NSScrollView, ArchiveBoardDocument
             controller.scrollView = nil
             controller = input.controller
             controller.scrollView = self
+            observeScrollActivity()
         }
         let key = input.presentation
         if !key.state.isBoardVisible { controller.activity.removeAllHover() }
@@ -118,7 +115,10 @@ final class ArchiveBoardHorizontalScrollView: NSScrollView, ArchiveBoardDocument
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
-        if newWindow == nil { controller.activity.removeAllHover() }
+        if newWindow == nil {
+            scrollObservation = nil
+            controller.activity.removeAllHover()
+        }
         super.viewWillMove(toWindow: newWindow)
     }
 
@@ -150,15 +150,18 @@ final class ArchiveBoardHorizontalScrollView: NSScrollView, ArchiveBoardDocument
         }
     }
 
-    @objc private func liveScroll(_ notification: Notification) {
-        guard let scroll = notification.object as? NSScrollView, scroll.isDescendant(of: self) else { return }
-        controller.activity.recordActivity()
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        observeScrollActivity()
     }
 
-    @objc private func clipMoved(_ notification: Notification) {
-        guard let clip = notification.object as? NSClipView, clip.isDescendant(of: self) else { return }
-        controller.activity.recordActivity()
+    private func observeScrollActivity() {
+        scrollObservation = nil
+        if window != nil {
+            scrollObservation = ArchiveBoardScrollObservation(scrollView: self, activity: controller.activity)
+        }
     }
+
 }
 
 private final class ArchiveBoardLaneDocument: NSView {

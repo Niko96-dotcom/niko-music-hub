@@ -122,7 +122,9 @@ Archive domain and safety. No SwiftUI/AppKit.
 - Horizontal board movement uses `ArchiveBoardHorizontalScroll`: one native viewport whose document directly
   contains the retained column drop hosts. It adds no SwiftUI hosting graph. Lane rectangles are read only during
   drag edge scrolling; offsets are never published as SwiftUI state. Presentation equality reuses the catalog's
-  shared-storage comparisons. Hover suppression tracks only the controls under the pointer.
+  shared-storage comparisons. Hover suppression tracks only the controls under the pointer. Scroll activity observes
+  only the viewport and native lanes' own scroll/clip views; subscriptions end on detach or destruction and refresh
+  when a lane is reused with a different board controller.
   See `docs/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
 - The board stays mounted under the song detail page (`ArchiveBrowserViewModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
