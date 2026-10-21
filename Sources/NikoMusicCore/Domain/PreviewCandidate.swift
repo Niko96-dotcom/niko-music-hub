@@ -43,7 +43,7 @@ public struct PreviewCandidate: Identifiable, Hashable, Sendable, Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
-        filePath = try container.decode(URL.self, forKey: .filePath)
+        _filePath = ArchiveFileURL(wrappedValue: try container.decode(URL.self, forKey: .filePath))
         fileName = try container.decode(String.self, forKey: .fileName)
         folderRole = try container.decode(PreviewFolderRole.self, forKey: .folderRole)
         modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
