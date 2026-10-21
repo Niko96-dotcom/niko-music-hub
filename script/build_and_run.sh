@@ -47,12 +47,15 @@ nmh_build_bundle
 case "$MODE" in
   run)
     nmh_open_app
-    echo "Launched $NMH_APP_BUNDLE"
+    echo "Launched ${NMH_ISOLATED_APP_BUNDLE:-$NMH_APP_BUNDLE}"
     echo "If nothing appears: Force Quit old Niko Music Hub instances, then rerun."
     echo "First Finder open of dist/NikoMusicHub.app may need Right-click → Open."
     ;;
   --debug|debug)
-    lldb -- "$NMH_APP_BINARY"
+    if [[ -n "${NIKO_MUSIC_HUB_SETTINGS_SUITE:-}" ]]; then
+      nmh_prepare_isolated_app "$NIKO_MUSIC_HUB_SETTINGS_SUITE"
+    fi
+    lldb -- "${NMH_ISOLATED_APP_BINARY:-$NMH_APP_BINARY}"
     ;;
   --logs|logs)
     nmh_open_app
@@ -68,7 +71,7 @@ case "$MODE" in
     /usr/bin/pgrep -x "$NMH_APP_NAME" >/dev/null
     VERIFY_STATUS=0
     nmh_ui_probe \
-      --binary-path "$NMH_APP_BINARY" \
+      --binary-path "${NMH_ISOLATED_APP_BINARY:-$NMH_APP_BINARY}" \
       --check-visible || VERIFY_STATUS=$?
     case "$VERIFY_STATUS" in
       0) echo "verify ok: visible main window" ;;
@@ -85,7 +88,7 @@ case "$MODE" in
       STARTUP_PID="$(nmh_running_dist_app_pids | head -n 1)"
       if [[ -n "$STARTUP_PID" ]]; then
         PROBE_STATUS=0
-        nmh_ui_probe --pid "$STARTUP_PID" --binary-path "$NMH_APP_BINARY" \
+        nmh_ui_probe --pid "$STARTUP_PID" --binary-path "${NMH_ISOLATED_APP_BINARY:-$NMH_APP_BINARY}" \
           --check-visible >"$STARTUP_EVIDENCE/window.txt" 2>&1 || PROBE_STATUS=$?
         case "$PROBE_STATUS" in
           0) STARTUP_READY=true; break ;;
@@ -98,7 +101,7 @@ case "$MODE" in
       echo "verify failed: isolated app has no verified visible window; inspect $STARTUP_EVIDENCE" >&2
       exit 1
     fi
-    nmh_ui_probe --pid "$STARTUP_PID" --binary-path "$NMH_APP_BINARY" \
+    nmh_ui_probe --pid "$STARTUP_PID" --binary-path "${NMH_ISOLATED_APP_BINARY:-$NMH_APP_BINARY}" \
       --ax-dump >"$STARTUP_EVIDENCE/accessibility.txt" 2>"$STARTUP_EVIDENCE/accessibility-error.log" || true
     echo "verify ok: isolated visible main window (pid=$STARTUP_PID)"
     ;;

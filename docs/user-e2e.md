@@ -13,7 +13,8 @@ This script:
 3. Runs the app with `NIKO_MUSIC_HUB_E2E_SMOKE=1` (CLI hook — not pgrep-only)
 4. Drives the same `ArchiveUserFlowSmoke` path as unit tests: fixture root → scan → fuzzy search **neon hk** → dry-run open latest CPR
 5. Asserts stdout includes user-flow markers, search match explainability (`search_match_summary`), CPR path, dry-run log, read-only write-probe, and unchanged fixture tree
-6. Builds the `.app` bundle, launches its binary directly (by PID, with an isolated `NIKO_MUSIC_HUB_SETTINGS_SUITE`), captures `.build/e2e-public-ui.png`, dumps the macOS accessibility tree, and asserts the normal first-run UI is clean
+6. Creates disposable, ad-hoc-signed app copies with distinct bundle IDs and embedded settings suites; launches their exact binaries by PID, captures `.build/e2e-public-ui.png`, dumps the macOS accessibility tree, and asserts the normal first-run UI is clean
+7. Verifies the canonical app refuses direct suite launches and that the entire production preferences domain, including AppKit keys, is unchanged after both fixture runs
 
 The public first-run UI smoke requires the Set Up sheet (helper tools + music archive rows) over the empty archive board, and rejects prototype/community-hostile strings such as `Outside Cubase`, `Dev Tool`, fixture roots, `/var/folders`, and exposed scan diagnostics.
 

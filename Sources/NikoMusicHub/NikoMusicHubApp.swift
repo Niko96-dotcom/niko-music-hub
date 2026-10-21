@@ -4,6 +4,26 @@ import AppUpdates
 import SwiftUI
 
 @main
+enum NikoMusicHubMain {
+    @MainActor
+    static func main() {
+        do {
+            if let suite = try IsolatedAppLaunch.settingsSuite(
+                requested: ProcessInfo.processInfo.environment[MusicHubRuntimeEnvironment.settingsSuiteKey],
+                declared: Bundle.main.object(forInfoDictionaryKey: IsolatedAppLaunch.suiteInfoKey) as? String,
+                bundleID: Bundle.main.bundleIdentifier,
+                canonicalID: Bundle.main.object(forInfoDictionaryKey: IsolatedAppLaunch.canonicalIDInfoKey) as? String
+            ) {
+                setenv(MusicHubRuntimeEnvironment.settingsSuiteKey, suite, 1)
+            }
+        } catch {
+            FileHandle.standardError.write(Data((error.localizedDescription + "\n").utf8))
+            exit(78)
+        }
+        NikoMusicHubApp.main()
+    }
+}
+
 struct NikoMusicHubApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     // The App observes only what changes scene structure: the colour scheme

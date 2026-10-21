@@ -96,7 +96,7 @@ nmh_running_app_binary_pids() {
 }
 
 nmh_running_dist_app_pids() {
-  nmh_running_app_binary_pids "$NMH_APP_BINARY"
+  nmh_running_app_binary_pids "${NMH_ISOLATED_APP_BINARY:-$NMH_APP_BINARY}"
 }
 
 nmh_stop_app_binary() {
@@ -142,7 +142,41 @@ nmh_stop_app_binary() {
 }
 
 nmh_stop_app() {
-  nmh_stop_app_binary "$NMH_APP_BINARY" "${1:-false}"
+  nmh_stop_app_binary "${NMH_ISOLATED_APP_BINARY:-$NMH_APP_BINARY}" "${1:-false}"
+}
+
+# AppKit and Sparkle ignore the app's settings suite for their own preferences.
+# Copy into a disposable, ad-hoc-signed identity; never modify the source bundle.
+# Its embedded suite also survives Finder/LaunchServices relaunches without env.
+# This is fixture tooling, not proof of release signing, TCC or login-item behavior.
+nmh_prepare_isolated_app() {
+  local suite="${1:?missing settings suite}" source_bundle="${2:-$NMH_APP_BUNDLE}"
+  local digest target_dir
+  if [[ ! "$suite" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ || "$suite" == "$NMH_CANONICAL_BUNDLE_ID" ]]; then
+    echo "unsafe isolated settings suite: $suite" >&2
+    return 1
+  fi
+  digest="$(printf '%s' "$suite" | shasum -a 256 | cut -c1-16)"
+  NMH_ISOLATED_BUNDLE_ID="$NMH_CANONICAL_BUNDLE_ID.isolated.$digest"
+  mkdir -p "$NMH_DIST_DIR/isolated-apps" || return 1
+  target_dir="$(mktemp -d "$NMH_DIST_DIR/isolated-apps/$digest.XXXXXX")" || return 1
+  NMH_ISOLATED_APP_BUNDLE="$target_dir/$NMH_APP_NAME.app"
+  NMH_ISOLATED_APP_BINARY="$NMH_ISOLATED_APP_BUNDLE/Contents/MacOS/$NMH_APP_NAME"
+  /usr/bin/ditto "$source_bundle" "$NMH_ISOLATED_APP_BUNDLE" || return 1
+  /usr/bin/python3 - "$NMH_ISOLATED_APP_BUNDLE/Contents/Info.plist" "$NMH_CANONICAL_BUNDLE_ID" "$NMH_ISOLATED_BUNDLE_ID" "$suite" <<'PY' || return 1
+import pathlib, plistlib, sys
+path = pathlib.Path(sys.argv[1])
+info = plistlib.loads(path.read_bytes())
+if info.get("CFBundleIdentifier") != sys.argv[2]:
+    raise SystemExit("isolated source must be the canonical app bundle")
+info["CFBundleIdentifier"] = sys.argv[3]
+info["NMHCanonicalBundleIdentifier"] = sys.argv[2]
+info["NMHIsolatedSettingsSuite"] = sys.argv[4]
+path.write_bytes(plistlib.dumps(info))
+PY
+  nmh_write_entitlements "$target_dir/fixture.entitlements" || return 1
+  nmh_sign_bundle - "$NMH_ISOLATED_APP_BUNDLE" "$NMH_ISOLATED_APP_BUNDLE/Contents/Frameworks/Sparkle.framework" "$target_dir/fixture.entitlements" || return 1
+  NMH_ISOLATED_SETTINGS_SUITE="$suite"
 }
 
 # Forget a throwaway settings suite completely. `defaults delete` only empties the
@@ -157,6 +191,9 @@ nmh_forget_settings_suite() {
   esac
   defaults delete "$suite" >/dev/null 2>&1 || true
   rm -f "$HOME/Library/Preferences/$suite.plist"
+  local isolated_domain="$NMH_CANONICAL_BUNDLE_ID.isolated.$(printf '%s' "$suite" | shasum -a 256 | cut -c1-16)"
+  defaults delete "$isolated_domain" >/dev/null 2>&1 || true
+  rm -f "$HOME/Library/Preferences/$isolated_domain.plist"
 }
 
 nmh_swift() {
@@ -258,6 +295,9 @@ SPARKLE_KEYS
 # Nested code is signed first, then the app wrapper.
 nmh_sign_bundle() {
   local identity="${1:?missing signing identity}"
+  local NMH_APP_BUNDLE="${2:-$NMH_APP_BUNDLE}"
+  local NMH_SPARKLE_FRAMEWORK="${3:-$NMH_SPARKLE_FRAMEWORK}"
+  local NMH_ENTITLEMENTS_PLIST="${4:-$NMH_ENTITLEMENTS_PLIST}"
   local -a sign_options=()
   local nested
 
@@ -303,8 +343,23 @@ nmh_sign_bundle() {
     --sign "$identity" "$NMH_APP_BUNDLE" >/dev/null || return 1
 }
 
+nmh_write_entitlements() {
+  cat >"${1:?missing entitlements path}" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+}
+
 nmh_build_bundle() {
   cd "$NMH_ROOT_DIR"
+  # A later open must clone the new build rather than reuse an older fixture copy.
+  unset NMH_ISOLATED_SETTINGS_SUITE
 
   local build_dir build_binary
   # NOTE: --show-bin-path only PRINTS the path — it does not compile. Build first,
@@ -398,16 +453,7 @@ $NMH_SPARKLE_PLIST_FRAGMENT
 </plist>
 PLIST
 
-  cat >"$NMH_ENTITLEMENTS_PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>com.apple.security.device.audio-input</key>
-  <true/>
-</dict>
-</plist>
-PLIST
+  nmh_write_entitlements "$NMH_ENTITLEMENTS_PLIST"
 
   local sign_identity
   sign_identity="${NMH_SIGNING_IDENTITY:-}"
@@ -446,13 +492,21 @@ PLIST
 
 nmh_open_app() {
   local open_args=(-n "$@")
-  local var
+  local var target_bundle="$NMH_APP_BUNDLE"
+  if [[ -n "${NIKO_MUSIC_HUB_SETTINGS_SUITE:-}" ]]; then
+    if [[ "${NMH_ISOLATED_SETTINGS_SUITE:-}" != "$NIKO_MUSIC_HUB_SETTINGS_SUITE" || ! -x "${NMH_ISOLATED_APP_BINARY:-}" ]]; then
+      nmh_prepare_isolated_app "$NIKO_MUSIC_HUB_SETTINGS_SUITE" || return 1
+    fi
+    target_bundle="$NMH_ISOLATED_APP_BUNDLE"
+  else
+    unset NMH_ISOLATED_SETTINGS_SUITE NMH_ISOLATED_APP_BUNDLE NMH_ISOLATED_APP_BINARY NMH_ISOLATED_BUNDLE_ID
+  fi
   for var in NIKO_MUSIC_HUB_DRY_RUN_OPEN NIKO_MUSIC_HUB_FIXTURE_ROOT NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT NIKO_MUSIC_HUB_E2E_SMOKE NIKO_MUSIC_HUB_SETTINGS_SUITE NIKO_MUSIC_HUB_SHOW_DEV_TOOL NIKO_MUSIC_HUB_UI_TOOL NIKO_MUSIC_HUB_DISABLE_ARCHIVE_WATCHER; do
     if [[ -n "${!var+x}" ]]; then
       open_args+=(--env "$var=${!var}")
     fi
   done
-  open_args+=("$NMH_APP_BUNDLE")
+  open_args+=("$target_bundle")
   if [[ -n "${NIKO_MUSIC_HUB_UI_TOOL:-}" ]]; then
     open_args+=(--args -ui-tool "$NIKO_MUSIC_HUB_UI_TOOL")
   fi
@@ -465,6 +519,11 @@ nmh_focus_app() {
 
 nmh_ui_probe() {
   local title_args=()
+  local binary_args=(--binary-path "${NMH_ISOLATED_APP_BINARY:-$NMH_APP_BINARY}")
+  local arg
+  for arg in "$@"; do
+    if [[ "$arg" == "--binary-path" ]]; then binary_args=(); break; fi
+  done
   if [[ -n "$NMH_WINDOW_TITLE" ]]; then
     title_args=(--window-title "$NMH_WINDOW_TITLE")
   fi
@@ -473,5 +532,6 @@ nmh_ui_probe() {
     ${title_args[@]+"${title_args[@]}"} \
     --min-width "$NMH_WINDOW_MIN_WIDTH" \
     --min-height "$NMH_WINDOW_MIN_HEIGHT" \
+    ${binary_args[@]+"${binary_args[@]}"} \
     "$@"
 }

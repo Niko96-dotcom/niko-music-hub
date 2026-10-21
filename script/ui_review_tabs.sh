@@ -62,7 +62,8 @@ capture_tool() {
     --min-height $((h - 50))
   echo "captured $tool @ $size_label -> $OUT_DIR/${tool}-${size_label}.png"
 
-  # Cleanup suite to prevent preference bleed (research Pitfall 5).
+  # Stop the owner before clearing both app and framework preference domains.
+  nmh_stop_app true
   nmh_forget_settings_suite "$suite"
 }
 
@@ -98,6 +99,7 @@ capture_inbox_state() {
   echo "captured output-inbox-${state} @ $size_label -> $OUT_DIR/output-inbox-${state}-${size_label}.png"
 
   # Cleanup suite.
+  nmh_stop_app true
   nmh_forget_settings_suite "$suite"
 }
 

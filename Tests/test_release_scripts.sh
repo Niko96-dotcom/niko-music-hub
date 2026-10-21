@@ -653,9 +653,15 @@ done
 echo "== throwaway settings suites are forgotten completely, the real domain never =="
 SUITE_PROBE="NikoMusicHubE2E.release-script-test.$(uuidgen)"
 defaults write "$SUITE_PROBE" probe -int 1
+ISOLATED_DOMAIN="$EXPECTED_BUNDLE_ID.isolated.$(printf '%s' "$SUITE_PROBE" | shasum -a 256 | cut -c1-16)"
+defaults write "$ISOLATED_DOMAIN" NSOSPLastRootDirectory -string /fixture-only
 bash -c "source '$LIFECYCLE'; nmh_forget_settings_suite '$SUITE_PROBE'"
 if [[ -e "$HOME/Library/Preferences/$SUITE_PROBE.plist" ]]; then
   echo "nmh_forget_settings_suite left $SUITE_PROBE.plist behind" >&2
+  exit 1
+fi
+if defaults read "$ISOLATED_DOMAIN" >/dev/null 2>&1; then
+  echo "nmh_forget_settings_suite left AppKit fixture preferences behind" >&2
   exit 1
 fi
 assert_fail forget-real-domain bash -c "source '$LIFECYCLE'; nmh_forget_settings_suite com.niko96.NikoMusicHub"

@@ -45,11 +45,13 @@ struct AppComposition {
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
         // Reconciling registers or removes a login item, so unreadable settings
         // skip it rather than reconcile the defaults (Vault off).
-        do {
-            let vaultSettings = try settingsStore.loadSettings().vault
-            try VaultLaunchAtLoginReconciler(controller: launchAtLogin).reconcile(settings: vaultSettings)
-        } catch {
-            diagnostics.log(.error, "Project Vault launch-at-login reconciliation failed: \(error)")
+        if !runtime.usesIsolatedSettingsSuite {
+            do {
+                let vaultSettings = try settingsStore.loadSettings().vault
+                try VaultLaunchAtLoginReconciler(controller: launchAtLogin).reconcile(settings: vaultSettings)
+            } catch {
+                diagnostics.log(.error, "Project Vault launch-at-login reconciliation failed: \(error)")
+            }
         }
         // Automated end-to-end runs must never contact the feed or stage an
         // install over the bundle they are testing. Release bundles built
@@ -57,8 +59,8 @@ struct AppComposition {
         // E2E run is pointed at a signed build.
         let updateController = AppUpdateController(
             configuration: AppUpdateConfiguration.resolve(),
-            suppressedReason: runtime.e2eSmoke
-                ? "Updates are disabled during automated end-to-end runs."
+            suppressedReason: runtime.e2eSmoke || runtime.usesIsolatedSettingsSuite
+                ? "Updates are disabled in isolated test runs."
                 : nil
         )
         let showsDevTool = runtime.showsDevTool

@@ -13,6 +13,31 @@ fi
 FIXTURE_ROOT="$ROOT/Fixtures/CubaseArchive"
 LOG_FILE="$ROOT/.build/e2e-smoke.log"
 
+# Compare the whole preferences domain, including AppKit/Sparkle keys, without
+# printing personal paths or settings into the test log.
+real_preferences_digest() {
+  /usr/bin/python3 - "$NMH_CANONICAL_BUNDLE_ID" <<'PY'
+import hashlib, plistlib, subprocess, sys
+result = subprocess.run(["/usr/bin/defaults", "export", sys.argv[1], "-"], capture_output=True)
+if result.returncode:
+    print("absent")
+else:
+    value = plistlib.loads(result.stdout)
+    print(hashlib.sha256(plistlib.dumps(value, sort_keys=True)).hexdigest())
+PY
+}
+REAL_PREFS_BEFORE="$(real_preferences_digest)"
+
+finish_smoke() {
+  nmh_stop_app true
+  if [[ "$(real_preferences_digest)" != "$REAL_PREFS_BEFORE" ]]; then
+    echo "E2E failed: the production preferences domain changed during isolated launches" >&2
+    exit 1
+  fi
+  echo "production_preferences_unchanged=true"
+  echo "E2E user smoke passed."
+}
+
 # Every app launch in this script must run with NIKO_MUSIC_HUB_SETTINGS_SUITE set.
 # The suite routes settings AND Application Support (archive-index.sqlite,
 # output-inbox.json) into "Niko Music Hub/Isolated/<suite>/". Overriding $HOME does
@@ -46,9 +71,14 @@ echo "== generate fixtures =="
 echo "== build app bundle =="
 nmh_stop_app true
 nmh_build_bundle
-APP_BUNDLE="$ROOT/dist/NikoMusicHub.app"
+APP_BUNDLE="$NMH_APP_BUNDLE"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/NikoMusicHub"
 [[ -x "$APP_BINARY" ]] || { echo "E2E failed: built app binary missing" >&2; exit 1; }
+UNSAFE_STATUS=0
+NIKO_MUSIC_HUB_SETTINGS_SUITE="$ARCHIVE_SUITE" "$APP_BINARY" >"$ROOT/.build/e2e-unsafe-launch.log" 2>&1 || UNSAFE_STATUS=$?
+[[ "$UNSAFE_STATUS" == 78 ]] || { echo "E2E failed: canonical bundle did not refuse an isolated-suite launch" >&2; exit 1; }
+nmh_prepare_isolated_app "$ARCHIVE_SUITE"
+APP_BINARY="$NMH_ISOLATED_APP_BINARY"
 
 echo "== archive smoke (Swift validator owns archive assertions) =="
 rm -f "$LOG_FILE"
@@ -92,6 +122,8 @@ rm -f "$PUBLIC_UI_TEXT" "$PUBLIC_UI_TEXT_TMP" "$PUBLIC_UI_SCREENSHOT" "$PUBLIC_U
 # activate a different installed or already-running copy, which would bypass the
 # isolated suite and expose the user's real archive to this test.
 nmh_stop_app true
+nmh_prepare_isolated_app "$UI_SUITE"
+APP_BINARY="$NMH_ISOLATED_APP_BINARY"
 NIKO_MUSIC_HUB_SETTINGS_SUITE="$UI_SUITE" \
   "$APP_BINARY" >"$PUBLIC_UI_LOG" 2>&1 &
 PUBLIC_UI_PID=$!
@@ -114,7 +146,8 @@ while (( SECONDS < PUBLIC_UI_DEADLINE )); do
       --ax-dump >"$PUBLIC_UI_TEXT_TMP" 2>/dev/null; then
     mv "$PUBLIC_UI_TEXT_TMP" "$PUBLIC_UI_TEXT"
     # A brand-new user first sees the setup sheet (HubSetupView); keep this in step with it.
-    if grep -Fq "The app downloads the free tools it needs into its own folder" "$PUBLIC_UI_TEXT"; then
+    if grep -Fq "The app downloads the free tools it needs into its own folder" "$PUBLIC_UI_TEXT" \
+        && grep -Fq "Archive Browser" "$PUBLIC_UI_TEXT"; then
       PUBLIC_UI_READY=true
       break
     fi
@@ -138,7 +171,7 @@ if [[ "$PUBLIC_UI_READY" != "true" ]]; then
       exit 1
     fi
     echo "public first-run UI text check skipped: AX dump did not expose window content"
-    echo "E2E user smoke passed."
+    finish_smoke
     exit 0
   fi
 fi
@@ -174,4 +207,4 @@ for forbidden_text in \
   fi
 done
 
-echo "E2E user smoke passed."
+finish_smoke

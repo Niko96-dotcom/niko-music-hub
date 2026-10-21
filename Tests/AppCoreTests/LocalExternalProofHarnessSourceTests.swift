@@ -20,7 +20,9 @@ final class LocalExternalProofHarnessSourceTests: XCTestCase {
         XCTAssertTrue(proof.contains("run_proof_process seed"))
         XCTAssertTrue(proof.contains("run_proof_process verify"))
         XCTAssertTrue(proof.contains(#""$APP_BINARY" >"$log" 2>&1"#))
-        XCTAssertTrue(proof.contains(#"defaults delete "$SUITE""#))
+        XCTAssertTrue(proof.contains(#"nmh_prepare_isolated_app "$SUITE" "$APP_PATH""#))
+        XCTAssertTrue(proof.contains(#"APP_BINARY="$NMH_ISOLATED_APP_BINARY""#))
+        XCTAssertTrue(proof.contains(#"nmh_forget_settings_suite "$SUITE""#))
         XCTAssertFalse(proof.contains("/usr/bin/open"))
         XCTAssertFalse(proof.contains("pgrep"))
     }

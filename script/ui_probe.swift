@@ -347,9 +347,14 @@ do {
     switch options.mode {
     case .axDump:
         let app = AXUIElementCreateApplication(pid)
-        let window = axElement(of: app, attribute: kAXMainWindowAttribute)
+        let windows = axElements(of: app, attribute: kAXWindowsAttribute)
+        // A background first launch may focus the setup sheet before AppKit
+        // publishes AXMainWindow. Inspect its owning shell, including the
+        // sheet, so readiness cannot succeed on a sheet-only partial tree.
+        let window = windows.first { stringAttribute($0, kAXIdentifierAttribute) == "hub.main" }
+            ?? axElement(of: app, attribute: kAXMainWindowAttribute)
             ?? axElement(of: app, attribute: kAXFocusedWindowAttribute)
-            ?? axElements(of: app, attribute: kAXWindowsAttribute).first
+            ?? windows.first
         guard let window else {
             fputs("accessibility window unavailable for pid \(pid)\n", stderr)
             exit(1)

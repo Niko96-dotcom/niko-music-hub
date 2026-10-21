@@ -7,7 +7,12 @@ APP_BINARY="$APP_PATH/Contents/MacOS/NikoMusicHub"
 [[ -x "$APP_BINARY" ]] || { echo "installed app binary missing: $APP_BINARY" >&2; exit 1; }
 
 SUITE="NikoMusicHub.BookmarkProof.$(uuidgen)"
-PROOF_ROOT="$(mktemp -d /tmp/niko-music-hub-bookmark-proof.XXXXXX)"
+# shellcheck source=lib/app_lifecycle.sh
+source "$ROOT/script/lib/app_lifecycle.sh"
+nmh_prepare_isolated_app "$SUITE" "$APP_PATH"
+APP_BINARY="$NMH_ISOLATED_APP_BINARY"
+mkdir -p "$ROOT/.build/bookmark-proof"
+PROOF_ROOT="$(mktemp -d "$ROOT/.build/bookmark-proof/run.XXXXXX")"
 ACTIVE_ROOT="$PROOF_ROOT/Active Projects"
 ARCHIVE_ROOT="$PROOF_ROOT/Archive Projects"
 SEED_LOG="$PROOF_ROOT/seed.log"
@@ -18,8 +23,7 @@ mkdir -p "$ACTIVE_ROOT" "$ARCHIVE_ROOT"
 cleanup() {
   local status=$?
   # Same reason as nmh_forget_settings_suite: `defaults delete` leaves the plist behind.
-  defaults delete "$SUITE" >/dev/null 2>&1 || true
-  rm -f "$HOME/Library/Preferences/$SUITE.plist"
+  nmh_forget_settings_suite "$SUITE"
   rm -rf "$ISOLATED_SUPPORT"
   if [[ "$status" -eq 0 ]]; then
     rm -rf "$PROOF_ROOT"

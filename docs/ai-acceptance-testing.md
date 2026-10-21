@@ -29,6 +29,14 @@ filesystem/hash/audio/provider verification.
 
 ## Test target
 
+Run release UAT in a separate macOS account with disposable fixture settings in
+the candidate's normal domain. `NIKO_MUSIC_HUB_SETTINGS_SUITE` alone cannot isolate
+AppKit or Sparkle preferences; the canonical bundle refuses that launch shape.
+The local launch helpers instead create ad-hoc-signed fixture copies with distinct
+bundle IDs. Those copies are useful for development and E2E, but their signing,
+TCC, login-item and update results cannot approve the unchanged release candidate.
+Never restore a snapshot over the person's real preferences to hide test writes.
+
 Test the exact commit as the build shape that ships, and record it under
 `tested_build`:
 
@@ -88,10 +96,10 @@ NMH_SIGNING_IDENTITY="$NMH_DEVELOPER_ID_APPLICATION" \
    location, launch, and confirm first-run state (no inherited state from
    other installs). Evidence: install log, bundle/build/commit/hash
    verification, first-run screenshot/AX.
-2. `upgrade_preserves_settings` — Seed a prior-version settings domain on a
-   fixture suite, install the candidate over it, and confirm settings and
-   library state survive. Evidence: before/after settings dumps (fixture
-   suite only), screenshots.
+2. `upgrade_preserves_settings` — In the separate test account, seed the prior
+   version's normal domain with fixture settings, install the candidate over it,
+   and confirm settings and library state survive. Evidence: before/after
+   settings dumps from that test account only, screenshots.
 3. `uninstall` — Remove the candidate per the documented uninstall path and
    confirm the app bundle and its throwaway fixture suites are gone while
    the real user domain is never touched. Evidence: file-existence checks

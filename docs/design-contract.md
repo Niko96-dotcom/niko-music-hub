@@ -247,9 +247,10 @@ with real-looking rows, and check light appearance too — both were blind spots
 
 1. `swift build && swift test` (source guards live in `Tests/AppCoreTests/*Source*Tests`).
 2. Launch the dev bundle with the fixture archive (`script/lib/app_lifecycle.sh`
-   `nmh_build_bundle`, then `open --env NIKO_MUSIC_HUB_FIXTURE_ROOT=… --env
-   NIKO_MUSIC_HUB_SETTINGS_SUITE=<fresh> --env NIKO_MUSIC_HUB_DRY_RUN_OPEN=1`).
-3. Resolve the dev PID (`pgrep -f dist/NikoMusicHub.app/Contents/MacOS/NikoMusicHub`) —
+   `nmh_build_bundle`, export `NIKO_MUSIC_HUB_FIXTURE_ROOT=…`,
+   `NIKO_MUSIC_HUB_SETTINGS_SUITE=<fresh>` and `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1`, then
+   `nmh_open_app`). This creates a distinct fixture bundle identity for AppKit preferences.
+3. Resolve the dev PID with `nmh_running_dist_app_pids` (the helper's exact isolated binary) —
    never target the app by name; stale copies may be running.
 4. Dump accessibility frames (window-relative) for the page and compare to §2.
    A small AX walker (role, id/description, x,y, w×h) is all it takes; the window

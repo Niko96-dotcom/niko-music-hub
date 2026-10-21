@@ -99,7 +99,8 @@ cmd_launch() {
   source "$ROOT/script/lib/app_lifecycle.sh"
   nmh_build_bundle >"$ROOT/.build/bakeoff-build-$name-$config.log" 2>&1 \
     || { tail -n 30 "$ROOT/.build/bakeoff-build-$name-$config.log" >&2; die "build failed"; }
-  bundle="$dist/NikoMusicHub.app"
+  nmh_prepare_isolated_app "$SUITE"
+  bundle="$NMH_ISOLATED_APP_BUNDLE"
   mkdir -p "$DATA/logs"
   /usr/bin/open -n -g \
     --stdout "$DATA/logs/$name-stdout.log" --stderr "$DATA/logs/$name-stderr.log" \

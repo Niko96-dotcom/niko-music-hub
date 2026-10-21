@@ -29,13 +29,26 @@ Green means the app compiled, deterministic tests passed, the user-style archive
 
 Passing command output is saved under `.build/dev-flow/` so the screen stays readable. If a step fails, `./script/dev.sh check` prints the last useful log lines and points to the full log file.
 
-The final startup check uses a fresh settings suite and `dist/verification/NikoMusicHub.app`.
+The final startup check builds `dist/verification/NikoMusicHub.app`, then makes a disposable
+copy under `dist/verification/isolated-apps/` with a fresh settings suite and a distinct
+bundle identifier. AppKit preferences (including folder-picker locations) stay in that
+test identity. The embedded suite survives Finder relaunches; Sparkle and startup
+login-item reconciliation are disabled in isolated runs. Direct suite launches of the
+canonical app are refused before SwiftUI creates the application.
 It clears inherited `NIKO_MUSIC_HUB_*` launch overrides, enables dry-run CPR opening,
 and checks the PID belonging to that exact binary. A missing window or unavailable
 window API fails the check. It stops its own app and removes its isolated settings
 and Application Support data on exit. The earlier E2E step still rebuilds and stops
 the repository's ordinary `dist/NikoMusicHub.app`; finish work in that development
 instance before running the full check.
+
+For fixture UI work, export `NIKO_MUSIC_HUB_SETTINGS_SUITE` with a fresh alphanumeric,
+dot, underscore or hyphen name, then use `./script/build_and_run.sh` or source
+`script/lib/app_lifecycle.sh` and call `nmh_open_app`. For a direct process launch, call
+`nmh_prepare_isolated_app "$NIKO_MUSIC_HUB_SETTINGS_SUITE"` and launch
+`"$NMH_ISOLATED_APP_BINARY"`; resolve that exact binary's PID for AX checks.
+The helper ad-hoc signs the copy and leaves the canonical source bundle unchanged.
+These fixture copies do not prove release signing, permissions, updates or login behavior.
 
 ## If Something Breaks
 
