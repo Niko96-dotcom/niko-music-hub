@@ -8,6 +8,7 @@ import Foundation
 public enum HubRelativeTime {
     public static func string(for date: Date, relativeTo reference: Date = Date()) -> String {
         let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "en_US")
         formatter.unitsStyle = .abbreviated
         formatter.dateTimeStyle = .named
         return formatter.localizedString(for: date, relativeTo: reference)

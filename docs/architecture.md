@@ -99,6 +99,7 @@ Archive domain and safety. No SwiftUI/AppKit.
   [Running work and quit](#running-work-and-quit)).
 - Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, and admission/capacity/activity probes; it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`.
 - Shared UI: `ToolHeaderBlock`, `HubInspectorPage`, hub design tokens (see `docs/design-contract.md`).
+- `HubRelativeTime` formats relative dates in English, matching the app's UI independently of the system locale.
 
 ### `FeatureArchiveBrowser` (SwiftUI feature)
 

@@ -13,6 +13,7 @@ final class HubRelativeTimeTests: XCTestCase {
     func testOlderItemsStillReadAsElapsedTime() {
         let reference = Date()
         let text = HubRelativeTime.string(for: reference.addingTimeInterval(-15 * 60), relativeTo: reference)
-        XCTAssertTrue(text.contains("15"), text)
+        XCTAssertTrue(text.contains("15"))
+        XCTAssertTrue(text.hasSuffix(" ago"), "relative dates follow the English UI even on a German Mac: \(text)")
     }
 }
