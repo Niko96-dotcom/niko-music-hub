@@ -1,4 +1,31 @@
-# Performance report
+# Archive board performance (round 2, 21.10.2026)
+
+## What was merged
+
+`main` holds `perf/r2-combined`: Sol's native board lanes (this report, below) plus the memory work from
+`perf/r2-sonnet` (index save by diff, held catalog kept on an unchanged rescan, shared preview reason lists, rescan
+result released off the main thread, rescan apply limited to changed songs; Sonnet's own report is on that branch),
+a cross-fade for the card hover fill, and the removal of the in-app probe.
+
+The referee measured it from outside the app on the synthetic 10k archive (probe v4, one quiet pass, base = 4 runs,
+branch = 1 run, release builds; base is `main` before the merge):
+
+| Measure | Base | Merged |
+| --- | --- | --- |
+| Fling to the oldest song in the largest lane | never arrives | 188 ms |
+| Back from a song's detail page to the board | 301 ms | 84 ms |
+| Settled / peak memory after a cached launch | 648 / 763 MB | 340 / 482 MB |
+| Settled memory after a first scan | 446 MB | 236 MB |
+| Switch to the Archive tool | 184 ms | 161 ms |
+| Fling back to the top | 139 ms | 166 ms |
+| Open a song's detail page | 172 ms | 188 ms |
+| Old-song search hit (typed) | 429 ms | 495 ms |
+
+Known costs: each table row hosts its own card, so a search that shows cards costs about 1.8 ms per card plus
+about 2 ms per lane for the table reload; opening a detail page hides the mounted board. An accessibility client
+that reads a lane's full child list (3,042 rows) costs the app about 135 ms per read.
+
+# Sol's report (perf/r2-sol)
 
 ## Summary
 
@@ -6,10 +33,10 @@ The 10k failure followed SwiftUI lazy-row realization inside the independently h
 
 ## Measurement method
 
-> **Note (21.10.2026, `perf/r2-combined`):** the in-process probe and its runner, `script/archive_perf.sh`, were
-> removed from the app after the bake-off, so the app ships no measurement code. They stay in the history of
-> `perf/r2-sol` (added in `4bdaf50`); the rerun commands below work only on a checkout of that branch. The referee
-> measures from outside the app, and `script/performance/` holds the in-process harnesses that stay outside the product.
+> **Note (21.10.2026):** the in-process probe and its runner, `script/archive_perf.sh`, were removed from the app
+> after the bake-off, so the app ships no measurement code. They stay in the history of `perf/r2-sol` (added in
+> `4bdaf50`); the rerun commands below work only on a checkout of that branch. The referee measures from outside the
+> app, and `script/performance/` holds the in-process harnesses that stay outside the product.
 
 - Hardware: Apple M1 Ultra, 20 logical CPUs, 64 GiB; macOS 27.0.1 (26A434), Apple Swift 6.4. All scored app builds are **release**, with warnings as errors and the strict target import check.
 - Dataset: frozen generator's **10k** archive, seed 20261018, 10,000 songs and 157,639 files. The largest lane is No Status, with 3,042 songs. The same seeded workflow/collaborator/history database was used throughout. Each scored launch loads the existing index and performs the normal background rescan and watcher setup. No real archive or personal settings were used.
