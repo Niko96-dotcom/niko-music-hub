@@ -1,11 +1,10 @@
-import AppCore
 import SwiftUI
 
-/// The horizontally scrolling row of workflow lanes. Owns the lane-origin
-/// measurements and the edge auto-scroller so a card dragged to the viewport's
-/// left or right edge walks the board one lane at a time.
+/// The native row of workflow lanes and its drag edge auto-scroller.
 struct ArchiveBoardLanesView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.layoutDirection) private var layoutDirection
 
     let columns: [ArchiveBoardColumn]
     @ObservedObject var viewModel: ArchiveBrowserViewModel
@@ -13,60 +12,24 @@ struct ArchiveBoardLanesView: View {
     /// Called when a card or lane is clicked, so the board can reclaim keyboard focus.
     let onInteract: () -> Void
 
-    @State private var columnOrigins: [String: CGFloat] = [:]
-    @State private var boardViewportWidth: CGFloat = 0
+    @State private var scrolling = ArchiveBoardScrollController()
     @State private var edgeAutoScroller = ArchiveBoardEdgeAutoScroller()
 
     var body: some View {
-        ScrollViewReader { scrollProxy in
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 10) {
-                    ForEach(columns) { column in
-                        ArchiveBoardColumnView(
-                            column: column,
-                            viewModel: viewModel,
-                            compactWhenEmpty: compactEmptyStages && !viewModel.songs.contains { $0.workflowStatus == column.status },
-                            onDragLocationChanged: { columnID, localX in
-                                handleDragLocation(
-                                    columnID: columnID,
-                                    localX: localX,
-                                    scrollProxy: scrollProxy
-                                )
-                            },
-                            onDragEnded: {
-                                edgeAutoScroller.stop()
-                            },
-                            onInteract: onInteract
-                        )
-                        .id(column.id)
-                        .background {
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: ArchiveBoardColumnOriginPreferenceKey.self,
-                                    value: [column.id: proxy.frame(in: .named(ArchiveBoardCoordinateSpace.name)).minX]
-                                )
-                            }
-                        }
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .coordinateSpace(name: ArchiveBoardCoordinateSpace.name)
-            .background {
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear {
-                            boardViewportWidth = proxy.size.width
-                        }
-                        .onChange(of: proxy.size) { _, size in
-                            boardViewportWidth = size.width
-                        }
-                }
-            }
-            .onPreferenceChange(ArchiveBoardColumnOriginPreferenceKey.self) { origins in
-                columnOrigins = origins
-            }
-        }
+        let compactIDs = Set(columns.filter { column in
+            compactEmptyStages && !viewModel.songs.contains { $0.workflowStatus == column.status }
+        }.map(\.id))
+        let presentation = ArchiveBoardLanesPresentation(
+            columns: columns, compactColumnIDs: compactIDs,
+            colorScheme: colorScheme, reduceMotion: reduceMotion, layoutDirection: layoutDirection,
+            state: ArchiveBoardLaneState(viewModel: viewModel)
+        )
+        ArchiveBoardHorizontalScroll(
+            controller: scrolling, presentation: presentation, viewModel: viewModel,
+            onInteract: onInteract, locationChanged: handleDragLocation,
+            ended: { edgeAutoScroller.stop() }
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// A `DropInfo` location is local to the lane receiving the card. Combine
@@ -74,41 +37,23 @@ struct ArchiveBoardLanesView: View {
     /// pointer is held at the left or right edge of the visible viewport.
     private func handleDragLocation(
         columnID: String,
-        localX: CGFloat,
-        scrollProxy: ScrollViewProxy
+        localX: CGFloat
     ) {
-        guard let columnX = columnOrigins[columnID] else { return }
-        let leadingIndex = leadingVisibleColumnIndex()
+        let origins = scrolling.columnOrigins()
+        guard let pointerX = scrolling.pointerX(columnID: columnID, localX: localX) else { return }
+        let leadingIndex = leadingVisibleColumnIndex(origins)
         edgeAutoScroller.update(
-            pointerX: columnX + localX,
-            viewportWidth: boardViewportWidth,
+            pointerX: pointerX,
+            viewportWidth: scrolling.viewportWidth,
             leadingColumnIndex: leadingIndex,
             columnCount: columns.count
         ) { targetIndex, _ in
             guard columns.indices.contains(targetIndex) else { return }
-            let duration = HubDesignSystem.Motion.duration(.short, reduceMotion: reduceMotion)
-            let scroll = {
-                // Both logical directions pin the policy target with `.leading`:
-                // the target is always the live leading lane ± 1, so pinning its
-                // leading edge moves exactly one lane. `.trailing` on the left
-                // pinned the target to the viewport's right edge, jumping a full
-                // viewport. `.leading` adapts to RTL automatically.
-                scrollProxy.scrollTo(
-                    columns[targetIndex].id,
-                    anchor: .leading
-                )
-            }
-            if duration == 0 {
-                scroll()
-            } else {
-                withAnimation(.easeOut(duration: duration)) {
-                    scroll()
-                }
-            }
+            scrolling.scroll(to: columns[targetIndex].id, animated: !reduceMotion)
         }
     }
 
-    private func leadingVisibleColumnIndex() -> Int {
+    private func leadingVisibleColumnIndex(_ columnOrigins: [String: CGFloat]) -> Int {
         let origins = columns.enumerated().compactMap { index, column in
             columnOrigins[column.id].map { (index, $0) }
         }
@@ -124,14 +69,25 @@ struct ArchiveBoardLanesView: View {
     }
 }
 
-private enum ArchiveBoardCoordinateSpace {
-    static let name = "archive-board-viewport"
+/// Value inputs for the retained native columns. Equality uses the existing
+/// shared-storage column comparisons, without reflecting through every song.
+struct ArchiveBoardLanesPresentation: Equatable {
+    let columns: [ArchiveBoardColumn]
+    let compactColumnIDs: Set<String>
+    let colorScheme: ColorScheme
+    let reduceMotion: Bool
+    let layoutDirection: LayoutDirection
+    let state: ArchiveBoardLaneState
+
 }
 
-private struct ArchiveBoardColumnOriginPreferenceKey: PreferenceKey {
-    static let defaultValue: [String: CGFloat] = [:]
+enum ArchiveBoardLaneLayout {
+    static let expandedWidth: CGFloat = 220
+    static let compactWidth: CGFloat = 56
+    static let spacing: CGFloat = 10
 
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    static func documentWidth(columnIDs: [String], compactIDs: Set<String>, expandedIDs: Set<String>) -> CGFloat {
+        columnIDs.reduce(0) { $0 + (compactIDs.contains($1) && !expandedIDs.contains($1) ? compactWidth : expandedWidth) }
+            + CGFloat(max(0, columnIDs.count - 1)) * spacing
     }
 }

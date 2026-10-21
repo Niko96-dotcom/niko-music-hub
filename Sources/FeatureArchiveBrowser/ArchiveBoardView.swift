@@ -213,6 +213,7 @@ struct ArchiveBoardCardView: View {
     var onRevealInFinder: (() -> Void)? = nil
     var canRevealInFinder: Bool = false
     var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)? = nil
+    var scrollActivity: ArchiveBoardScrollActivity? = nil
 
     @ObservedObject private var session = ArchivePreviewSession.shared
     @State private var isHovered = false
@@ -266,7 +267,9 @@ struct ArchiveBoardCardView: View {
                         title: song.effectiveDisplayTitle,
                         isPlaying: session.songID == song.id && session.isPlaying,
                         isLoaded: session.songID == song.id,
-                        isEnabled: !session.captureActive
+                        isEnabled: !session.captureActive,
+                        hoverTarget: .play(songID: song.id, laneID: song.workflowStatus?.rawValue),
+                        scrollActivity: scrollActivity
                     ) {
                         playPreview()
                     }
@@ -297,7 +300,8 @@ struct ArchiveBoardCardView: View {
                     .fill(HubDesignSystem.Palette.selection)
                     .opacity(showsSelectionFill ? 1 : 0)
             }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: isHovered)
+            .animation(reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.animation,
+                       value: showsSelectionFill)
         }
         .overlay {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
@@ -310,8 +314,9 @@ struct ArchiveBoardCardView: View {
         .onTapGesture {
             performInteraction(.singleClick)
         }
-        .onHover { hovering in
-            isHovered = hovering
+        .onHover {
+            ArchiveBoardScrollActivity.updateHover($0, target: .card(songID: song.id, laneID: song.workflowStatus?.rawValue),
+                                                   isHovered: $isHovered, activity: scrollActivity)
         }
         .contextMenu {
             SongItemCommands(

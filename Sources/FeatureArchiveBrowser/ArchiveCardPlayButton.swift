@@ -6,6 +6,8 @@ struct ArchiveCardPlayButton: View {
     let isPlaying: Bool
     let isLoaded: Bool
     let isEnabled: Bool
+    var hoverTarget: ArchiveBoardHoverTarget? = nil
+    var scrollActivity: ArchiveBoardScrollActivity? = nil
     let action: () -> Void
     @State private var isHovered = false
 
@@ -20,7 +22,9 @@ struct ArchiveCardPlayButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .onHover {
+            ArchiveBoardScrollActivity.updateHover($0, target: hoverTarget, isHovered: $isHovered, activity: scrollActivity)
+        }
         .disabled(!isEnabled)
         .accessibilityLabel("\(isPlaying ? "Pause" : "Play") \(title)")
     }

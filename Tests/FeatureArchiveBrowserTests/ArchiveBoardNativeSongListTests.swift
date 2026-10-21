@@ -7,6 +7,22 @@ import XCTest
 
 @MainActor
 final class ArchiveBoardNativeSongListTests: XCTestCase {
+    func testLaneForwardsLateralWheelUnchangedAndRetainsResponsiveVerticalScrolling() {
+        let controller = ArchiveBoardScrollController()
+        let receiver = LaneWheelReceiver()
+        controller.scrollView = receiver
+        let fixture = makeFixture(boardScroll: controller)
+        defer { fixture.window.close() }
+        let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
+                         wheel1: -2, wheel2: -12, wheel3: 0)!
+        cg.setIntegerValueField(.scrollWheelEventScrollPhase, value: 1)
+        let event = NSEvent(cgEvent: cg)!
+        fixture.list.scrollWheel(with: event)
+        XCTAssertTrue(receiver.received === event)
+        XCTAssertTrue(ArchiveBoardNativeSongListView.isCompatibleWithResponsiveScrolling)
+        XCTAssertEqual(fixture.list.horizontalScrollElasticity, .none)
+    }
+
     func testEndOfLongLaneIsRealizedAndCardSpacingHasNoTableInsets() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }
@@ -102,7 +118,7 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         XCTAssertEqual(table.numberOfRows, songs.count)
     }
 
-    private func makeFixture() -> Fixture {
+    private func makeFixture(boardScroll: ArchiveBoardScrollController? = nil) -> Fixture {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         let songs = (0..<200).map {
             Song(folderPath: URL(fileURLWithPath: "/fixture-only/Song-\($0)"), originalFolderName: "Song", displayTitle: "Song")
@@ -116,7 +132,8 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         window.contentView = container
         list.apply(ArchiveBoardNativeSongList(
             songs: songs, selectedSongID: nil, vaultPresentations: [:], vaultActivity: [:],
-            viewModel: model, dropLayout: layout, colorScheme: .light, reduceMotion: true
+            viewModel: model, dropLayout: layout, colorScheme: .light, reduceMotion: true,
+            boardScroll: boardScroll
         ), animated: false)
         window.orderFront(nil)
         return Fixture(window: window, container: container, list: list, songs: songs, layout: layout, model: model)
@@ -130,6 +147,11 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         let layout: ArchiveBoardDropLayout
         let model: ArchiveBrowserViewModel
     }
+}
+
+private final class LaneWheelReceiver: NSScrollView {
+    var received: NSEvent?
+    override func scrollWheel(with event: NSEvent) { received = event }
 }
 
 private final class ColumnFrameSpace: NSView, ArchiveBoardColumnFrameSpace {

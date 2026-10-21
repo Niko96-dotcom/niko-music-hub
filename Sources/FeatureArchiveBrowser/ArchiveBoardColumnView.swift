@@ -1,105 +1,138 @@
 import AppCore
+import AppKit
 import NikoMusicCore
 import SwiftUI
 
-/// One workflow lane: header plus the lazy card list, hosted in an AppKit
-/// drop target so a card can be dropped onto the column to change its status.
-struct ArchiveBoardColumnView: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
+/// Value inputs for one retained native lane. The model is used for actions;
+/// the parent supplies presentation values through one observation boundary.
+struct ArchiveBoardColumnInput {
     let column: ArchiveBoardColumn
-    @ObservedObject var viewModel: ArchiveBrowserViewModel
+    let state: ArchiveBoardLaneState
+    let viewModel: ArchiveBrowserViewModel
     let compactWhenEmpty: Bool
-    let onDragLocationChanged: (String, CGFloat) -> Void
-    let onDragEnded: () -> Void
-    let onInteract: () -> Void
+    let colorScheme: ColorScheme
+    let reduceMotion: Bool
+    let boardScroll: ArchiveBoardScrollController
+    let locationChanged: (String, CGFloat) -> Void
+    let ended: () -> Void
+}
 
-    @State private var isDropTargeted = false
-    @State private var dropLayout = ArchiveBoardDropLayout()
+@MainActor
+final class ArchiveBoardNativeColumn {
+    let view: ArchiveBoardDropHostingView<ArchiveBoardColumnContent>
+    private var input: ArchiveBoardColumnInput
+    private let dropLayout = ArchiveBoardDropLayout()
+    private var isTargeted = false
 
-    private var isCompact: Bool { compactWhenEmpty && !isDropTargeted }
-    private var columnWidth: CGFloat { isCompact ? 56 : 220 }
-
-    var body: some View {
-        ArchiveBoardDropHost(
-            content: columnContent(column),
-            renderKey: ArchiveBoardColumnRenderKey(
-                column: column,
-                selectedSongID: viewModel.selectedSong?.id,
-                vaultPresentations: viewModel.projectVaultPresentationsBySongID,
-                vaultActivity: viewModel.projectVaultActivityMessages,
-                isTargeted: isDropTargeted,
-                reduceMotion: reduceMotion,
-                colorScheme: colorScheme,
-                isCompact: compactWhenEmpty,
-                isBoardVisible: viewModel.showsBoardPage
-            ),
-            accepts: { acceptsDrop(songID: $0) },
-            perform: { performDrop(songID: $0) },
-            locationChanged: { onDragLocationChanged(column.id, $0) },
-            ended: onDragEnded,
-            targeted: { if isDropTargeted != $0 { isDropTargeted = $0 } },
-            landingFrame: { dropLayout.frame(for: $0) },
-            // Must return the same opaque type as `content`, so the lookup is
-            // a method but the `columnContent` call stays inline.
-            refreshedContent: { columnContent(currentColumn()) },
-            reduceMotion: reduceMotion
-        )
-        .frame(width: columnWidth)
-        .frame(maxHeight: .infinity)
+    var width: CGFloat {
+        input.compactWhenEmpty && !isTargeted ? ArchiveBoardLaneLayout.compactWidth : ArchiveBoardLaneLayout.expandedWidth
     }
 
-    private func columnContent(_ column: ArchiveBoardColumn) -> some View {
-        ArchiveBoardColumnContent(
-            column: column,
-            viewModel: viewModel,
-            selectedSongID: viewModel.selectedSong.flatMap {
-                $0.workflowStatus == column.status ? $0.id : nil
+    init(input: ArchiveBoardColumnInput) {
+        self.input = input
+        view = ArchiveBoardDropHostingView(rootView: Self.content(input: input, column: input.column,
+                                                                 state: input.state, targeted: false, layout: dropLayout))
+        apply(input)
+    }
+
+    func apply(_ next: ArchiveBoardColumnInput) {
+        let ownerChanged = input.viewModel !== next.viewModel || input.boardScroll !== next.boardScroll
+        input = next
+        let content = Self.content(input: input, column: input.column, state: input.state,
+                                   targeted: isTargeted, layout: dropLayout)
+        if ownerChanged { view.renderedKey = nil }
+        ArchiveBoardDropHost(
+            content: content,
+            renderKey: ArchiveBoardColumnRenderKey(
+                column: input.column, selectedSongID: input.state.selectedSong?.id,
+                vaultPresentations: input.state.vaultPresentations, vaultActivity: input.state.vaultActivity,
+                isTargeted: isTargeted, reduceMotion: input.reduceMotion, colorScheme: input.colorScheme,
+                isCompact: input.compactWhenEmpty, isBoardVisible: input.state.isBoardVisible
+            ),
+            accepts: { [weak self] in self?.acceptsDrop(songID: $0) == true },
+            perform: { [weak self] in self?.performDrop(songID: $0) },
+            locationChanged: { [weak self] x in
+                guard let self else { return }
+                self.input.locationChanged(self.input.column.id, x)
             },
-            vaultPresentations: viewModel.projectVaultPresentationsBySongID,
-            vaultActivity: viewModel.projectVaultActivityMessages,
-            isCompact: isCompact,
-            isDropTargeted: isDropTargeted,
-            colorScheme: colorScheme,
-            dropLayout: dropLayout,
-            isBoardVisible: viewModel.showsBoardPage,
-            onInteract: onInteract
-        )
+            ended: { [weak self] in self?.input.ended() },
+            targeted: { [weak self] in self?.setTargeted($0) },
+            landingFrame: { [weak self] in self?.dropLayout.frame(for: $0) },
+            refreshedContent: { [weak self] in
+                guard let self else { return content }
+                let column = ArchiveBoardProjection.columns(from: self.input.viewModel.filteredSongs,
+                                                             preservingOrder: self.input.viewModel.isSearching)
+                    .first { $0.id == self.input.column.id } ?? self.input.column
+                return Self.content(input: self.input, column: column,
+                                    state: ArchiveBoardLaneState(viewModel: self.input.viewModel),
+                                    targeted: self.isTargeted, layout: self.dropLayout)
+            },
+            reduceMotion: input.reduceMotion,
+            boardScroll: input.boardScroll
+        ).update(view)
+    }
+
+    private func setTargeted(_ targeted: Bool) {
+        guard targeted != isTargeted else { return }
+        isTargeted = targeted
+        apply(input)
+        input.boardScroll.scrollView?.layoutSubtreeIfNeeded()
     }
 
     private func acceptsDrop(songID: String) -> Bool {
-        guard let song = viewModel.songs.first(where: { $0.id == songID }) else { return false }
-        return viewModel.canMutateWorkflowStatus(for: song)
+        guard let song = input.viewModel.songs.first(where: { $0.id == songID }) else { return false }
+        return input.viewModel.canMutateWorkflowStatus(for: song)
     }
 
-    /// Re-check mutability here: `acceptsDrop` ran on drag-enter, and the
-    /// Done path below bypasses `applyWorkflowStatus`'s own guard.
     private func performDrop(songID: String) {
-        guard let song = viewModel.songs.first(where: { $0.id == songID }),
-              viewModel.canMutateWorkflowStatus(for: song),
-              song.workflowStatus != column.status else { return }
-        if column.status == .done {
-            viewModel.requestWorkflowDoneArchive(for: song)
-            return
-        }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-            viewModel.applyWorkflowStatus(column.status, for: song)
+        guard let song = input.viewModel.songs.first(where: { $0.id == songID }),
+              input.viewModel.canMutateWorkflowStatus(for: song),
+              song.workflowStatus != input.column.status else { return }
+        if input.column.status == .done {
+            input.viewModel.requestWorkflowDoneArchive(for: song)
+        } else {
+            withAnimation(input.reduceMotion ? nil : ArchiveBoardMotion.animation) {
+                input.viewModel.applyWorkflowStatus(input.column.status, for: song)
+            }
         }
     }
 
-    /// The drop host asks for fresh content after a drop lands; re-project
-    /// from the live browse list so the lane reflects the moved card.
-    private func currentColumn() -> ArchiveBoardColumn {
-        ArchiveBoardProjection.columns(from: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
-            .first(where: { $0.id == column.id }) ?? column
+    private static func content(input: ArchiveBoardColumnInput, column: ArchiveBoardColumn,
+                                state: ArchiveBoardLaneState, targeted: Bool,
+                                layout: ArchiveBoardDropLayout) -> ArchiveBoardColumnContent {
+        let scrolling = input.boardScroll
+        return ArchiveBoardColumnContent(
+            column: column, viewModel: input.viewModel,
+            selectedSongID: state.selectedSong.flatMap { $0.workflowStatus == column.status ? $0.id : nil },
+            vaultPresentations: state.vaultPresentations, vaultActivity: state.vaultActivity,
+            isCompact: input.compactWhenEmpty && !targeted, isDropTargeted: targeted,
+            colorScheme: input.colorScheme, dropLayout: layout, isBoardVisible: state.isBoardVisible,
+            onInteract: { scrolling.onInteract() }, boardScroll: scrolling
+        )
+    }
+}
+
+struct ArchiveBoardLaneState: Equatable {
+    let selectedSong: Song?
+    let vaultPresentations: [String: ProjectVaultCardPresentation]
+    let vaultActivity: [String: String]
+    let isBoardVisible: Bool
+}
+
+extension ArchiveBoardLaneState {
+    @MainActor
+    init(viewModel: ArchiveBrowserViewModel) {
+        selectedSong = viewModel.selectedSong
+        vaultPresentations = viewModel.projectVaultPresentationsBySongID
+        vaultActivity = viewModel.projectVaultActivityMessages
+        isBoardVisible = viewModel.showsBoardPage
     }
 }
 
 /// A named hosting root keeps SwiftUI's dynamic-property discovery at the lane
 /// boundary small. Every changing render input is a value here, so selection,
 /// Vault activity and catalog updates still invalidate the hosted contents.
-private struct ArchiveBoardColumnContent: View {
+struct ArchiveBoardColumnContent: View {
     let column: ArchiveBoardColumn
     let viewModel: ArchiveBrowserViewModel
     let selectedSongID: String?
@@ -111,6 +144,7 @@ private struct ArchiveBoardColumnContent: View {
     let dropLayout: ArchiveBoardDropLayout
     let isBoardVisible: Bool
     let onInteract: () -> Void
+    let boardScroll: ArchiveBoardScrollController
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -124,7 +158,8 @@ private struct ArchiveBoardColumnContent: View {
                 viewModel: viewModel,
                 dropLayout: dropLayout,
                 isBoardVisible: isBoardVisible,
-                onInteract: onInteract
+                onInteract: onInteract,
+                boardScroll: boardScroll
             )
             .equatable()
 

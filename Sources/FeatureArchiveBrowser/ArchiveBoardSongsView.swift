@@ -14,6 +14,7 @@ struct ArchiveBoardSongsView: View, Equatable {
     let dropLayout: ArchiveBoardDropLayout
     var isBoardVisible = true
     var onInteract: () -> Void = {}
+    var boardScroll: ArchiveBoardScrollController? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
@@ -22,6 +23,7 @@ struct ArchiveBoardSongsView: View, Equatable {
             && lhs.viewModel === rhs.viewModel
             && lhs.dropLayout === rhs.dropLayout
             && lhs.isBoardVisible == rhs.isBoardVisible
+            && lhs.boardScroll === rhs.boardScroll
             && lhs.songs.equalsConcurrently(rhs.songs)
             && lhs.vaultPresentations == rhs.vaultPresentations
             && lhs.vaultActivity == rhs.vaultActivity
@@ -38,7 +40,8 @@ struct ArchiveBoardSongsView: View, Equatable {
             colorScheme: colorScheme,
             reduceMotion: reduceMotion,
             isBoardVisible: isBoardVisible,
-            onInteract: onInteract
+            onInteract: onInteract,
+            boardScroll: boardScroll
         )
         .onMoveCommand { direction in
             viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
@@ -56,12 +59,14 @@ struct ArchiveBoardSongCard: View, Equatable {
     let vaultPresentation: ProjectVaultCardPresentation?
     var vaultActivityMessage: String? = nil
     let viewModel: ArchiveBrowserViewModel
+    var scrollActivity: ArchiveBoardScrollActivity? = nil
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.isSelected == rhs.isSelected
             && lhs.vaultPresentation == rhs.vaultPresentation
             && lhs.vaultActivityMessage == rhs.vaultActivityMessage
             && lhs.viewModel === rhs.viewModel
+            && lhs.scrollActivity === rhs.scrollActivity
             && lhs.song == rhs.song
     }
 
@@ -80,7 +85,8 @@ struct ArchiveBoardSongCard: View, Equatable {
             onOpenProject: { try? viewModel.openLatestCPR(for: song) },
             onRevealInFinder: { viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song)) },
             canRevealInFinder: viewModel.preferredRevealURL(for: song) != nil,
-            onWorkflowStatusChange: { viewModel.applyWorkflowStatus($0, for: song) }
+            onWorkflowStatusChange: { viewModel.applyWorkflowStatus($0, for: song) },
+            scrollActivity: scrollActivity
         )
     }
 }

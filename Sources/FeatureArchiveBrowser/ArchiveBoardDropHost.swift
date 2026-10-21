@@ -15,6 +15,7 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
     let landingFrame: (String) -> CGRect?
     let refreshedContent: () -> Content
     let reduceMotion: Bool
+    var boardScroll: ArchiveBoardScrollController? = nil
 
     func makeNSView(context: Context) -> ArchiveBoardDropHostingView<Content> {
         let view = ArchiveBoardDropHostingView(rootView: content)
@@ -23,6 +24,10 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: ArchiveBoardDropHostingView<Content>, context: Context) {
+        update(view)
+    }
+
+    func update(_ view: ArchiveBoardDropHostingView<Content>) {
         if view.renderedKey != renderKey { view.rootView = content }
         configure(view)
     }
@@ -41,6 +46,7 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
         view.landingFrame = landingFrame
         view.refreshedContent = refreshedContent
         view.reduceMotion = reduceMotion
+        boardScroll?.register(view, columnID: renderKey.column.id, isDropTargeted: renderKey.isTargeted)
     }
 }
 

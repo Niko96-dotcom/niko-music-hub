@@ -16,6 +16,7 @@ struct ArchiveBoardNativeSongList: NSViewRepresentable {
     let reduceMotion: Bool
     var isBoardVisible = true
     var onInteract: () -> Void = {}
+    var boardScroll: ArchiveBoardScrollController? = nil
 
     func makeNSView(context: Context) -> ArchiveBoardNativeSongListView {
         let view = ArchiveBoardNativeSongListView()
@@ -47,6 +48,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
         borderType = .noBorder
         hasVerticalScroller = true
         hasHorizontalScroller = false
+        horizontalScrollElasticity = .none
         autohidesScrollers = true
         automaticallyAdjustsContentInsets = false
         table.style = .plain
@@ -71,6 +73,15 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
     override var acceptsFirstResponder: Bool { false }
+
+    // Routing preserves the event and leaves all movement to AppKit. Keep
+    // native responsive scrolling enabled despite overriding scrollWheel.
+    override class var isCompatibleWithResponsiveScrolling: Bool { true }
+
+    override func scrollWheel(with event: NSEvent) {
+        if input?.boardScroll?.routeHorizontalWheel(event) == true { return }
+        super.scrollWheel(with: event)
+    }
 
     override func reflectScrolledClipView(_ clipView: NSClipView) {
         let height = documentView?.frame.height ?? 0
@@ -123,12 +134,12 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                 enteringIDs = newSet.subtracting(oldSet)
                 entranceGeneration &+= 1
                 let generation = entranceGeneration
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + ArchiveBoardMotion.duration) { [weak self] in
                     guard let self, self.entranceGeneration == generation else { return }
                     self.enteringIDs = []
                 }
                 NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.18
+                    context.duration = ArchiveBoardMotion.duration
                     context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     table.beginUpdates()
                     table.removeRows(at: IndexSet(oldIDs.indices.filter { !newSet.contains(oldIDs[$0]) }), withAnimation: .effectFade)
@@ -166,10 +177,12 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                 || old.vaultActivity[song.id] != next.vaultActivity[song.id]
             let selectionChanged = (old.selectedSongID == song.id) != (next.selectedSongID == song.id)
             guard contentChanged || selectionChanged || old.viewModel !== next.viewModel
-                    || old.colorScheme != next.colorScheme || old.reduceMotion != next.reduceMotion else { continue }
+                    || old.colorScheme != next.colorScheme || old.reduceMotion != next.reduceMotion
+                    || old.boardScroll !== next.boardScroll else { continue }
             if let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ArchiveBoardCardCell {
                 cell.setCard(card(at: row), colorScheme: next.colorScheme, isLast: row == next.songs.count - 1,
-                             interaction: interaction, width: table.tableColumns[0].width)
+                             interaction: interaction, width: table.tableColumns[0].width,
+                             scrollActivity: next.boardScroll?.activity, reduceMotion: next.reduceMotion)
             }
             if contentChanged { changedHeights.insert(row) }
         }
@@ -186,7 +199,8 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
         cell.identifier = Self.cellID
         cell.setCard(card(at: row), colorScheme: input.colorScheme, isLast: row == input.songs.count - 1,
                      insertionAnimated: enteringIDs.contains(input.songs[row].id), interaction: interaction,
-                     width: table.tableColumns[0].width)
+                     width: table.tableColumns[0].width, scrollActivity: input.boardScroll?.activity,
+                     reduceMotion: input.reduceMotion)
         return cell
     }
 
@@ -215,7 +229,8 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
             isSelected: input.selectedSongID == song.id,
             vaultPresentation: input.vaultPresentations[song.id],
             vaultActivityMessage: input.vaultActivity[song.id],
-            viewModel: input.viewModel
+            viewModel: input.viewModel,
+            scrollActivity: input.boardScroll?.activity
         )
     }
 }
@@ -239,9 +254,14 @@ final class ArchiveBoardCardCell: NSTableCellView {
     var displayedContent: ArchiveBoardCardContent? { host?.rootView }
 
     func setCard(_ card: ArchiveBoardSongCard, colorScheme: ColorScheme, isLast: Bool,
-                 insertionAnimated: Bool = false, interaction: ArchiveBoardNativeCardInteraction, width: CGFloat) {
+                 insertionAnimated: Bool = false, interaction: ArchiveBoardNativeCardInteraction, width: CGFloat,
+                 scrollActivity: ArchiveBoardScrollActivity? = nil, reduceMotion: Bool = false) {
+        if let old = host?.rootView, old.card.song.id != card.song.id || old.card.song.workflowStatus != card.song.workflowStatus {
+            old.scrollActivity?.removeHover(songID: old.card.song.id, laneID: old.card.song.workflowStatus?.rawValue)
+        }
         let content = ArchiveBoardCardContent(card: card, colorScheme: colorScheme,
-                                             insertionAnimated: insertionAnimated, interaction: interaction)
+                                             insertionAnimated: insertionAnimated, interaction: interaction,
+                                             scrollActivity: scrollActivity, reduceMotion: reduceMotion)
         if let host {
             host.rootView = content
         } else {
@@ -291,11 +311,13 @@ struct ArchiveBoardCardContent: View {
     let colorScheme: ColorScheme
     var insertionAnimated = false
     let interaction: ArchiveBoardNativeCardInteraction
+    var scrollActivity: ArchiveBoardScrollActivity? = nil
+    var reduceMotion = false
 
     var body: some View {
         card.equatable()
             .fixedSize(horizontal: false, vertical: true)
-            .modifier(ArchiveBoardCardEntrance(animated: insertionAnimated))
+            .modifier(ArchiveBoardCardEntrance(animated: insertionAnimated && !reduceMotion))
             .simultaneousGesture(TapGesture().onEnded { interaction.perform() })
             .id(card.song.id)
             .environment(\.colorScheme, colorScheme)
@@ -318,7 +340,7 @@ private struct ArchiveBoardCardEntrance: ViewModifier {
             .opacity(animated && !appeared ? 0 : 1)
             .offset(y: animated && !appeared ? 4 : 0)
             .onAppear {
-                if animated { withAnimation(.easeOut(duration: 0.18)) { appeared = true } }
+                if animated { withAnimation(ArchiveBoardMotion.animation) { appeared = true } }
             }
     }
 }

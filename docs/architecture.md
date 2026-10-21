@@ -119,8 +119,13 @@ Archive domain and safety. No SwiftUI/AppKit.
 - A board lane is an `NSTableView` (`ArchiveBoardNativeSongList`) with reusable rows; each row hosts the unchanged
   SwiftUI `ArchiveBoardSongCard`. AppKit owns the document height, so a fling to the end always realizes the last card.
   Measurements and known costs: `docs/performance/archive-board-2026-10-21.md`.
+- Horizontal board movement uses `ArchiveBoardHorizontalScroll`: one native viewport whose document directly
+  contains the retained column drop hosts. It adds no SwiftUI hosting graph. Lane rectangles are read only during
+  drag edge scrolling; offsets are never published as SwiftUI state. Presentation equality reuses the catalog's
+  shared-storage comparisons. Hover suppression tracks only the controls under the pointer.
+  See `docs/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
 - The board stays mounted under the song detail page (`ArchiveBrowserViewModel.showsBoardPage`): going back must not
-  rebuild nine lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
+  rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
   hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.
 - Applying a rescan (`applyCatalogScanUpdate`) reacts to the changed songs only, keeps the held catalog arrays when
   nothing changed, skips the browse projection for an unchanged catalog and releases the scan result off the main

@@ -4,6 +4,7 @@ import Combine
 import Darwin
 import Foundation
 import NikoMusicCore
+import ObjectiveC
 import QuartzCore
 import SwiftUI
 @testable import FeatureArchiveBrowser
@@ -135,6 +136,17 @@ struct ArchiveLaunchBenchmark {
             exit(64)
         }
 
+        if scenarios.contains("horizontal") {
+            // Direct, synchronous injection has no WindowServer event stream for
+            // AppKit's concurrent gesture tracker to consume. Disable that tracker
+            // in this harness only, equally for both comparison binaries.
+            let selector = NSSelectorFromString("isCompatibleWithResponsiveScrolling")
+            let method = class_getClassMethod(NSScrollView.self, selector)!
+            let implementation: @convention(block) (AnyObject) -> Bool = { _ in false }
+            class_replaceMethod(object_getClass(NSScrollView.self)!, selector,
+                                imp_implementationWithBlock(implementation), method_getTypeEncoding(method))
+        }
+
         let fm = FileManager.default
         let work = fm.temporaryDirectory.appendingPathComponent("NMH-Launch-Bench-\(UUID().uuidString)")
         try fm.createDirectory(at: work, withIntermediateDirectories: true)
@@ -173,6 +185,9 @@ struct ArchiveLaunchBenchmark {
 
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.finishLaunching()
+        if let appearance = ProcessInfo.processInfo.environment["NMH_SCROLL_APPEARANCE"] {
+            NSApp.appearance = NSAppearance(named: appearance == "light" ? .aqua : .darkAqua)
+        }
         let heartbeat = Heartbeat()
         let timer = Timer(timeInterval: 0.002, target: heartbeat, selector: #selector(Heartbeat.tick), userInfo: nil, repeats: true)
         RunLoop.main.add(timer, forMode: .common)
@@ -316,6 +331,130 @@ struct ArchiveLaunchBenchmark {
         let newest = ordered.first
         func titleQuery(_ song: Song?) -> String {
             song?.displayTitle.split(separator: " ").prefix(2).joined(separator: " ") ?? "amber"
+        }
+
+        if scenarios.contains("horizontal") {
+            model.viewMode = .board; model.selectedSong = nil; render(); settle(0.5)
+            func descendants(_ view: NSView) -> [NSView] {
+                [view] + view.subviews.flatMap(descendants)
+            }
+            guard let outer = descendants(host).compactMap({ $0 as? NSScrollView }).first(where: {
+                ($0.documentView?.frame.width ?? 0) > $0.contentView.bounds.width + 100
+            }), let lane = scrollViews().first else { fatalError("Missing board scroll views") }
+            let laneIDs = Set(scrollViews().map(ObjectIdentifier.init))
+            let cardPoint = lane.convert(NSPoint(x: 80, y: 100), to: nil)
+            var routing: [[String: Any]] = []
+            for (name, dx, dy, phased, overCards) in [
+                ("idle_control", 0, 0, false, false),
+                ("outer_control", 12, 0, true, false),
+                ("cards_horizontal", 12, 0, true, true),
+                ("cards_diagonal", 12, 3, true, true),
+                ("cards_wobble", 12, 0, true, true),
+                ("outer_wobble", 12, 0, true, false),
+                ("lane_direct", 12, 3, true, true),
+                ("cards_mouse", 12, 0, false, true)
+            ] {
+                var times: [Double] = []
+                var cpuTimes: [Double] = []
+                var positions: [Double] = []
+                var verticalDrift = 0.0
+                for _ in 0..<(runsOverride ?? 3) {
+                    outer.contentView.scroll(to: .zero); outer.reflectScrolledClipView(outer.contentView)
+                    scroll(to: 0.5); render(); settle(0.2)
+                    let initialY = Dictionary(uniqueKeysWithValues: scrollViews().map { (ObjectIdentifier($0), $0.contentView.bounds.minY) })
+                    for direction in [-1, 1] {
+                        for step in 0..<38 {
+                            // Finger phase, finger end, then momentum including its terminal event.
+                            let momentum = phased && step >= 25
+                            let terminal = phased && (step == 24 || step == 37)
+                            let factor = terminal ? 0 : (momentum ? 0.5 : 1.0)
+                            let wobble = name.hasSuffix("wobble") && step < 2
+                            let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
+                                             wheel1: Int32(Double((wobble ? 3 : dy) * direction) * factor),
+                                             wheel2: Int32(Double((wobble ? 0 : dx) * direction) * factor), wheel3: 0)!
+                            if phased {
+                                cg.setIntegerValueField(.scrollWheelEventScrollPhase,
+                                                        value: momentum ? 0 : (step == 0 ? 1 : (step == 24 ? 4 : 2)))
+                                cg.setIntegerValueField(.scrollWheelEventMomentumPhase,
+                                                        value: momentum ? (step == 25 ? 1 : (step == 37 ? 3 : 2)) : 0)
+                            }
+                            let screenPoint = window.convertPoint(toScreen: cardPoint)
+                            cg.location = NSPoint(x: screenPoint.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - screenPoint.y)
+                            let event = NSEvent(cgEvent: cg)!
+                            let hit = host.hitTest(host.convert(cardPoint, from: nil))
+                            let start = CACurrentMediaTime()
+                            let cpuStart = threadCPUTime()
+                            if name == "lane_direct" { lane.scrollWheel(with: event) }
+                            else if overCards { (hit ?? lane).scrollWheel(with: event) }
+                            else { outer.scrollWheel(with: event) }
+                            host.layoutSubtreeIfNeeded(); window.displayIfNeeded(); CATransaction.flush()
+                            settle(0.008)
+                            host.layoutSubtreeIfNeeded(); window.displayIfNeeded(); CATransaction.flush()
+                            times.append((CACurrentMediaTime() - start) * 1000)
+                            cpuTimes.append((threadCPUTime() - cpuStart) * 1000)
+                            positions.append(outer.contentView.bounds.minX)
+                            verticalDrift = max(verticalDrift, scrollViews().map { abs($0.contentView.bounds.minY - (initialY[ObjectIdentifier($0)] ?? 0)) }.max() ?? 0)
+                        }
+                    }
+                }
+                let sorted = times.sorted()
+                rows.append(["scenario": "horizontal_\(name)", "median_ms": median(times),
+                             "p95_ms": sorted[Int(Double(sorted.count - 1) * 0.95)], "max_ms": sorted.last ?? 0,
+                             "samples_ms": times, "positions_x": positions, "max_x": positions.max() ?? 0,
+                             "main_cpu_median_ms": median(cpuTimes), "main_cpu_samples_ms": cpuTimes,
+                             "max_vertical_drift": verticalDrift])
+                routing.append(["scenario": name, "event_x": dx, "event_y": dy,
+                                "hit_class": String(describing: type(of: host.hitTest(host.convert(cardPoint, from: nil)) ?? host)),
+                                "outer_class": String(describing: type(of: outer))])
+                FileHandle.standardError.write(Data("horizontal \(name): median \(median(times)) ms, max x \(positions.max() ?? 0), y drift \(verticalDrift)\n".utf8))
+            }
+            result["horizontal_routing"] = routing
+            result["native_lanes_retained"] = laneIDs == Set(scrollViews().map(ObjectIdentifier.init))
+            result["realized_card_cells"] = descendants(host).filter { $0 is ArchiveBoardCardCell }.count
+            if let artifacts = ProcessInfo.processInfo.environment["NMH_SCROLL_ARTIFACTS"] {
+                outer.contentView.scroll(to: .zero); outer.reflectScrolledClipView(outer.contentView)
+                scroll(to: 0); render(); settle(0.3)
+                func rect(_ rect: NSRect) -> [Double] { [rect.minX, rect.minY, rect.width, rect.height] }
+                result["board_lane_frames"] = scrollViews().map { rect($0.convert($0.bounds, to: host)) }
+                result["board_card_frames"] = descendants(host).compactMap { ($0 as? ArchiveBoardCardCell)?.cardFrame(in: host) }.map(rect)
+                let url = URL(fileURLWithPath: artifacts, isDirectory: true)
+                try fm.createDirectory(at: url, withIntermediateDirectories: true)
+                if let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                    host.cacheDisplay(in: host.bounds, to: bitmap)
+                    try bitmap.representation(using: .png, properties: [:])?.write(to: url.appendingPathComponent("board.png"))
+                }
+            }
+        }
+        if scenarios.contains("back") {
+            model.viewMode = .board; render(); settle(0.3)
+            measure("detail_to_board", prepare: { _ in
+                if let newest { model.openSongDetail(newest); render(); settle(0.2) }
+            }) { _ in model.viewMode = .board; render() }
+        }
+        if scenarios.contains("reach") {
+            model.viewMode = .board; model.selectedSong = nil; render(); settle(0.3)
+            guard let lane = scrollViews().max(by: { ($0.documentView?.frame.height ?? 0) < ($1.documentView?.frame.height ?? 0) }),
+                  let table = lane.documentView as? NSTableView else { fatalError("Missing native lane") }
+            let last = table.numberOfRows - 1
+            var passed = 0
+            var trials = 0
+            measure("board_oldest_card_reachable", prepare: { _ in scroll(to: 0); render() }) { _ in
+                trials += 1
+                table.scrollRowToVisible(last)
+                let deadline = CACurrentMediaTime() + 5
+                while CACurrentMediaTime() < deadline {
+                    render()
+                    if let cell = table.view(atColumn: 0, row: last, makeIfNecessary: false) as? ArchiveBoardCardCell,
+                       let frame = cell.cardFrame(in: lane.contentView),
+                       lane.contentView.bounds.insetBy(dx: -1, dy: -1).contains(frame) {
+                        passed += 1
+                        break
+                    }
+                    settle(0.005)
+                }
+            }
+            result["oldest_card_trials"] = trials
+            result["oldest_card_passed"] = passed
         }
 
         if scenarios.contains("open") {

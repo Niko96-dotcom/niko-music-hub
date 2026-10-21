@@ -1,5 +1,9 @@
 # Archive board performance (round 2, 21.10.2026)
 
+Horizontal scrolling and motion were subsequently measured and revised in
+[the horizontal-scroll follow-up](archive-horizontal-scroll-2026-10-21.md).
+The historical numbers below describe the earlier vertical-scroll and catalog work.
+
 ## What was merged
 
 `main` holds `perf/r2-combined`: Sol's native board lanes (this report, below) plus the memory work from
