@@ -1072,6 +1072,58 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
+    func testSaveNewVersionAndRenameAfterPostponementKeepCatalogIdentityAndMetadata() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
+        let metadata = try SQLiteSongUserMetadataStore(database: fixture.database)
+        let note = SongUserMetadata(songID: fixture.song.id, virtualTitle: "Keep title", appNote: "Keep note", collaboratorIDs: ["friend"], workflowStatus: .done)
+        try metadata.upsert(note)
+        let gib: Int64 = 1_073_741_824
+        let blocked = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
+            activeAvailableCapacityBytes: 7 * gib, archiveAvailableCapacityBytes: 7 * gib, projectedArchiveBytes: 4 * gib))
+        var projectID: ProjectID?
+        for step in 0..<3 {
+            if step == 1 {
+                let cpr = fixture.project.appendingPathComponent("Synthetic Song.cpr")
+                try Data("edited-cpr-v1".utf8).write(to: cpr)
+                try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1.1)], ofItemAtPath: cpr.path)
+            } else if step == 2 {
+                let version = fixture.project.appendingPathComponent("Synthetic Song v2.cpr")
+                try Data("new version".utf8).write(to: version)
+                try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 2)], ofItemAtPath: version.path)
+            }
+            var scanned = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first)
+            scanned.workflowStatus = .done
+            do {
+                _ = try await blocked.archive(song: scanned, trigger: .workflowDone)
+                XCTFail("expected capacity postponement")
+            } catch {
+                XCTAssertEqual(error as? ProjectVaultRuntimeError, .activityPostponed(.insufficientArchiveCapacity))
+            }
+            let entries = try fixture.catalogStore().loadEntries()
+            XCTAssertEqual(entries.count, 1)
+            if let projectID { XCTAssertEqual(entries.first?.record.id, projectID) }
+            else { projectID = entries.first?.record.id }
+            XCTAssertTrue(try fixture.catalogStore().loadReviews().isEmpty)
+            XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+        }
+        let moved = fixture.active.appendingPathComponent("Renamed Song", isDirectory: true)
+        try FileManager.default.moveItem(at: fixture.project, to: moved)
+        var renamed = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first)
+        renamed.workflowStatus = .done
+        let ready = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
+            activeAvailableCapacityBytes: 117 * gib, archiveAvailableCapacityBytes: 117 * gib, projectedArchiveBytes: 4 * gib))
+        let result = try await ready.archive(song: renamed, trigger: .workflowDone)
+        XCTAssertEqual(result.record.id, projectID)
+        XCTAssertEqual(result.transfer?.state, .archiveVerified)
+        XCTAssertEqual(try fixture.catalogStore().loadEntries().count, 1)
+        XCTAssertEqual(try metadata.loadAll()[note.songID]?.appNote, note.appNote)
+        XCTAssertEqual(try metadata.loadAll()[note.songID]?.virtualTitle, note.virtualTitle)
+        XCTAssertEqual(try metadata.loadAll()[note.songID]?.collaboratorIDs, note.collaboratorIDs)
+        XCTAssertEqual(try metadata.statusHistory(forSongID: note.songID).count, 1)
+    }
+
     func testDoneUsesProjectedHeadroomBeforeCreatingTransfer() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }

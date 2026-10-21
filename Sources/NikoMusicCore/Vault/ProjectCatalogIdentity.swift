@@ -99,16 +99,43 @@ public struct ProjectIdentityEvidence: Hashable, Codable, Sendable {
     public var normalizedFolderName: String
     public var cubaseFiles: Set<ProjectFileIdentity>
     public var selectedContentHashes: Set<String>
+    /// Present only for a complete live inventory with directly read file attributes.
+    /// Older evidence has no marker and retains the stricter legacy precision checks.
+    public var inventoryVersion: Int?
 
-    public init(folderName: String, cubaseFiles: Set<ProjectFileIdentity>, selectedContentHashes: Set<String> = []) {
+    public init(folderName: String, cubaseFiles: Set<ProjectFileIdentity>, selectedContentHashes: Set<String> = [], inventoryVersion: Int? = nil) {
         self.normalizedFolderName = Self.normalize(folderName)
         self.cubaseFiles = cubaseFiles
         self.selectedContentHashes = Set(selectedContentHashes.map { $0.lowercased() })
+        self.inventoryVersion = inventoryVersion
     }
 
     public func isHighConfidenceMatch(with other: Self) -> Bool {
         if !selectedContentHashes.isDisjoint(with: other.selectedContentHashes) { return true }
         return !cubaseFiles.isEmpty && cubaseFiles == other.cubaseFiles
+    }
+
+    /// Continuity at one uniquely claimed Active location, never identity across locations.
+    /// Existing files must remain, with positive sizes and no backward modification dates.
+    /// A legacy same-size subsecond difference can be timestamp truncation, not a save.
+    func isSaveEvolution(of stored: Self) -> Bool {
+        guard !stored.cubaseFiles.isEmpty, !cubaseFiles.isEmpty,
+              stored.cubaseFiles.allSatisfy({ $0.byteCount > 0 }),
+              cubaseFiles.allSatisfy({ $0.byteCount > 0 }),
+              stored.selectedContentHashes.isEmpty || selectedContentHashes.isEmpty
+                || !stored.selectedContentHashes.isDisjoint(with: selectedContentHashes) else { return false }
+        let oldFiles = Dictionary(grouping: stored.cubaseFiles, by: \.normalizedName)
+        let newFiles = Dictionary(grouping: cubaseFiles, by: \.normalizedName)
+        guard oldFiles.values.allSatisfy({ $0.count == 1 }), newFiles.values.allSatisfy({ $0.count == 1 }) else { return false }
+        let complete = stored.inventoryVersion == 1 && inventoryVersion == 1
+        for (name, previous) in oldFiles {
+            guard let old = previous.first, let fresh = newFiles[name]?.first else { return false }
+            if fresh == old { continue }
+            let elapsed = fresh.modifiedAt.timeIntervalSince(old.modifiedAt)
+            guard elapsed >= 0,
+                  complete || (elapsed > 0 && (fresh.byteCount != old.byteCount || elapsed >= 1)) else { return false }
+        }
+        return true
     }
 
     private static func normalize(_ value: String) -> String {
@@ -213,7 +240,8 @@ public struct ProjectCatalogReconciler: Sendable {
     /// relative path string; evidence means the existing high-confidence rule (a shared
     /// content hash, or the exact same set of file identities).
     /// 1. Two or more entries at the location: ambiguous.
-    /// 2. One entry at the location: reuse it only if it is the single strong match.
+    /// 2. One entry at the location: reuse its single strong match, or a forward save
+    ///    evolution at that Active location when no other entry strongly matches.
     /// 3. No entry at the location: one strong match merges (a moved folder); several are
     ///    ambiguous; none creates a new entry and, for matching names, a review.
     /// Ambiguity throws so a caller cannot persist a half-decided result.
@@ -302,6 +330,17 @@ public struct ProjectCatalogReconciler: Sendable {
                             migrations: &migrations,
                             observedAt: observedAt
                         )
+                        continue
+                    }
+                    if observation.location.kind == .active,
+                       (existing.first(where: { $0.record.id == entries[index].record.id }) ?? entries[index]).record.locations.contains(where: {
+                           $0.rootID == observation.location.rootID && $0.relativePath == observation.location.relativePath
+                               && $0.kind == .active && $0.availability != .missing
+                       }),
+                       strongMatches.isEmpty,
+                       observation.evidence.isSaveEvolution(of: entries[index].evidence) {
+                        mergeIndexed(observation, at: index, entries: &entries, indexes: &indexes, observedAt: observedAt)
+                        migrations[legacyPath(for: observation.location)] = entries[index].record.id
                         continue
                     }
                     throw Ambiguity.locationEvidenceMismatch(entries[index].record.id)
@@ -483,10 +522,8 @@ public struct ProjectCatalogReconciler: Sendable {
             }
         }
 
-        /// Synchronize after a union-merge of one entry. Evidence only grows
-        /// (formUnion), locations are only added/updated in place, and the folder
-        /// name is immutable across merges, so only additions plus a possible
-        /// fileset-key rotation need handling.
+        /// Synchronize after an accepted observation. The file-set key is replaced;
+        /// content hashes grow and locations are only added/updated in place.
         mutating func noteMerged(
             id: ProjectID,
             at index: Int,
@@ -875,7 +912,10 @@ public struct ProjectCatalogReconciler: Sendable {
             entry.record.locations.append(location)
         }
         entry.record.lastVerifiedAt = observedAt
-        entry.evidence.cubaseFiles.formUnion(observation.evidence.cubaseFiles)
+        // This is a current snapshot. Unioning old and new sizes/times makes no later
+        // observation match it, so moving the project would silently fork its identity.
+        entry.evidence.cubaseFiles = observation.evidence.cubaseFiles
+        entry.evidence.inventoryVersion = observation.evidence.inventoryVersion
         entry.evidence.selectedContentHashes.formUnion(observation.evidence.selectedContentHashes)
     }
 

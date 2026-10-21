@@ -29,6 +29,18 @@ Open uses macOS's file association, so associate `.als` with Ableton Live and `.
 
 ## Song identity and previews
 
+At an existing Active location with exactly one catalog claimant, complete live inventories
+can follow ordinary saves and new versions without requesting a new identity review. All
+previously observed filenames must remain, sizes must be positive, and modification dates
+must not move backward. Legacy inventories without the live-inventory marker require a
+forward size change or at least a full second of modification-time change; adding versions
+while retaining the previous exact file evidence is also supported. Zero-byte, incomplete,
+ambiguous and unrelated evidence still requires review, as does evidence strongly matching
+another project. This continuity rule never identifies a project across different locations.
+After an accepted observation or explicit Link, the current file list replaces obsolete
+sizes and timestamps, so later folder moves can match the current project without creating
+another ProjectID. Existing project metadata and review decisions are retained.
+
 The folder groups the project's files and remains its filesystem identity. The displayed song title comes from the selected full-song delivery when available, including exports without an artist prefix (`New Song DEMO V2.wav` becomes `New Song`) and numeric titles (`404 DEMO V1.wav` becomes `404`). Version, production and writer-credit suffixes are removed; words inside the title are retained. A virtual title in Song info remains the explicit user override.
 
 Automatic preview selection checks full-song suitability before scores, versions or modification dates. Stems, references, short clips and technical exports such as `for ableton` or `for mastering` cannot outrank a usable full-song mix. Among usable full songs, exports in the song root or Mixdown folder take precedence over imported audio in project subfolders. A finished song inside Cubase's Audio folder remains eligible when no such export exists. The same core rules run on fresh scans and cached automatic selections; manual preview choices stay intact. Vault refreshes the canonical title when archiving the active song, including when reusing an existing verified generation, without changing the ProjectID, folder or music files.

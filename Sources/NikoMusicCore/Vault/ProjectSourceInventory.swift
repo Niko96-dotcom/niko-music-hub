@@ -126,7 +126,7 @@ public struct ProjectSourceInventory: @unchecked Sendable {
             files.insert(ProjectFileIdentity(name: version.fileName, byteCount: byteCount, modifiedAt: modificationDate))
         }
         return .complete(
-            evidence: ProjectIdentityEvidence(folderName: song.originalFolderName, cubaseFiles: files),
+            evidence: ProjectIdentityEvidence(folderName: song.originalFolderName, cubaseFiles: files, inventoryVersion: 1),
             versions: inventory.versions
         )
     }
