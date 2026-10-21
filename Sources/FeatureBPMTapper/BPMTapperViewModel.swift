@@ -259,7 +259,9 @@ public final class BPMTapperViewModel: ObservableObject {
             statusText = "New tap run started"
             statusKind = .longPauseReset
         case .outlierIgnored:
-            statusText = "Uneven tap ignored"
+            // The estimator leaves the tap out and the readout keeps its value;
+            // a person tapping along does not need to be told.
+            statusText = ""
             statusKind = .outlierIgnored
         }
     }

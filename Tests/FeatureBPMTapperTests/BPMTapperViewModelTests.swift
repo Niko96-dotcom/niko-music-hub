@@ -70,7 +70,7 @@ final class BPMTapperViewModelTests: XCTestCase {
         viewModel.recordTap(at: 1.58)
 
         XCTAssertEqual(try XCTUnwrap(viewModel.displayedBPM), previousBPM, accuracy: 0.001)
-        XCTAssertEqual(viewModel.statusText, "Uneven tap ignored")
+        XCTAssertEqual(viewModel.statusText, "")
         XCTAssertEqual(viewModel.statusKind, .outlierIgnored)
     }
 
