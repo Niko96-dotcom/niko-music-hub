@@ -9,6 +9,18 @@ import XCTest
 /// commented-out modifier cannot fake a pass. Copy checks intentionally run on
 /// raw source because the banned phrases live inside string literals.
 final class HubDesignContractSourceTests: XCTestCase {
+    func testArchivePausedTransportSelectionReachesItsSessionOwner() throws {
+        let model = try readStripped("Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift")
+        expectMatch(model, pattern: #"@Published\s+var\s+selectedSong\s*:\s*Song\?\s*\{\s*didSet\s*\{\s*synchronizePreviewSelection\(\)"#,
+                    "Archive selection, including restored routes and rescans, must reach the session owner")
+        let session = try readStripped("Sources/FeatureArchiveBrowser/ArchivePreviewSession.swift")
+        expectMatch(session, pattern: #"ArchivePreviewSession\.shared\.followSelection\(selectedSong\)"#,
+                    "The playback session owns paused selection reconciliation")
+        let card = try readStripped("Sources/FeatureArchiveBrowser/ArchiveBoardView.swift")
+        expectMatch(card, pattern: #"private\s+func\s+playPreview\(\)\s*\{\s*onPlay\?\(\)\s*\}"#,
+                    "Card Play must target its own song rather than the global transport selection")
+    }
+
     private let toolPages = [
         "Sources/FeatureBPMTapper/BPMTapperView.swift",
         "Sources/FeatureAudioConverter/AudioConverterView.swift",

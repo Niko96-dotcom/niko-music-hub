@@ -92,6 +92,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var selectedCollaboratorID: String?
     @Published var selectedSong: Song? {
         didSet {
+            synchronizePreviewSelection()
             // NMH-049: a song change dismisses the nearby open error.
             // Guarded so an already-clear error adds no extra publish.
             if oldValue?.id != selectedSong?.id, openError != nil {

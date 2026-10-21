@@ -92,7 +92,7 @@ extension ArchiveBrowserViewModel {
         analyticsSnapshot = ArchiveAnalyticsProjection.snapshot(songs: songs, history: history)
     }
 
-    /// Board selection changes the highlight; only explicit Play replaces audio.
+    /// Board selection arms the paused player without interrupting active audio.
     func selectSongOnBoard(_ song: Song) {
         guard selectedSong?.id != song.id else { return }
         applySongSelection(song)

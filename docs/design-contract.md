@@ -194,6 +194,22 @@ measured Codex step (§1.1) — no sheen, no rim, no shadow. Every row label
 renders at full strength — the pill alone carries the state, exactly like the
 ChatGPT/Codex sidebar. Sidebar rows and inspector cells use the same treatment.
 
+### Archive selection and persistent preview player
+
+- While paused or idle, selecting a song arms its main preview and updates the persistent
+  player's title and filename without starting audio. A selected song without a preview
+  clears the paused transport. Deselecting preserves the last loaded track.
+- Browsing while audio is playing does not interrupt it. When playback pauses or finishes,
+  the transport follows the current selection. Recording blocks preview playback and
+  transport replacement until capture ends; it never resumes audio automatically.
+- The persistent Play button resumes the armed preview. Space explicitly auditions a
+  different selected song, even during playback. Every card Play action auditions that
+  card's own song through `ArchivePreviewSession`.
+- For the same selected song, valid explicit alternates and paused positions survive
+  metadata edits. Rescans refresh the title and replace removed or changed previews.
+  Playback state belongs to `ArchivePreviewSession`; selection changes, including
+  navigation restoration and catalog reconciliation, reach it from the view model.
+
 ## 4c. Accent: warm indicator, neutral everything else
 
 One warm colour exists: `Palette.indicator` (terracotta `#CC7D5E` light /

@@ -3,7 +3,7 @@ import Combine
 import NikoMusicCore
 import Foundation
 
-/// App-lifetime playback; song selection and preview defaults are independent.
+/// App-lifetime playback. Active audio survives browsing; the paused transport follows selection.
 @MainActor
 final class ArchivePreviewSession: ObservableObject {
     static let shared = ArchivePreviewSession()
@@ -27,12 +27,19 @@ final class ArchivePreviewSession: ObservableObject {
     /// Hide (Cmd-H) keeps playing; capture pause below (NMH-116) is unchanged.
     private(set) var routeObserver: ArchivePreviewRouteObserver?
     private var openSongAction: (() -> Void)?
+    private var selectedSong: Song?
+    private var selectedSongAction: (() -> Void)?
 
     init(player: ArchivePreviewPlayer = ArchivePreviewPlayer(), capture: AudioCaptureActivity = .shared) {
         self.player = player
         player.setVolume(volume)
         player.$playbackIntentActive.removeDuplicates().sink { [weak self] playing in
             self?.isPlaying = playing
+            if !playing {
+                // @Published emits before the player finishes pausing/stopping. Reconcile
+                // after that operation, never halfway through an explicit load or compare.
+                Task { @MainActor [weak self] in self?.followSelectionIfIdle() }
+            }
         }.store(in: &observations)
         ArchivePlaybackCoordinator.shared.$stopGeneration.dropFirst().sink { [weak self] _ in
             self?.clear()
@@ -40,6 +47,7 @@ final class ArchivePreviewSession: ObservableObject {
         capture.$isActive.sink { [weak self] active in
             self?.captureActive = active
             if active { self?.player.pause() }
+            else { self?.followSelectionIfIdle() }
         }.store(in: &observations)
         // NMH-137: observe output-route changes once. Pause on unplug only.
         self.routeObserver = ArchivePreviewRouteObserver.start(pausing: player)
@@ -47,10 +55,39 @@ final class ArchivePreviewSession: ObservableObject {
 
     @Published private(set) var isPlaying = false
 
+    func followSelection(_ song: Song?, openSong: @escaping () -> Void) {
+        selectedSong = song
+        selectedSongAction = song == nil ? nil : openSong
+        followSelectionIfIdle()
+    }
+
+    private func followSelectionIfIdle() {
+        guard !captureActive, !player.playbackIntentActive, let selectedSong else { return }
+        if songID == selectedSong.id, let preview,
+           selectedSong.previewCandidates.contains(where: { $0.id == preview.id && $0.modifiedAt == preview.modifiedAt }) {
+            // Keep a valid explicit alternate and its paused position. Metadata/rescans
+            // can still refresh the title or remove/replace the loaded file.
+            songTitle = selectedSong.effectiveDisplayTitle
+            openSongAction = selectedSongAction
+            return
+        }
+        guard let candidate = selectedSong.previewCandidates.first(where: { $0.id == selectedSong.mainPreviewCandidateID }) else {
+            clearLoadedPreview()
+            return
+        }
+        songID = selectedSong.id
+        songTitle = selectedSong.effectiveDisplayTitle
+        preview = candidate
+        openSongAction = selectedSongAction
+        // Selection only binds a URL; it never starts audio or allocates AVPlayer.
+        player.forceStop()
+        player.bind(url: candidate.filePath)
+    }
+
     func audition(song: Song, candidate: PreviewCandidate? = nil, openSong: @escaping () -> Void) {
         guard !captureActive, let candidate = candidate ?? song.previewCandidates.first(where: { $0.id == song.mainPreviewCandidateID }) else { return }
         if songID == song.id, preview?.id == candidate.id, preview?.modifiedAt == candidate.modifiedAt, player.playbackError == nil {
-            toggle()
+            toggleLoaded()
             return
         }
         songID = song.id
@@ -71,6 +108,11 @@ final class ArchivePreviewSession: ObservableObject {
     }
 
     func toggle() {
+        followSelectionIfIdle()
+        toggleLoaded()
+    }
+
+    private func toggleLoaded() {
         guard !captureActive, let preview else { return }
         if player.playbackError != nil { player.load(url: preview.filePath) }
         else { player.toggle(at: preview.filePath) }
@@ -79,7 +121,13 @@ final class ArchivePreviewSession: ObservableObject {
     func openSong() { openSongAction?() }
 
     func clear() {
-        player.forceStop()
+        selectedSong = nil
+        selectedSongAction = nil
+        clearLoadedPreview()
+    }
+
+    private func clearLoadedPreview() {
+        player.bind(url: nil)
         songID = nil
         songTitle = ""
         preview = nil
@@ -88,6 +136,14 @@ final class ArchivePreviewSession: ObservableObject {
 }
 
 extension ArchiveBrowserViewModel {
+    func synchronizePreviewSelection() {
+        let songID = selectedSong?.id
+        ArchivePreviewSession.shared.followSelection(selectedSong) { [weak self] in
+            guard let self, let song = self.songs.first(where: { $0.id == songID }) else { return }
+            self.openSongDetail(song)
+        }
+    }
+
     func audition(_ song: Song, candidate: PreviewCandidate? = nil) {
         ArchivePreviewSession.shared.audition(song: song, candidate: candidate) { [weak self] in
             guard let self, let current = self.songs.first(where: { $0.id == song.id }) else { return }

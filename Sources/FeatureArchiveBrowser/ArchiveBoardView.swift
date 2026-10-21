@@ -360,11 +360,7 @@ struct ArchiveBoardCardView: View {
     }
 
     private func playPreview() {
-        if session.songID == song.id {
-            session.toggle()
-        } else {
-            onPlay?()
-        }
+        onPlay?()
     }
 }
 
