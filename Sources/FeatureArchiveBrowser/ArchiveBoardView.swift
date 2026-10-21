@@ -233,10 +233,7 @@ struct ArchiveBoardCardView: View {
         return parts.isEmpty ? "No project files" : parts.joined(separator: " · ")
     }
 
-    private var cardFill: Color {
-        if isSelected { return HubDesignSystem.Palette.selection }
-        return isHovered ? HubDesignSystem.Palette.selection : HubDesignSystem.Palette.surfaceRaised
-    }
+    private var showsSelectionFill: Bool { isSelected || isHovered }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -289,9 +286,18 @@ struct ArchiveBoardCardView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(cardFill)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: isHovered)
+            // Cross-fade two layers instead of animating one fill between them: the raised
+            // surface is opaque and the selection fill is translucent, and interpolating the
+            // two colors passes through a darker half-transparent gray (a one-frame flash).
+            ZStack {
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                    .fill(HubDesignSystem.Palette.surfaceRaised)
+                    .opacity(showsSelectionFill ? 0 : 1)
+                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
+                    .fill(HubDesignSystem.Palette.selection)
+                    .opacity(showsSelectionFill ? 1 : 0)
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: isHovered)
         }
         .overlay {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
