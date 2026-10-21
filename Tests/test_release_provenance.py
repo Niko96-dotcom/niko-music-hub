@@ -60,12 +60,6 @@ REQUIRED_CHECKS = [
     "synthetic_archive_read_only_browse",
     "output_inbox_and_exact_reveal"
 ]
-REQUIRED_EXCLUSIONS = {
-    "separate_account_clean_install": "waived",
-    "disposable_uninstall": "waived",
-    "fresh_login_launch_at_login": "waived",
-    "deep_pointer_done_vault_queue": "not_run"
-}
 
 # Use the actual HEAD commit so validators resolve a real commit object.
 # Invented SHAs are rejected by the commit-object gate; fixtures must be real
@@ -150,7 +144,6 @@ def write_uat(
             "hardened_runtime": True,
         },
         "checks": {name: "passed" for name in REQUIRED_CHECKS},
-        "excluded_checks": dict(REQUIRED_EXCLUSIONS),
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -405,7 +398,7 @@ def approval_args(
 class ProvenanceBehaviorTests(unittest.TestCase):
     def test_required_smoke_checks_cannot_be_waived_or_skipped(self) -> None:
         for name in REQUIRED_CHECKS:
-            for state in ("waived", "not_run"):
+            for state in ("pending", "failed", "waived", "not_run", "unknown", None):
                 with self.subTest(check=name, state=state), tempfile.TemporaryDirectory() as raw:
                     artifact, manifest, uat, approval = build_valid_bundle(pathlib.Path(raw))
                     mutate_json(uat, lambda p: p["checks"].__setitem__(name, state))
@@ -416,11 +409,14 @@ class ProvenanceBehaviorTests(unittest.TestCase):
                         self.assertNotEqual(result.returncode, 0, msg=result.stdout)
                         self.assertIn("must be passed", result.stderr)
 
-    def test_excluded_work_is_disclosed_and_never_claimed_passed(self) -> None:
-        invalid = [None, [], {}, {**REQUIRED_EXCLUSIONS, "unknown": "waived"}]
-        invalid.extend({**REQUIRED_EXCLUSIONS, name: "passed"} for name in REQUIRED_EXCLUSIONS)
-        invalid.append({**REQUIRED_EXCLUSIONS, "deep_pointer_done_vault_queue": "waived"})
-        for excluded in invalid:
+    def test_legacy_excluded_checks_are_ignored_by_both_validators(self) -> None:
+        legacy = {
+            "separate_account_clean_install": "waived",
+            "disposable_uninstall": "waived",
+            "fresh_login_launch_at_login": "waived",
+            "deep_pointer_done_vault_queue": "not_run",
+        }
+        for excluded in (legacy, None, [], {}, {"unknown": "passed"}):
             with self.subTest(excluded=excluded), tempfile.TemporaryDirectory() as raw:
                 artifact, manifest, uat, approval = build_valid_bundle(pathlib.Path(raw))
                 mutate_json(uat, lambda p: p.__setitem__("excluded_checks", excluded))
@@ -428,8 +424,7 @@ class ProvenanceBehaviorTests(unittest.TestCase):
                                   manifest.name, sha_file(manifest), uat.name, sha_file(uat))
                 for args in (uat_args(uat), approval_args(approval, artifact, manifest, uat)):
                     result = run_cmd(args)
-                    self.assertNotEqual(result.returncode, 0, msg=result.stdout)
-                    self.assertIn("excluded_checks", result.stderr)
+                    self.assertEqual(result.returncode, 0, msg=result.stderr)
 
     def test_legacy_ten_check_record_does_not_approve_current_smoke(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

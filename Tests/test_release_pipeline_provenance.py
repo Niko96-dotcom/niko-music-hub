@@ -66,12 +66,6 @@ REQUIRED_CHECKS = [
     "synthetic_archive_read_only_browse",
     "output_inbox_and_exact_reveal"
 ]
-REQUIRED_EXCLUSIONS = {
-    "separate_account_clean_install": "waived",
-    "disposable_uninstall": "waived",
-    "fresh_login_launch_at_login": "waived",
-    "deep_pointer_done_vault_queue": "not_run"
-}
 
 
 def clean_env() -> dict[str, str]:
@@ -200,7 +194,6 @@ def write_valid_uat(path: pathlib.Path, commit: str, build_id: str) -> None:
             "hardened_runtime": True,
         },
         "checks": {name: "passed" for name in REQUIRED_CHECKS},
-        "excluded_checks": dict(REQUIRED_EXCLUSIONS),
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

@@ -50,15 +50,6 @@ NMH_REQUIRED_UAT_CHECKS=(
   output_inbox_and_exact_reveal
 )
 
-# Owner-approved personal-project scope (2026-10-21). These are disclosures,
-# never successful tests. Keep them separate from the six required passes.
-NMH_REQUIRED_UAT_EXCLUSIONS=(
-  separate_account_clean_install=waived
-  disposable_uninstall=waived
-  fresh_login_launch_at_login=waived
-  deep_pointer_done_vault_queue=not_run
-)
-
 nmh_required_release_gates() {
   printf '%s\n' "${NMH_REQUIRED_RELEASE_GATES[@]}"
 }

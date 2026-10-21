@@ -21,11 +21,5 @@
     "synthetic_archive_read_only_browse": "pending",
     "output_inbox_and_exact_reveal": "pending"
   },
-  "notes": "Approve only after observing all six owner-required personal-project smoke scenarios on the exact signed release commit/build, with durable GUI and file/hash/audio evidence per docs/ai-acceptance-testing.md. Preserve current-account music/settings and disclose corrections. Excluded work is waived or not_run, never passed. Historical or earlier-commit UAT does not approve a new candidate. approved_by truthfully identifies the AI executor/session.",
-  "excluded_checks": {
-    "separate_account_clean_install": "waived",
-    "disposable_uninstall": "waived",
-    "fresh_login_launch_at_login": "waived",
-    "deep_pointer_done_vault_queue": "not_run"
-  }
+  "notes": "Approve only after observing all six owner-required personal-project smoke scenarios on the exact signed release commit/build, with durable GUI and file/hash/audio evidence per docs/ai-acceptance-testing.md. Preserve existing music/settings and disclose corrections. Historical or earlier-commit UAT does not approve a new candidate. approved_by truthfully identifies the AI executor/session."
 }

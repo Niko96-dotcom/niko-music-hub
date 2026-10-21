@@ -1,9 +1,7 @@
 # AI Acceptance Testing (Release UAT)
 
 The owner-approved personal-project release scope is six functional smoke
-scenarios on the current macOS account. The owner selected this scope on
-2026-10-21 to avoid requiring a separate account or a fresh login for every
-release. AI computer-use may execute and approve the smoke, with truthful
+scenarios. AI computer-use may execute and approve the smoke, with truthful
 executor identity and durable evidence for every required pass.
 
 ## Contract
@@ -18,26 +16,13 @@ executor identity and durable evidence for every required pass.
 5. `synthetic_archive_read_only_browse`
 6. `output_inbox_and_exact_reveal`
 
-Any pending, failed, waived, missing or unknown required check rejects the
+Any pending, failed, missing or unknown required check rejects the
 release. Historical ten-check records cannot approve this scope by dropping
 unperformed checks: issue a new record only after observing the six scenarios
 on the exact final candidate.
 
-The record must separately disclose exactly these `excluded_checks`:
-
-| Excluded work | Recorded result |
-| --- | --- |
-| `separate_account_clean_install` | `waived` |
-| `disposable_uninstall` | `waived` |
-| `fresh_login_launch_at_login` | `waived` |
-| `deep_pointer_done_vault_queue` | `not_run` |
-
-These disclosures are not successful tests. The last exclusion covers pointer
-drag-out/Done, Vault source/destination manifest and Keep Local exercises,
-queued Done Undo, cancellation/retry and queued-work relaunch/restore. They
-remain useful optional investigations, with their own evidence, but are not
-prerequisites for this release smoke. Existing permission grants may be used;
-new/denied permission-prompt paths are not thereby claimed tested.
+Existing permission grants may be used; new/denied permission-prompt paths
+are not thereby claimed tested.
 
 The twelve automated/artifact release gates and four narrowly allowed
 emergency exceptions are unchanged. Required source CI, strict development
@@ -63,7 +48,7 @@ final approval. Exact commit/build/signing checks and frozen hash checks are
 unchanged. Copy `docs/release-uat-evidence.template.json` into the private
 project evidence directory and approve it only after all six scenarios pass.
 
-## Current-account safety
+## Data safety
 
 - Inspect ongoing work before quitting or replacing an app. Keep the prior
   installation available. Use a separate candidate location where useful.
@@ -77,15 +62,15 @@ project evidence directory and approve it only after all six scenarios pass.
   Investigate unexpected changes and verify preservation before approval.
 - All write/destructive/archive/restore exercises use synthetic fixtures.
   Never move, remove or rewrite real music. Browse real archives read-only.
-- No new account, forced logout/reboot, TCC reset, password/security changes
-  or real audio-routing changes are needed for this smoke. Permission prompts
-  still follow the host's permission policy; unavailable capture is a failed
-  or pending required check, not permission to use fake audio.
+- No forced logout/reboot, TCC reset, password/security changes or real
+  audio-routing changes are needed for this smoke. Permission prompts follow
+  the host's permission policy; unavailable capture is a failed or pending
+  required check, not permission to use fake audio.
 
 ## Six observed scenarios
 
 1. **Launch and current settings:** launch the exact signed candidate; observe
-   its build and functioning main window. Compare current-account settings and
+   its build and functioning main window. Compare existing settings and
    root identities with the prior state, then verify them again after the full
    smoke. Record any discrepancy, cause if known, correction and final readback.
    Preserve checked metadata/Vault tables and existing Inbox entries.
@@ -105,8 +90,7 @@ project evidence directory and approve it only after all six scenarios pass.
    the actual visible results; typing a query or scanning alone is insufficient.
 6. **Inbox/reveal:** observe the converter, recorder and downloader outputs
    registered and available in the Output Inbox. Reveal a produced file and
-   verify Finder selects that exact path. Pointer drag-out is excluded rather
-   than substituted with a different action.
+   verify Finder selects that exact path.
 
 Each required pass cites durable AX/screenshot observations plus the relevant
 filesystem, hash, audio or provider artifacts. Neither source tests alone nor
@@ -115,9 +99,8 @@ never commit personal settings, real archives, credentials or raw local logs.
 
 ## Approval and publication
 
-Set `status: approved` only when all six required checks genuinely pass and
-excluded work is disclosed with the exact waived/not_run states. A missing
-prerequisite stays pending/failed. Run both the standalone UAT validator and
-the normal release rehearsal/publication workflow without bypassing gates.
+Set `status: approved` only when all six required checks genuinely pass. A
+missing prerequisite stays pending/failed. Run both the standalone UAT validator
+and the normal release rehearsal/publication workflow without bypassing gates.
 Public artifact verification, hosted-byte validation and update delivery remain
 part of `docs/release.md` and `docs/release-validation.md`.

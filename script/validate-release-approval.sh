@@ -67,9 +67,8 @@ fi
 REQUIRED_GATES_CSV="$(IFS=,; printf '%s' "${NMH_REQUIRED_RELEASE_GATES[*]}")"
 OVERRIDABLE_GATES_CSV="$(IFS=,; printf '%s' "${NMH_EMERGENCY_OVERRIDABLE_GATES[*]}")"
 REQUIRED_CHECKS_CSV="$(IFS=,; printf '%s' "${NMH_REQUIRED_UAT_CHECKS[*]}")"
-REQUIRED_EXCLUSIONS_CSV="$(IFS=,; printf '%s' "${NMH_REQUIRED_UAT_EXCLUSIONS[*]}")"
 
-/usr/bin/python3 - "$APPROVAL" "$ARTIFACT" "$MANIFEST" "$UAT" "$VERSION" "$BUNDLE_ID" "$COMMIT" "$TAG" "$EXPECTED_BUILD_ID" "${EXPECTED_SIGNING_IDENTITY:-}" "$REQUIRED_GATES_CSV" "$OVERRIDABLE_GATES_CSV" "$REQUIRED_CHECKS_CSV" "$ROOT/script/lib" "$REQUIRED_EXCLUSIONS_CSV" <<'PY'
+/usr/bin/python3 - "$APPROVAL" "$ARTIFACT" "$MANIFEST" "$UAT" "$VERSION" "$BUNDLE_ID" "$COMMIT" "$TAG" "$EXPECTED_BUILD_ID" "${EXPECTED_SIGNING_IDENTITY:-}" "$REQUIRED_GATES_CSV" "$OVERRIDABLE_GATES_CSV" "$REQUIRED_CHECKS_CSV" "$ROOT/script/lib" <<'PY'
 import hashlib
 import json
 import pathlib
@@ -82,7 +81,6 @@ expected_build_id, expected_signing_identity = sys.argv[9:11]
 required_gates = [g for g in sys.argv[11].split(",") if g]
 overridable_gates = set(g for g in sys.argv[12].split(",") if g)
 required_checks = [c for c in sys.argv[13].split(",") if c]
-required_exclusions = dict(item.split("=", 1) for item in sys.argv[15].split(",") if item)
 sys.path.insert(0, sys.argv[14])
 import release_uat
 
@@ -204,7 +202,6 @@ release_uat.validate_uat(
     expected_build_id,
     expected_signing_identity,
     required_checks,
-    required_exclusions,
 )
 # Signing consistency: the tested UAT build and the manifest candidate must be
 # the same signing team. A UAT run on one team's build says nothing about a

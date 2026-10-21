@@ -719,12 +719,6 @@ write_valid_uat() {
       "live_provider_download": "passed",
       "synthetic_archive_read_only_browse": "passed",
       "output_inbox_and_exact_reveal": "passed"
-  },
-  "excluded_checks": {
-      "separate_account_clean_install": "waived",
-      "disposable_uninstall": "waived",
-      "fresh_login_launch_at_login": "waived",
-      "deep_pointer_done_vault_queue": "not_run"
   }
 }
 JSON

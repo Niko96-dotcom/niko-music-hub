@@ -47,9 +47,7 @@ This validates:
 - manifest provenance
 - manifest artifact size, architecture, minimum-macOS, and signing/notarization attestation
 - exact `com.niko96.NikoMusicHub` identity in source, bundle, artifact, manifest, and installed app
-- exact-commit approved six-scenario current-account Mac smoke, with three explicit
-  waived account/install/login checks and deep pointer/Done/Vault work disclosed
-  as not_run, from frozen bytes (`frozen-uat.json` in the private
+- exact-commit approved six-scenario Mac smoke from frozen bytes (`frozen-uat.json` in the private
   run dir, frozen BEFORE validation with its sha256 captured, re-checked after
   validation and at approval with `cmp` frozen-vs-final; validated with
   `--commit COMMIT --expected-build-id VERSION+short12
