@@ -109,11 +109,17 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
         var reloaded = false
         if oldIDs != nextIDs {
             rowByID = Dictionary(nextIDs.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })
-            let oldSet = Set(oldIDs)
-            let newSet = Set(nextIDs)
-            let commonOld = oldIDs.filter { newSet.contains($0) }
-            let commonNew = nextIDs.filter { oldSet.contains($0) }
-            if animated, old != nil, commonOld == commonNew {
+            // Only an animated change needs the sets: a search or a filter change is not animated
+            // and goes from thousands of rows to a few, so it reloads without hashing every id twice.
+            var oldSet: Set<String> = []
+            var newSet: Set<String> = []
+            var keepsOrder = false
+            if animated, old != nil {
+                oldSet = Set(oldIDs)
+                newSet = Set(nextIDs)
+                keepsOrder = oldIDs.filter { newSet.contains($0) } == nextIDs.filter { oldSet.contains($0) }
+            }
+            if keepsOrder {
                 enteringIDs = newSet.subtracting(oldSet)
                 entranceGeneration &+= 1
                 let generation = entranceGeneration
