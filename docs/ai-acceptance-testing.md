@@ -1,167 +1,123 @@
 # AI Acceptance Testing (Release UAT)
 
-Canonical procedure for evidence-backed AI computer-use acceptance of a
-release candidate. The AI executor may execute and approve all ten required checks by directly
-driving the signed release app plus deterministic
-filesystem/hash/audio/provider verification.
+The owner-approved personal-project release scope is six functional smoke
+scenarios on the current macOS account. The owner selected this scope on
+2026-10-21 to avoid requiring a separate account or a fresh login for every
+release. AI computer-use may execute and approve the smoke, with truthful
+executor identity and durable evidence for every required pass.
 
-## Contract invariants (unchanged)
+## Contract
 
-- Schema stays `schema_version: 1` with exactly the ten required checks
-  from `script/lib/release_gates.sh` (`clean_install`,
-  `upgrade_preserves_settings`, `uninstall`, `launch_at_login`,
-  `privacy_permissions`, `recorder_real_audio`, `downloader_live`,
-  `archive_read_only`, `output_handoffs`, `e2e_user_smoke`). No new schema
-  is introduced.
-- Required gates (exact 12, 4 emergency-overridable), pending/failed
-  fail-closed semantics, and the frozen exact-commit/build/signing/hash
-  rules are unchanged. `pending`, `failed`, or any non-`passed` value
-  rejects in both the standalone and final approval validators.
-- `approved_by` truthfully identifies the AI agent/session (for example
-  `ai-acceptance <agent> <session>`). It never impersonates a human and
-  never carries a placeholder (`TODO*`, `REPLACE_WITH_*`, blank).
-- The existing validator already accepts such a non-placeholder AI actor;
-  this procedure adds no leniency and weakens nothing.
-- All checks need durable observation/artifact evidence for the exact
-  final SHA. Policy edits require a new candidate before final acceptance:
-  this document defines the procedure only; the actual acceptance record
-  is left to the coordinator after live tests on the exact final commit.
+`script/lib/release_gates.sh` is the single source of truth. UAT JSON keeps
+`schema_version: 1` and has exactly these six required `checks`, all `passed`:
 
-## Test target
+1. `exact_candidate_launch_and_current_settings`
+2. `synthetic_wav_conversion`
+3. `genuine_system_audio_capture`
+4. `live_provider_download`
+5. `synthetic_archive_read_only_browse`
+6. `output_inbox_and_exact_reveal`
 
-Run release UAT in a separate macOS account with disposable fixture settings in
-the candidate's normal domain. `NIKO_MUSIC_HUB_SETTINGS_SUITE` alone cannot isolate
-AppKit or Sparkle preferences; the canonical bundle refuses that launch shape.
-The local launch helpers instead create ad-hoc-signed fixture copies with distinct
-bundle IDs. Those copies are useful for development and E2E, but their signing,
-TCC, login-item and update results cannot approve the unchanged release candidate.
-Never restore a snapshot over the person's real preferences to hide test writes.
+Any pending, failed, waived, missing or unknown required check rejects the
+release. Historical ten-check records cannot approve this scope by dropping
+unperformed checks: issue a new record only after observing the six scenarios
+on the exact final candidate.
 
-Test the exact commit as the build shape that ships, and record it under
-`tested_build`:
+The record must separately disclose exactly these `excluded_checks`:
 
-```bash
-NMH_BUILD_CONFIGURATION=release \
-NMH_SIGNING_IDENTITY="$NMH_DEVELOPER_ID_APPLICATION" \
-./script/install-local.sh
-```
+| Excluded work | Recorded result |
+| --- | --- |
+| `separate_account_clean_install` | `waived` |
+| `disposable_uninstall` | `waived` |
+| `fresh_login_launch_at_login` | `waived` |
+| `deep_pointer_done_vault_queue` | `not_run` |
 
-- `build_configuration` must be `release`, `signing_identity` the exact
-  intended `Developer ID Application:` identity, `hardened_runtime` boolean
-  `true`, and `build_id` exactly `VERSION+short12(commit)`.
-- Ad-hoc/debug builds have a per-build TCC identity and no hardened
-  runtime; their privacy, recorder, and login-item results do not transfer
-  and the validator rejects them.
-- UAT bytes are frozen to `frozen-uat.json` BEFORE validation; the frozen
-  hash is re-checked after validation and at approval. Never reuse test or
-  historical UAT for a real release.
+These disclosures are not successful tests. The last exclusion covers pointer
+drag-out/Done, Vault source/destination manifest and Keep Local exercises,
+queued Done Undo, cancellation/retry and queued-work relaunch/restore. They
+remain useful optional investigations, with their own evidence, but are not
+prerequisites for this release smoke. Existing permission grants may be used;
+new/denied permission-prompt paths are not thereby claimed tested.
 
-## Evidence standard
+The twelve automated/artifact release gates and four narrowly allowed
+emergency exceptions are unchanged. Required source CI, strict development
+E2E, release-configuration and Thread Sanitizer checks remain. This UAT scope
+does not waive identity, signing, notarization, hash, provenance, update-feed
+or real-data safeguards.
 
-- Every `passed` check cites durable evidence: screenshot and/or
-  Accessibility (AX) observation of the running signed app plus file-level
-  artifacts (hashes, manifests, logs) bound to the exact commit/build.
-- Immutable intent and root-change coverage comes from deterministic tests
-  supporting the UI; live computer-use observations confirm the shipped
-  app actually behaves that way. Neither layer alone suffices.
-- Never fabricate a passed result. A check that cannot be observed on the
-  exact candidate stays non-`passed` with its limitation recorded precisely.
-- Synthetic fixtures only; production music data and real Cubase archives
-  stay untouched (read-only toward real archives by default; destructive
-  cases run only on fixtures).
+## Exact candidate
 
-## Safety and capability boundaries
+Test a release-configuration, Developer ID, hardened-runtime app built from
+the exact final commit. Record its canonical `VERSION+short12(commit)` build
+ID and intended signing identity under `tested_build`; correlate the running
+PID, bundle metadata and executable hash with the prepared candidate.
 
-- No forcing logout, reboot, power-cut, TCC reset, or real audio-routing
-  changes. Never describe a process relaunch as a reboot or a power-cut test.
-- Existing machine permissions may be observed and exercised as-is with the
-  limitation recorded; permission prompts follow the host permission
-  policy.
-- Login-item registration is not a real login-session launch: verify
-  registration state deterministically, and where a true fresh-login launch
-  is not attainable in-session, record the capability limit as blocked with
-  precise evidence rather than working around it.
-- The real-audio check requires actual audio capture/output inspection on
-  the candidate (a genuine recording path exercised and its output
-  inspected), never a fake or copied-in file standing in for a recording.
-- The owner's pre-existing push/install/publication authorization stands
-  and this owner-authorized AI acceptance supersedes the human-only
-  condition; do not require another ordinary publication approval for this
-  policy transition. Live install/publication steps still execute under
-  that authorization with synthetic fixtures only.
+Ad-hoc/debug fixture copies cannot approve the signed candidate's behavior.
+A policy/source change requires a new commit, new candidate and fresh smoke
+for that candidate. Never rewrite old observations to claim a later build
+was tested. `approved_by` names the actual AI agent/session, never an
+impersonated human. `approved_at_utc` is the actual approval time.
 
-## Per-check procedure
+The pipeline freezes UAT bytes before validation and binds the same bytes to
+final approval. Exact commit/build/signing checks and frozen hash checks are
+unchanged. Copy `docs/release-uat-evidence.template.json` into the private
+project evidence directory and approve it only after all six scenarios pass.
 
-1. `clean_install` — Install the candidate DMG/app copy into an isolated
-   location, launch, and confirm first-run state (no inherited state from
-   other installs). Evidence: install log, bundle/build/commit/hash
-   verification, first-run screenshot/AX.
-2. `upgrade_preserves_settings` — In the separate test account, seed the prior
-   version's normal domain with fixture settings, install the candidate over it,
-   and confirm settings and library state survive. Evidence: before/after
-   settings dumps from that test account only, screenshots.
-3. `uninstall` — Remove the candidate per the documented uninstall path and
-   confirm the app bundle and its throwaway fixture suites are gone while
-   the real user domain is never touched. Evidence: file-existence checks
-   before/after, log.
-4. `launch_at_login` — Verify login-item registration state for the
-   candidate build. Mark this check `passed` only when a true fresh
-   login-session launch of the exact candidate is observed. Registration
-   and an in-session process relaunch are insufficient. If the host cannot
-   provide that observation, leave the check non-`passed` and record the
-   capability limit precisely; never force logout or reboot to obtain it.
-5. `privacy_permissions` — Exercise the candidate's permission surfaces
-   (microphone/audio-input, folders, accessibility where applicable) as the
-   host currently grants them. Record granted/denied/limited per prompt
-   with screenshots; follow host permission policy and never reset TCC.
-6. `recorder_real_audio` — On a machine with a usable capture setup, drive
-   a real recording in the candidate and inspect genuine captured output
-   (duration, non-silent content, output file hash). A stub file is never
-   evidence. If no capture device exists, record the block precisely and
-   leave the check non-`passed`.
-7. `downloader_live` — Run a real provider download through the candidate
-   against live test media on synthetic destinations, then verify output
-   bytes and handoff. Evidence: provider response/log, output hash, player
-   or checksum inspection.
-8. `archive_read_only` — Browse a synthetic archive fixture in the
-   candidate and prove no rename/move/delete/rewrite of source material;
-   verify read-only behavior via filesystem snapshots (hashes before/after)
-   and AX-visible read-only affordances.
-9. `output_handoffs` — Complete converter/recorder/downloader output handoffs
-   on fixture material: verify produced files are registered in the Output Inbox,
-   reveal the correct file, and exercise drag-out to a disposable destination.
-   Also verify manifest and content hashes BEFORE any Vault source removal,
-   confirm Keep-Local/copy-only behavior (originals intact), exercise Undo
-   of a queued Done item, plus cancellation/retry paths and
-   relaunch/restore of queued work. Evidence: manifests, hash comparisons,
-   queue/progress screenshots and AX, relaunch state screenshots.
-10. `e2e_user_smoke` — Run the user-style end-to-end pass on the signed
-    candidate (`NMH_STRICT_UI_E2E=1` semantics for public mode). The core
-    interaction is a real pointer drag of a synthetic song card onto Done —
-    not an alternate menu action or keyboard shortcut standing in for the
-    drag — followed by its confirmation, queue/progress observation,
-    verified manifest/content hashes before source removal, Keep
-    Local/copy-only confirmation, Undo of the queued Done, a
-    cancellation/retry exercise, and a relaunch/restore check.
-    Evidence: drag-path screenshots/AX frames, confirmation and progress
-    captures, hash logs, undo/cancel/retry captures, relaunch capture.
+## Current-account safety
 
-## Recording the result
+- Inspect ongoing work before quitting or replacing an app. Keep the prior
+  installation available. Use a separate candidate location where useful.
+- Capture relevant settings, library roots, output path, existing Inbox items,
+  song metadata and Vault state before the test. Verify preservation afterward;
+  record ordinary UI/update preference writes and owned test outputs explicitly.
+- Temporarily choose a project-local synthetic output folder through the UI;
+  restore that choice through the UI afterward. Never overwrite the real
+  preferences domain with a snapshot to hide writes. If a minimal settings
+  correction is needed, preserve its exact before/after state and explain it.
+  Investigate unexpected changes and verify preservation before approval.
+- All write/destructive/archive/restore exercises use synthetic fixtures.
+  Never move, remove or rewrite real music. Browse real archives read-only.
+- No new account, forced logout/reboot, TCC reset, password/security changes
+  or real audio-routing changes are needed for this smoke. Permission prompts
+  still follow the host's permission policy; unavailable capture is a failed
+  or pending required check, not permission to use fake audio.
 
-- Fill a copy of `docs/release-uat-evidence.template.json` kept outside
-  the repository. `approved_by` is the truthful AI executor identifier
-  (`TODO_TEST_EXECUTOR_REQUIRED` is only the template sentinel and must be
-  replaced); `approved_at_utc` and `machine` are real values.
-- Set a check to `passed` only with the durable evidence above. Anything
-  blocked or unobserved stays non-`passed` and fails closed.
-- Hand the evidence bundle (JSON + screenshots/AX dumps + hash logs +
-  exact commit/build/identity bindings) to the coordinator, who produces
-  the final acceptance record after live tests on the exact final SHA.
+## Six observed scenarios
 
-## Gates the coordinator runs
+1. **Launch and current settings:** launch the exact signed candidate; observe
+   its build and functioning main window. Compare current-account settings and
+   root identities with the prior state, then verify them again after the full
+   smoke. Record any discrepancy, cause if known, correction and final readback.
+   Preserve checked metadata/Vault tables and existing Inbox entries.
+2. **Conversion:** convert synthetic non-silent audio through the app. Inspect
+   the produced file's format, duration, non-silent content and SHA-256. Verify
+   the synthetic source stayed unchanged and output went to the chosen folder.
+3. **Recording:** drive a genuine system-audio recording in the candidate.
+   Play a synthetic signal using the existing audio setup and inspect the actual
+   captured output (duration, signal/non-silence, format and hash). A copied or
+   stub file never satisfies this check. Do not change audio routing or reset TCC.
+4. **Download:** complete a live provider download of short test media through
+   the candidate. Inspect output bytes, duration/audio and hash. Preserve real
+   provider failures as failures for those attempts; a successful alternate test
+   URL needs its own observed output and is not a relabelled failed attempt.
+5. **Archive read-only:** browse a synthetic archive and its project versions
+   in the app. Compare source membership, modes and hashes before/after. Capture
+   the actual visible results; typing a query or scanning alone is insufficient.
+6. **Inbox/reveal:** observe the converter, recorder and downloader outputs
+   registered and available in the Output Inbox. Reveal a produced file and
+   verify Finder selects that exact path. Pointer drag-out is excluded rather
+   than substituted with a different action.
 
-```bash
-python3 Tests/test_release_provenance.py
-bash Tests/test_release_scripts.sh
-# full gates later: ./script/ci.sh, ./script/e2e_user_smoke.sh, release-all.sh paths
-```
+Each required pass cites durable AX/screenshot observations plus the relevant
+filesystem, hash, audio or provider artifacts. Neither source tests alone nor
+an action-call success is GUI acceptance. Keep evidence private in the project;
+never commit personal settings, real archives, credentials or raw local logs.
+
+## Approval and publication
+
+Set `status: approved` only when all six required checks genuinely pass and
+excluded work is disclosed with the exact waived/not_run states. A missing
+prerequisite stays pending/failed. Run both the standalone UAT validator and
+the normal release rehearsal/publication workflow without bypassing gates.
+Public artifact verification, hosted-byte validation and update delivery remain
+part of `docs/release.md` and `docs/release-validation.md`.

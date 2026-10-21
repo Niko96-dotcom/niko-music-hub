@@ -42,16 +42,21 @@ NMH_EMERGENCY_OVERRIDABLE_GATES=(
 # Exact required UAT checks. The evidence checks object must contain exactly
 # this set, all passed.
 NMH_REQUIRED_UAT_CHECKS=(
-  clean_install
-  upgrade_preserves_settings
-  uninstall
-  launch_at_login
-  privacy_permissions
-  recorder_real_audio
-  downloader_live
-  archive_read_only
-  output_handoffs
-  e2e_user_smoke
+  exact_candidate_launch_and_current_settings
+  synthetic_wav_conversion
+  genuine_system_audio_capture
+  live_provider_download
+  synthetic_archive_read_only_browse
+  output_inbox_and_exact_reveal
+)
+
+# Owner-approved personal-project scope (2026-10-21). These are disclosures,
+# never successful tests. Keep them separate from the six required passes.
+NMH_REQUIRED_UAT_EXCLUSIONS=(
+  separate_account_clean_install=waived
+  disposable_uninstall=waived
+  fresh_login_launch_at_login=waived
+  deep_pointer_done_vault_queue=not_run
 )
 
 nmh_required_release_gates() {

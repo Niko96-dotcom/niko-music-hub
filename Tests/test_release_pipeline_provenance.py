@@ -59,17 +59,19 @@ OTHER_IDENTITY = "Developer ID Application: Release Test (OTHER)"
 TIMESTAMP = "2026-07-13T12:00:00Z"
 
 REQUIRED_CHECKS = [
-    "clean_install",
-    "upgrade_preserves_settings",
-    "uninstall",
-    "launch_at_login",
-    "privacy_permissions",
-    "recorder_real_audio",
-    "downloader_live",
-    "archive_read_only",
-    "output_handoffs",
-    "e2e_user_smoke",
+    "exact_candidate_launch_and_current_settings",
+    "synthetic_wav_conversion",
+    "genuine_system_audio_capture",
+    "live_provider_download",
+    "synthetic_archive_read_only_browse",
+    "output_inbox_and_exact_reveal"
 ]
+REQUIRED_EXCLUSIONS = {
+    "separate_account_clean_install": "waived",
+    "disposable_uninstall": "waived",
+    "fresh_login_launch_at_login": "waived",
+    "deep_pointer_done_vault_queue": "not_run"
+}
 
 
 def clean_env() -> dict[str, str]:
@@ -198,6 +200,7 @@ def write_valid_uat(path: pathlib.Path, commit: str, build_id: str) -> None:
             "hardened_runtime": True,
         },
         "checks": {name: "passed" for name in REQUIRED_CHECKS},
+        "excluded_checks": dict(REQUIRED_EXCLUSIONS),
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -391,7 +394,7 @@ class PipelineProvenanceTests(unittest.TestCase):
             frozen_sha_before = sha_file(frozen)
 
             # Mutate the external original AFTER freezing.
-            mutate_json(original, lambda p: p["checks"].__setitem__("privacy_permissions", "pending"))
+            mutate_json(original, lambda p: p["checks"].__setitem__("genuine_system_audio_capture", "pending"))
             mutate_json(original, lambda p: p.__setitem__("commit", "0" * 40))
             self.assertNotEqual(sha_file(original), frozen_sha_before)
 
@@ -469,7 +472,7 @@ class PipelineProvenanceTests(unittest.TestCase):
 
             # Capture bad evidence then rehash the approval so hashes match: the
             # final validator must still reject for semantics, not the hash.
-            mutate_json(frozen, lambda p: p["checks"].__setitem__("privacy_permissions", "pending"))
+            mutate_json(frozen, lambda p: p["checks"].__setitem__("genuine_system_audio_capture", "pending"))
             generate_approval(approval, artifact.name, artifact_sha, manifest, frozen, pinned)
             bad = run_cmd(
                 [
@@ -809,7 +812,7 @@ class PipelineOrchestrationTests(unittest.TestCase):
             'p = pathlib.Path(sys.argv[1])\n'
             'd = json.loads(p.read_text())\n'
             'd["commit"] = "0"*40\n'
-            'd["checks"]["privacy_permissions"] = "pending"\n'
+            'd["checks"]["genuine_system_audio_capture"] = "pending"\n'
             'p.write_text(json.dumps(d, indent=2, sort_keys=True)+"\\n")\n'
             'PY\n'
             'elif [[ "$mode" == "final-uat-bad" ]]; then\n'
@@ -820,7 +823,7 @@ class PipelineOrchestrationTests(unittest.TestCase):
             'import json, pathlib, sys\n'
             'p = pathlib.Path(sys.argv[1])\n'
             'd = json.loads(p.read_text())\n'
-            'd["checks"]["privacy_permissions"] = "pending"\n'
+            'd["checks"]["genuine_system_audio_capture"] = "pending"\n'
             'p.write_text(json.dumps(d, indent=2, sort_keys=True)+"\\n")\n'
             'PY\n'
             '    echo "mutated-final-uat=$f" >>"${NMH_ORCH_GATE_LOG:?}"\n'

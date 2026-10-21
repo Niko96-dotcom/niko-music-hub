@@ -65,7 +65,8 @@ if [[ -n "$EXPECTED_SIGNING_IDENTITY" ]]; then
   [[ "$EXPECTED_SIGNING_IDENTITY" == "Developer ID Application:"* ]] || { echo "explicit --expected-signing-identity must be a Developer ID Application identity (was '$EXPECTED_SIGNING_IDENTITY')" >&2; exit 1; }
 fi
 REQUIRED_CHECKS_CSV="$(IFS=,; printf '%s' "${NMH_REQUIRED_UAT_CHECKS[*]}")"
-APPROVER="$(/usr/bin/python3 - "$EVIDENCE" "$VERSION" "$BUNDLE_ID" "$EXPECTED_COMMIT" "$EXPECTED_BUILD_ID" "${EXPECTED_SIGNING_IDENTITY:-}" "$REQUIRED_CHECKS_CSV" "$ROOT/script/lib" <<'PY'
+REQUIRED_EXCLUSIONS_CSV="$(IFS=,; printf '%s' "${NMH_REQUIRED_UAT_EXCLUSIONS[*]}")"
+APPROVER="$(/usr/bin/python3 - "$EVIDENCE" "$VERSION" "$BUNDLE_ID" "$EXPECTED_COMMIT" "$EXPECTED_BUILD_ID" "${EXPECTED_SIGNING_IDENTITY:-}" "$REQUIRED_CHECKS_CSV" "$ROOT/script/lib" "$REQUIRED_EXCLUSIONS_CSV" <<'PY'
 import json
 import pathlib
 import sys
@@ -75,6 +76,7 @@ version, bundle_id, commit = sys.argv[2:5]
 expected_build_id, expected_signing_identity = sys.argv[5:7]
 required_checks = [c for c in sys.argv[7].split(",") if c]
 lib_dir = sys.argv[8]
+required_exclusions = dict(item.split("=", 1) for item in sys.argv[9].split(",") if item)
 sys.path.insert(0, lib_dir)
 import release_uat
 
@@ -94,6 +96,7 @@ release_uat.validate_uat(
     expected_build_id,
     expected_signing_identity,
     required_checks,
+    required_exclusions,
 )
 print(payload.get("approved_by"))
 PY

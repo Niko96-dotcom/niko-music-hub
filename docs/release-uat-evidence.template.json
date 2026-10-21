@@ -14,16 +14,18 @@
     "hardened_runtime": true
   },
   "checks": {
-    "clean_install": "pending",
-    "upgrade_preserves_settings": "pending",
-    "uninstall": "pending",
-    "launch_at_login": "pending",
-    "privacy_permissions": "pending",
-    "recorder_real_audio": "pending",
-    "downloader_live": "pending",
-    "archive_read_only": "pending",
-    "output_handoffs": "pending",
-    "e2e_user_smoke": "pending"
+    "exact_candidate_launch_and_current_settings": "pending",
+    "synthetic_wav_conversion": "pending",
+    "genuine_system_audio_capture": "pending",
+    "live_provider_download": "pending",
+    "synthetic_archive_read_only_browse": "pending",
+    "output_inbox_and_exact_reveal": "pending"
   },
-  "notes": "Copy outside the repo and fill only after testing the exact commit as the build shape that ships (release configuration, exact NMH_DEVELOPER_ID_APPLICATION identity, hardened runtime) following docs/ai-acceptance-testing.md. Validators require status=approved, exact commit/version/bundle match, exact tested_build.build_id for that commit (stale builds fail), exact intended signing identity with UAT and manifest on the same team, all ten checks passed with no unknown checks (pending/failed fail closed), and real approved_by/approved_at_utc/machine values. approved_by names the truthful test executor: an AI agent/session identifier (for example 'ai-acceptance <agent> <session>') or the responsible operator; never impersonate a human. Set every check to passed only with durable observation/artifact evidence; automated assertions without observed runtime and artifact evidence do not satisfy acceptance."
+  "notes": "Approve only after observing all six owner-required personal-project smoke scenarios on the exact signed release commit/build, with durable GUI and file/hash/audio evidence per docs/ai-acceptance-testing.md. Preserve current-account music/settings and disclose corrections. Excluded work is waived or not_run, never passed. Historical or earlier-commit UAT does not approve a new candidate. approved_by truthfully identifies the AI executor/session.",
+  "excluded_checks": {
+    "separate_account_clean_install": "waived",
+    "disposable_uninstall": "waived",
+    "fresh_login_launch_at_login": "waived",
+    "deep_pointer_done_vault_queue": "not_run"
+  }
 }

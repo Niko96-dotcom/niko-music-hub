@@ -21,6 +21,7 @@
 - [ ] Public tag `v<VERSION>` points at the intended commit.
 - [ ] UAT ran on a Developer ID, hardened-runtime, release-configuration install of the exact commit (`NMH_BUILD_CONFIGURATION=release NMH_SIGNING_IDENTITY="$NMH_DEVELOPER_ID_APPLICATION" ./script/install-local.sh`) per `docs/ai-acceptance-testing.md` (evidence-backed AI computer-use; no mandatory human approver), and the JSON's `tested_build` records it.
 - [ ] Consolidated UAT JSON matches the exact version, commit, and bundle ID and is approved, with `approved_by` as the truthful AI agent/session identifier (never impersonating a human).
+- [ ] All six current-account smoke scenarios passed with durable observations; the exact excluded_checks disclosure lists account/install/login work as waived and deep pointer/Done/Vault work as not_run, never passed.
 - [ ] Checksums were generated after notarization/stapling.
 - [ ] DMG layout contains `NikoMusicHub.app`.
 - [ ] `appcast.xml` was generated after stapling and validated against the key and exact `CFBundleShortVersionString`/`CFBundleVersion` embedded in the candidate app; it contains one full `arm64` enclosure and no delta.

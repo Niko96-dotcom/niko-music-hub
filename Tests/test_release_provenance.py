@@ -53,17 +53,19 @@ OVERRIDABLE_GATES = {
     "thread-sanitizer",
 }
 REQUIRED_CHECKS = [
-    "clean_install",
-    "upgrade_preserves_settings",
-    "uninstall",
-    "launch_at_login",
-    "privacy_permissions",
-    "recorder_real_audio",
-    "downloader_live",
-    "archive_read_only",
-    "output_handoffs",
-    "e2e_user_smoke",
+    "exact_candidate_launch_and_current_settings",
+    "synthetic_wav_conversion",
+    "genuine_system_audio_capture",
+    "live_provider_download",
+    "synthetic_archive_read_only_browse",
+    "output_inbox_and_exact_reveal"
 ]
+REQUIRED_EXCLUSIONS = {
+    "separate_account_clean_install": "waived",
+    "disposable_uninstall": "waived",
+    "fresh_login_launch_at_login": "waived",
+    "deep_pointer_done_vault_queue": "not_run"
+}
 
 # Use the actual HEAD commit so validators resolve a real commit object.
 # Invented SHAs are rejected by the commit-object gate; fixtures must be real
@@ -148,6 +150,7 @@ def write_uat(
             "hardened_runtime": True,
         },
         "checks": {name: "passed" for name in REQUIRED_CHECKS},
+        "excluded_checks": dict(REQUIRED_EXCLUSIONS),
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -400,6 +403,46 @@ def approval_args(
 
 
 class ProvenanceBehaviorTests(unittest.TestCase):
+    def test_required_smoke_checks_cannot_be_waived_or_skipped(self) -> None:
+        for name in REQUIRED_CHECKS:
+            for state in ("waived", "not_run"):
+                with self.subTest(check=name, state=state), tempfile.TemporaryDirectory() as raw:
+                    artifact, manifest, uat, approval = build_valid_bundle(pathlib.Path(raw))
+                    mutate_json(uat, lambda p: p["checks"].__setitem__(name, state))
+                    generate_approval(approval, artifact.name, sha_file(artifact),
+                                      manifest.name, sha_file(manifest), uat.name, sha_file(uat))
+                    for args in (uat_args(uat), approval_args(approval, artifact, manifest, uat)):
+                        result = run_cmd(args)
+                        self.assertNotEqual(result.returncode, 0, msg=result.stdout)
+                        self.assertIn("must be passed", result.stderr)
+
+    def test_excluded_work_is_disclosed_and_never_claimed_passed(self) -> None:
+        invalid = [None, [], {}, {**REQUIRED_EXCLUSIONS, "unknown": "waived"}]
+        invalid.extend({**REQUIRED_EXCLUSIONS, name: "passed"} for name in REQUIRED_EXCLUSIONS)
+        invalid.append({**REQUIRED_EXCLUSIONS, "deep_pointer_done_vault_queue": "waived"})
+        for excluded in invalid:
+            with self.subTest(excluded=excluded), tempfile.TemporaryDirectory() as raw:
+                artifact, manifest, uat, approval = build_valid_bundle(pathlib.Path(raw))
+                mutate_json(uat, lambda p: p.__setitem__("excluded_checks", excluded))
+                generate_approval(approval, artifact.name, sha_file(artifact),
+                                  manifest.name, sha_file(manifest), uat.name, sha_file(uat))
+                for args in (uat_args(uat), approval_args(approval, artifact, manifest, uat)):
+                    result = run_cmd(args)
+                    self.assertNotEqual(result.returncode, 0, msg=result.stdout)
+                    self.assertIn("excluded_checks", result.stderr)
+
+    def test_legacy_ten_check_record_does_not_approve_current_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            uat = pathlib.Path(raw) / "uat.json"
+            write_uat(uat)
+            legacy = ("clean_install", "upgrade_preserves_settings", "uninstall",
+                      "launch_at_login", "privacy_permissions", "recorder_real_audio",
+                      "downloader_live", "archive_read_only", "output_handoffs", "e2e_user_smoke")
+            mutate_json(uat, lambda p: p.__setitem__("checks", dict.fromkeys(legacy, "passed")))
+            result = run_cmd(uat_args(uat))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unknown checks", result.stderr)
+
     def test_uat_validator_accepts_valid_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             tmp = pathlib.Path(raw)
@@ -424,7 +467,7 @@ class ProvenanceBehaviorTests(unittest.TestCase):
 
     def test_approval_accepts_explicit_ai_actor(self) -> None:
         # Same AI actor passes the final approval validator when every other
-        # byte (hashes, exact ten checks, build/signing binding) is valid.
+        # byte (hashes, exact six smoke checks, build/signing binding) is valid.
         with tempfile.TemporaryDirectory() as raw:
             tmp = pathlib.Path(raw)
             artifact, manifest, uat, approval = build_valid_bundle(tmp)
@@ -451,7 +494,7 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             uat = tmp / "uat.json"
             write_uat(uat)
             mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
-            mutate_json(uat, lambda payload: payload["checks"].__setitem__("privacy_permissions", "pending"))
+            mutate_json(uat, lambda payload: payload["checks"].__setitem__("genuine_system_audio_capture", "pending"))
             standalone = run_cmd(uat_args(uat))
             self.assertNotEqual(standalone.returncode, 0)
             self.assertIn("must be passed", standalone.stderr)
@@ -459,7 +502,7 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             tmp = pathlib.Path(raw)
             artifact, manifest, uat, approval = build_valid_bundle(tmp)
             mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
-            mutate_json(uat, lambda payload: payload["checks"].__setitem__("archive_read_only", "pending"))
+            mutate_json(uat, lambda payload: payload["checks"].__setitem__("synthetic_archive_read_only_browse", "pending"))
             generate_approval(
                 approval,
                 artifact.name,
@@ -480,7 +523,7 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
 
             def drop_check(payload) -> None:
-                del payload["checks"]["e2e_user_smoke"]
+                del payload["checks"]["output_inbox_and_exact_reveal"]
 
             mutate_json(uat, drop_check)
             standalone = run_cmd(uat_args(uat))
@@ -492,7 +535,7 @@ class ProvenanceBehaviorTests(unittest.TestCase):
             mutate_json(uat, lambda payload: payload.__setitem__("approved_by", AI_ACTOR))
 
             def drop_check(payload) -> None:
-                del payload["checks"]["e2e_user_smoke"]
+                del payload["checks"]["output_inbox_and_exact_reveal"]
 
             mutate_json(uat, drop_check)
             generate_approval(
@@ -594,7 +637,7 @@ class ProvenanceBehaviorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             tmp = pathlib.Path(raw)
             artifact, manifest, uat, approval = build_valid_bundle(tmp)
-            mutate_json(uat, lambda payload: payload["checks"].__setitem__("privacy_permissions", "pending"))
+            mutate_json(uat, lambda payload: payload["checks"].__setitem__("genuine_system_audio_capture", "pending"))
             generate_approval(
                 approval,
                 artifact.name,

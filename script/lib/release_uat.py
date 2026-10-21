@@ -10,9 +10,9 @@ docs/ai-acceptance-testing.md (owner-authorized; no mandatory human
 approver). approved_by accepts any truthful non-placeholder executor
 identifier, including an AI agent/session identifier (never a human
 name the executor is not); it must never impersonate a human. Schema
-stays schema_version int 1 with exactly the ten required checks; no
-new schema is introduced and pending/failed requirements are not
-weakened.
+stays schema_version int 1. The shared shell contract supplies exactly six
+required smoke checks and separate explicit exclusions. Required checks
+must all pass; waived or unrun work never counts as a pass.
 
 Strict types: schema_version must be exact int 1 (not "1", not True,
 not 1.0), hardened_runtime must be boolean True (not "true", not 1), all other
@@ -75,13 +75,14 @@ def validate_uat(
     expected_build_id: str,
     expected_signing_identity: str,
     required_checks: list[str],
+    required_exclusions: dict[str, str],
 ) -> None:
     """Validate UAT semantics; raises SystemExit with a stable message.
 
     approved_by may be an AI agent/session identifier or the responsible
     operator, provided it is truthful, non-placeholder, and never
-    impersonates a human. Schema, exact ten-check, and fail-closed
-    (pending/failed reject) semantics are unchanged.
+    impersonates a human. Identity and required-check failure semantics
+    remain fail closed under the owner-approved personal-project scope.
     """
     if not isinstance(payload, dict):
         raise SystemExit("release UAT evidence must be a JSON object")
@@ -204,3 +205,9 @@ def validate_uat(
                 f"release UAT evidence check {name!r} must be passed "
                 f"(was {checks.get(name)!r}; UAT check {name!r} must be passed)"
             )
+    exclusions = payload.get("excluded_checks")
+    if not isinstance(exclusions, dict) or exclusions != required_exclusions:
+        raise SystemExit(
+            f"release UAT excluded_checks must disclose exactly {required_exclusions!r}; "
+            f"waived or unrun work must not be reported passed (was {exclusions!r})"
+        )

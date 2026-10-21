@@ -672,7 +672,7 @@ echo "== shared release gate contract is the single source of truth =="
 source "$ROOT/script/lib/release_gates.sh"
 [[ "${#NMH_REQUIRED_RELEASE_GATES[@]}" == "12" ]] || { echo "shared contract must define exactly 12 required gates" >&2; exit 1; }
 [[ "${#NMH_EMERGENCY_OVERRIDABLE_GATES[@]}" == "4" ]] || { echo "shared contract must define exactly 4 emergency-overridable gates" >&2; exit 1; }
-[[ "${#NMH_REQUIRED_UAT_CHECKS[@]}" == "10" ]] || { echo "shared contract must define exactly 10 required UAT checks" >&2; exit 1; }
+[[ "${#NMH_REQUIRED_UAT_CHECKS[@]}" == "6" ]] || { echo "shared contract must define exactly 6 required UAT checks" >&2; exit 1; }
 assert_contains "$ROOT/script/release-all.sh" 'for _nmh_gate in "${NMH_REQUIRED_RELEASE_GATES[@]}"; do'
 assert_contains "$ROOT/script/release-all.sh" 'APPROVAL_ARGS+=(--gate "$_nmh_gate|$_nmh_cmd|$_nmh_res|$GATE_TIME")'
 for gate in "${NMH_REQUIRED_RELEASE_GATES[@]}"; do
@@ -713,16 +713,18 @@ write_valid_uat() {
     "hardened_runtime": true
   },
   "checks": {
-    "clean_install": "passed",
-    "upgrade_preserves_settings": "passed",
-    "uninstall": "passed",
-    "launch_at_login": "passed",
-    "privacy_permissions": "passed",
-    "recorder_real_audio": "passed",
-    "downloader_live": "passed",
-    "archive_read_only": "passed",
-    "output_handoffs": "passed",
-    "e2e_user_smoke": "passed"
+      "exact_candidate_launch_and_current_settings": "passed",
+      "synthetic_wav_conversion": "passed",
+      "genuine_system_audio_capture": "passed",
+      "live_provider_download": "passed",
+      "synthetic_archive_read_only_browse": "passed",
+      "output_inbox_and_exact_reveal": "passed"
+  },
+  "excluded_checks": {
+      "separate_account_clean_install": "waived",
+      "disposable_uninstall": "waived",
+      "fresh_login_launch_at_login": "waived",
+      "deep_pointer_done_vault_queue": "not_run"
   }
 }
 JSON
@@ -734,11 +736,11 @@ assert_pass uat-valid-explicit-identity "$ROOT/script/validate-release-uat.sh" -
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["checks"]["privacy_permissions"] = "pending"
+payload["checks"]["genuine_system_audio_capture"] = "pending"
 path.write_text(json.dumps(payload))
 PY
 assert_fail uat-pending "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
-assert_contains "$TMP/uat-pending.err" "privacy_permissions"
+assert_contains "$TMP/uat-pending.err" "genuine_system_audio_capture"
 
 echo "== UAT rejects changed status, commit, and checks =="
 write_valid_uat
@@ -766,11 +768,11 @@ write_valid_uat
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["checks"]["e2e_user_smoke"] = "failed"
+payload["checks"]["output_inbox_and_exact_reveal"] = "failed"
 path.write_text(json.dumps(payload))
 PY
 assert_fail uat-check-failed "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"
-assert_contains "$TMP/uat-check-failed.err" "e2e_user_smoke"
+assert_contains "$TMP/uat-check-failed.err" "output_inbox_and_exact_reveal"
 write_valid_uat
 /usr/bin/python3 - "$UAT" <<'PY'
 import json, pathlib, sys
@@ -1213,7 +1215,7 @@ echo "== final validator hashes and enforces the same UAT bytes =="
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["checks"]["privacy_permissions"] = "pending"
+payload["checks"]["genuine_system_audio_capture"] = "pending"
 path.write_text(json.dumps(payload))
 PY
 assert_fail approval-uat-pending-bytes "$ROOT/script/validate-release-uat.sh" --evidence "$UAT"

@@ -137,7 +137,8 @@ Friendly wrappers: `./script/dev.sh run`, `./script/dev.sh doctor`, `./script/de
 
 `VERSION` is the canonical release version; `BUNDLE_ID` is the permanent app identity. Release is
 fail-closed and local: `script/release-all.sh`. Every public build requires a newly approved
-exact-commit UAT record produced by evidence-backed AI computer-use acceptance per
+exact-commit UAT record for the six owner-approved current-account smoke scenarios,
+with excluded account/login/deep-Vault work disclosed separately, produced by evidence-backed AI computer-use acceptance per
 `docs/ai-acceptance-testing.md` (owner-authorized; no mandatory human approver). `approved_by`
 truthfully identifies the AI agent/session and never impersonates a human; every passed check
 needs durable observation/artifact evidence for the exact final SHA, and policy edits require a
