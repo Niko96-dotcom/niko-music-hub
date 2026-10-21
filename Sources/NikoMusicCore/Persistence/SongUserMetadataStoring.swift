@@ -27,6 +27,12 @@ public protocol SongUserMetadataLoadReporting: Sendable {
     func loadAllWithReport() throws -> SongUserMetadataLoadReport
 }
 
+/// One-time key migration, separate from ordinary read-only loads. Implementations must
+/// move metadata, status history and repair backups atomically and refuse collisions.
+public protocol RootLevelSongMetadataMigrating: Sendable {
+    func migrateRootLevelSongIdentities(for songs: [Song]) throws
+}
+
 /// Optional capability: stores that record workflow status transitions expose
 /// them for analytics (per-stage dwell time) and per-song history UI.
 /// The SQLite store conforms.

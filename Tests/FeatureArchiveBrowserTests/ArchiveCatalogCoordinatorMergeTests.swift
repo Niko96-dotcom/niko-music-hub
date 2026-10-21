@@ -23,7 +23,7 @@ final class ArchiveCatalogCoordinatorMergeTests: XCTestCase {
         let songB = makeFolderSong(folder: songBFolder, title: "Song B")
         let looseSong = makeRootCPRSong(cprPath: looseCPR, title: "Loose")
 
-        let affected: Set<String> = [looseCPR.standardizedFileURL.path]
+        let affected: Set<String> = [looseSong.id]
         let updatedLoose = Song(
             folderPath: looseCPR,
             originalFolderName: "Loose.cpr",

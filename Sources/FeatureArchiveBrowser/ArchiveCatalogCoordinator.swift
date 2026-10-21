@@ -261,10 +261,11 @@ struct ArchiveCatalogCoordinator {
         let statusMessage: String
         let scannedAt: Date
         /// Retained for source compatibility. Always false: scans never write
-        /// song metadata (P0 data-loss fix — a whole-catalog scan-time upsert
+        /// song metadata values (P0 data-loss fix — a whole-catalog scan-time upsert
         /// overwrote stored titles/notes/status whenever the metadata load
         /// failed, and blocked the main actor on a full-table write). User
-        /// edits persist single rows via `persistUserMetadata`.
+        /// edits persist single rows via `persistUserMetadata`. The separate legacy
+        /// loose-project key migration moves raw rows atomically, without editing values.
         let shouldPersistUserMetadata: Bool
         /// Non-nil when the metadata load behind this scan was degraded
         /// (unreadable store or corrupt rows). Nothing was overwritten.
@@ -455,7 +456,7 @@ struct ArchiveCatalogCoordinator {
         resolution: ArchiveSongFolderResolver.Resolution,
         existing: [Song]
     ) -> Set<String> {
-        // Song.id is the standardized song-folder path; resolver returns folder URLs.
+        // Folder song IDs are standardized paths; loose-project IDs are grouped below.
         var ids = Set(resolution.songFolders.map { $0.standardizedFileURL.path })
 
         // `standardizedFileURL` only strips the `/private` alias while the path exists, so a
@@ -576,7 +577,7 @@ struct ArchiveCatalogCoordinator {
         var warning: String? = nil
         var outcome: SongMetadataLoadOutcome?
         if let songMetadataStore {
-            switch loadMetadataReport(songMetadataStore) {
+            switch loadMetadataReport(songMetadataStore, songs: scanned) {
             case .success(let report):
                 metadata = report.metadata
                 let names = Self.names(for: scanned, ids: report.corruptSongIDs)
@@ -605,9 +606,11 @@ struct ArchiveCatalogCoordinator {
 
     /// Tolerant full read, shared by every metadata merge.
     private func loadMetadataReport(
-        _ store: any SongUserMetadataStoring
+        _ store: any SongUserMetadataStoring,
+        songs: [Song] = []
     ) -> Result<SongUserMetadataLoadReport, any Error> {
         Result {
+            try (store as? any RootLevelSongMetadataMigrating)?.migrateRootLevelSongIdentities(for: songs)
             if let reporting = store as? any SongUserMetadataLoadReporting {
                 return try reporting.loadAllWithReport()
             }
@@ -794,6 +797,7 @@ struct ArchiveCatalogCoordinator {
             var corruptSongIDs: [String] = []
             var metadataLoadFailed = false
             do {
+                try (songMetadataStore as? any RootLevelSongMetadataMigrating)?.migrateRootLevelSongIdentities(for: uniqueSongs)
                 if let reporting = songMetadataStore as? any SongUserMetadataLoadReporting {
                     let report = try reporting.loadAllWithReport()
                     metadata = report.metadata

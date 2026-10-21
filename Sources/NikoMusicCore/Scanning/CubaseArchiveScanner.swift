@@ -390,7 +390,7 @@ public struct MusicArchiveScanner: @unchecked Sendable {
     }
 
     private func rootLevelSongs(from versions: [ProjectVersion]) -> [Song] {
-        let grouped = Dictionary(grouping: versions, by: rootLevelSongKey)
+        let grouped = Dictionary(grouping: versions, by: RootLevelSongIdentity.groupKey)
         return grouped.values.compactMap { versions in
             let sorted = versions.sorted { $0.modifiedAt > $1.modifiedAt }
             guard let latest = projectDetector.latestProject(from: sorted) else { return nil }
@@ -405,15 +405,6 @@ public struct MusicArchiveScanner: @unchecked Sendable {
                 latestCPR: latest
             )
         }
-    }
-
-    private func rootLevelSongKey(for version: ProjectVersion) -> String {
-        let title = titleResolver.bestTitle(from: [version])
-            ?? (version.fileName as NSString).deletingPathExtension
-        return title
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-            .lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func scanSongFolder(_ folder: URL) throws -> Song? {

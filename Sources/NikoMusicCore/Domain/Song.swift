@@ -127,7 +127,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         self.cprSelectionMode = cprSelectionMode
         self.manualMainCPRID = manualMainCPRID
         self.ignoredCPRVersionIDs = ignoredCPRVersionIDs
-        self.id = folderPath.standardizedFileURL.path
+        self.id = RootLevelSongIdentity.songID(folderPath: folderPath, versions: projectVersions)
     }
 
     /// Scan warnings safe for on-screen display (redacts embedded home paths).
@@ -196,7 +196,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         cprSelectionMode = try container.decodeIfPresent(CPRSelectionMode.self, forKey: .cprSelectionMode) ?? .auto
         manualMainCPRID = try container.decodeIfPresent(String.self, forKey: .manualMainCPRID)
         ignoredCPRVersionIDs = try container.decodeIfPresent([String].self, forKey: .ignoredCPRVersionIDs) ?? []
-        id = decodedFolderPath.standardizedFileURL.path
+        id = RootLevelSongIdentity.songID(folderPath: decodedFolderPath, versions: projectVersions)
     }
 
     public func encode(to encoder: Encoder) throws {

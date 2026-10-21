@@ -68,7 +68,8 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
             // remembering them costs no second copy. An older snapshot is rewritten song by song at launch: the
             // first save writes it in full and records what it wrote.
             if let stored, let version = stored.dataVersion,
-               rows.previewSemanticsVersion == PreviewAutoSelectionNormalizer.currentVersion {
+               rows.previewSemanticsVersion == PreviewAutoSelectionNormalizer.currentVersion,
+               rows.songIDs == songs.map(\.id) {
                 memo.replace(songs: songs, dataVersion: version, ifGeneration: stored.memoGeneration)
             }
             return ArchiveIndexSnapshot(
@@ -95,6 +96,7 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
         let previewSemanticsVersion: Int?
         /// Song JSON in stored position order.
         let songJSON: [Data]
+        let songIDs: [String]
     }
 
     public func save(_ snapshot: ArchiveIndexSnapshot) throws {
@@ -197,11 +199,12 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
 
         var songsStatement: OpaquePointer?
         defer { sqlite3_finalize(songsStatement) }
-        let songsSQL = "SELECT song_json FROM archive_snapshot_song ORDER BY position ASC;"
+        let songsSQL = "SELECT song_json, song_id FROM archive_snapshot_song ORDER BY position ASC;"
         guard sqlite3_prepare_v2(db, songsSQL, -1, &songsStatement, nil) == SQLITE_OK else {
             throw StoreError.prepare(message(db))
         }
         var rows: [Data] = []
+        var ids: [String] = []
         while true {
             let stepResult = sqlite3_step(songsStatement)
             switch stepResult {
@@ -212,12 +215,15 @@ public struct SQLiteArchiveIndexStore: ArchiveIndexStoring, @unchecked Sendable 
                     roots: roots,
                     scannedAt: scannedAt,
                     previewSemanticsVersion: previewSemanticsVersion,
-                    songJSON: rows
+                    songJSON: rows,
+                    songIDs: ids
                 )
             default:
                 throw StoreError.step(message(db))
             }
-            guard let songCString = sqlite3_column_text(songsStatement, 0) else { continue }
+            guard let songCString = sqlite3_column_text(songsStatement, 0),
+                  let idCString = sqlite3_column_text(songsStatement, 1) else { continue }
+            ids.append(String(cString: idCString))
             rows.append(Data(String(cString: songCString).utf8))
         }
     }

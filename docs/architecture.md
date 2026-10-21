@@ -146,6 +146,17 @@ Archive domain and safety. No SwiftUI/AppKit.
 
 ## Archive metadata editing ownership
 
+Loose CPR/ALS versions at an archive root use a stable song ID derived from that root and
+the scanner's normalized project-name group. `folderPath` remains the latest physical file
+for opening; it is not the metadata key. Old snapshot payloads derive the same stable ID
+when decoded. Before merging metadata at launch or after a scan, the SQLite metadata store
+migrates legacy version-path keys, status history and repair-backup ownership in one
+transaction. Values, timestamps and raw corrupt rows are preserved. Multiple metadata rows
+claiming one group refuse the entire migration and block edits through the existing load
+failure gate; no conflicting record is overwritten. Ordinary loads remain read-only, and
+scans never upsert metadata values. Snapshot rows whose stored keys predate this identity
+must be rewritten before the unchanged-row memo is enabled.
+
 [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) owns edit validation and persistence ordering, notes/status undo, repair-song IDs, and delayed index persistence. It holds no catalog copy. The required immutable `ArchiveMetadataEditingHost` supplies live inputs and narrow mutation callbacks together; weak view-model captures and absent-input checks prevent edits after the host disappears.
 
 - Notes and ordinary workflow commands pass through the per-song integrity gate and authoritative metadata persistence before requesting a catalog replacement. Late corruption refuses replacement; ordinary storage failure retains the visible edit with a warning. `ArchiveCatalogCoordinator` retains the store and integrity-reporting machinery.

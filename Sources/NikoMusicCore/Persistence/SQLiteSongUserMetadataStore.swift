@@ -3,7 +3,7 @@ import SQLite3
 
 private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMetadataLoadReporting, SongUserMetadataRepairing, WorkflowStatusHistoryReading, @unchecked Sendable {
+public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMetadataLoadReporting, SongUserMetadataRepairing, WorkflowStatusHistoryReading, RootLevelSongMetadataMigrating, @unchecked Sendable {
     private let database: SQLiteArchiveDatabase
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -122,6 +122,76 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
 
     public func upsert(_ metadata: SongUserMetadata) throws {
         try upsertAll([metadata])
+    }
+
+    public func migrateRootLevelSongIdentities(for songs: [Song]) throws {
+        let targets = Set(songs.compactMap { song -> String? in
+            RootLevelSongIdentity.id(forProjectFile: song.folderPath) == song.id ? song.id : nil
+        })
+        guard !targets.isEmpty else { return }
+        try database.withConnection { db in
+            guard sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil) == SQLITE_OK else {
+                throw StoreError.exec(message(db))
+            }
+            do {
+                // Include history-only and repaired rows, including versions that no longer exist.
+                var statement: OpaquePointer?
+                let sql = """
+                SELECT song_id, 1 FROM song_metadata
+                UNION SELECT song_id, 0 FROM song_status_history
+                UNION SELECT song_id, 0 FROM song_metadata_repair_backup;
+                """
+                guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                    throw StoreError.prepare(message(db))
+                }
+                var metadataIDs = Set<String>()
+                var migrations: [String: String] = [:]
+                do {
+                    defer { sqlite3_finalize(statement) }
+                    while true {
+                        let step = sqlite3_step(statement)
+                        if step == SQLITE_DONE { break }
+                        guard step == SQLITE_ROW, let text = sqlite3_column_text(statement, 0) else {
+                            throw StoreError.step(message(db))
+                        }
+                        let oldID = String(cString: text)
+                        if sqlite3_column_int(statement, 1) == 1 { metadataIDs.insert(oldID) }
+                        guard oldID.hasPrefix("/"),
+                              let target = RootLevelSongIdentity.id(forProjectFile: URL(fileURLWithPath: oldID)),
+                              targets.contains(target) else { continue }
+                        var isDirectory: ObjCBool = false
+                        if FileManager.default.fileExists(atPath: oldID, isDirectory: &isDirectory), isDirectory.boolValue { continue }
+                        migrations[oldID] = target
+                    }
+                }
+                let groups = Dictionary(grouping: migrations, by: \.value)
+                for (target, sources) in groups {
+                    let occupied = sources.filter { metadataIDs.contains($0.key) }.count
+                        + (metadataIDs.contains(target) ? 1 : 0)
+                    guard occupied <= 1 else {
+                        throw StoreError.exec("Conflicting details for a loose project; all original records were kept.")
+                    }
+                }
+                for (source, target) in migrations.sorted(by: { $0.key < $1.key }) {
+                    for table in ["song_metadata", "song_status_history", "song_metadata_repair_backup"] {
+                        var update: OpaquePointer?
+                        defer { sqlite3_finalize(update) }
+                        guard sqlite3_prepare_v2(db, "UPDATE \(table) SET song_id = ? WHERE song_id = ?;", -1, &update, nil) == SQLITE_OK else {
+                            throw StoreError.prepare(message(db))
+                        }
+                        sqlite3_bind_text(update, 1, target, -1, sqliteTransient)
+                        sqlite3_bind_text(update, 2, source, -1, sqliteTransient)
+                        guard sqlite3_step(update) == SQLITE_DONE else { throw StoreError.step(message(db)) }
+                    }
+                }
+                guard sqlite3_exec(db, "COMMIT;", nil, nil, nil) == SQLITE_OK else {
+                    throw StoreError.exec(message(db))
+                }
+            } catch {
+                sqlite3_exec(db, "ROLLBACK;", nil, nil, nil)
+                throw error
+            }
+        }
     }
 
     public func upsertAll(_ metadata: [SongUserMetadata]) throws {
