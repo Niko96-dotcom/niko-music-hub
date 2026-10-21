@@ -384,6 +384,22 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
         XCTAssertTrue(undo.canRedo)
     }
 
+    func testUndoOfPausedDoneReplacesStaleVaultStatusWithoutQueuedWork() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Paused Done", workflow: .done)
+        try FileManager.default.createDirectory(at: song.folderPath, withIntermediateDirectories: true)
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: OwnerFakeMetadataStore())
+        box.vaultStatuses = ["Marked Done. Archiving is paused."]
+        coordinator.registerWorkflowStatusUndo(songID: song.id, previousStatus: .prod, actionName: "Mark Done")
+
+        undo.undo()
+
+        XCTAssertEqual(box.replaced.last?.workflowStatus, .prod)
+        XCTAssertEqual(box.revoked, [song.id])
+        XCTAssertEqual(box.vaultStatuses.last, "Undo restored the workflow status.")
+        XCTAssertTrue(undo.canRedo)
+    }
+
     func testRefusedUndoOfNotesEditRegistersNoRedo() throws {
         let root = try makeTempRoot()
         let song = makeSong(in: root, named: "Notes Undo Refused Song")

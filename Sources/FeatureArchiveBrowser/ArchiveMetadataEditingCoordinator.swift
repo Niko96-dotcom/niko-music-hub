@@ -363,10 +363,10 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         }
         // A refused commit restored nothing, so there is nothing to redo.
         guard outcome != .refused else { return }
-        if leavingDone,
-           let live = host.currentSongs()?.first(where: { $0.id == songID }),
-           !FileManager.default.fileExists(atPath: live.folderPath.path) {
-            host.reportVaultStatus("Undo restored the workflow status. The Active Projects folder was already archived and removed; use Restore & Open to review the verified archive.")
+        if leavingDone, let live = host.currentSongs()?.first(where: { $0.id == songID }) {
+            host.reportVaultStatus(FileManager.default.fileExists(atPath: live.folderPath.path)
+                ? "Undo restored the workflow status."
+                : "Undo restored the workflow status. The Active Projects folder was already archived and removed; use Restore & Open to review the verified archive.")
         }
         registerWorkflowStatusUndo(
             songID: songID,
