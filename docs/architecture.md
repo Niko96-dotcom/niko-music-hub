@@ -102,6 +102,7 @@ Archive domain and safety. No SwiftUI/AppKit.
 - Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, and admission/capacity/activity probes; it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`.
 - Shared UI: `ToolHeaderBlock`, `HubInspectorPage`, hub design tokens (see `docs/design-contract.md`).
 - `HubRelativeTime` formats relative dates in English, matching the app's UI independently of the system locale.
+- Recorder startup explains the macOS system-audio prompt. Stop during startup waits for the capture backend to settle, shows why it is waiting, and reports when no recording began instead of silently returning to idle.
 
 ### `FeatureArchiveBrowser` (SwiftUI feature)
 

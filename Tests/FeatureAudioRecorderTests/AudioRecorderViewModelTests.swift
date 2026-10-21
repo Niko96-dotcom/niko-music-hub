@@ -6,6 +6,41 @@ import XCTest
 
 @MainActor
 final class AudioRecorderViewModelTests: XCTestCase {
+    func testStopDuringPermissionPromptExplainsWaitAndCancelledTake() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("recorder-prompt-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let startEntered = expectation(description: "startup reached permission prompt")
+        let stopEntered = expectation(description: "stop waits for prompt")
+        let port = PromptPendingCapturePort(onStart: { startEntered.fulfill() }, onStop: { stopEntered.fulfill() })
+        let inbox = InMemoryOutputInboxStore()
+        let vm = AudioRecorderViewModel(
+            capturePort: port, useCase: RecordSystemAudioUseCase(capturePort: port),
+            outputURL: directory, outputGuard: ToolOutputGuard(settings: .default), outputInboxStore: inbox
+        )
+        await vm.startRecording()
+        await fulfillment(of: [startEntered], timeout: 1)
+        XCTAssertTrue(vm.captureStartupMessage?.contains("macOS") == true)
+        let stop = Task { await vm.stopRecording() }
+        await fulfillment(of: [stopEntered], timeout: 1)
+        XCTAssertEqual(vm.recordingState, .stopping)
+        XCTAssertTrue(vm.captureStartupMessage?.contains("finish stopping") == true)
+
+        port.answerPrompt()
+        await stop.value
+
+        guard case .error(let error) = vm.recordingState,
+              case .apiError(let message) = error else {
+            return XCTFail("Expected an explicit cancelled-start explanation, got \(vm.recordingState)")
+        }
+        XCTAssertTrue(message.contains("start a new recording"))
+        XCTAssertTrue(AudioRecorderView.cardFor(error, keptTake: nil).body.contains("start a new recording"))
+        XCTAssertFalse(vm.isCaptureActive)
+        XCTAssertNil(vm.captureStartupMessage)
+        XCTAssertNil(vm.lastRecordedURL)
+        XCTAssertTrue(try inbox.listItems().isEmpty)
+    }
+
     func testStartingStatePersistsUntilCaptureReadiness() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("recorder-starting-\(UUID().uuidString)", isDirectory: true)
@@ -919,6 +954,48 @@ private final class WritingCapturePort: AudioCapturePort, @unchecked Sendable {
                 writeErrorCount: writeErrorCount
             )
         )
+    }
+}
+
+private final class PromptPendingCapturePort: AudioCapturePort, @unchecked Sendable {
+    private let lock = NSLock()
+    private var start: CheckedContinuation<AsyncStream<RecorderAudioLevel>, any Error>?
+    private var stop: CheckedContinuation<Void, Never>?
+    private let onStart: @Sendable () -> Void
+    private let onStop: @Sendable () -> Void
+    var recording: Bool { false }
+
+    init(onStart: @escaping @Sendable () -> Void, onStop: @escaping @Sendable () -> Void) {
+        self.onStart = onStart
+        self.onStop = onStop
+    }
+
+    func checkPermission() async -> RecorderPermissionState { .authorized }
+    func requestPermission() async -> RecorderPermissionState { .authorized }
+    func isCompatibleMacOS() -> Bool { true }
+
+    func startRecording(outputURL: URL, preset: AudioPreset, maxDuration: TimeInterval?) async throws -> AsyncStream<RecorderAudioLevel> {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.withLock { start = continuation }
+            onStart()
+        }
+    }
+
+    func stopRecording() async throws -> RecorderResult {
+        await withCheckedContinuation { continuation in
+            lock.withLock { stop = continuation }
+            onStop()
+        }
+        throw CancellationError()
+    }
+
+    func answerPrompt() {
+        let pending = lock.withLock { () -> (CheckedContinuation<AsyncStream<RecorderAudioLevel>, any Error>?, CheckedContinuation<Void, Never>?) in
+            defer { start = nil; stop = nil }
+            return (start, stop)
+        }
+        pending.0?.resume(throwing: CancellationError())
+        pending.1?.resume()
     }
 }
 

@@ -174,6 +174,13 @@ public struct AudioRecorderView: View {
             if viewModel.isRecording {
                 meterSection
             }
+            if let message = viewModel.captureStartupMessage {
+                Text(message)
+                    .font(HubDesignSystem.Typography.bodySmall())
+                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(viewModel.showSaveConfirmation
                  ? (viewModel.lastRecordedURL?.lastPathComponent ?? viewModel.proposedFilename)
                  : viewModel.proposedFilename)
@@ -495,8 +502,8 @@ public struct AudioRecorderView: View {
                 category: .permission,
                 label: "Audio Capture Failed",
                 icon: "waveform.badge.xmark",
-                body: message,
-                recoveryActions: [
+                body: message + keptTakeSentence,
+                recoveryActions: [showKeptTake].compactMap { $0 } + [
                     AppErrorCard.RecoveryAction(label: "Open System Settings", style: .secondary, action: .openSystemSettings),
                     AppErrorCard.RecoveryAction(label: "Try Again", style: .primary, action: .tryAgain)
                 ]

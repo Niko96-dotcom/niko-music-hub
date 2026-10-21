@@ -104,6 +104,17 @@ public final class AudioRecorderViewModel: ObservableObject {
     @Published public private(set) var recentRecordings: [OutputInboxItem] = []
     /// The failed take's file when audio recorded before the error is still on disk.
     @Published public private(set) var keptPartialTakeURL: URL?
+    @Published private var stoppingBeforeCapture = false
+
+    public var captureStartupMessage: String? {
+        if recordingState == .starting {
+            return "If macOS asks for system-audio permission, answer the prompt. Recording begins when audio is ready."
+        }
+        if recordingState == .stopping, stoppingBeforeCapture {
+            return "Answer any macOS system-audio permission prompt to finish stopping. Audio startup has not finished."
+        }
+        return nil
+    }
 
     public var isRecording: Bool {
         recordingState == .recording
@@ -292,6 +303,9 @@ public final class AudioRecorderViewModel: ObservableObject {
 
     private func stopRecording(awaitingCurrentTask: Bool) async {
         guard isCaptureActive else { return }
+        let wasStarting = recordingState == .starting
+        stoppingBeforeCapture = wasStarting
+        defer { stoppingBeforeCapture = false }
         recordingState = .stopping
         let taskToAwait = recordingTask
 
@@ -305,10 +319,17 @@ public final class AudioRecorderViewModel: ObservableObject {
             try await finalizeRecording(result)
         } catch is CancellationError {
             taskToAwait?.cancel()
+            if awaitingCurrentTask {
+                await taskToAwait?.value
+            }
             recordingTask = nil
             currentLevel = nil
-            recordingState = .idle
-            error = nil
+            if wasStarting {
+                presentFailure(.apiError("Recording was stopped during startup. If macOS asked for system-audio permission, answer the prompt, then start a new recording."))
+            } else {
+                recordingState = .idle
+                error = nil
+            }
         } catch let recorderError as RecorderError {
             taskToAwait?.cancel()
             recordingTask = nil
