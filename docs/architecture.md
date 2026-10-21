@@ -33,6 +33,8 @@ NikoMusicHub (executable)
 
 ## Existing feature dependency: Stem Separation → Downloader
 
+Downloader shows a URL-derived title before provider lookup, then replaces it with the resolved media title when the download job starts.
+
 Verified 2026-09-19: `Package.swift` explicitly makes `FeatureStemSeparation`
 depend on `FeatureDownloader`. This is a narrow exception to feature independence:
 the YouTube input adapter in

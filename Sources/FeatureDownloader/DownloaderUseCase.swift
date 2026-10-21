@@ -82,6 +82,7 @@ public protocol DownloaderUseCaseRunning: Sendable {
 }
 
 public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Sendable {
+    static let jobTitlePrefix = "Download: "
     private let downloader: any DownloadRunning
     private let healthChecker: YtDlpHealthChecker
     private let jobRunner: any JobRunning
@@ -175,7 +176,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         let capturedOptions = options
 
         let job = jobRunner.enqueue(
-            title: "Download: \(simulateTitle)",
+            title: Self.jobTitlePrefix + simulateTitle,
             sourceToolID: ToolFeatureID("downloader")
         ) { progress in
             let result = try await capturedUseCase.downloadResultWithRetry(

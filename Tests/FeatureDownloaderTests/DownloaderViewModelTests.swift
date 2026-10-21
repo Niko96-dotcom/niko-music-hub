@@ -225,7 +225,7 @@ final class DownloaderViewModelTests: XCTestCase {
         let outputURL = try makeExistingFile(named: "download.wav", in: directory)
         let job = Job(
             sourceToolID: "downloader",
-            title: "Download",
+            title: "Download: Me at the zoo",
             state: .completed,
             progress: 1,
             message: "Downloaded",
@@ -248,6 +248,7 @@ final class DownloaderViewModelTests: XCTestCase {
         try await waitUntil { inbox.items.count == 1 }
         XCTAssertEqual(inbox.items.first?.metadata["dlSourceURL"], "https://example.com/original")
         XCTAssertEqual(viewModel.outputURLs, [outputURL])
+        XCTAssertEqual(viewModel.detectedFileName, "Me at the zoo")
     }
 
     func testInboxAddFailureKeepsDownloadCompletedWithHandoffWarning() async throws {

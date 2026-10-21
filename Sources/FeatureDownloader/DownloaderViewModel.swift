@@ -298,6 +298,10 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private func acceptStartedJob(_ observedJob: Job, sourceURL: URL, outputDirectory: URL, generation: UInt64) {
         guard observationGeneration == generation, downloadState == .downloading else { return }
         job = observedJob
+        if observedJob.title.hasPrefix(DownloaderUseCase.jobTitlePrefix) {
+            let title = String(observedJob.title.dropFirst(DownloaderUseCase.jobTitlePrefix.count))
+            if !title.isEmpty { detectedFileName = title }
+        }
         observeJob(id: observedJob.id, sourceURL: sourceURL, outputDirectory: outputDirectory, generation: generation)
     }
 
