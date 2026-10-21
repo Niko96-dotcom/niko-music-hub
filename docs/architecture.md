@@ -124,7 +124,9 @@ Archive domain and safety. No SwiftUI/AppKit.
   drag edge scrolling; offsets are never published as SwiftUI state. Presentation equality reuses the catalog's
   shared-storage comparisons. Hover suppression tracks only the controls under the pointer. Scroll activity observes
   only the viewport and native lanes' own scroll/clip views; subscriptions end on detach or destruction and refresh
-  when a lane is reused with a different board controller.
+  when a lane is reused with a different board controller. Hover uses a 0.10-second ease-out (disabled by Reduce
+  Motion); lane/row motion remains 0.16 seconds. Live scroll end restores hover synchronously; one board-local
+  pointer tracking area clears unphased-wheel suppression on the first move, without waiting for the idle timer.
   See `docs/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
 - The board stays mounted under the song detail page (`ArchiveBrowserViewModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane

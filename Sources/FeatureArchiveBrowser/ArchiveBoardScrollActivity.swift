@@ -4,6 +4,7 @@ import SwiftUI
 enum ArchiveBoardMotion {
     static let duration = 0.16
     static let animation = Animation.easeOut(duration: duration)
+    static let hover = Animation.easeOut(duration: 0.10)
 }
 
 enum ArchiveBoardHoverTarget: Hashable {
@@ -27,8 +28,10 @@ final class ArchiveBoardScrollActivity {
     private var hovered: [ArchiveBoardHoverTarget: Hover] = [:]
     private var lastEvent = Date.distantPast
     private var timer: Timer?
+    private var liveScrolls: Set<ObjectIdentifier> = []
 
-    func hover(_ target: ArchiveBoardHoverTarget, inside: Bool, change: @escaping (Bool) -> Void) {
+    func hover(_ target: ArchiveBoardHoverTarget, inside: Bool, at now: Date = Date(), change: @escaping (Bool) -> Void) {
+        endIfIdle(at: now)
         if inside {
             for old in Array(hovered.keys) where old.cardIdentity != target.cardIdentity {
                 if let previous = hovered.removeValue(forKey: old), previous.displayed { previous.change(false) }
@@ -64,6 +67,22 @@ final class ArchiveBoardScrollActivity {
         }
     }
 
+    func beginLiveScroll(source: ObjectIdentifier) {
+        liveScrolls.insert(source)
+        recordActivity()
+    }
+
+    func endLiveScroll(source: ObjectIdentifier) {
+        guard liveScrolls.remove(source) != nil else { return }
+        if liveScrolls.isEmpty { endScrolling() }
+    }
+
+    /// A real pointer move is immediate intent to hover after unphased wheel
+    /// scrolling. Live trackpad/momentum notifications still take precedence.
+    func pointerMoved() {
+        if liveScrolls.isEmpty { endScrolling() }
+    }
+
     func recordWheel(_ event: NSEvent) {
         guard event.scrollingDeltaX != 0 || event.scrollingDeltaY != 0 else { return }
         recordActivity()
@@ -85,6 +104,10 @@ final class ArchiveBoardScrollActivity {
 
     func endIfIdle(at now: Date = Date()) {
         guard now.timeIntervalSince(lastEvent) >= 0.16 else { return }
+        endScrolling()
+    }
+
+    private func endScrolling() {
         timer?.invalidate()
         timer = nil
         if isScrolling {
@@ -117,18 +140,31 @@ final class ArchiveBoardScrollObservation: NSObject {
         self.activity = activity
         super.init()
         let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(scrolled(_:)),
+        center.addObserver(self, selector: #selector(liveScrolled(_:)),
                            name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
-        center.addObserver(self, selector: #selector(scrolled(_:)),
+        center.addObserver(self, selector: #selector(liveScrolled(_:)),
                            name: NSScrollView.didLiveScrollNotification, object: scrollView)
+        center.addObserver(self, selector: #selector(ended(_:)),
+                           name: NSScrollView.didEndLiveScrollNotification, object: scrollView)
         scrollView.contentView.postsBoundsChangedNotifications = true
         center.addObserver(self, selector: #selector(scrolled(_:)),
                            name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+    }
+
+    @objc private func liveScrolled(_ notification: Notification) {
+        activity.beginLiveScroll(source: ObjectIdentifier(self))
+    }
+
+    @objc private func ended(_ notification: Notification) {
+        activity.endLiveScroll(source: ObjectIdentifier(self))
     }
 
     @objc private func scrolled(_ notification: Notification) {
         activity.recordActivity()
     }
 
-    isolated deinit { NotificationCenter.default.removeObserver(self) }
+    isolated deinit {
+        NotificationCenter.default.removeObserver(self)
+        activity.endLiveScroll(source: ObjectIdentifier(self))
+    }
 }

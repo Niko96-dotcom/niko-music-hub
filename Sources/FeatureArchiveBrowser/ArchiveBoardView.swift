@@ -300,7 +300,7 @@ struct ArchiveBoardCardView: View {
                     .fill(HubDesignSystem.Palette.selection)
                     .opacity(showsSelectionFill ? 1 : 0)
             }
-            .animation(reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.animation,
+            .animation(reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.hover,
                        value: showsSelectionFill)
         }
         .overlay {

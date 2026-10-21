@@ -180,6 +180,64 @@ final class ArchiveBoardHorizontalScrollTests: XCTestCase {
         XCTAssertEqual(controller.pointerX(columnID: "lane", localX: 210) ?? -1, 10, accuracy: 1)
     }
 
+    func testFirstPointerMoveRestoresHoverAfterUnphasedScrollWithoutWaitingForIdleTimer() throws {
+        let fixture = makeFixture()
+        defer { fixture.window.close() }
+        let activity = fixture.controller.activity
+        var values: [Bool] = []
+        activity.hover(.card(songID: "fixture", laneID: nil), inside: true) { values.append($0) }
+        activity.recordActivity()
+        XCTAssertEqual(values, [true, false])
+        for _ in 0..<10 { fixture.scroll.updateTrackingAreas() }
+        XCTAssertEqual(fixture.scroll.trackingAreas.filter { $0.owner === fixture.scroll && $0.options.contains(.mouseMoved) }.count, 1)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved, location: NSPoint(x: 100, y: 100),
+                                                    modifierFlags: [], timestamp: 0, windowNumber: fixture.window.windowNumber,
+                                                    context: nil, eventNumber: 0, clickCount: 0, pressure: 0))
+        fixture.scroll.mouseMoved(with: event)
+        XCTAssertFalse(activity.isScrolling)
+        XCTAssertEqual(values, [true, false, true], "The native pointer callback must update hover synchronously")
+    }
+
+    func testLiveScrollEndRestoresCardAndPlayHoverSynchronouslyAndPointerDoesNotInterruptMomentum() {
+        let activity = ArchiveBoardScrollActivity()
+        let scroll = NSScrollView()
+        let observation = ArchiveBoardScrollObservation(scrollView: scroll, activity: activity)
+        var cardValues: [Bool] = []
+        var playValues: [Bool] = []
+        activity.hover(.card(songID: "fixture", laneID: nil), inside: true) { cardValues.append($0) }
+        activity.hover(.play(songID: "fixture", laneID: nil), inside: true) { playValues.append($0) }
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scroll)
+        activity.pointerMoved()
+        XCTAssertTrue(activity.isScrolling, "Pointer movement must not override a live scroll or momentum sequence")
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: NSScrollView())
+        XCTAssertTrue(activity.isScrolling, "Unrelated end notifications must not release suppression")
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
+        XCTAssertFalse(activity.isScrolling)
+        XCTAssertEqual(cardValues, [true, false, true])
+        XCTAssertEqual(playValues, [true, false, true])
+        withExtendedLifetime(observation) {}
+    }
+
+    func testHoverCallbackExpiresIdleSuppressionBeforeNextTimerTick() {
+        let activity = ArchiveBoardScrollActivity()
+        let start = Date()
+        activity.recordActivity(at: start)
+        var displayed = false
+        activity.hover(.card(songID: "fixture", laneID: nil), inside: true,
+                       at: start.addingTimeInterval(0.17)) { displayed = $0 }
+        XCTAssertTrue(displayed, "A pending idle timer must not delay a plain hover callback")
+        XCTAssertFalse(activity.isScrolling)
+    }
+
+    func testHoverTimingIsIndependentOfLaneAndRowMotionAndRespectsReduceMotion() throws {
+        XCTAssertEqual(ArchiveBoardMotion.hover, .easeOut(duration: 0.10))
+        XCTAssertEqual(ArchiveBoardMotion.duration, 0.16)
+        for path in ["ArchiveBoardView.swift", "ArchiveCardPlayButton.swift"] {
+            let source = try String(contentsOfFile: "Sources/FeatureArchiveBrowser/" + path, encoding: .utf8)
+            XCTAssertTrue(source.contains("reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.hover"), path)
+        }
+    }
+
     func testHoverTrackingDoesNotWriteCardStateDuringScrollAndRestoresAfterMomentum() {
         let activity = ArchiveBoardScrollActivity()
         let target = ArchiveBoardHoverTarget.card(songID: "fixture", laneID: nil)

@@ -44,6 +44,7 @@ final class ArchiveBoardHorizontalScrollView: NSScrollView, ArchiveBoardDocument
     private var naturalWidth: CGFloat = 0
     private var positioned = false
     private var scrollObservation: ArchiveBoardScrollObservation?
+    private var pointerTrackingArea: NSTrackingArea?
     private var isRightToLeft = false
 
     init(controller: ArchiveBoardScrollController) {
@@ -67,6 +68,21 @@ final class ArchiveBoardHorizontalScrollView: NSScrollView, ArchiveBoardDocument
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
     override var acceptsFirstResponder: Bool { false }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if pointerTrackingArea == nil {
+            let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeInActiveApp, .inVisibleRect],
+                                      owner: self, userInfo: nil)
+            addTrackingArea(area)
+            pointerTrackingArea = area
+        }
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        controller.activity.pointerMoved()
+        super.mouseMoved(with: event)
+    }
 
     func apply(_ input: ArchiveBoardHorizontalScroll) {
         if controller !== input.controller {

@@ -10,6 +10,7 @@ struct ArchiveCardPlayButton: View {
     var scrollActivity: ArchiveBoardScrollActivity? = nil
     let action: () -> Void
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: action) {
@@ -18,6 +19,8 @@ struct ArchiveCardPlayButton: View {
                 .foregroundStyle(isHovered || isLoaded
                     ? HubDesignSystem.Palette.textPrimary
                     : HubDesignSystem.Palette.textSecondary)
+                .animation(reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.hover,
+                           value: isHovered)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
