@@ -13,6 +13,9 @@ struct PreviewSongIdentity {
     private static let tempoTag = CompiledRegex(#"(?i)\b\d+\s*bpm\b"#)
     private static let renderTakePrefix = CompiledRegex(#"^(?:0\d(?:[-_]\d{1,3})?(?:$|[-_%])|\d{1,3}[-_]\d{1,3}(?:$|[-_%])|\d{1,3}_)"#)
     private static let technicalExportLabel = CompiledRegex(#"(?i)\b(?:no[ _-]+(?:lim(?:iter)?|clip(?:per)?|master)|unlimited|unmastered|premaster|pre[ _-]+master|for[ _-]+(?:mastering|ableton|cubase))\b"#)
+    // A paired session-bounce label starts the suffix even when unparenthesized
+    // writer credits follow it ("session bounce writer x writer x writer").
+    private static let sessionBounceAnnotation = CompiledRegex(#"(?i)\s+(?:session|seshy?|sessin)\s+bounce\b"#)
     private static let annotationStart = CompiledRegex(#"(?i)\s+(?:(?:demo|demmo|prod|production|session\s+bounce|seshy?\s+bounce|sessin\s+bounce|mixdown|mixed|mix|mastered|master|mstr|bounce|preview)\b(?=\s*(?:$|\(|v(?:ersion)?\s*\d|demo\b|prod\b|mix\b|master\b|final\b|no[ _-]))|v(?:ersion)?\s*\d+(?:\.\d+)*\b|premaster\b|unmastered\b|no[ _-]+(?:lim(?:iter)?|clip(?:per)?)\b|for[ _-]+(?:mastering|ableton|cubase)\b)|\s+\([^)]*,|\s+\((?:vocals?|vox|instrumental|instr|stems?|bass|keyboard|guitar|piano|fx)\)|\s+(?:instrumental|instr|acapella|vocals?|vox|stems?|reference|ref)(?:\s+v\d+)?$"#)
     private static let trackLabels: Set<String> = [
         "fx", "sfx", "kit", "drumloop", "drum", "drums", "bass", "synth",
@@ -69,7 +72,8 @@ struct PreviewSongIdentity {
     private static func annotationBoundary(in stem: String) -> Range<String.Index>? {
         // A label must begin an export suffix. This preserves title words in
         // “The Master Plan” and “Old Friends” instead of deleting arbitrary tokens.
-        annotationStart.firstMatchRange(in: stem)
+        [annotationStart.firstMatchRange(in: stem), sessionBounceAnnotation.firstMatchRange(in: stem)]
+            .compactMap { $0 }.min { $0.lowerBound < $1.lowerBound }
     }
 
 }

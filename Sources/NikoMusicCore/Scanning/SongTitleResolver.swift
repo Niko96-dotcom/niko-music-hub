@@ -70,7 +70,7 @@ public struct SongTitleResolver: Sendable {
            let deliveryTitle = PreviewSongIdentity.unstructuredDeliveryTitle(preview.fileName),
            hasSongWordBeyondLabels(deliveryTitle),
            !isLikelyStemExportTitle(deliveryTitle) {
-            return deliveryTitle
+            return deliveryTitle == deliveryTitle.lowercased() ? titleCase(deliveryTitle) : deliveryTitle
         }
 
         // A folder remains the fallback for projects without a usable delivery.

@@ -137,6 +137,23 @@ final class PreviewDeliverySelectionTests: XCTestCase {
         XCTAssertEqual(PreviewSongIdentity.parse("ARTIST - 404 DEMO V2.wav")?.displayTitle, "ARTIST - 404")
     }
 
+    func testSessionBounceStartsAnnotationBeforeUnparenthesizedCollaboratorCredits() {
+        for label in ["session bounce", "SESH BOUNCE", "seshy bounce", "sessin bounce"] {
+            let file = "sun stays up forever \(label) writer one x writer two x writer three.wav"
+            XCTAssertEqual(PreviewSongIdentity.unstructuredDeliveryTitle(file), "sun stays up forever")
+            XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Working Session", mainPreview: candidate(file)), "Sun Stays Up Forever")
+            XCTAssertEqual(PreviewSongIdentity.parse("ARTIST - \(file)")?.displayTitle, "ARTIST - sun stays up forever")
+        }
+        for title in ["The Master Plan", "Bounce With Me", "Session Of Love", "st_Rlight", "NEW SONG"] {
+            let file = "\(title) session bounce writer x writer.wav"
+            XCTAssertEqual(SongTitleResolver().displayTitle(fromFolderName: "Working Session", mainPreview: candidate(file)), title)
+        }
+        XCTAssertEqual(
+            SongTitleResolver().displayTitle(fromFolderName: "Working Session", mainPreview: candidate("session bounce writer x writer.wav")),
+            "Working Session"
+        )
+    }
+
     func testVersionOrStageOnlyDeliveryTitleDoesNotReplaceStrongFolderName() {
         XCTAssertEqual(PreviewSongIdentity.unstructuredDeliveryTitle("V2 Mix.wav"), "V2")
         for file in ["V2 Mix.wav", "Version 3 Master.wav", "Mix 2 master.wav", "Demo 2 mix.wav", "Mix v2.wav"] {

@@ -12,6 +12,7 @@ final class PreviewSemanticsVersionTests: XCTestCase {
     /// digest here, so cached snapshots from the old logic are refreshed at launch.
     private static let recordedDigests: [Int: String] = [
         1: "3f720db896b897d609fbc1671f9065993b0b7710fb1cbd8424266c6f126ae9fd",
+        2: "3f720db896b897d609fbc1671f9065993b0b7710fb1cbd8424266c6f126ae9fd",
     ]
 
     private func scannedFixtureSongs() throws -> [Song] {
