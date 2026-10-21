@@ -49,6 +49,8 @@ Automatic preview selection checks full-song suitability before scores, versions
 
 **Archive Now** verifies the Vault generation and current project, checks that the DAW and project files are closed, then removes the Active copy. The song leaves the normal board and becomes a **Restore & Open** target under **Show archived projects**. A restored, unchanged song can reuse its verified generation when archived again.
 
+Transfer status distinguishes waiting for a provider upload from finalizing a verified Vault copy. Finalization applies to both local and cloud destinations and does not by itself mean the Active copy has been removed.
+
 **Create Backup Copy** verifies a Vault copy and keeps the song in Active Projects. Use this when you want another copy without removing the local project.
 
 Existing archive folders explicitly linked to a catalog identity also appear under **Show archived projects**. Their details report whether files are local, online-only, or downloading, and offer **Show in Finder**. Linking preserves the project ID, original evidence, historical locations and user metadata. It does not create a verified Vault generation. **Restore & Open** still works for a linked folder: it builds a fresh content manifest and copies the folder into Active Projects (see [Restoring linked historical archives](linked-archive-restore.md)). File availability comes from the files inside the folder, since a locally present Dropbox folder may contain online-only audio and project files.

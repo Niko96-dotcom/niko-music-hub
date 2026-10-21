@@ -977,7 +977,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertFalse(presentation.statusLabel.contains("Archived"))
         XCTAssertNotEqual(presentation.primaryAction, .restoreAndOpen)
         XCTAssertEqual(ProjectVaultCardPresentation.transferStatusLabel(.awaitingProviderDurability), "Waiting for upload")
-        XCTAssertEqual(ProjectVaultCardPresentation.transferStatusLabel(.promotingArchiveGeneration), "Waiting for upload")
+        XCTAssertEqual(ProjectVaultCardPresentation.transferStatusLabel(.promotingArchiveGeneration), "Finalizing Vault copy")
         XCTAssertFalse(ProjectVaultCardPresentation.transferStatusLabel(.awaitingProviderDurability).contains("Archived"))
     }
 

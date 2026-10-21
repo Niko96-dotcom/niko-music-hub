@@ -517,6 +517,9 @@ final class ProjectVaultPolishTests: XCTestCase {
         XCTAssertTrue(promoting.isWaitingForProviderUpload)
         let promotingSnapshot = ProjectVaultRuntimeSnapshot(record: record, transfer: promoting)
         XCTAssertFalse(promotingSnapshot.isReadyToFreeSpace(localActiveRetained: true, isBoundGeneration: true, isKeepLocal: false))
+        let promotingPresentation = ProjectVaultCardPresentation(record: record, transferState: .promotingArchiveGeneration)
+        XCTAssertEqual(promotingPresentation.statusLabel, "Finalizing Vault copy")
+        XCTAssertEqual(ProjectVaultActivityExplanation.transfer(.promotingArchiveGeneration), "Finalizing the verified Vault copy.")
 
         let waitingPresentation = ProjectVaultCardPresentation(record: record, transferState: .awaitingProviderDurability)
         XCTAssertEqual(waitingPresentation.state, .archiving)

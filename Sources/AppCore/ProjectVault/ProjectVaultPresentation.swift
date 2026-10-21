@@ -207,8 +207,10 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
             return "Copying"
         case .verifyingArchiveStaging:
             return "Verifying"
-        case .awaitingProviderDurability, .promotingArchiveGeneration:
+        case .awaitingProviderDurability:
             return "Waiting for upload"
+        case .promotingArchiveGeneration:
+            return "Finalizing Vault copy"
         case .archiveVerified, .archivedLocal, .archivedOnlineOnly:
             return "Verified"
         default:
@@ -412,7 +414,8 @@ public enum ProjectVaultActivityExplanation {
         switch state {
         case .copyingToArchiveStaging: return "Copying to a temporary folder in the Vault. Your Active folder isn’t touched."
         case .verifyingArchiveStaging: return "Verifying every copied file."
-        case .awaitingProviderDurability, .promotingArchiveGeneration: return "Waiting for cloud upload to finish. Your Active folder stays on this Mac."
+        case .awaitingProviderDurability: return "Waiting for cloud upload to finish. Your Active folder stays on this Mac."
+        case .promotingArchiveGeneration: return "Finalizing the verified Vault copy."
         case .removingActiveCopy: return "Vault copy verified. Removing only the old Active folder."
         case .failedRecoverable: return "Paused safely. Every copy was kept, and you can retry."
         case .recoveryRequired: return "Needs your decision. Every copy we know about was kept."

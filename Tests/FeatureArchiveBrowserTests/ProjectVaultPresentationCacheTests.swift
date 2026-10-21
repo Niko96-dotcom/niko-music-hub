@@ -121,14 +121,15 @@ final class ProjectVaultPresentationCacheTests: XCTestCase {
             locations: [ProjectLocation(rootID: UUID(), relativePath: "Active Song", kind: .active, availability: .local)]
         )
         for waitingState in [VaultTransferState.awaitingProviderDurability, VaultTransferState.promotingArchiveGeneration] {
+            let expectedLabel = waitingState == .promotingArchiveGeneration ? "Finalizing Vault copy" : "Waiting for upload"
             let waiting = ProjectVaultCardPresentation(record: activeRecord, transferState: waitingState)
             XCTAssertEqual(waiting.state, .archiving, "\(waitingState)")
-            XCTAssertEqual(waiting.statusLabel, "Waiting for upload", "\(waitingState)")
+            XCTAssertEqual(waiting.statusLabel, expectedLabel, "\(waitingState)")
             XCTAssertFalse(waiting.statusLabel.contains("Archived"), "\(waitingState)")
             XCTAssertNotEqual(waiting.primaryAction, .restoreAndOpen, "\(waitingState)")
             XCTAssertEqual(
                 ProjectVaultCardPresentation.transferStatusLabel(waitingState),
-                "Waiting for upload",
+                expectedLabel,
                 "\(waitingState)"
             )
             XCTAssertFalse(
