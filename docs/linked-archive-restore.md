@@ -22,6 +22,9 @@ overwritten.
 ## Verification and recovery
 
 - Revalidate the configured roots and the unique catalog location claim.
+- Admit explicit restore-inventory preparation. Mounted-folder clients can
+  expose cloud placeholders with zero-byte metadata; coordinated reads resolve
+  them before the transient inventory is taken. This never runs while browsing.
 - Enumerate file names, sizes and modification times without reading file content.
   This transient inventory is download input, not verified content evidence.
 - Admit provider downloads against the free-space reserve. Require fully local

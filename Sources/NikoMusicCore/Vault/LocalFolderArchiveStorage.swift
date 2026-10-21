@@ -14,15 +14,20 @@ public struct LocalFolderArchiveStorage: ArchiveStorageProvider, @unchecked Send
     private let root: URL
     private let fileManager: FileManager
     private let flushSeam: LocalVaultFlushSeam
+    private let readPlaceholder: @Sendable (URL) async throws -> Void
 
     public init(root: URL, fileManager: FileManager = .default) {
         self.init(root: root, fileManager: fileManager, flushSeam: .live)
     }
 
-    init(root: URL, fileManager: FileManager, flushSeam: LocalVaultFlushSeam) {
+    init(
+        root: URL, fileManager: FileManager, flushSeam: LocalVaultFlushSeam,
+        readPlaceholder: @escaping @Sendable (URL) async throws -> Void = VaultCoordinatedRead.materialize
+    ) {
         self.root = root
         self.fileManager = fileManager
         self.flushSeam = flushSeam
+        self.readPlaceholder = readPlaceholder
     }
 
     public func capabilities() async throws -> StorageCapabilities {
@@ -42,11 +47,64 @@ public struct LocalFolderArchiveStorage: ArchiveStorageProvider, @unchecked Send
         manifest: VaultManifest
     ) async throws -> ArchiveStorageLocality {
         guard fileManager.isReadableFile(atPath: location.path) else { throw LocalFolderStorageError.unreadable }
+        let safety = PathSafety(fileManager: fileManager)
+        guard safety.isResolvedContainedWithoutNestedSymlinks(location, in: root) else {
+            throw FileProviderArchiveStorageError.locationOutsideRoot
+        }
+        for entry in manifest.archiveStorageManifest.entries where entry.type == .regularFile && entry.byteCount > 0 {
+            let file = location.appendingPathComponent(entry.relativePath)
+            guard safety.isResolvedContainedWithoutNestedSymlinks(file, in: location) else {
+                throw FileProviderArchiveStorageError.locationOutsideRoot
+            }
+            let attributes = try fileManager.attributesOfItem(atPath: file.path)
+            if (attributes[.size] as? NSNumber)?.int64Value == 0 { return .materializationRequired }
+        }
         return .fullyLocalCurrent
     }
 
     public func prepareForRead(_ location: URL) async throws {
         guard fileManager.isReadableFile(atPath: location.path) else { throw LocalFolderStorageError.unreadable }
+    }
+
+    public func prepareForRestoreInventory(_ location: URL) async throws {
+        try await readPlaceholders(at: location)
+    }
+
+    private func readPlaceholders(at location: URL, manifest: VaultManifest? = nil) async throws {
+        try await prepareForRead(location)
+        let safety = PathSafety(fileManager: fileManager)
+        guard safety.isResolvedContainedWithoutNestedSymlinks(location, in: root) else {
+            throw FileProviderArchiveStorageError.locationOutsideRoot
+        }
+        var enumerationError: Error?
+        guard let walker = fileManager.enumerator(
+            at: location, includingPropertiesForKeys: nil,
+            errorHandler: { _, error in enumerationError = error; return false }
+        ) else { throw LocalFolderStorageError.unreadable }
+        let expectedPaths = manifest.map {
+            Set($0.archiveStorageManifest.entries.filter { $0.type == .regularFile }.map(\.relativePath))
+        }
+        while let url = walker.nextObject() as? URL {
+            try Task.checkCancellation()
+            guard safety.isResolvedContainedWithoutNestedSymlinks(url, in: location) else {
+                throw FileProviderArchiveStorageError.locationOutsideRoot
+            }
+            let attributes = try fileManager.attributesOfItem(atPath: url.path)
+            guard attributes[.type] as? FileAttributeType == .typeRegular,
+                  !VaultArchiveContentPolicy.ignoresRegularFile(at: url) else { continue }
+            if let expectedPaths {
+                let relative = url.standardizedFileURL.pathComponents
+                    .dropFirst(location.standardizedFileURL.pathComponents.count).joined(separator: "/")
+                guard expectedPaths.contains(relative) else { continue }
+            }
+            // Some Dropbox clients expose an evicted file as an ordinary empty
+            // file. A coordinated read asks the client for its bytes. Do this
+            // only in admitted restore preparation, never in metadata browsing.
+            if (attributes[.size] as? NSNumber)?.int64Value == 0 {
+                try await readPlaceholder(url)
+            }
+        }
+        if let enumerationError { throw enumerationError }
     }
 
     public func prepareForWrite(at location: URL) async throws {
@@ -74,7 +132,11 @@ public struct LocalFolderArchiveStorage: ArchiveStorageProvider, @unchecked Send
     }
 
     public func materialize(_ location: URL) async throws {
-        try await prepareForRead(location)
+        try await readPlaceholders(at: location)
+    }
+
+    public func materialize(_ location: URL, manifest: VaultManifest) async throws {
+        try await readPlaceholders(at: location, manifest: manifest)
     }
 
     public func evictIfSupported(_ location: URL) async throws -> EvictionResult { .unsupported }

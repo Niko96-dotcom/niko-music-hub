@@ -4,6 +4,67 @@ import XCTest
 @testable import NikoMusicCore
 
 final class LocalVaultRestoreEngineTests: XCTestCase {
+    func testDropboxPlaceholderIsNotReadWhenArchiveDownloadAdmissionRefuses() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let project = fixture.generation.appendingPathComponent("Synthetic Song.cpr")
+        try Data().write(to: project)
+        let provider = LocalFolderArchiveStorage(root: fixture.archive, fileManager: .default, flushSeam: .live,
+            readPlaceholder: { _ in XCTFail("A refused download must not open the placeholder") })
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        try store.save(fixture.archiveRecord)
+        let events = VaultRestoreEventLog()
+        let engine = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: store, store: store, projectionStore: store,
+            provider: provider, catalog: VaultRestoreCatalogSpy(events: events),
+            projectOpener: SafeVaultProjectOpener(workspace: VaultRestoreWorkspaceSpy(events: events)),
+            writeAdmission: { _, _ in throw VaultWriteAdmissionError.postponed(.insufficientArchiveCapacity) })
+        do {
+            _ = try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+            XCTFail("Expected capacity refusal")
+        } catch {
+            XCTAssertEqual(error as? VaultWriteAdmissionError, .postponed(.insufficientArchiveCapacity))
+        }
+        XCTAssertEqual(try Data(contentsOf: project).count, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.active.appendingPathComponent("Restored").path))
+    }
+
+    func testDropboxPlaceholderFailureRetriesSameJournalAndVerifiesDownloadedBytes() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let project = fixture.generation.appendingPathComponent("Synthetic Song.cpr")
+        let original = try Data(contentsOf: project)
+        try Data().write(to: project)
+        let downloads = RetryPlaceholderDownload(bytes: original)
+        let provider = LocalFolderArchiveStorage(root: fixture.archive, fileManager: .default, flushSeam: .live,
+            readPlaceholder: { url in try await downloads.read(url) })
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        try store.save(fixture.archiveRecord)
+        let events = VaultRestoreEventLog()
+        let workspace = VaultRestoreWorkspaceSpy(events: events)
+        let engine = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: store, store: store, projectionStore: store,
+            provider: provider, catalog: VaultRestoreCatalogSpy(events: events),
+            projectOpener: SafeVaultProjectOpener(workspace: workspace), writeAdmission: allowRestoreWrites)
+        do {
+            _ = try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+            XCTFail("The first download must fail")
+        } catch { XCTAssertEqual(error as? LocalFolderStorageError, .unreadable) }
+        let pending = try XCTUnwrap(store.recoverableRestoreRecords().first)
+        XCTAssertEqual(pending.phase, .materializingArchive)
+        XCTAssertNil(pending.failureReason)
+        XCTAssertTrue(workspace.opened.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: pending.destinationURL.path))
+        let result = try await engine.retryRestore(id: pending.id)
+        XCTAssertEqual(result.id, pending.id)
+        XCTAssertNotNil(result.completedAt)
+        XCTAssertNil(result.error)
+        XCTAssertNil(result.failureReason)
+        XCTAssertEqual(workspace.opened.count, 1)
+        try VaultManifestBuilder().verify(fixture.manifest, at: result.destinationURL)
+        try VaultManifestBuilder().verifyArchive(fixture.manifest, at: fixture.generation)
+    }
+
     func testLaunchRecoveryFailsClosedWhenRestoreStoreReconciliationThrows() async throws {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
@@ -2214,6 +2275,19 @@ private actor CancellingMaterializeService: FileProviderArchiveServicing {
 
 private let allowRestoreWrites: LocalVaultTransferEngine.WriteAdmission = { _, operation in
     try await operation()
+}
+
+private actor RetryPlaceholderDownload {
+    let bytes: Data
+    private var failed = false
+    init(bytes: Data) { self.bytes = bytes }
+    func read(_ url: URL) throws {
+        guard failed else {
+            failed = true
+            throw LocalFolderStorageError.unreadable
+        }
+        try bytes.write(to: url)
+    }
 }
 
 private final class VaultRestoreAdmissionRecorder: @unchecked Sendable {

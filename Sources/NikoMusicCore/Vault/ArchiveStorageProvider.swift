@@ -33,6 +33,9 @@ public protocol ArchiveStorageProvider: Sendable {
     func capabilities() async throws -> StorageCapabilities
     func currentLocality(at location: URL, manifest: VaultManifest) async throws -> ArchiveStorageLocality
     func prepareForRead(_ location: URL) async throws
+    /// Explicit, admitted restore preparation before an unverified linked-folder
+    /// inventory. Some clients reveal the real metadata only after reading.
+    func prepareForRestoreInventory(_ location: URL) async throws
     func prepareForWrite(at root: URL) async throws
     func waitUntilDurable(_ location: URL) async throws -> VaultDurability
     func materialize(_ location: URL) async throws
@@ -41,6 +44,10 @@ public protocol ArchiveStorageProvider: Sendable {
 }
 
 public extension ArchiveStorageProvider {
+    func prepareForRestoreInventory(_ location: URL) async throws {
+        try await prepareForRead(location)
+    }
+
     func currentLocality(at location: URL, manifest: VaultManifest) async throws -> ArchiveStorageLocality {
         .unknown
     }

@@ -112,12 +112,27 @@ and provider sync makes no claim about local flush. Never present local
 barrier success as remote sync, or vice versa.
 
 Cloud qualification depends on the client's exposed APIs, not its folder name.
-The runtime selects the File Provider adapter only when Foundation reports the
-root as ubiquitous. A Dropbox client that exposes online-only placeholders
-without those APIs takes the local-folder path; automatic download and remote
-sync proof are not established for that configuration. Download the files in
-Dropbox before restoring. See the [real-folder L340 check](audits/l340-dropbox-2026-10-21.md)
-for the observed limitation and retry result.
+The runtime selects the File Provider adapter when Foundation reports the root
+as ubiquitous. A stored download error requests fresh materialization on Retry;
+it never proves success, and file type, size, and current-status checks still
+apply. A new request must finish before the archive is verified and copied.
+
+Some Dropbox clients expose online-only files as ordinary zero-byte files
+without ubiquitous metadata. For a known Vault manifest, the local-folder
+adapter detects those missing bytes without opening them. After download
+admission, coordinated reads request only the expected placeholder files;
+manifest verification still rejects truncated, changed, or incomplete content.
+For an ordinary linked folder, admitted restore preparation resolves empty
+placeholders before taking the unverified download inventory. When the client
+hides the real size, this first admission can check only the current free-space
+reserve; the full hydrated manifest is admitted again before the Active copy.
+Browsing and locality checks never request these reads. Cancellation keeps the
+restore stopped across relaunch for explicit Retry.
+
+Successful reads do not establish remote upload durability or authorize Active
+removal. The local adapter still reports only `.verifiedLocal`, with no cloud
+eviction capability. See the [real-folder L340 check](audits/l340-dropbox-2026-10-21.md)
+for the actual-app download and retry observations.
 
 ## Barrier success is not a hardware guarantee
 

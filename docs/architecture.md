@@ -64,6 +64,11 @@ Archive domain and safety. No SwiftUI/AppKit.
 - Catalog helpers: `SongCatalogDeduplicator`, `ArchiveMetadataMerger`.
 - `Vault/`: the Project Vault engines (`LocalVaultTransferEngine`, `LocalVaultRestoreEngine`, `VaultManifest`,
   archive storage providers, the transfer state machine and automation rules).
+  `ArchiveStorageProvider.prepareForRestoreInventory` is explicit, admitted
+  preparation for linked restores: the mounted-folder adapter can coordinate
+  reads of ordinary cloud placeholders before their real metadata is available.
+  Metadata-only browsing/locality checks never download content. Known managed
+  restores materialize only their recorded files and verify the saved manifest.
 - `Persistence/`: the SQLite stores (`SQLiteArchiveDatabase` and the index, metadata, collaborator, catalog and
   Vault transfer stores).
 - `Browse/` (filters, sort, smart shelves, health report), `Intelligence/` (archive intelligence, index export),

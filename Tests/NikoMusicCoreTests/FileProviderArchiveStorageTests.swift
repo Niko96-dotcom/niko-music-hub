@@ -77,6 +77,65 @@ private actor StubFileProviderArchiveService: FileProviderArchiveServicing {
 final class FileProviderArchiveStorageTests: XCTestCase {
     private let root = URL(fileURLWithPath: "/tmp/provider-root", isDirectory: true)
 
+    func testL340StoredDownloadErrorRequestsFreshDownloadBeforeWaitingForCurrent() async throws {
+        let item = FileProviderExpectedItem(url: root.appendingPathComponent("Song.cpr"),
+            expectedType: .regularFile, expectedByteCount: 42)
+        let stale = FileProviderPromisedItemMetadata(type: .regularFile, size: 42,
+            status: .unknown, hasDownloadingError: true)
+        let coordinator = SequencedPromisedMetadataCoordinator(outcomesByPath: [item.url.path: [
+            .metadata(stale), .metadata(stale),
+            .metadata(.init(type: .regularFile, size: 42, status: .current)),
+        ]])
+        let downloader = StubFileProviderDownloader()
+        let service = SystemFileProviderArchiveService(promisedMetadataCoordinator: coordinator, downloader: downloader)
+        let before = try await service.currentLocality(root: root, expectedItems: [item])
+        XCTAssertEqual(before, .materializationRequired)
+        try await service.materialize(root: root, expectedItems: [item])
+        XCTAssertEqual(downloader.requestedURLs, [item.url])
+    }
+
+    func testL340DownloadErrorDoesNotHideWrongFileSizeOrClaimCurrent() async throws {
+        let item = FileProviderExpectedItem(url: root.appendingPathComponent("Song.cpr"),
+            expectedType: .regularFile, expectedByteCount: 42)
+        let downloader = StubFileProviderDownloader()
+        let wrong = SystemFileProviderArchiveService(promisedMetadataCoordinator:
+            StubFileProviderMetadataCoordinator(metadataByPath: [item.url.path:
+                .init(type: .regularFile, size: 43, status: .current, hasDownloadingError: true)]),
+            downloader: downloader)
+        do {
+            try await wrong.materialize(root: root, expectedItems: [item])
+            XCTFail("A stale download error must not excuse changed file identity")
+        } catch {
+            XCTAssertEqual(error as? FileProviderArchiveStorageError,
+                .expectedFileSizeMismatch(item.url, expected: 42, actual: 43))
+        }
+        XCTAssertTrue(downloader.requestedURLs.isEmpty)
+        let stillFailed = SystemFileProviderArchiveService(
+            pollPolicy: .init(timeout: .seconds(1), initialBackoff: .milliseconds(1),
+                maximumBackoff: .milliseconds(1), maximumReadinessProbes: 1),
+            promisedMetadataCoordinator: StubFileProviderMetadataCoordinator(metadataByPath: [item.url.path:
+                .init(type: .regularFile, size: 42, status: .current, hasDownloadingError: true)]),
+            downloader: downloader)
+        do {
+            try await stillFailed.materialize(root: root, expectedItems: [item])
+            XCTFail("A new request alone is not download success")
+        } catch { XCTAssertEqual(error as? FileProviderArchiveStorageError, .operationTimedOut) }
+        XCTAssertEqual(downloader.requestedURLs, [item.url])
+    }
+
+    func testL340PromisedSDKErrorIsRetainedAsRetryableMetadata() throws {
+        let sdk = StubPromisedItemSDK(values: [
+            .isRegularFileKey: true, .fileSizeKey: 42,
+            .ubiquitousItemDownloadingErrorKey: NSError(domain: NSCocoaErrorDomain, code: NSFileReadUnknownError),
+        ])
+        let accessor = FoundationFileProviderPromisedItemAccessor(
+            checkPromisedItemIsReachable: sdk.checkReachable, getPromisedItemResourceValue: sdk.resourceValue)
+        let metadata = try accessor.metadata(at: root.appendingPathComponent("Song.cpr"))
+        XCTAssertEqual(metadata.type, .regularFile)
+        XCTAssertEqual(metadata.size, 42)
+        XCTAssertTrue(metadata.hasDownloadingError)
+    }
+
     func testAvailableProviderReportsPublicCapabilities() async throws {
         let service = StubFileProviderArchiveService()
         let storage = FileProviderArchiveStorage(root: root, service: service)

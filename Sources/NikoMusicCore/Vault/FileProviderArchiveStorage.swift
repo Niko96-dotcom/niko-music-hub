@@ -49,6 +49,7 @@ struct FileProviderPromisedItemMetadata: Equatable, Sendable {
     let type: FileProviderPromisedItemType?
     let size: Int64?
     let status: FileProviderPromisedItemStatus
+    var hasDownloadingError = false
 }
 
 protocol FileProviderPromisedMetadataCoordinating: Sendable {
@@ -112,10 +113,6 @@ struct FoundationFileProviderPromisedItemAccessor: @unchecked Sendable {
         let downloadingStatus = try resourceValue(url, .ubiquitousItemDownloadingStatusKey)
         let downloadingError = try resourceValue(url, .ubiquitousItemDownloadingErrorKey)
 
-        if downloadingError != nil {
-            throw FileProviderArchiveStorageError.materializationUnavailable
-        }
-
         let type: FileProviderPromisedItemType?
         if isRegularFile == true, isDirectory != true {
             type = .regularFile
@@ -144,7 +141,10 @@ struct FoundationFileProviderPromisedItemAccessor: @unchecked Sendable {
         default: status = .unknown
         }
 
-        return FileProviderPromisedItemMetadata(type: type, size: size, status: status)
+        return FileProviderPromisedItemMetadata(
+            type: type, size: size, status: status,
+            hasDownloadingError: downloadingError != nil
+        )
     }
 }
 
@@ -181,10 +181,10 @@ struct FoundationFileProviderMetadataCoordinator: FileProviderPromisedMetadataCo
 
 /// Provider-neutral storage backed by Foundation's public ubiquitous-item APIs.
 ///
-/// Modern macOS File Provider domains, including Dropbox, expose upload,
-/// download, materialization, and eviction state through these APIs to normal
-/// client apps. The adapter never relies on vendor paths, private xattrs, or a
-/// provider-owned `NSFileProviderManager` domain.
+/// Used only when the root exposes these APIs. Other mounted cloud clients
+/// use the local-folder adapter's coordinated reads during explicit restore.
+/// Neither adapter relies on vendor paths, private xattrs, or a provider-owned
+/// `NSFileProviderManager` domain.
 public struct FileProviderArchiveStorage: ArchiveStorageProvider, Sendable {
     private let root: URL
     private let service: any FileProviderArchiveServicing
@@ -428,6 +428,9 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
     ) async throws -> ArchiveStorageLocality {
         let metadata = try validatedMetadata(for: expectedItems)
         for itemMetadata in metadata {
+            // A previous download's error is not evidence about a new attempt.
+            // Keep it non-local until a fresh request succeeds and clears it.
+            if itemMetadata.hasDownloadingError { return .materializationRequired }
             switch itemMetadata.status {
             case .current:
                 continue
@@ -449,6 +452,7 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
         let deadline = FileProviderReadinessPoller.deadline(for: pollPolicy)
         let preflight = try validatedMetadata(for: expectedItems)
         let pendingItems = zip(expectedItems, preflight).compactMap { item, metadata -> FileProviderExpectedItem? in
+            if metadata.hasDownloadingError { return item }
             switch metadata.status {
             case .current:
                 return nil
@@ -458,7 +462,7 @@ struct SystemFileProviderArchiveService: FileProviderArchiveServicing, @unchecke
                 return nil
             }
         }
-        guard !preflight.contains(where: { $0.status == .unknown }) else {
+        guard !preflight.contains(where: { $0.status == .unknown && !$0.hasDownloadingError }) else {
             throw FileProviderArchiveStorageError.lookupUnavailable
         }
         for item in pendingItems {

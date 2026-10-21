@@ -340,9 +340,20 @@ extension LiveProjectVaultRuntime {
         preparingLinkedRestores[entry.record.id] = ProjectVaultRestoreProgress(phase: .materializingArchive)
         defer { preparingLinkedRestores.removeValue(forKey: entry.record.id) }
         let inventory = LinkedArchiveInventory()
+        let preliminary = try inventory.materializationManifest(at: archiveURL)
+        preparingLinkedRestores[entry.record.id] = ProjectVaultRestoreProgress(phase: .materializingArchive, manifest: preliminary)
+        let admission = makeWriteAdmission(settings: settings)
+        // Resolve ordinary placeholders before taking the unverified download
+        // inventory. Their zero-byte stat size is not a content-size promise.
+        // Admission still checks the live free-space reserve before this read;
+        // the complete hydrated manifest is admitted again before copying.
+        try await admission(VaultWriteAdmissionRequest(target: .archive, sourceURL: nil,
+            targetRootURL: archiveURL, minimumProjectedBytes: try preliminary.validatedTotalBytes(), manifest: nil)) {
+            try validate(entry.record.id, location, archiveURL)
+            try await provider.prepareForRestoreInventory(archiveURL)
+        }
         let download = try inventory.materializationManifest(at: archiveURL)
         preparingLinkedRestores[entry.record.id] = ProjectVaultRestoreProgress(phase: .materializingArchive, manifest: download)
-        let admission = makeWriteAdmission(settings: settings)
         if try await provider.currentLocality(at: archiveURL, manifest: download) != .fullyLocalCurrent {
             try await admission(VaultWriteAdmissionRequest(target: .archive, sourceURL: nil,
                 targetRootURL: archiveURL, minimumProjectedBytes: try download.validatedTotalBytes(), manifest: nil)) {
