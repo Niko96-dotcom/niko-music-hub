@@ -234,7 +234,10 @@ final class ArchiveVaultObservation: ObservableObject {
     }
 
     func snapshot(for song: Song) -> ProjectVaultRuntimeSnapshot? {
-        snapshotsByPath[Self.vaultCanonicalPath(song.folderPath)]
+        // Canonicalizing the song's path resolves symlinks on disk. Every card asks, on every render, and an
+        // archive with no Project Vault project has no snapshot to find.
+        guard !snapshotsByPath.isEmpty else { return nil }
+        return snapshotsByPath[Self.vaultCanonicalPath(song.folderPath)]
     }
 
     func linkedArchive(for snapshot: ProjectVaultRuntimeSnapshot) -> ProjectVaultLinkedArchive? {
