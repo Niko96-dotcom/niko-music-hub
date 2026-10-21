@@ -269,12 +269,15 @@ struct ArchiveBrowserView: View {
         }
         .sheet(item: $viewModel.projectVaultRestoreRequest) { request in
             ProjectVaultRestoreSheet(request: request, viewModel: viewModel)
+                .hubAllowsApplicationQuit()
         }
         .sheet(item: $viewModel.identityReviewPresentation) { presentation in
             ProjectIdentityReviewSheet(presentation: presentation, viewModel: viewModel)
+                .hubAllowsApplicationQuit()
         }
         .sheet(isPresented: $showNewSongSheet) {
             NewSongSheet(viewModel: viewModel)
+                .hubAllowsApplicationQuit()
         }
         .onReceive(NotificationCenter.default.publisher(for: .archiveNewSongDraftRequested)) { _ in
             showNewSongSheet = true
@@ -284,6 +287,7 @@ struct ArchiveBrowserView: View {
             set: { _ in /* Skip keeps the archive empty; roots can be added from the board or Settings */ }
         )) {
             ArchiveFirstRunView(onChooseRoot: chooseRoot, onSkip: { viewModel.completeArchiveOnboarding() })
+                .hubAllowsApplicationQuit()
                 .interactiveDismissDisabled(true)
                 // NMH-136: trap VoiceOver in first-run; Esc stays blocked above.
                 .accessibilityAddTraits(.isModal)
@@ -310,6 +314,7 @@ struct ArchiveBrowserView: View {
             )
         ) {
             ProjectVaultDoneChoiceSheet(viewModel: viewModel)
+                .hubAllowsApplicationQuit()
         }
         .alert(
             CancelCopy.stopTransferTitle,

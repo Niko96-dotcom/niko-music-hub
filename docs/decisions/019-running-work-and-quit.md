@@ -24,6 +24,8 @@ finish.
 
 ## Decision
 
+App-owned workflow sheets use `hubAllowsApplicationQuit()` so menu Quit and ⌘Q reach this policy while a sheet is open. The sheet does not bypass confirmation, cancellation, or finalization of running work.
+
 1. **Registry (implemented).** `ShellJobStatusCenter` is the one registry of work
    that must not be cut off silently. A `listed` flag on `ShellJobStatus`
    separates "shown in the jobs strip" (and reachable by ⌘./Esc) from "counts at

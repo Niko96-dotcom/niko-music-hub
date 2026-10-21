@@ -114,6 +114,7 @@ struct ArchiveSidebarMorePanel: View {
                             }
                             .padding(20)
                             .frame(minWidth: 420, minHeight: 360)
+                            .hubAllowsApplicationQuit()
                         }
                     }
                 }

@@ -151,6 +151,7 @@ struct AppShellView: View {
                 chooseArchiveFolder: chooseSetupArchiveFolder,
                 onClose: { shellSession.dismissSetup() }
             )
+            .hubAllowsApplicationQuit()
         }
         .onChange(of: router.toolRequest) { _, request in
             applyToolRequest(request)

@@ -109,6 +109,7 @@ struct SongDetailView: View {
             }
             .padding(24)
             .frame(width: 660, height: 440)
+            .hubAllowsApplicationQuit()
         }
         // Archive Now, Cancel transfer and the other Vault actions in "Manage
         // storage" ask for confirmation in a dialog the board presents. A sheet

@@ -182,6 +182,7 @@ struct ProjectVaultSettingsView: View {
                 onEnable: finishSetup,
                 onCancel: { showSetup = false }
             )
+            .hubAllowsApplicationQuit()
         }
         .sheet(isPresented: $showKeepLocalReview) {
             KeepLocalReviewSheet(
@@ -192,6 +193,7 @@ struct ProjectVaultSettingsView: View {
                 onDone: doneKeepLocalReview,
                 onCancel: { showKeepLocalReview = false }
             )
+            .hubAllowsApplicationQuit()
         }
         .onChange(of: settings.vault.keepLocalReviewRequired) { _, required in
             if required {
