@@ -80,6 +80,12 @@ Archive domain and safety. No SwiftUI/AppKit.
   songs already on screen: 4). Measurements and the benchmark tools:
   `docs/performance/archive-startup-2026-10-20.md`, `script/performance/`, `script/benchmark_scan_workers.sh`
   (read-only worker sweep on a real archive disk), `script/bakeoff/` (synthetic 1k/10k archive and isolated launch).
+  Memory: `SQLiteArchiveIndexStore` saves by diffing against the songs its rows hold (`SnapshotRowsMemo`, `SongRowDiff`),
+  so an unchanged catalog costs no JSON and no row writes, and the launch load of a current snapshot records what the
+  rows hold; `ConfidenceReasonPool` keeps one array per distinct list of preview confidence reasons; `ArchiveFileURL`
+  stores scanned file URLs as fresh compact `NSURL` values (enumerator URLs carry prefetched file properties);
+  `SongCatalogDeduplicator.uniqueByID` returns a catalog without repeats unchanged and `sharingUnchangedValues` reuses
+  the held value of every song a rescan left equal; `[Song].songsDiffering(from:)` finds the songs a rescan changed.
 
 ### `AppCore` (shared)
 
@@ -101,6 +107,14 @@ Archive domain and safety. No SwiftUI/AppKit.
 - Vault operation extensions: `+ProjectVaultQueue.swift`, `+ProjectVaultArchive.swift`, `+ProjectVault.swift`, `+ProjectVaultActions.swift`, `+ProjectVaultRestore.swift`, `+ProjectVaultRecovery.swift`, `+Metadata.swift` (Done revoke), `+Scan.swift` (root-bound clears).
 - Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift), [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) (song-metadata mutation ordering), [`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) (Vault observation/presentation).
 - Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
+- A board lane is an `NSTableView` (`ArchiveBoardNativeSongList`) with reusable rows; each row hosts the unchanged
+  SwiftUI `ArchiveBoardSongCard`. AppKit owns the document height, so a fling to the end always realizes the last card.
+- The board stays mounted under the song detail page (`ArchiveBrowserViewModel.showsBoardPage`): going back must not
+  rebuild nine lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
+  hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.
+- Applying a rescan (`applyCatalogScanUpdate`) reacts to the changed songs only, keeps the held catalog arrays when
+  nothing changed, skips the browse projection for an unchanged catalog and releases the scan result off the main
+  thread (`OffMainRelease`).
 
 ## Persistence, services, composition
 
