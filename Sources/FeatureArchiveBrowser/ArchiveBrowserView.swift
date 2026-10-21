@@ -187,10 +187,6 @@ struct ArchiveBrowserView: View {
             updateArrowKeyMonitor(active: isActiveTool)
             viewModel.presentPendingIdentityReviewsIfNeeded()
         }
-        .task { await ArchivePerformanceProbe.runIfRequested(viewModel: viewModel) }
-        .onChange(of: viewModel.viewMode) { _, mode in
-            ArchivePerformanceProbe.didRender(mode)
-        }
         .onDisappear {
             ArchiveShortcutFocusPolicy.removeArchiveArrowKeyMonitor()
         }
