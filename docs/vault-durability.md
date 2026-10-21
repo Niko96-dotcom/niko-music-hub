@@ -111,6 +111,14 @@ proves provider sync (upload/materialization state) and returns
 and provider sync makes no claim about local flush. Never present local
 barrier success as remote sync, or vice versa.
 
+Cloud qualification depends on the client's exposed APIs, not its folder name.
+The runtime selects the File Provider adapter only when Foundation reports the
+root as ubiquitous. A Dropbox client that exposes online-only placeholders
+without those APIs takes the local-folder path; automatic download and remote
+sync proof are not established for that configuration. Download the files in
+Dropbox before restoring. See the [real-folder L340 check](audits/l340-dropbox-2026-10-21.md)
+for the observed limitation and retry result.
+
 ## Barrier success is not a hardware guarantee
 
 Barrier success means the operating system accepted the full sequence
