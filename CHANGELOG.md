@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.1 - 2026-10-21
+
+- Download online-only Dropbox files when restoring a Project Vault copy. Retry starts a fresh download after a provider error and resumes failed or stopped restores, including after restarting the app; the verified copy and song metadata stay intact.
+- Keep a loose Cubase or Ableton song's title, notes, aliases and workflow history when a newer project version appears, and retain Project Vault identity across ordinary project saves.
+- Make large archive browsing and rescans lighter: reuse native board rows, keep the board mounted during song-detail visits, share unchanged catalog data, and move scan and cache work off the main thread.
+- Allow Quit while a workflow sheet is open. Explain recorder permission waits and a cancelled start, show the resolved download title, and keep relative dates in English throughout the interface.
+- Refresh the footer after undoing a paused Done action, distinguish finalizing a Vault copy from waiting for cloud upload, and make archive confirmation and restore instructions match the current controls.
+- Isolate development and automated-test launches from the installed app's settings, including AppKit and update preferences.
+- Keep an uneven BPM tap out of the estimate without interrupting tapping with an outlier message.
+
 ## 1.8.0 - 2026-10-18
 
 - Keep every configured music folder (Active, Archive and library) write-protected for tool output while Project Vault is off: the WAV Converter, Downloader, Audio Recorder, Stem Separation, the Settings output picker, Export Index, Export Diagnostics, New Song and recovery copies now refuse those folders, follow a folder that was renamed or moved in Finder, and also catch a path that reaches a music folder through a broken symbolic link.
