@@ -688,13 +688,6 @@ extension ArchiveBrowserViewModel {
         updateFooter { $0.withdraw(message) }
     }
 
-    /// Temporary until every resolvable warning family has a kind
-    /// (docs/plans/archive-footer-status.md, steps 3-5).
-    func removeFooterWarning(where shouldRemove: (ArchiveFooterStatus.Warning) -> Bool) {
-        guard let warning = footer.warning, shouldRemove(warning) else { return }
-        clearFooterWarning()
-    }
-
     private func updateFooter(_ change: (inout ArchiveFooterStatus) -> Void) {
         var next = footer
         change(&next)

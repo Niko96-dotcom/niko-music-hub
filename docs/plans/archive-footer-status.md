@@ -23,7 +23,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 4 Settings kind | done | `git log --grep='(step 4)'` | strict build; `FeatureArchiveBrowserTests` 631/631 |
 | 5 Vault read kind, upload-wait withdraw | done | `git log --grep='(step 5)'` | strict build; `FeatureArchiveBrowserTests` 631/631 before the new test; new `testRefreshWithdrawsTheUploadWaitMessageOnlyWhenNoUploadIsPending` passes |
 | 6 Song-details host callback | done | `git log --grep='(step 6)'` | strict build; `FeatureArchiveBrowserTests` 633/633 (with the new repair test) |
-| 7 Remove temporary API, docs, full gates | not started | | |
+| 7 Remove temporary API, docs, full gates | code and docs done, gates running | `git log --grep='(step 7)'` | strict build; archive tests; then full `ci.sh` and strict E2E from Terminal.app on that commit, then delete this plan |
 
 ## Revisions
 

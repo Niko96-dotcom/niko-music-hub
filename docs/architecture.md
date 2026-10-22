@@ -184,7 +184,7 @@ must be rewritten before the unchanged-row memo is enabled.
 - Notes and ordinary workflow commands pass through the per-song integrity gate and authoritative metadata persistence before requesting a catalog replacement. Late corruption refuses replacement; ordinary storage failure retains the visible edit with a warning. `ArchiveCatalogCoordinator` retains the store and integrity-reporting machinery.
 - Owned, injected, and weak window-bound undo managers live in the editing owner. Explicit bind/unbind methods scrub only this owner's registrations. The weak undo target routes inverses back to the driving manager; native window behavior remains in `ArchiveWorkflowUndoBridge`.
 - `scheduleIndexPersist` serializes behind its predecessor, reads live songs when firing, and checks the captured root generation. Root reset cancels but retains an in-flight predecessor so its detached write cannot overwrite a newer snapshot. Deinitialization cancels pending work.
-- `repairSongMetadata` reloads and merges repaired rows and updates the repair-ID projection. Status and integrity-warning callbacks remain part of the view model's footer composition.
+- `repairSongMetadata` reloads and merges repaired rows and updates the repair-ID projection. Its status and warning callbacks write the archive footer through the view model; after a repair, `refreshSongDetailsWarning` replaces only a song-details warning (see [Archive footer ownership](#archive-footer-ownership)).
 
 The remaining ownership is intentional:
 
@@ -192,12 +192,33 @@ The remaining ownership is intentional:
 | --- | --- |
 | View model: catalog/browse | `songs` / `scannedSongs`, selected shelf/filter/search state, prepared search index, catalog replacement and selection reconciliation. Owners read current inputs and return results rather than keeping a second catalog. |
 | View model: roots/scan host | Roots, bookmarks, root generation and scan-result application; `ArchiveScanOrchestrator` owns scan execution. |
-| View model: UI integration | Selection/navigation, playback and preview-analysis invalidation, collaborator/intelligence projections, exports and status composition. |
+| View model: UI integration | Selection/navigation, playback and preview-analysis invalidation, collaborator/intelligence projections, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
 | View model: Vault authorization | Capture/confirmation/restore presentation, runtime dispatch, and the Done revocation bridge. Metadata commands request Done capture or revocation through callbacks; they do not create or reuse authorization. |
 | `ProjectVaultOperationCoordinator` | Queue, active/busy state, cancellation, retry and capacity accounting. The observation and editing owners do not mutate its storage. |
 | `ArchiveCatalogCoordinator` | Scan reconciliation, persistence and per-song metadata integrity. The editing owner controls transaction ordering above this layer. |
 
 The metadata extension retains the user-created-folder flow and the catalog/selection applier, plus preview/playback integration. It delegates editing and undo commands through the owner API; bound Done and ordinary status commits keep their existing distinct authorization paths.
+
+## Archive footer ownership
+
+[`ArchiveFooterStatus`](../Sources/FeatureArchiveBrowser/ArchiveFooterStatus.swift) is the one owner of what the
+Archive Browser footer shows: at most one message and one warning, joined by one space.
+
+- A message comes from a source. An **action** message (something the person did) always replaces the message and
+  releases a Project Vault hold. A **Project Vault** message holds the footer until the next action message. A
+  **background** message (scan progress and results) never replaces a held Vault message.
+- A new warning replaces the old one. Each warning has a kind, so code that resolves a condition clears only its
+  own warning: `settings` (settings repair), `rootAccess` (root recovery or removal), `projectVaultRead` (a
+  successful snapshot read), `songDetails` (a repair replaces it), and `other` (cleared only by another warning or
+  a root change). The kinds that clear themselves write their sentence in a factory next to the kind; a plain
+  string warning is a `songDetails` warning when `SongMetadataIntegrityCopy` wrote it.
+- `ArchiveBrowserViewModel.footer` is `private(set)`. The footer methods at the end of `ArchiveBrowserViewModel.swift`
+  are its only writers and publish only when the footer changes. `statusMessage`, `statusBaseMessage` and
+  `persistenceWarningMessage` are read-only views of it. The upload-wait Vault message is withdrawn only while it
+  is still on show.
+- Per-source message slots and several warnings at once were considered and not chosen: they need clearing rules
+  nobody has asked for, and several warnings would not fit the footer's fixed slot. Revisit that only when a real
+  report shows one warning hiding another.
 
 ## Shell navigation and tool-page scaffold (2026-09)
 

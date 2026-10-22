@@ -153,6 +153,7 @@ into those closures; it imports neither SwiftUI nor AppKit.
 | Durable settings (music roots, output folder, Vault, helpers) | `SettingsStore` → `UserDefaultsSettingsStore`; display mirror `AppSettingsObserver` | UserDefaults key `nikoMusicHub.settings` (JSON) |
 | Archive roots, catalog (`scannedSongs`, `songs`), selection, browse inputs | `ArchiveBrowserViewModel` | snapshot in `SQLiteArchiveIndexStore` |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
+| Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
 | Vault queue, retries, capacity | `ProjectVaultOperationCoordinator` | memory; the journal is authoritative |
 | Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
@@ -233,8 +234,8 @@ These rules are documented and, where named, enforced. The full table is in
 5. **Some dependencies are global, not injected:** `ArchivePreviewSession.shared`,
    `ArchivePlaybackCoordinator.shared`, `AudioCaptureActivity.shared`, `LiveProcessGroupRegistry.shared`,
    and `HelperToolLocator.standard()` built separately by each helper consumer.
-6. **`ArchiveBrowserViewModel` is one type in 23 files** (the main file plus 22 `+*.swift` extensions,
-   4,609 lines). Four owners were extracted (scan orchestrator, catalog, metadata editing, Vault queue and
+6. **`ArchiveBrowserViewModel` is one type in 22 files** (the main file plus 21 `+*.swift` extensions,
+   4,598 lines; the footer rules moved out to `ArchiveFooterStatus` on 2026-10-22). Four owners were extracted (scan orchestrator, catalog, metadata editing, Vault queue and
    observation); the extensions still share one set of state. The catalog is held three ways
    (`scannedSongs`, `songs`, `songsByID`) and every writer keeps them consistent.
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
