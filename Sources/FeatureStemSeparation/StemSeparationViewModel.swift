@@ -25,7 +25,8 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     /// Nil when the helper is missing or ready. Drops and job errors never
     /// change it, so the setup card keeps the real cause.
     @Published public private(set) var helperSetupDiagnostic: String?
-    @Published public private(set) var results: [OutputInboxItem] = []
+    /// Every stem this tool made, for the Results list on this page.
+    public let recentOutputs: ToolRecentOutputs
 
     public let supportedPresets = StemSeparationPreset.allCases
 
@@ -34,7 +35,6 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     private let youtubeWorkflow: YouTubeStemSeparationWorkflow?
     private let healthChecker: DemucsMLXHealthChecker
     private var jobObservationTask: Task<Void, Never>?
-    private var inboxObservationTask: Task<Void, Never>?
     private var helperToolsObservation: AnyCancellable?
     private(set) var currentJobID: Job.ID?
     /// True while the visible error is helper-related and may be cleared when
@@ -52,12 +52,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         self.service = service
         self.youtubeWorkflow = youtubeWorkflow
         self.healthChecker = healthChecker
+        self.recentOutputs = ToolRecentOutputs(store: context.outputInboxStore, toolID: StemSeparationService.toolID)
         loadSettings()
     }
 
     deinit {
         jobObservationTask?.cancel()
-        inboxObservationTask?.cancel()
     }
 
     public var canStart: Bool {
@@ -264,16 +264,6 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         }
     }
 
-    public func loadResults() {
-        do {
-            results = try context.outputInboxStore.listItems()
-                .filter { $0.sourceToolID == StemSeparationService.toolID }
-                .sorted { $0.createdAt > $1.createdAt }
-        } catch {
-            diagnosticsError(error)
-        }
-    }
-
     public func reveal(item: OutputInboxItem) {
         context.fileActions.revealInFinder(item.fileURL)
     }
@@ -283,19 +273,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     }
 
     public func onAppear() {
-        loadResults()
+        recentOutputs.refresh()
         refreshHelperHealth()
         if helperToolsObservation == nil {
             helperToolsObservation = context.router.$helperToolsChangeCount
                 .dropFirst()
                 .sink { [weak self] _ in self?.refreshHelperHealth() }
-        }
-        guard inboxObservationTask == nil else { return }
-        inboxObservationTask = Task { @MainActor [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
-                guard !Task.isCancelled else { return }
-                self?.loadResults()
-            }
         }
     }
 
@@ -381,7 +364,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         case .completed:
             finish(message: "Stems ready")
             helperRelatedErrorActive = false
-            loadResults()
+            recentOutputs.refresh()
             return true
         case .failed:
             finish(message: current.message, error: current.message)

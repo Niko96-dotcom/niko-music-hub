@@ -142,7 +142,8 @@ struct StemSeparationViewModelTests {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
 
-        #expect(vm.results.count == 4)
+        await vm.recentOutputs.waitForIdle()
+        #expect(vm.recentOutputs.items.count == 4)
     }
 
     @Test
@@ -191,7 +192,8 @@ struct StemSeparationViewModelTests {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
 
-        #expect(vm.results.count == 4)
+        await vm.recentOutputs.waitForIdle()
+        #expect(vm.recentOutputs.items.count == 4)
     }
 
     @Test
@@ -289,7 +291,7 @@ struct StemSeparationViewModelTests {
     }
 
     @Test
-    func loadResults_filtersByToolID() throws {
+    func recentOutputs_filtersByToolID() async throws {
         let inbox = FakeOutputInboxStore()
         let stemItem = OutputInboxItem(
             fileURL: URL(fileURLWithPath: "/out/vocals.wav"),
@@ -306,10 +308,11 @@ struct StemSeparationViewModelTests {
         try inbox.addItem(otherItem)
 
         let vm = makeViewModel(outputInboxStore: inbox)
-        vm.loadResults()
+        vm.recentOutputs.refresh()
+        await vm.recentOutputs.waitForIdle()
 
-        #expect(vm.results.count == 1)
-        #expect(vm.results.first?.id == stemItem.id)
+        #expect(vm.recentOutputs.items.count == 1)
+        #expect(vm.recentOutputs.items.first?.id == stemItem.id)
     }
 
     @Test
@@ -329,7 +332,7 @@ struct StemSeparationViewModelTests {
     }
 
     @Test
-    func loadResults_sortsByCreatedAtDescending() throws {
+    func recentOutputs_sortsNewestFirst() async throws {
         let inbox = FakeOutputInboxStore()
         let older = OutputInboxItem(
             fileURL: URL(fileURLWithPath: "/out/older.wav"),
@@ -345,9 +348,10 @@ struct StemSeparationViewModelTests {
         try inbox.addItem(newer)
 
         let vm = makeViewModel(outputInboxStore: inbox)
-        vm.loadResults()
+        vm.recentOutputs.refresh()
+        await vm.recentOutputs.waitForIdle()
 
-        #expect(vm.results.first?.id == newer.id)
+        #expect(vm.recentOutputs.items.first?.id == newer.id)
     }
 
     @Test

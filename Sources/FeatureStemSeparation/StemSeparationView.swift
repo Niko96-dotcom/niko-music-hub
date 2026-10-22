@@ -5,10 +5,14 @@ import UniformTypeIdentifiers
 public struct StemSeparationView: View {
     /// Owned by the feature session (`viewModel(for:)`), not by this view.
     @ObservedObject private var viewModel: StemSeparationViewModel
+    /// The Results list, held by the view model. Observed here so new stems
+    /// re-render the page; the view model does not republish it.
+    @ObservedObject private var recentOutputs: ToolRecentOutputs
     @State private var isTargeted = false
 
     public init(viewModel: StemSeparationViewModel) {
         self.viewModel = viewModel
+        self.recentOutputs = viewModel.recentOutputs
     }
 
     public var body: some View {
@@ -300,7 +304,7 @@ public struct StemSeparationView: View {
     private var resultsSection: some View {
         ToolOutputShelf(
             title: "Results",
-            items: viewModel.results,
+            items: recentOutputs.items,
             emptyText: "No stems yet",
             subtitle: { $0.metadata["displayName"] },
             onReveal: { viewModel.reveal(item: $0) }
