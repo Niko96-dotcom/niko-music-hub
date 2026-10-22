@@ -263,10 +263,15 @@ struct SettingsView: View {
         HubToolPage {
             settingsLoadErrorBanner
             paneContent
-            saveErrorBanner
         }
         .frame(width: HubToolLayout.maxContentWidth)
         .frame(maxWidth: .infinity)
+        // A save can fail from any row of a scrolled pane. Pinned below the form,
+        // the refusal shows without scrolling; after the last card it sat below
+        // the window.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            saveErrorBanner
+        }
     }
 
     @ViewBuilder
@@ -355,6 +360,11 @@ struct SettingsView: View {
     private var saveErrorBanner: some View {
         if let saveError = session.saveError {
             SettingsErrorBanner(message: saveError, tone: .error)
+                .padding(.horizontal, HubToolLayout.horizontalPadding)
+                .padding(.vertical, HubDesignSystem.Spacing.controlGap)
+                .frame(width: HubToolLayout.maxContentWidth)
+                .frame(maxWidth: .infinity)
+                .background(.bar)
         }
     }
 

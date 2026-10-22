@@ -72,6 +72,40 @@ final class SettingsLiquidSourceTests: XCTestCase {
         }
     }
 
+    /// A save can fail from any row of a scrolled pane (the output picker refuses a
+    /// folder inside a music root). Inside the scrolling form, after the last card,
+    /// the refusal sat below the window and nobody saw it. It is pinned below the form.
+    func testSaveErrorIsPinnedOutsideTheScrollingForm() throws {
+        let source = SourceLex.stripped(try settingsSource())
+        let page = try XCTUnwrap(Self.closureBody(after: "HubToolPage {", in: source), "SettingsView.body has no HubToolPage")
+        let inset = try XCTUnwrap(
+            Self.closureBody(after: ".safeAreaInset(edge: .bottom, spacing: 0) {", in: source),
+            "SettingsView.body has no bottom safe-area inset"
+        )
+
+        XCTAssertFalse(SourceLex.containsWord(page, "saveErrorBanner"), "the save error must not scroll with the form")
+        XCTAssertTrue(SourceLex.containsWord(inset, "saveErrorBanner"), "the save error is pinned in the bottom inset")
+        XCTAssertTrue(SourceLex.containsWord(page, "settingsLoadErrorBanner"), "the load error stays at the top of the form")
+    }
+
+    /// The text between the braces of the first `opener` (which ends with `{`).
+    private static func closureBody(after opener: String, in source: String) -> String? {
+        guard let open = source.range(of: opener) else { return nil }
+        var depth = 1
+        var index = open.upperBound
+        while index < source.endIndex {
+            switch source[index] {
+            case "{": depth += 1
+            case "}":
+                depth -= 1
+                if depth == 0 { return String(source[open.upperBound..<index]) }
+            default: break
+            }
+            index = source.index(after: index)
+        }
+        return nil
+    }
+
     /// Choosing a vault root reloads the stored settings first. When that load
     /// fails, the folder is not at fault: the view must show the plain repair
     /// sentence and keep "That folder cannot be used" for VaultRootManager only.

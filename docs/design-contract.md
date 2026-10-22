@@ -187,6 +187,13 @@ width splits evenly left/right (measured 96px/96px). Quirk to preserve:
 real content is 648 wide — size any centering box to exactly 680, never 680+32,
 or the phantom slack pools on the right again (leading-anchored).
 
+A failed save or a refused choice (`saveErrorBanner`, for example an output folder
+inside a music root) is pinned below the form in a `.bar` strip
+(`.safeAreaInset(edge: .bottom)`), on the same 648 keyline as the cards. A save can
+fail from any row of a scrolled pane, so it never scrolls with the form. The
+settings-load warning with "Repair Settings" stays at the top of the form.
+Guarded by `SettingsLiquidSourceTests.testSaveErrorIsPinnedOutsideTheScrollingForm`.
+
 A selected row (sidebar nav row, segmented cell) is a flat Codex-quiet pill:
 `Palette.selection` — a translucent neutral (black 0.055 light / white 0.09 dark)
 that reads darker than the rail in light and a small step lighter in dark, the
