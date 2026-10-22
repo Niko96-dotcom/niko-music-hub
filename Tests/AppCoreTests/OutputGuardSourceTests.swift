@@ -21,6 +21,31 @@ final class OutputGuardSourceTests: XCTestCase {
         )
     }
 
+    /// A tool run gets its folder and guard from one `ToolOutputDestination`, so the folder
+    /// it writes and the roots it protects come from the same settings read. Before, each
+    /// tool paired them its own way, and Stem Separation read settings twice per run.
+    func testToolRunsGetTheirGuardFromToolOutputDestination() throws {
+        let failures = try Self.appSourceFiles(excluding: Set(Self.toolOutputGuardBuilders.keys)).flatMap { file in
+            Self.lines(matching: Self.toolOutputGuardConstruction, in: SourceLex.strippedCommentsOnly(try SourceTestSupport.read(file)))
+                .map { "\(file):\($0)" }
+        }
+        XCTAssertEqual(
+            failures,
+            [],
+            "A tool run admits its output through ToolOutputDestination.load(from:) "
+                + "(Sources/AppCore/Settings/ToolOutputDestination.swift), not its own ToolOutputGuard. "
+                + "Code that checks a folder outside a run belongs in toolOutputGuardBuilders with its reason:\n"
+                + failures.joined(separator: "\n")
+        )
+        for file in Self.toolOutputGuardBuilders.keys.sorted() {
+            let source = SourceLex.strippedCommentsOnly(try SourceTestSupport.read(file))
+            XCTAssertFalse(
+                Self.lines(matching: Self.toolOutputGuardConstruction, in: source).isEmpty,
+                "\(file) no longer builds a ToolOutputGuard. Remove it from toolOutputGuardBuilders."
+            )
+        }
+    }
+
     func testNoWriterPassesTheBrowseListOrNothingAsProtection() throws {
         let failures = try Self.appSourceFiles(excluding: []).flatMap { file in
             Self.lines(matching: Self.browseListAsProtection, in: SourceLex.stripped(try SourceTestSupport.read(file)))
@@ -72,6 +97,16 @@ final class OutputGuardSourceTests: XCTestCase {
         // e2135e6^: the recorder took its destination and roots from defaults on a failed load.
         XCTAssertEqual(hits(Self.tryOptionalSettingsLoad, "let settings = (try? context.settingsStore.loadSettings()) ?? .default"), 1)
 
+        // b5fb166^: the converter built its own guard next to its own folder read.
+        func constructions(_ line: String) -> Int {
+            Self.lines(matching: Self.toolOutputGuardConstruction, in: SourceLex.strippedCommentsOnly(line)).count
+        }
+        XCTAssertEqual(constructions("try ToolOutputGuard(settings: settings).validate(settings.outputFolder.url)"), 1)
+        XCTAssertEqual(constructions(#"log("refused by \(ToolOutputGuard (settings: settings))")"#), 1, "inside an interpolation")
+        XCTAssertEqual(constructions("let destination = try ToolOutputDestination.load(from: context.settingsStore)"), 0)
+        XCTAssertEqual(constructions("public let outputGuard: ToolOutputGuard"), 0)
+        XCTAssertEqual(constructions("/// only through `ToolOutputGuard(settings:)`."), 0)
+
         XCTAssertEqual(hits(Self.outputWriteGuardUse, "try ToolOutputGuard(settings: settings).validate(folder)"), 0)
         XCTAssertEqual(hits(Self.browseListAsProtection, "archiveRoots: try writeProtectedRoots(),"), 0)
         XCTAssertEqual(hits(Self.browseListAsProtection, "public init(folder: URL, protectedRoots: [URL]) {"), 0)
@@ -84,6 +119,16 @@ final class OutputGuardSourceTests: XCTestCase {
     static let outputWriteGuardOwners: Set<String> = ["Sources/AppCore/Settings/ToolOutputGuard.swift"]
 
     private static let outputWriteGuardUse = try! NSRegularExpression(pattern: #"\bOutputWriteGuard\b"#)
+
+    /// The files that build a `ToolOutputGuard` themselves, each with its reason. A tool run
+    /// never does: it calls `ToolOutputDestination.load(from:)`.
+    static let toolOutputGuardBuilders: [String: String] = [
+        "Sources/AppCore/Settings/ToolOutputDestination.swift": "the owner: pairs a run's folder with its guard",
+        "Sources/NikoMusicHub/Settings/SettingsView.swift": "the output picker checks a candidate folder before it is saved, not a run",
+        "Sources/AppCore/ProjectVault/ProjectVaultRecoveryService.swift": "the recovery bundle export writes to a folder the person chose, not the output folder",
+    ]
+
+    private static let toolOutputGuardConstruction = try! NSRegularExpression(pattern: #"\bToolOutputGuard\s*\("#)
 
     private static let browseListAsProtection = try! NSRegularExpression(
         pattern: #"\b(?:archiveRoots|protectedRoots)\s*:\s*(?:try\s+)?(?:self\.)?(?:roots\b|\[\]|[A-Za-z_][\w.]*\.(?:archiveRoots|effectiveScanRoots)\b)"#

@@ -22,7 +22,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 3 WAV Converter | done | `git log --grep='(output step 3)'` | strict build; `FeatureAudioConverterTests` 97, 0 failures |
 | 4 Downloader | done | `git log --grep='(output step 4)'` | strict build; `FeatureDownloaderTests` 206 (2 skipped), 0 failures |
 | 5 Stem Separation | done | `git log --grep='(output step 5)'` | strict build; `FeatureStemSeparationTests` 93, 0 failures; full gates in step 7 (see revision 4) |
-| 6 Guard the rule | not started | | |
+| 6 Guard the rule | done | `git log --grep='(output step 6)'` | strict build; every `*SourceTests` (AppCore 91, 0 failures); a planted `ToolOutputGuard(settings: .default)` in `DownloaderViewModel` failed the new test at the right line, then was removed |
 | 7 Docs, full gates, live check | not started | | |
 
 ## Revisions
@@ -59,6 +59,11 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    (`unreadableSettingsRefuseAFileRunBeforeAnyJob`, `unreadableSettingsRefuseAYouTubeRunBeforeDownloading`).
    The full gates run once in step 7 instead of after step 5 too: step 6 only adds a source test, and
    step 7 must run them on the final commit anyway.
+5. **Step 6: three guard builders, not four.** Since step 2, `RecorderOutputInboxSmoke` builds a
+   `ToolOutputDestination(settings:)`, not a guard. So `OutputGuardSourceTests.toolOutputGuardBuilders`
+   lists `ToolOutputDestination.swift`, `SettingsView.swift` and `ProjectVaultRecoveryService.swift`.
+   The test also fails when a listed file stops building a guard, like the `try?` baseline. The
+   detector reads comment-stripped source, so a construction inside a string interpolation counts.
 
 ## Terms
 
@@ -367,8 +372,8 @@ Done as revision 4 describes; the bullets below are the original plan.
 
 - `ToolOutputDestination` is the only way a tool run obtains its output folder and guard.
   `RecordingDestination` no longer exists.
-- In Sources, `ToolOutputGuard(settings:` appears only in the four files listed in step 6, and the
-  source test enforces it.
+- In Sources, `ToolOutputGuard(settings:` appears only in the three files listed in revision 5, and
+  the source test enforces it.
 - Stem Separation reads settings for a run once, and both requests have no `outputRootURL`.
 - Both converter entry points admit through the same `ToolOutputDestination` (revision 3).
 - Every refusal sentence and every output location is unchanged. Existing tests pass; only tests

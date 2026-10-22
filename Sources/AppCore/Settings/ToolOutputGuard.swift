@@ -9,8 +9,10 @@ import NikoMusicCore
 /// (`AppSettings.outputProtectedRoots`). Writers that chose their own list protected the
 /// browse list (604025d) or nothing at all after a `try? … ?? .default` settings load
 /// (e2135e6). Load the snapshot with `try settingsStore.loadSettings()` and refuse the
-/// write when it throws. `OutputGuardSourceTests` fails on `OutputWriteGuard` used
-/// anywhere else in the app.
+/// write when it throws. A tool run gets its guard from `ToolOutputDestination`, paired
+/// with the output folder from the same read. `OutputGuardSourceTests` fails on
+/// `OutputWriteGuard` used anywhere else in the app, and on a guard built outside the
+/// files it lists.
 public struct ToolOutputGuard: Equatable, Sendable {
     let protectedRoots: [URL]
 
