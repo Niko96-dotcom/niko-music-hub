@@ -29,8 +29,6 @@ public enum DownloadState: Equatable {
 @MainActor
 public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     public static let toolID = ToolFeatureID("downloader")
-    /// How many finished downloads stay visible on the tool page (full history lives in the Output Inbox).
-    static let recentDownloadsLimit = 5
 
     @Published public var urlText: String = ""
     @Published public var formatSelection: DownloadFormatSelection
@@ -47,7 +45,6 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     @Published public private(set) var postProcessingStatus: String?
     @Published public private(set) var logEntries: [String] = []
     @Published public private(set) var outputURLs: [URL] = []
-    @Published public private(set) var recentDownloads: [OutputInboxItem] = []
 
     public var showsDeterminateProgress: Bool {
         progress > 0
@@ -70,7 +67,6 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var downloadStartTask: Task<Void, Never>?
-    private var inboxObservationTask: Task<Void, Never>?
     private var progressFeedbackTask: Task<Void, Never>?
     private var stallMonitor: DownloadStallMonitor?
     private var validationGeneration: UInt64 = 0
@@ -447,7 +443,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
     /// Single output-inbox handoff mechanism: verifies candidates (regular
     /// contained files in the captured output directory, never overwriting),
-    /// attempts every verified output, updates outputURLs/recent downloads,
+    /// attempts every verified output, updates outputURLs,
     /// logs failures, and returns the verified set plus the first failure.
     /// Caller policy stays distinct: completed downloads stay completed with
     /// a warning; failed handoffs report failed; partial playlists stay
@@ -481,29 +477,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         if let firstFailure {
             context.diagnostics.scoped(to: .downloader).log(.error, "Download inbox handoff failed: \(firstFailure)")
         }
-        loadRecentDownloads()
         return (verified, firstFailure)
-    }
-
-    public func onAppear() {
-        loadRecentDownloads()
-        guard inboxObservationTask == nil else { return }
-        inboxObservationTask = Task { @MainActor [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
-                guard !Task.isCancelled else { return }
-                self?.loadRecentDownloads()
-            }
-        }
-    }
-
-    public func loadRecentDownloads() {
-        let items = (try? context.outputInboxStore.listItems()) ?? []
-        recentDownloads = Array(
-            items
-                .filter { $0.sourceToolID == Self.toolID }
-                .sorted { $0.createdAt > $1.createdAt }
-                .prefix(Self.recentDownloadsLimit)
-        )
     }
 
     public func cancelDownload() {
@@ -571,7 +545,6 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         debounceTask?.cancel()
         observeTask?.cancel()
         downloadStartTask?.cancel()
-        inboxObservationTask?.cancel()
         progressFeedbackTask?.cancel()
         context.jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.downloadStart, status: nil)
     }
@@ -592,12 +565,10 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         debounceTask?.cancel()
         observeTask?.cancel()
         downloadStartTask?.cancel()
-        inboxObservationTask?.cancel()
         progressFeedbackTask?.cancel()
         debounceTask = nil
         observeTask = nil
         downloadStartTask = nil
-        inboxObservationTask = nil
         progressFeedbackTask = nil
     }
 

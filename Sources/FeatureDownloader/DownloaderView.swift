@@ -27,7 +27,6 @@ public struct DownloaderView: View {
             inspector: { inspectorGroups },
             action: { downloadActions }
         )
-        .onAppear { viewModel.onAppear() }
     }
 
     private var header: some View {
