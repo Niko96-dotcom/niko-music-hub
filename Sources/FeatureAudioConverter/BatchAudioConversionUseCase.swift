@@ -54,8 +54,8 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
         )
     }
 
-    /// Explicit-snapshot entry point. The output guard, the converter factory,
-    /// and every `ConversionRequest` in the run use this one snapshot, so a
+    /// Explicit-snapshot entry point. The output destination, the converter
+    /// factory, and every `ConversionRequest` in the run use this one snapshot, so a
     /// durable settings change that lands mid-run cannot silently re-target
     /// the remaining files. Callers holding durable truth at admission (the
     /// converter pane) pass it here; direct callers keep the loading overload
@@ -68,7 +68,8 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
     ) async throws -> [BatchAudioConversionOutcome] {
         guard !files.isEmpty else { return [] }
 
-        try ToolOutputGuard(settings: settings).validate(settings.outputFolder.url)
+        let destination = ToolOutputDestination(settings: settings)
+        try destination.validate(destination.folder)
         let converter = converterFactory(settings)
         var outcomes: [BatchAudioConversionOutcome] = []
 
@@ -95,7 +96,7 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
 
             let request = ConversionRequest(
                 sourceURL: file.sourceURL,
-                outputDirectory: settings.outputFolder.url,
+                outputDirectory: destination.folder,
                 preset: settings.audioPreset,
                 sourceType: file.sourceType
             )

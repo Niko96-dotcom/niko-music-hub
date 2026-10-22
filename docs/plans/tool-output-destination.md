@@ -19,7 +19,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 0 Baseline | done | — | full gates green on `63630fd`; `a6c3c59` changed docs only, so no re-run |
 | 1 `ToolOutputDestination` and its tests | done | `git log --grep='(output step 1)'` | strict build; `ToolOutputDestinationTests` 4/4 |
 | 2 Audio Recorder | done | `git log --grep='(output step 2)'` | strict build; recorder suites 105 (3 skipped) and `ToolOutputDestinationTests`, 0 failures |
-| 3 WAV Converter | not started | | |
+| 3 WAV Converter | done | `git log --grep='(output step 3)'` | strict build; `FeatureAudioConverterTests` 97, 0 failures |
 | 4 Downloader | not started | | |
 | 5 Stem Separation | not started | | |
 | 6 Guard the rule | not started | | |
@@ -39,6 +39,12 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    takes `destination: ToolOutputDestination`, and tests say what they mean with
    `.noProtectedRoots(at:)` (a test-target helper). `RecordSystemAudioUseCase.Config` still takes a
    guard, as planned.
+3. **Step 3: the converter keeps its loading overload.** The plan said the overload that loads settings
+   itself was used by one test. It is used by about ten `BatchAudioConversionUseCaseTests`. It already
+   loads with `try` and calls the snapshot overload, which now admits through `ToolOutputDestination`.
+   So both entry points end in the same admission. Removing the overload would only churn tests. The
+   completion criterion "one `convert` entry point" becomes "both entry points admit through the same
+   destination".
 
 ## Terms
 
@@ -348,7 +354,7 @@ one commit per step.
 - In Sources, `ToolOutputGuard(settings:` appears only in the four files listed in step 6, and the
   source test enforces it.
 - Stem Separation reads settings for a run once, and both requests have no `outputRootURL`.
-- The converter has one `convert` entry point.
+- Both converter entry points admit through the same `ToolOutputDestination` (revision 3).
 - Every refusal sentence and every output location is unchanged. Existing tests pass; only tests
   that built the removed types or overloads were edited.
 - The full gates and the live check are green on the final commit.
