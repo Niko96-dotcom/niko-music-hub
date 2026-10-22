@@ -1,9 +1,9 @@
 # Decision: Keep Local pins keep their stored format; one module owns matching
 
-**Status:** Accepted — implementation in progress ([docs/plans/keep-local-pins.md](../plans/keep-local-pins.md))  
+**Status:** Accepted — implemented (`6ae71fb`..`63630fd`; `KeepLocalPins`, `KeepLocalPinsTests`, `KeepLocalPinsSourceTests`)  
 **Date:** 2026-10-22  
 **Deciders:** Niko Music Hub owner (approved 2026-10-22) + implementation  
-**Scope:** `VaultSettings.keepLocalProjectIDs`, the planned `KeepLocalPins` (AppCore), every Keep Local check in the Project Vault runtime and the archive browser
+**Scope:** `VaultSettings.keepLocalProjectIDs`, `KeepLocalPins` (AppCore), every Keep Local check in the Project Vault runtime and the archive browser
 
 ## Context
 
