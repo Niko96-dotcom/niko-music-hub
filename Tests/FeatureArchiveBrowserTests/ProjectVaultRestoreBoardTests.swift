@@ -26,7 +26,7 @@ final class ProjectVaultRestoreBoardTests: XCTestCase {
         // The runtime honors it; the card cache must not clear it with a
         // source-path-only check.
         let projectID = try XCTUnwrap(try fixture.catalogStore().loadEntries().first?.record.id)
-        try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = [projectID.description] }
+        try fixture.settingsStore.updateSettings { $0.vault.keepLocalPins.pin(KeepLocalPins.Project(projectIDs: [projectID])) }
         model.refreshProjectVaultPresentationContext()
         let presentation = try XCTUnwrap(model.projectVaultPresentation(for: song))
         XCTAssertTrue(presentation.isKeepLocal)

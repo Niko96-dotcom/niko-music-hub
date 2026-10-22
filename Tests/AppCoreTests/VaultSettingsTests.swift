@@ -255,7 +255,7 @@ final class VaultSettingsTests: XCTestCase {
         XCTAssertEqual(partial.spaceIntent, .keepCopy)
         XCTAssertFalse(partial.automationEmergencyStop)
         XCTAssertFalse(partial.independentBackupConfirmed)
-        XCTAssertEqual(partial.keepLocalProjectIDs, [])
+        XCTAssertEqual(partial.keepLocalPins.storedKeys, [])
     }
 
     func testOptionalVaultFieldsAcceptMissingAndNull() throws {

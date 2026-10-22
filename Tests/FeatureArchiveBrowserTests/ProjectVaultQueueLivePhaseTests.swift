@@ -363,7 +363,7 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
             ),
         ])
         try harness.store.updateSettings { settings in
-            settings.vault.keepLocalProjectIDs.insert(recordID.description)
+            settings.vault.keepLocalPins.pin(KeepLocalPins.Project(projectIDs: [recordID]))
         }
         let viewModel = makeViewModel(
             harness: harness, runtime: runtime,
@@ -436,7 +436,7 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
             ),
         ])
         try harness.store.updateSettings { settings in
-            settings.vault.keepLocalProjectIDs.formUnion([recordID.description, restored.id])
+            settings.vault.keepLocalPins.pin(KeepLocalPins.Project(projectIDs: [recordID], songIDs: [restored.id]))
         }
         let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [restored])
         viewModel.refreshProjectVaultPresentationContext()
@@ -444,7 +444,7 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
         XCTAssertTrue(viewModel.vaultObservation.isIntentionalKeepLocalSkip(for: restored))
 
         viewModel.setProjectKeepLocal(false, for: restored)
-        XCTAssertEqual(try harness.store.loadSettings().vault.keepLocalProjectIDs, [])
+        XCTAssertEqual(try harness.store.loadSettings().vault.keepLocalPins.storedKeys, [])
         XCTAssertFalse(viewModel.vaultObservation.isIntentionalKeepLocalSkip(for: restored))
     }
 
@@ -474,7 +474,7 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
             harness: harness, runtime: runtime,
             songs: [runtimePinned, ordinary]
         )
-        // Settings keepLocalProjectIDs stays empty: the skip must come from
+        // The stored pins stay empty: the skip must come from
         // the runtime catalog pin alone.
         runtime.releaseArchive()
 

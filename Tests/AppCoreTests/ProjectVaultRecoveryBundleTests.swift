@@ -60,7 +60,7 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
         // Identity, roots, metadata, and Keep Local preserved.
         XCTAssertEqual(result.settings.vault.activeRootID, active.id)
         XCTAssertEqual(result.settings.vault.archiveRootID, archive.id)
-        XCTAssertEqual(result.settings.vault.keepLocalProjectIDs, ["keep-1"])
+        XCTAssertEqual(result.settings.vault.keepLocalPins.storedKeys, ["keep-1"])
         XCTAssertEqual(result.settings.musicRoots.map(\.id), [active.id, archive.id])
         XCTAssertEqual(result.settings.musicRoots.map(\.pathFallback), [active.pathFallback, archive.pathFallback])
         // Staged database carries the full snapshot and workflow metadata.

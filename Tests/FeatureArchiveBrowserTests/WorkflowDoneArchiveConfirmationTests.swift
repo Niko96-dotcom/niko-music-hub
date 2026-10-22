@@ -347,7 +347,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         // Keep Local persisted: presentation shows pinned, readiness never offers free-space.
         let settings = try fixture.settingsStore.loadSettings()
-        XCTAssertFalse(settings.vault.keepLocalProjectIDs.isEmpty)
+        XCTAssertFalse(settings.vault.keepLocalPins.storedKeys.isEmpty)
         try await waitUntil(timeout: .seconds(5)) { viewModel.projectVaultBusySongIDs.isEmpty }
     }
 

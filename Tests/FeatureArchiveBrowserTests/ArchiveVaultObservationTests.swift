@@ -190,7 +190,7 @@ final class ArchiveVaultObservationTests: XCTestCase {
         let harness = try makeHarness()
         defer { harness.cleanup() }
         let song = makeSong(in: harness.active, named: "Settings Pinned")
-        try harness.store.updateSettings { $0.vault.keepLocalProjectIDs.insert(song.id) }
+        try harness.store.updateSettings { $0.vault.keepLocalPins.pin(KeepLocalPins.Project(songIDs: [song.id])) }
         let settings = try harness.store.loadSettings()
 
         let observation = ArchiveVaultObservation()
@@ -251,7 +251,7 @@ final class ArchiveVaultObservationTests: XCTestCase {
 
         // Context/cards change without a health change stays silent.
         var contextOnly = healthOnly
-        contextOnly.vault.keepLocalProjectIDs.insert(song.id)
+        contextOnly.vault.keepLocalPins.pin(KeepLocalPins.Project(songIDs: [song.id]))
         XCTAssertTrue(observation.refreshContext(settings: contextOnly, songs: [song], notifyWhenChanged: false))
         XCTAssertEqual(publications, 1, "a silent context/cards change must not publish")
 
@@ -275,7 +275,7 @@ final class ArchiveVaultObservationTests: XCTestCase {
 
         var both = settings
         both.vault.lastSuccessfulVerificationAt = Date(timeIntervalSince1970: 1_700_000_000)
-        both.vault.keepLocalProjectIDs.insert(song.id)
+        both.vault.keepLocalPins.pin(KeepLocalPins.Project(songIDs: [song.id]))
         XCTAssertTrue(observation.refreshContext(settings: both, songs: [song], notifyWhenChanged: true))
         XCTAssertEqual(publications, 1, "health plus cards must coalesce to one publish")
     }

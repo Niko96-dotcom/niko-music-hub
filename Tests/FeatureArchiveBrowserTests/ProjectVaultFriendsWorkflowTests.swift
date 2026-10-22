@@ -1031,12 +1031,12 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let folder = readySong.folderPath.standardizedFileURL
         // A restore pins the project ID and the folder paths, not the key the toggle writes.
         try fixture.settingsStore.updateSettings {
-            $0.vault.keepLocalProjectIDs.formUnion([
+            $0.vault.keepLocalPins = KeepLocalPins(storedKeys: $0.vault.keepLocalPins.storedKeys.union([
                 snapshot.record.id.description,
                 readySong.id,
                 folder.path,
                 folder.resolvingSymlinksInPath().path,
-            ])
+            ]))
         }
         viewModel.refreshProjectVaultPresentationContext()
         await viewModel.refreshProjectVaultSnapshots()
@@ -1044,7 +1044,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
 
         viewModel.setProjectKeepLocal(false, for: readySong)
         await viewModel.refreshProjectVaultSnapshots()
-        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs, [])
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedKeys, [])
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.isKeepLocal, false)
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
     }
@@ -1067,12 +1067,12 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: fixture.active)
         let aliased = link.appendingPathComponent("Friends Workflow Song", isDirectory: true)
         try fixture.settingsStore.updateSettings {
-            $0.vault.keepLocalProjectIDs.formUnion([
+            $0.vault.keepLocalPins = KeepLocalPins(storedKeys: $0.vault.keepLocalPins.storedKeys.union([
                 snapshot.record.id.description,
                 aliased.path,
                 aliased.standardizedFileURL.path,
                 aliased.standardizedFileURL.resolvingSymlinksInPath().path,
-            ])
+            ]))
         }
         viewModel.refreshProjectVaultPresentationContext()
         await viewModel.refreshProjectVaultSnapshots()
@@ -1080,7 +1080,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
 
         viewModel.setProjectKeepLocal(false, for: readySong)
         await viewModel.refreshProjectVaultSnapshots()
-        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs, [])
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedKeys, [])
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.isKeepLocal, false)
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
     }

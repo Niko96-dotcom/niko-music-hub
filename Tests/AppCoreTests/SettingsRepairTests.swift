@@ -75,7 +75,7 @@ final class SettingsRepairTests: XCTestCase {
         XCTAssertFalse(repaired.vault.launchAtLogin)
         XCTAssertEqual(repaired.vault.rolloutStage, .privateBeta)
         XCTAssertTrue(repaired.vault.independentBackupConfirmed)
-        XCTAssertEqual(repaired.vault.keepLocalProjectIDs, ["song-a", "song-b"])
+        XCTAssertEqual(repaired.vault.keepLocalPins.storedKeys, ["song-a", "song-b"])
         XCTAssertEqual(repaired.vault.spaceIntent, .keepCopy)
 
         XCTAssertEqual(outcome.resetFields, ["Project Vault free-space rule"])
@@ -367,7 +367,7 @@ final class SettingsRepairTests: XCTestCase {
             XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(repaired), junk)
             // Everything else readable survives.
             XCTAssertTrue(repaired.independentBackupConfirmed)
-            XCTAssertEqual(repaired.keepLocalProjectIDs, ["pinned-a", "pinned-b"])
+            XCTAssertEqual(repaired.keepLocalPins.storedKeys, ["pinned-a", "pinned-b"])
         }
     }
 
@@ -400,7 +400,7 @@ final class SettingsRepairTests: XCTestCase {
         defaults.set(try JSONSerialization.data(withJSONObject: ["vault": vault]), forKey: key)
         let store = UserDefaultsSettingsStore(userDefaults: defaults)
         _ = try store.repairStoredSettings(backupDirectory: makeTempDirectory("partial-pins"))
-        XCTAssertEqual(try store.loadSettings().vault.keepLocalProjectIDs, ["pinned-a"])
+        XCTAssertEqual(try store.loadSettings().vault.keepLocalPins.storedKeys, ["pinned-a"])
     }
 
     func testUnreadableVaultObjectPausesRemoval() throws {

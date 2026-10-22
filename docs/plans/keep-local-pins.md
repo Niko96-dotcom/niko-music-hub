@@ -22,8 +22,8 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 2 Runtime reads | done | `git log --grep='(Keep Local step 2)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
 | 3 Runtime writes | done | `git log --grep='(Keep Local step 3)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
 | 4 Browser reads | done | `git log --grep='(Keep Local step 4)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
-| 5 Browser writes | done | `git log --grep='(Keep Local step 5)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures; full gates: see the step 5 note below the table |
-| 6 Close the raw set | not started | | |
+| 5 Browser writes | done | `git log --grep='(Keep Local step 5)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures; full gates at `cd67e7d` green (Terminal.app): XCTest 2,824, 0 failures, 8 skipped; Swift Testing 93; strict E2E passed |
+| 6 Close the raw set | done | `git log --grep='(Keep Local step 6)'` | strict build; `AppCoreTests` 795 (2 skipped), `FeatureArchiveBrowserTests` 633, all `*SourceTests`; the new guard fails on a planted raw use and passes without it |
 | 7 Docs, ADR, full gates, live check | not started | | |
 
 ## Revisions
@@ -38,6 +38,11 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    `pin(keepLocalProject(for:))` writes (the same four spellings as before, plus the IDs). The catalog
    location match that `keepLocalKeys(for:)` and `snapshotsContainKeepLocalMatch` each wrote by hand
    is now one helper, `catalogSnapshots(locatedAt:)`.
+3. **Step 6: the source guard keeps string literals.** The first guard used `SourceLex.stripped`, which
+   blanks string literals and their interpolations, and it missed a planted
+   `"…\(vault.keepLocalProjectIDs.count)"` in the diagnostics exporter. It now strips comments only
+   and has a detector self-test for that case. Four `AppCoreTests` files without `@testable` read the
+   set through `keepLocalPins.storedKeys`; the public memberwise `init` parameter stays.
 
 ## Terms
 

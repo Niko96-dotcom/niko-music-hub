@@ -112,8 +112,9 @@ public struct VaultSettings: Equatable, Codable, Sendable {
     public var lastSuccessfulVerificationAt: Date?
     public var lastRestoreDrillAt: Date?
     /// App metadata only. Paths are stable scan identifiers; pinning never writes
-    /// into or changes a project folder.
-    public var keepLocalProjectIDs: Set<String>
+    /// into or changes a project folder. The stored Keep Local keys: read and
+    /// write them through `keepLocalPins` (ADR 021).
+    var keepLocalProjectIDs: Set<String>
     /// Durable Keep Local review obligation. Set by settings repair when the
     /// pin list (or the whole Vault/settings blob) could not be read, so pins
     /// may be missing. While true, every active-copy removal path refuses at

@@ -80,7 +80,7 @@ final class WorkflowDoneMetadataRefusalTests: XCTestCase {
         XCTAssertNil(viewModel.projectVaultActiveOperation, "no archive running", file: file, line: line)
         XCTAssertFalse(harness.undoManager.canUndo, "no Undo for a change that never happened", file: file, line: line)
         let settings = try harness.fixture.settingsStore.loadSettings()
-        XCTAssertTrue(settings.vault.keepLocalProjectIDs.isEmpty, "no Keep Local write", file: file, line: line)
+        XCTAssertTrue(settings.vault.keepLocalPins.storedKeys.isEmpty, "no Keep Local write", file: file, line: line)
         XCTAssertTrue(
             viewModel.statusMessage?.contains("couldn't be read") == true,
             "the refusal warning is visible, got: \(viewModel.statusMessage ?? "nil")",
@@ -185,7 +185,7 @@ final class WorkflowDoneMetadataRefusalTests: XCTestCase {
 
         XCTAssertEqual(harness.undoManager.undoActionName, "Mark Done")
         let settings = try harness.fixture.settingsStore.loadSettings()
-        XCTAssertTrue(settings.vault.keepLocalProjectIDs.isEmpty)
+        XCTAssertTrue(settings.vault.keepLocalPins.storedKeys.isEmpty)
         XCTAssertEqual(
             harness.viewModel.statusMessage?.contains("Done couldn't be saved, so nothing was archived."),
             true
