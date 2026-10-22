@@ -224,6 +224,43 @@ final class AudioRecorderViewModelTests: XCTestCase {
         XCTAssertEqual(try inbox.listItems().count, 1)
         XCTAssertNotNil(vm.lastRecordedURL)
         XCTAssertTrue(vm.showSaveConfirmation)
+
+        // The saved take tops the page's list without waiting for a change notification.
+        await vm.recentOutputs.waitForIdle()
+        XCTAssertEqual(vm.recentOutputs.items.first?.fileURL, vm.lastRecordedURL)
+    }
+
+    func testRecentOutputsShowTheFiveNewestTakesOnAppear() async throws {
+        let inbox = InMemoryOutputInboxStore()
+        for second in 1...6 {
+            try inbox.addItem(OutputInboxItem(
+                fileURL: URL(fileURLWithPath: "/tmp/recorder-recent/take-\(second).wav"),
+                sourceToolID: AudioRecorderViewModel.toolID,
+                createdAt: Date(timeIntervalSince1970: TimeInterval(second)),
+                status: .available
+            ))
+        }
+        try inbox.addItem(OutputInboxItem(
+            fileURL: URL(fileURLWithPath: "/tmp/recorder-recent/converted.wav"),
+            sourceToolID: "wav-converter",
+            createdAt: Date(timeIntervalSince1970: 100),
+            status: .available
+        ))
+        let port = WritingCapturePort(writesAudioFrames: true)
+        let vm = AudioRecorderViewModel(
+            capturePort: port,
+            useCase: RecordSystemAudioUseCase(capturePort: port),
+            destination: .noProtectedRoots(at: FileManager.default.temporaryDirectory),
+            outputInboxStore: inbox
+        )
+
+        vm.onAppear()
+        await vm.recentOutputs.waitForIdle()
+
+        XCTAssertEqual(
+            vm.recentOutputs.items.map(\.fileURL.lastPathComponent),
+            ["take-6.wav", "take-5.wav", "take-4.wav", "take-3.wav", "take-2.wav"]
+        )
     }
 
     func testDismissSaveConfirmationClearsBannerFlag() async throws {
@@ -1191,11 +1228,13 @@ private final class StopFailingOnceCapturePort: AudioCapturePort, @unchecked Sen
     }
 }
 
+/// Locked: `recentOutputs` reads it off the main actor while the view model writes on it.
 private final class InMemoryOutputInboxStore: OutputInboxStore, @unchecked Sendable {
+    private let lock = NSLock()
     private var items: [OutputInboxItem] = []
 
-    func listItems() throws -> [OutputInboxItem] { items }
-    func addItem(_ item: OutputInboxItem) throws { items.append(item) }
+    func listItems() throws -> [OutputInboxItem] { lock.withLock { items } }
+    func addItem(_ item: OutputInboxItem) throws { lock.withLock { items.append(item) } }
     func updateItem(_ item: OutputInboxItem) throws {}
     func refreshAvailability() throws {}
 }

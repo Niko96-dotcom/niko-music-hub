@@ -21,7 +21,7 @@ step's commit with `git log --grep='(recent step N)'`.
 | --- | --- | --- | --- |
 | 0 Baseline and prerequisite | done | — | `main` gained `ced1816` (Settings save error); its message reports `ci.sh` and strict E2E green, so no re-run. `ac57335` is not on `main` yet |
 | 1 `ToolRecentOutputs` and its tests | done | `git log --grep='(recent step 1)'` | strict build, no warnings; `ToolRecentOutputsTests` 7 and `OutputInboxRefreshTests` 12, 0 failures; the new suite passed 10 runs in a row |
-| 2 Audio Recorder | not started | | |
+| 2 Audio Recorder | done | `git log --grep='(recent step 2)'` | strict build, no warnings; `AudioRecorderViewModelTests` and `RecordingSettingsSnapshotTests` 34, `ToolRecentOutputsTests` 7 and `SwiftUIStateOwnershipSourceTests` 4, 0 failures |
 | 3 Stem Separation | not started | | |
 | 4 Guard the rule | not started | | |
 | 5 Docs, full gates, live check | not started | | |

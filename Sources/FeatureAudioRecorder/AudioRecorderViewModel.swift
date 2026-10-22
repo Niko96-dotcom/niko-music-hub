@@ -51,8 +51,6 @@ private func messageIndicatesCapturePermissionFailure(_ message: String) -> Bool
 @MainActor
 public final class AudioRecorderViewModel: ObservableObject {
     public static let toolID = ToolFeatureID("audio-recorder")
-    /// How many finished recordings stay visible on the tool page (full history lives in the Output Inbox).
-    static let recentRecordingsLimit = 5
 
     @Published public private(set) var recordingState: RecordingDisplayState = .idle {
         didSet {
@@ -78,10 +76,11 @@ public final class AudioRecorderViewModel: ObservableObject {
     @Published public private(set) var handoffWarningMessage: String?
     /// The last take was saved, but it is silent because macOS withheld system audio.
     @Published public private(set) var savedRecordingIsSilentFromBlockedCapture = false
-    @Published public private(set) var recentRecordings: [OutputInboxItem] = []
     /// The failed take's file when audio recorded before the error is still on disk.
     @Published public private(set) var keptPartialTakeURL: URL?
     @Published private var stoppingBeforeCapture = false
+    /// The five newest takes, for the list on this page. The full history lives in the Output Inbox.
+    public let recentOutputs: ToolRecentOutputs
 
     public var captureStartupMessage: String? {
         if recordingState == .starting {
@@ -107,7 +106,6 @@ public final class AudioRecorderViewModel: ObservableObject {
     }
 
     private var recordingTask: Task<Void, Never>?
-    private var inboxObservationTask: Task<Void, Never>?
     private let capturePort: AudioCapturePort
     private let useCase: RecordSystemAudioUseCase
     private let now: @Sendable () -> Date
@@ -151,13 +149,13 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.now = now
         self.destinationProvider = destinationProvider
         self.outputInboxStore = outputInboxStore
+        self.recentOutputs = ToolRecentOutputs(store: outputInboxStore, toolID: Self.toolID, limit: 5)
         self.jobStatusCenter = jobStatusCenter
         self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
         refreshProposedFilename()
     }
 
     deinit {
-        inboxObservationTask?.cancel()
         jobStatusCenter?.setExtraJob(sourceID: ShellJobExtraSourceID.audioRecorder, status: nil)
         let owner = captureActivityID
         Task { @MainActor in AudioCaptureActivity.shared.setActive(false, owner: owner) }
@@ -442,7 +440,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         currentLevel = nil
         refreshProposedFilename()
         HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.recordingStopped)
-        loadRecentRecordings()
+        recentOutputs.refresh()
         if result.silentBecauseCaptureWasBlocked {
             // The take is kept (and handed off) like any other; the card explains why
             // it is silent.
@@ -490,23 +488,7 @@ public final class AudioRecorderViewModel: ObservableObject {
 
     public func onAppear() {
         refreshProposedFilename()
-        loadRecentRecordings()
-        guard inboxObservationTask == nil else { return }
-        inboxObservationTask = Task { @MainActor [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .outputInboxDidChange) {
-                self?.loadRecentRecordings()
-            }
-        }
-    }
-
-    public func loadRecentRecordings() {
-        let items = (try? outputInboxStore.listItems()) ?? []
-        recentRecordings = Array(
-            items
-                .filter { $0.sourceToolID == Self.toolID }
-                .sorted { $0.createdAt > $1.createdAt }
-                .prefix(Self.recentRecordingsLimit)
-        )
+        recentOutputs.refresh()
     }
 
     private static func handoffWarningMessage(for error: Error) -> String {

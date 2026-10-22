@@ -9,6 +9,9 @@ public struct AudioRecorderView: View {
     /// Persisted settings, observed so a max-duration change made in Settings
     /// reaches this (cached, never re-appearing) pane.
     @ObservedObject private var appSettings: AppSettingsObserver
+    /// The take list, held by the view model. Observed here so a new take
+    /// re-renders the page; the view model does not republish it.
+    @ObservedObject private var recentOutputs: ToolRecentOutputs
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lastPersistedMaxDurationMinutes: Int?
     // NMH-142: the Record/Stop capsule is a custom `.plain` Button, so track
@@ -20,6 +23,7 @@ public struct AudioRecorderView: View {
         self.context = context
         self.viewModel = viewModel
         self.appSettings = context.appSettings
+        self.recentOutputs = viewModel.recentOutputs
         _lastPersistedMaxDurationMinutes = State(initialValue: viewModel.maxDurationMinutes)
     }
 
@@ -330,7 +334,7 @@ public struct AudioRecorderView: View {
     private var recordingsList: some View {
         ToolOutputShelf(
             title: "Recordings",
-            items: viewModel.recentRecordings,
+            items: recentOutputs.items,
             emptyText: "No recordings yet",
             subtitle: { recordingSubtitle(for: $0) },
             onReveal: { context.fileActions.revealInFinder($0.fileURL) },
