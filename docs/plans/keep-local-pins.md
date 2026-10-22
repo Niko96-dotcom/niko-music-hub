@@ -24,7 +24,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 4 Browser reads | done | `git log --grep='(Keep Local step 4)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
 | 5 Browser writes | done | `git log --grep='(Keep Local step 5)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures; full gates at `cd67e7d` green (Terminal.app): XCTest 2,824, 0 failures, 8 skipped; Swift Testing 93; strict E2E passed |
 | 6 Close the raw set | done | `git log --grep='(Keep Local step 6)'` | strict build; `AppCoreTests` 795 (2 skipped), `FeatureArchiveBrowserTests` 633, all `*SourceTests`; the new guard fails on a planted raw use and passes without it |
-| 7 Docs, ADR, full gates, live check | not started | | |
+| 7 Docs, ADR, full gates, live check | docs done, gates and live check running | `git log --grep='(Keep Local step 7)'` | |
 
 ## Revisions
 

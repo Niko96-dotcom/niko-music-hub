@@ -242,6 +242,28 @@ Archive Browser footer shows: at most one message and one warning, joined by one
   at/after removal the fate is uncertain, partial copies are never claimed verified, and review
   stays via Restore & Open / Recover Verified Project.
 
+## Keep Local pins
+
+[`KeepLocalPins`](../Sources/AppCore/Settings/KeepLocalPins.swift) is the one owner of Keep Local: whether a project is
+pinned, which keys a pin writes and which keys unpin removes. [ADR 021](decisions/021-keep-local-pin-format.md) has the
+decision.
+
+- Storage is unchanged: `VaultSettings.keepLocalProjectIDs`, a set of strings that mixes catalog project IDs, song IDs and
+  folder paths in several spellings. Older builds and recovery bundles read it, so a pin still writes every spelling
+  they compare (raw, standardized, resolved, canonical). The set is `internal` to AppCore; everything else uses
+  `VaultSettings.keepLocalPins` (`KeepLocalPinsSourceTests`).
+- A caller describes a project with what it knows (`KeepLocalPins.Project`: project IDs, song IDs, folders). IDs match
+  exactly; folders match by one canonical folder path (`KeepLocalPins.canonicalFolderPath`, which
+  `ArchiveVaultObservation.vaultCanonicalPath` forwards to), so a pin under another spelling of the same folder
+  counts everywhere. Matching is never weaker than the ten hand-built key sets it replaced.
+- The runtime gates (capture, Done eligibility, removal admission, the runtime pin flag) and the restore pins pass the
+  facts each had before; the archive browser builds one project per song (`ArchiveVaultObservation.keepLocalProject(for:)`)
+  for its card flag, the automatic Done skip, and the Keep Local toggle and "Keep on this Mac" writes.
+- `KeepLocalPins` values are built once per presentation-context refresh or snapshot read. An ID-only check, or a set
+  without path keys, does no filesystem work, so the card for a song without a snapshot stays cheap.
+- The Review Keep Local sheet's "N projects are currently pinned" counts stored keys, not projects; old keys cannot be
+  grouped per project (ADR 021, Open).
+
 ## Running work and quit
 
 [ADR 019](decisions/019-running-work-and-quit.md) has the full contract.

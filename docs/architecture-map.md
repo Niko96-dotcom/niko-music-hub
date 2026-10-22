@@ -12,7 +12,7 @@ Each section says what kind of statement it makes:
 - **Open**: not decided, or not verified.
 
 Detail lives in [architecture.md](architecture.md) (owners, safety, Project Vault),
-[design-contract.md](design-contract.md) (UI), [decisions/](decisions/) (ADRs 017–020),
+[design-contract.md](design-contract.md) (UI), [decisions/](decisions/) (ADRs 017–021),
 [vault-durability.md](vault-durability.md) and [vault-recovery.md](vault-recovery.md).
 [product-scope.md](product-scope.md) is the historical v0.1 scope.
 
@@ -154,6 +154,7 @@ into those closures; it imports neither SwiftUI nor AppKit.
 | Archive roots, catalog (`scannedSongs`, `songs`), selection, browse inputs | `ArchiveBrowserViewModel` | snapshot in `SQLiteArchiveIndexStore` |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
+| Keep Local pins | `KeepLocalPins` over `VaultSettings.keepLocalProjectIDs` ([ADR 021](decisions/021-keep-local-pin-format.md)) | settings JSON in UserDefaults |
 | Vault queue, retries, capacity | `ProjectVaultOperationCoordinator` | memory; the journal is authoritative |
 | Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
@@ -212,6 +213,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Archive access is read-only; writes outside a confirmed Vault transfer are refused | [architecture.md § Safety](architecture.md#safety-architecture) | `ReadOnlyArchivePolicy`, `PathSafety`, `OutputGuardSourceTests` |
 | Every feature registers through `ToolFeature`; the archive is not special | [architecture.md § Principles](architecture.md#principles) | judgment (see gap 1) |
 | One registry of running work; quit reads it | [ADR 019](decisions/019-running-work-and-quit.md) | `HubTerminationSourceTests`, `ShellJobStatusCenterTests` |
+| Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
 | One UI scaffold, header and chrome material | [design-contract.md](design-contract.md) | `HubDesignContractSourceTests` |
 | The Vault runtime leaves `AppCore` once it gets its own target | [AGENTS.md § Architecture](../AGENTS.md#architecture) | none; no date or trigger |
