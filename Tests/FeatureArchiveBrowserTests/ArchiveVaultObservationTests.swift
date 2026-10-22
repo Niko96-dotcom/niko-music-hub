@@ -363,7 +363,48 @@ final class ArchiveVaultObservationTests: XCTestCase {
         let failedRefresh = await viewModel.refreshProjectVaultSnapshots()
         XCTAssertFalse(failedRefresh)
         XCTAssertEqual(viewModel.projectVaultSnapshots.count, 1, "an unreadable journal must preserve the current presentation")
-        XCTAssertEqual(viewModel.persistenceWarningMessage, ArchiveBrowserViewModel.projectVaultReadFailureMessage)
+        XCTAssertEqual(viewModel.footer.warning, .projectVaultUnreadable(recordsOnly: false))
+    }
+
+    /// The upload-wait footer message clears once no transfer waits for upload,
+    /// and only while it is still the message on show.
+    func testRefreshWithdrawsTheUploadWaitMessageOnlyWhenNoUploadIsPending() async throws {
+        let harness = try makeHarness()
+        defer { harness.cleanup() }
+        let runtime = ObservationTestRuntime()
+        let song = makeSong(in: harness.active, named: "Upload Wait")
+        let recordID = ProjectID()
+        var transfer = VaultTransferRecord(
+            projectID: recordID,
+            sourceURL: song.folderPath,
+            stagingURL: song.folderPath.appendingPathComponent(".nmh-test-staging"),
+            destinationURL: URL(fileURLWithPath: "/tmp/nmh-observation-archive/\(recordID.description)"),
+            state: .awaitingProviderDurability
+        )
+        transfer.nextRetryAt = Date().addingTimeInterval(60)
+        let waiting = ProjectVaultRuntimeSnapshot(
+            record: ProjectRecord(id: recordID, canonicalTitle: song.effectiveDisplayTitle, locations: []),
+            transfer: transfer
+        )
+        let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [song])
+        try await waitUntil { runtime.snapshotsCalls >= 1 && runtime.dueCalls >= 1 }
+        let uploadWait = ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability)
+
+        runtime.setServed([waiting])
+        viewModel.setProjectVaultStatusMessage(uploadWait)
+        _ = await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.statusBaseMessage, uploadWait, "an upload still pending keeps the message")
+
+        runtime.setServed([])
+        viewModel.setProjectVaultStatusMessage("Archived “Upload Wait”.")
+        _ = await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.statusBaseMessage, "Archived “Upload Wait”.", "another Vault message stays")
+
+        viewModel.setProjectVaultStatusMessage(uploadWait)
+        _ = await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertNil(viewModel.statusBaseMessage)
+        viewModel.setBackgroundStatusMessage("Scanned the archive.")
+        XCTAssertNil(viewModel.statusBaseMessage, "the Project Vault keeps the footer after the withdraw")
     }
 
     func testRootChangeClearsListIndexAndCount() throws {

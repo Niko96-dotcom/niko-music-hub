@@ -678,6 +678,12 @@ extension ArchiveBrowserViewModel {
         updateFooter { $0.clearWarning() }
     }
 
+    /// Clears a Project Vault message once its condition is over, only while
+    /// the footer still shows it.
+    func withdrawFooterMessage(_ message: String) {
+        updateFooter { $0.withdraw(message) }
+    }
+
     /// Temporary until every resolvable warning family has a kind
     /// (docs/plans/archive-footer-status.md, steps 3-5).
     func removeFooterWarning(where shouldRemove: (ArchiveFooterStatus.Warning) -> Bool) {

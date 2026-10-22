@@ -185,13 +185,9 @@ extension ArchiveBrowserViewModel {
         guard let projectVaultRuntime else { return false }
         do {
             let snapshots = try await projectVaultRuntime.snapshots()
-            removeFooterWarning { warning in
-                warning.text == Self.projectVaultReadFailureMessage
-                    || warning.text == Self.projectVaultUnreadableRecordsMessage
-            }
-            if statusBaseMessage == ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability),
-               !snapshots.contains(where: { $0.transfer?.isWaitingForProviderUpload == true }) {
-                setProjectVaultStatusMessage(nil)
+            resolveFooterWarning(.projectVaultRead)
+            if !snapshots.contains(where: { $0.transfer?.isWaitingForProviderUpload == true }) {
+                withdrawFooterMessage(ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability))
             }
             vaultObservation.stageSnapshots(snapshots)
             rebuildProjectVaultCatalog()
@@ -221,9 +217,6 @@ extension ArchiveBrowserViewModel {
         }
     }
 
-    static let projectVaultReadFailureMessage = "Project Vault status couldn't be read. Nothing was changed."
-    static let projectVaultUnreadableRecordsMessage = "Some Project Vault records couldn't be read. They were left as they are."
-
     /// Plain footer copy for an unreadable Vault state; the technical detail
     /// goes to diagnostics only. While settings themselves are unreadable the
     /// Vault read fails for that reason, and the settings-repair notice
@@ -233,9 +226,7 @@ extension ArchiveBrowserViewModel {
         // Probe: only a failed load tells unreadable settings apart from defaults.
         if (try? settingsStore.loadSettings()) == nil { return }
         recordPersistenceWarning(
-            error as? ProjectVaultRuntimeError == .journalRecordsUnreadable
-                ? Self.projectVaultUnreadableRecordsMessage
-                : Self.projectVaultReadFailureMessage
+            .projectVaultUnreadable(recordsOnly: error as? ProjectVaultRuntimeError == .journalRecordsUnreadable)
         )
     }
 

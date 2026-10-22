@@ -21,7 +21,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 2 View model stores the footer | done | `git log --grep='(step 2)'` | strict build; `FeatureArchiveBrowserTests` 631/631; all `*SourceTests` 88/88; full `ci.sh` at `9b24264` green (Terminal.app): XCTest 2,813, 0 failures, 8 skipped; Swift Testing 93 |
 | 3 Root-access kind | done | `git log --grep='(step 3)'` | strict build; `FeatureArchiveBrowserTests` 631/631 |
 | 4 Settings kind | done | `git log --grep='(step 4)'` | strict build; `FeatureArchiveBrowserTests` 631/631 |
-| 5 Vault read kind, upload-wait withdraw | not started | | |
+| 5 Vault read kind, upload-wait withdraw | done | `git log --grep='(step 5)'` | strict build; `FeatureArchiveBrowserTests` 631/631 before the new test; new `testRefreshWithdrawsTheUploadWaitMessageOnlyWhenNoUploadIsPending` passes |
 | 6 Song-details host callback | not started | | |
 | 7 Remove temporary API, docs, full gates | not started | | |
 
@@ -47,6 +47,12 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    `setBackgroundStatusMessage`. `ArchiveSettingsRepairTests.swift:115` now records an unrelated
    warning instead of assigning nil, which still proves that onboarding records the settings
    warning again.
+
+5. **Step 5: a test for the upload-wait withdraw.** No existing test checked that the upload-wait
+   message clears only when no upload is pending and only while it is on show. The condition was
+   rewritten in this step, so `ArchiveVaultObservationTests` gained
+   `testRefreshWithdrawsTheUploadWaitMessageOnlyWhenNoUploadIsPending`. The view model gained
+   `withdrawFooterMessage(_:)` because `footer` is `private(set)`.
 
 ## Terms
 
