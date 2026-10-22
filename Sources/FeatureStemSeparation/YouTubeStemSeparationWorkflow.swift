@@ -42,12 +42,14 @@ public struct YtDlpYouTubeAudioDownloader: YouTubeAudioDownloading {
 
 public struct YouTubeStemSeparationRequest: Equatable, Sendable {
     public var sourceURL: URL
-    public var outputRootURL: URL
+    /// The run's output folder and guard, from one settings read at start. The
+    /// download and the separation both write below its folder.
+    public var destination: ToolOutputDestination
     public var preset: StemSeparationPreset
 
-    public init(sourceURL: URL, outputRootURL: URL, preset: StemSeparationPreset) {
+    public init(sourceURL: URL, destination: ToolOutputDestination, preset: StemSeparationPreset) {
         self.sourceURL = sourceURL
-        self.outputRootURL = outputRootURL
+        self.destination = destination
         self.preset = preset
     }
 }
@@ -78,11 +80,11 @@ public struct YouTubeStemSeparationWorkflow: Sendable {
         request: YouTubeStemSeparationRequest,
         progress: JobProgress
     ) async throws {
-        let downloadDirectory = request.outputRootURL
+        let downloadDirectory = request.destination.folder
             .appendingPathComponent("Downloads", isDirectory: true)
             .appendingPathComponent("YouTube to Stems", isDirectory: true)
         try Task.checkCancellation()
-        try stemService.validateOutputDirectory(downloadDirectory)
+        try request.destination.validate(downloadDirectory)
         try FileManager.default.createDirectory(at: downloadDirectory, withIntermediateDirectories: true)
 
         progress.update(progress: 0, message: "Downloading audio…")
@@ -100,7 +102,7 @@ public struct YouTubeStemSeparationWorkflow: Sendable {
 
         let stemRequest = StemSeparationRequest(
             inputURL: audioURL,
-            outputRootURL: request.outputRootURL,
+            destination: request.destination,
             preset: request.preset,
             title: audioURL.deletingPathExtension().lastPathComponent
         )

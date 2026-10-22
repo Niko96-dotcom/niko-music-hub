@@ -16,8 +16,7 @@ struct YouTubeStemSeparationWorkflowTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: inbox,
-            jobRunner: runner,
-            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+            jobRunner: runner
         )
         let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
         let workflow = YouTubeStemSeparationWorkflow(
@@ -30,7 +29,7 @@ struct YouTubeStemSeparationWorkflowTests {
         let sourceURL = URL(string: "https://www.youtube.com/watch?v=test")!
 
         let job = workflow.startJob(
-            request: YouTubeStemSeparationRequest(sourceURL: sourceURL, outputRootURL: root, preset: .fast4)
+            request: YouTubeStemSeparationRequest(sourceURL: sourceURL, destination: .noProtectedRoots(at: root), preset: .fast4)
         )
         try await waitUntilFinished(runner: runner, job: job)
 
@@ -51,8 +50,7 @@ struct YouTubeStemSeparationWorkflowTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: inbox,
-            jobRunner: runner,
-            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+            jobRunner: runner
         )
         let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
         let workflow = YouTubeStemSeparationWorkflow(
@@ -65,7 +63,7 @@ struct YouTubeStemSeparationWorkflowTests {
         let sourceURL = URL(string: "https://www.youtube.com/watch?v=test")!
 
         let job = workflow.startJob(
-            request: YouTubeStemSeparationRequest(sourceURL: sourceURL, outputRootURL: root, preset: .fast4)
+            request: YouTubeStemSeparationRequest(sourceURL: sourceURL, destination: .noProtectedRoots(at: root), preset: .fast4)
         )
         try await waitUntilFinished(runner: runner, job: job)
 
@@ -92,8 +90,7 @@ struct YouTubeStemSeparationWorkflowTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: runner,
-            outputGuardProvider: { .protecting([configuredArchiveAlias]) }
+            jobRunner: runner
         )
         let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
         let workflow = YouTubeStemSeparationWorkflow(
@@ -105,7 +102,7 @@ struct YouTubeStemSeparationWorkflowTests {
         let job = workflow.startJob(
             request: YouTubeStemSeparationRequest(
                 sourceURL: URL(string: "https://www.youtube.com/watch?v=test")!,
-                outputRootURL: archive,
+                destination: .protecting([configuredArchiveAlias], output: archive),
                 preset: .fast4
             )
         )
@@ -115,48 +112,6 @@ struct YouTubeStemSeparationWorkflowTests {
         #expect(downloader.requests.isEmpty)
         #expect(backend.requests.isEmpty)
         #expect(!fileManager.fileExists(atPath: archive.appendingPathComponent("Downloads", isDirectory: true).path))
-    }
-
-    @Test
-    func startJob_unreadableSettingsFailsWithPlainSettingsMessageBeforeDownloading() async throws {
-        let suite = "YouTubeStemSeparationWorkflowTests.unreadable.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: "nikoMusicHub.settings")
-        let settingsStore = UserDefaultsSettingsStore(userDefaults: defaults)
-        let runner = JobRunner()
-        let backend = MockStemSeparationBackend()
-        let service = StemSeparationService(
-            backend: backend,
-            outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: runner,
-            outputGuardProvider: { ToolOutputGuard(settings: try settingsStore.loadSettings()) }
-        )
-        let downloader = FakeYouTubeAudioDownloader(fileName: "downloaded.wav")
-        let workflow = YouTubeStemSeparationWorkflow(
-            downloader: downloader,
-            stemService: service,
-            jobRunner: runner
-        )
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-
-        let job = workflow.startJob(
-            request: YouTubeStemSeparationRequest(
-                sourceURL: URL(string: "https://www.youtube.com/watch?v=test")!,
-                outputRootURL: root,
-                preset: .fast4
-            )
-        )
-        try await waitUntilFinished(runner: runner, job: job)
-
-        let finished = try #require(runner.job(id: job.id))
-        #expect(finished.state == .failed)
-        #expect(finished.message == StemSeparationHelperCopy.settingsUnreadable)
-        #expect(downloader.requests.isEmpty)
-        #expect(backend.requests.isEmpty)
-        #expect(!FileManager.default.fileExists(atPath: root.path))
     }
 }
 

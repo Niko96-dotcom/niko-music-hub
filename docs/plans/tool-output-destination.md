@@ -21,7 +21,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 2 Audio Recorder | done | `git log --grep='(output step 2)'` | strict build; recorder suites 105 (3 skipped) and `ToolOutputDestinationTests`, 0 failures |
 | 3 WAV Converter | done | `git log --grep='(output step 3)'` | strict build; `FeatureAudioConverterTests` 97, 0 failures |
 | 4 Downloader | done | `git log --grep='(output step 4)'` | strict build; `FeatureDownloaderTests` 206 (2 skipped), 0 failures |
-| 5 Stem Separation | not started | | |
+| 5 Stem Separation | done | `git log --grep='(output step 5)'` | strict build; `FeatureStemSeparationTests` 93, 0 failures; full gates in step 7 (see revision 4) |
 | 6 Guard the rule | not started | | |
 | 7 Docs, full gates, live check | not started | | |
 
@@ -45,6 +45,20 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    So both entry points end in the same admission. Removing the overload would only churn tests. The
    completion criterion "one `convert` entry point" becomes "both entry points admit through the same
    destination".
+4. **Step 5: the request carries the destination; no `destinationProvider`.** The plan gave the
+   service a provider that read settings at job start. But the view model already read settings at
+   start to show the folder, so a provider would keep two reads per run, the problem this plan
+   removes. Now the view model calls `ToolOutputDestination.load(from:)` once at start and puts the
+   result in `StemSeparationRequest.destination` and `YouTubeStemSeparationRequest.destination`
+   (they replace `outputRootURL`). The service lost its `outputGuardProvider` and
+   `validateOutputDirectory`; it uses `request.destination.folder` as the run root and
+   `request.destination.validate(_:)` for the run folder. The YouTube workflow admits its download
+   folder with the same destination and passes it on. Unreadable settings now refuse the run before
+   any job exists, with the same sentence (`StemSeparationHelperCopy.settingsUnreadable`). So the two
+   service and workflow tests for that case moved to the view model
+   (`unreadableSettingsRefuseAFileRunBeforeAnyJob`, `unreadableSettingsRefuseAYouTubeRunBeforeDownloading`).
+   The full gates run once in step 7 instead of after step 5 too: step 6 only adds a source test, and
+   step 7 must run them on the final commit anyway.
 
 ## Terms
 
@@ -204,12 +218,12 @@ needed. The lasting rationale (why the handoff was not unified) goes into
 - **New:** `ToolOutputDestination` in `Sources/AppCore/Settings/ToolOutputDestination.swift`.
 - **Removed:**
   - `RecordingDestination` (FeatureAudioRecorder), replaced by `ToolOutputDestination`.
-  - `BatchAudioConversionUseCase.convert(files:stopController:progress:)` (the loading overload).
-    Production uses the snapshot overload only.
-  - `StemSeparationRequest.outputRootURL` and `YouTubeStemSeparationRequest.outputRootURL`.
-- **Changed:** `StemSeparationService.init(…, outputGuardProvider:)` becomes
-  `init(…, destinationProvider: @Sendable () throws -> ToolOutputDestination)`. The service gets
-  `separate(request:destination:progress:)`, and `validateOutputDirectory` takes a destination.
+  - ~~`BatchAudioConversionUseCase.convert(files:stopController:progress:)` (the loading overload).~~
+    Kept (revision 3).
+  - `StemSeparationRequest.outputRootURL` and `YouTubeStemSeparationRequest.outputRootURL`, replaced by
+    `destination: ToolOutputDestination` (revision 4).
+- **Changed:** `StemSeparationService.init(…, outputGuardProvider:)` loses the provider; the request
+  carries the destination, and `validateOutputDirectory` is gone (revision 4).
 - **Unchanged:** `ToolOutputGuard`, `OutputWriteGuard`, `OutputInboxStore`,
   `RecordSystemAudioUseCase.Config` (it still takes `outputGuard`, now `destination.outputGuard`).
 
@@ -297,6 +311,8 @@ one commit per step.
 - **Verify:** `B`, then `T(DownloaderViewModelTests|DownloaderUseCaseTests|DownloaderTrustAndErrorTests)`.
 
 ### Step 5: Stem Separation
+
+Done as revision 4 describes; the bullets below are the original plan.
 
 - `StemSeparationService` takes `destinationProvider`.
 - `startJob` reads one destination at job start (unreadable settings →

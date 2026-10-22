@@ -39,10 +39,7 @@ public struct StemSeparationFeature: ToolFeature {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: context.outputInboxStore,
-            jobRunner: context.jobRunner,
-            outputGuardProvider: {
-                ToolOutputGuard(settings: try context.settingsStore.loadSettings())
-            }
+            jobRunner: context.jobRunner
         )
         let healthChecker = YtDlpHealthChecker()
         let downloaderUseCase = DownloaderUseCase(

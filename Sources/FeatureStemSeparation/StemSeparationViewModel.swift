@@ -192,12 +192,11 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     public func startSeparation() {
         guard let inputURL = droppedFileURL else { return }
         guard !isRunning else { return }
-
-        loadSettings()
+        guard let destination = loadRunDestination() else { return }
 
         let request = StemSeparationRequest(
             inputURL: inputURL,
-            outputRootURL: outputFolderURL,
+            destination: destination,
             preset: selectedPreset,
             title: nil
         )
@@ -229,11 +228,11 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
             return
         }
 
-        loadSettings()
+        guard let destination = loadRunDestination() else { return }
 
         let request = YouTubeStemSeparationRequest(
             sourceURL: sourceURL,
-            outputRootURL: outputFolderURL,
+            destination: destination,
             preset: selectedPreset
         )
 
@@ -407,6 +406,21 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         currentJobID = nil
         statusMessage = message
         errorMessage = error
+    }
+
+    /// One settings read per run. Unreadable settings refuse the run before any
+    /// job starts, with the same sentence a failed job shows.
+    private func loadRunDestination() -> ToolOutputDestination? {
+        do {
+            let destination = try ToolOutputDestination.load(from: context.settingsStore)
+            outputFolderURL = destination.folder
+            return destination
+        } catch {
+            context.diagnostics.scoped(to: .stemSeparation).log(.error, "Stem settings could not be read: \(error)")
+            finish(message: StemSeparationHelperCopy.settingsUnreadable, error: StemSeparationHelperCopy.settingsUnreadable)
+            helperRelatedErrorActive = false
+            return nil
+        }
     }
 
     private func loadSettings() {

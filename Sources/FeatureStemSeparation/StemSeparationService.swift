@@ -8,20 +8,15 @@ public struct StemSeparationService: Sendable {
     private let backend: any StemSeparationBackend
     private let outputInboxStore: any OutputInboxStore
     private let jobRunner: any JobRunning
-    private let outputGuardProvider: @Sendable () throws -> ToolOutputGuard
 
-    /// `outputGuardProvider` loads settings with `try` at job time, so a cached tool
-    /// session honors current settings and unreadable settings refuse the job.
     public init(
         backend: any StemSeparationBackend,
         outputInboxStore: any OutputInboxStore,
-        jobRunner: any JobRunning,
-        outputGuardProvider: @escaping @Sendable () throws -> ToolOutputGuard
+        jobRunner: any JobRunning
     ) {
         self.backend = backend
         self.outputInboxStore = outputInboxStore
         self.jobRunner = jobRunner
-        self.outputGuardProvider = outputGuardProvider
     }
 
     @discardableResult
@@ -38,7 +33,7 @@ public struct StemSeparationService: Sendable {
     ) async throws {
         let title = request.title ?? defaultTitle(for: request.inputURL)
         let outputFolderURL = uniqueOutputFolder(
-            root: request.outputRootURL,
+            root: request.destination.folder,
             title: title,
             preset: request.preset
         )
@@ -48,7 +43,8 @@ public struct StemSeparationService: Sendable {
             preset: request.preset
         )
         try Task.checkCancellation()
-        try validateOutputDirectory(outputFolderURL)
+        // Enforces the archive write boundary before the run creates its folder.
+        try request.destination.validate(outputFolderURL)
         try await runJob(
             backendRequest: backendRequest,
             preset: request.preset,
@@ -166,20 +162,6 @@ public struct StemSeparationService: Sendable {
             withIntermediateDirectories: true,
             attributes: nil
         )
-    }
-
-    /// Enforces the archive write boundary before a workflow creates output folders.
-    /// The provider is read at job time so cached tool sessions still honor current settings.
-    /// A provider that cannot read settings refuses with the same sentence as the backend,
-    /// never the raw decoding error.
-    func validateOutputDirectory(_ outputDirectoryURL: URL) throws {
-        let outputGuard: ToolOutputGuard
-        do {
-            outputGuard = try outputGuardProvider()
-        } catch {
-            throw StemSeparationServiceError(StemSeparationHelperCopy.settingsUnreadable)
-        }
-        try outputGuard.validate(outputDirectoryURL)
     }
 
     /// UTF-8 bytes kept from the title. APFS allows 255 bytes per name, and the job

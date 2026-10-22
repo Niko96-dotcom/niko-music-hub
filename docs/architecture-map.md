@@ -103,8 +103,8 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
 | --- | --- | --- | --- |
 | WAV Converter | own `Task` + extra source `converter` | `BatchAudioConversionUseCase` | `BatchAudioConversionUseCase` |
 | Downloader | `JobRunner` job (+ extra source `downloadStart` for the title lookup) | `DownloaderViewModel` | `DownloaderViewModel`, after it observes the job |
-| Stem Separation | `JobRunner` job | `StemSeparationService` (provider closure) | `StemSeparationService` |
-| Audio Recorder | own `Task` + extra source `audioRecorder` | `RecordingDestination.load` / `RecordSystemAudioUseCase` | `AudioRecorderViewModel.finalizeRecording` |
+| Stem Separation | `JobRunner` job | `StemSeparationService`, with the request's `ToolOutputDestination` | `StemSeparationService` |
+| Audio Recorder | own `Task` + extra source `audioRecorder` | `ToolOutputDestination.load` / `RecordSystemAudioUseCase` | `AudioRecorderViewModel.finalizeRecording` |
 
 ### Project Vault: archive, restore, recover
 

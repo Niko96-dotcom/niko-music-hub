@@ -11,7 +11,7 @@ import NikoMusicCore
 /// (e2135e6). Load the snapshot with `try settingsStore.loadSettings()` and refuse the
 /// write when it throws. `OutputGuardSourceTests` fails on `OutputWriteGuard` used
 /// anywhere else in the app.
-public struct ToolOutputGuard: Sendable {
+public struct ToolOutputGuard: Equatable, Sendable {
     let protectedRoots: [URL]
 
     /// Each root's stored path and, when it has a bookmark, where the bookmark points now

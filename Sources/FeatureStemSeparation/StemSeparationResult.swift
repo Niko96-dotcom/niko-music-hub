@@ -3,18 +3,19 @@ import Foundation
 
 public struct StemSeparationRequest: Equatable, Sendable {
     public let inputURL: URL
-    public let outputRootURL: URL
+    /// The run's output folder and guard, from one settings read at start.
+    public let destination: ToolOutputDestination
     public let preset: StemSeparationPreset
     public let title: String?
 
     public init(
         inputURL: URL,
-        outputRootURL: URL,
+        destination: ToolOutputDestination,
         preset: StemSeparationPreset,
         title: String? = nil
     ) {
         self.inputURL = inputURL
-        self.outputRootURL = outputRootURL
+        self.destination = destination
         self.preset = preset
         self.title = title
     }

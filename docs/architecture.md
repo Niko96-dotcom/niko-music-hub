@@ -297,7 +297,7 @@ retained archive generations stay write-protected. The archive browser's exports
 use `writeProtectedRoots()`. `OutputGuardSourceTests` enforces both owners.
 
 Settings that gate a write or a Project Vault decision are loaded with `try`, and the action is
-refused when they cannot be read (`RecordingDestination.load(from:)`,
+refused when they cannot be read (`ToolOutputDestination.load(from:)`,
 `ArchiveBrowserViewModel.loadSettingsForWrite()`); display-only code reads
 `ToolContext.appSettings`. The few `try? …loadSettings()` reads that stay are listed with their
 reasons in `OutputGuardSourceTests`.

@@ -13,8 +13,7 @@ struct StemSeparationServiceTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: inbox,
-            jobRunner: runner,
-            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+            jobRunner: runner
         )
         return (service, runner, inbox)
     }
@@ -28,7 +27,7 @@ struct StemSeparationServiceTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let input = makeInputFile()
         let (service, runner, _) = makeService(backend: backend)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4)
 
         let job = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: job)
@@ -50,7 +49,7 @@ struct StemSeparationServiceTests {
 
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let (service, runner, _) = makeService(backend: backend)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4)
 
         _ = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: runner.listJobs().first!)
@@ -70,7 +69,7 @@ struct StemSeparationServiceTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let inbox = FakeOutputInboxStore()
         let (service, runner, _) = makeService(backend: backend, inbox: inbox)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4)
 
         let job = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: job)
@@ -90,7 +89,7 @@ struct StemSeparationServiceTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let inbox = FakeOutputInboxStore()
         let (service, runner, _) = makeService(backend: backend, inbox: inbox)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4, title: "Neon Hook")
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4, title: "Neon Hook")
 
         let job = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: job)
@@ -117,7 +116,7 @@ struct StemSeparationServiceTests {
         // About 237 bytes, like a long yt-dlp file name with a Japanese title and emoji.
         let title = String(repeating: "夜明けの歌", count: 14) + " 🎶🎶🎶 [dQw4w9WgXcQ]"
         let request = StemSeparationRequest(
-            inputURL: makeInputFile(), outputRootURL: root, preset: .experimental6, title: title
+            inputURL: makeInputFile(), destination: .noProtectedRoots(at: root), preset: .experimental6, title: title
         )
         backend.filesToWrite = StemSeparationPreset.experimental6.expectedStemRoles.map { ($0, "\($0.rawValue).wav") }
 
@@ -142,7 +141,7 @@ struct StemSeparationServiceTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let inbox = FakeOutputInboxStore()
         let (service, runner, _) = makeService(backend: backend, inbox: inbox)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4)
 
         let job = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: job)
@@ -158,11 +157,11 @@ struct StemSeparationServiceTests {
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
         let inbox = try makeRealInbox()
         let runner = JobRunner()
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
 
         let job = service.startJob(request: StemSeparationRequest(
-            inputURL: makeInputFile(), outputRootURL: root, preset: preset, title: "Neon Hook"
+            inputURL: makeInputFile(), destination: .noProtectedRoots(at: root), preset: preset, title: "Neon Hook"
         ))
         try await waitUntilFinished(runner: runner, job: job)
 
@@ -181,9 +180,9 @@ struct StemSeparationServiceTests {
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
         let inbox = FailingBatchInboxStore(underlying: try makeRealInbox())
         let runner = JobRunner()
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let request = StemSeparationRequest(inputURL: makeInputFile(), outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: makeInputFile(), destination: .noProtectedRoots(at: root), preset: .fast4)
 
         let failedJob = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: failedJob)
@@ -220,7 +219,7 @@ struct StemSeparationServiceTests {
         let input = makeInputFile()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let (service, runner, _) = makeService(backend: backend)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4)
 
         let job = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: job)
@@ -239,7 +238,7 @@ struct StemSeparationServiceTests {
         let input = makeInputFile()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let (service, runner, _) = makeService(backend: backend)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4)
 
         let job = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: job)
@@ -266,12 +265,11 @@ struct StemSeparationServiceTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: runner,
-            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+            jobRunner: runner
         )
         let input = makeInputFile()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4)
 
         let job = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: job)
@@ -292,7 +290,7 @@ struct StemSeparationServiceTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let inbox = FakeOutputInboxStore()
         let (service, runner, _) = makeService(backend: backend, inbox: inbox)
-        let request = StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4)
+        let request = StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4)
 
         let job = service.startJob(request: request)
         try await waitUntilFinished(runner: runner, job: job)
@@ -311,8 +309,8 @@ struct StemSeparationServiceTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let (service, runner, _) = makeService(backend: backend)
 
-        _ = service.startJob(request: StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4))
-        _ = service.startJob(request: StemSeparationRequest(inputURL: input, outputRootURL: root, preset: .fast4))
+        _ = service.startJob(request: StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4))
+        _ = service.startJob(request: StemSeparationRequest(inputURL: input, destination: .noProtectedRoots(at: root), preset: .fast4))
 
         while runner.listJobs().contains(where: { $0.state == .queued || $0.state == .running }) {
             try await Task.sleep(nanoseconds: 10_000_000)
@@ -340,12 +338,11 @@ struct StemSeparationServiceTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: runner,
-            outputGuardProvider: { .protecting([configuredArchiveAlias]) }
+            jobRunner: runner
         )
 
         let job = service.startJob(
-            request: StemSeparationRequest(inputURL: input, outputRootURL: archive, preset: .fast4)
+            request: StemSeparationRequest(inputURL: input, destination: .protecting([configuredArchiveAlias], output: archive), preset: .fast4)
         )
         try await waitUntilFinished(runner: runner, job: job)
 
@@ -370,14 +367,13 @@ struct StemSeparationServiceTests {
             let service = StemSeparationService(
                 backend: backend,
                 outputInboxStore: inbox,
-                jobRunner: runner,
-                outputGuardProvider: { ToolOutputGuard(settings: settings) }
+                jobRunner: runner
             )
 
             let job = service.startJob(
                 request: StemSeparationRequest(
                     inputURL: fixture.input,
-                    outputRootURL: settings.outputFolder.url,
+                    destination: ToolOutputDestination(settings: settings),
                     preset: .fast4
                 )
             )
@@ -403,14 +399,13 @@ struct StemSeparationServiceTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: runner,
-            outputGuardProvider: { ToolOutputGuard(settings: settings) }
+            jobRunner: runner
         )
 
         let job = service.startJob(
             request: StemSeparationRequest(
                 inputURL: fixture.input,
-                outputRootURL: settings.outputFolder.url,
+                destination: ToolOutputDestination(settings: settings),
                 preset: .fast4
             )
         )
@@ -420,40 +415,6 @@ struct StemSeparationServiceTests {
         let outputFolder = backend.requests.first?.outputFolderURL
         #expect(outputFolder?.standardizedFileURL.path.hasPrefix(fixture.ordinaryOutput.standardizedFileURL.path) == true)
         #expect(try fixture.archiveSnapshot() == before)
-    }
-
-    // The feature builds the guard from `try settingsStore.loadSettings()`. A blob that
-    // does not decode refuses the run with the backend's sentence, not the DecodingError.
-    @Test
-    func startJob_unreadableSettingsFailsWithPlainSettingsMessage() async throws {
-        let suite = "StemSeparationServiceTests.unreadable.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8), forKey: "nikoMusicHub.settings")
-        let settingsStore = UserDefaultsSettingsStore(userDefaults: defaults)
-        let backend = MockStemSeparationBackend()
-        let inbox = FakeOutputInboxStore()
-        let runner = JobRunner()
-        let service = StemSeparationService(
-            backend: backend,
-            outputInboxStore: inbox,
-            jobRunner: runner,
-            outputGuardProvider: { ToolOutputGuard(settings: try settingsStore.loadSettings()) }
-        )
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-
-        let job = service.startJob(
-            request: StemSeparationRequest(inputURL: makeInputFile(), outputRootURL: root, preset: .fast4)
-        )
-        try await waitUntilFinished(runner: runner, job: job)
-
-        let finished = try #require(runner.job(id: job.id))
-        #expect(finished.state == .failed)
-        #expect(finished.message == StemSeparationHelperCopy.settingsUnreadable)
-        #expect(backend.requests.isEmpty)
-        #expect(inbox.items.isEmpty)
-        #expect(!FileManager.default.fileExists(atPath: root.path))
     }
 
     @Test
@@ -481,14 +442,13 @@ struct StemSeparationServiceTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: runner,
-            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+            jobRunner: runner
         )
 
         let job = service.startJob(
             request: StemSeparationRequest(
                 inputURL: URL(fileURLWithPath: "/Users/music/input.wav"),
-                outputRootURL: outputRoot,
+                destination: .noProtectedRoots(at: outputRoot),
                 preset: .fast4
             )
         )

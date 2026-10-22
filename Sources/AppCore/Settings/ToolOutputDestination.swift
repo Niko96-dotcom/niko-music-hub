@@ -3,7 +3,7 @@ import Foundation
 /// Where one tool run writes, and the guard that admits it, read from one
 /// settings snapshot. Unreadable settings refuse the run: they never fall back
 /// to defaults, which protect nothing.
-public struct ToolOutputDestination: Sendable {
+public struct ToolOutputDestination: Equatable, Sendable {
     /// The output folder from the snapshot.
     public let folder: URL
     /// The guard from the same snapshot, for APIs that take a guard.

@@ -30,12 +30,13 @@ Responsibilities:
 
 ### `StemSeparationRequest`
 
-Domain request from the UI/service:
+Domain request from the UI/service. `destination` is the run's output folder and guard, read once
+from settings when the run starts (`ToolOutputDestination.load(from:)` in the view model):
 
 ```swift
 public struct StemSeparationRequest {
     public let inputURL: URL
-    public let outputRootURL: URL
+    public let destination: ToolOutputDestination
     public let preset: StemSeparationPreset
     public let title: String?
 }

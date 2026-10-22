@@ -7,13 +7,14 @@ import Testing
 struct StemSeparationViewModelTests {
 
     private func makeViewModel(
+        settingsStore: any SettingsStore = FakeSettingsStore(),
         outputInboxStore: OutputInboxStore = FakeOutputInboxStore(),
         jobRunner: JobRunner = JobRunner(),
         youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil
     ) -> StemSeparationViewModel {
         let context = ToolContext(
             registeredToolCount: 7,
-            settingsStore: FakeSettingsStore(),
+            settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
@@ -26,8 +27,7 @@ struct StemSeparationViewModelTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: outputInboxStore,
-            jobRunner: jobRunner,
-            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+            jobRunner: jobRunner
         )
         return StemSeparationViewModel(context: context, service: service, youtubeWorkflow: youtubeWorkflow)
     }
@@ -95,8 +95,7 @@ struct StemSeparationViewModelTests {
         let service = StemSeparationService(
             backend: backend,
             outputInboxStore: inbox,
-            jobRunner: jobRunner,
-            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+            jobRunner: jobRunner
         )
         let context = ToolContext(
             registeredToolCount: 7,
@@ -174,7 +173,7 @@ struct StemSeparationViewModelTests {
         let backend = MockStemSeparationBackend()
         backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
         let workflow = YouTubeStemSeparationWorkflow(
             downloader: FakeViewModelYouTubeAudioDownloader(),
             stemService: service,
@@ -231,7 +230,7 @@ struct StemSeparationViewModelTests {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
         let backend = BlockingAfterFirstStemBackend()
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
         let workflow = YouTubeStemSeparationWorkflow(
             downloader: FakeViewModelYouTubeAudioDownloader(),
             stemService: service,
@@ -373,7 +372,7 @@ struct StemSeparationViewModelTests {
         let backend = MockStemSeparationBackend()
         backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
         let vm = StemSeparationViewModel(
             context: context,
             service: service,
@@ -403,7 +402,7 @@ struct StemSeparationViewModelTests {
         let runner = JobRunner()
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
         let workflow = YouTubeStemSeparationWorkflow(
             downloader: FakeViewModelYouTubeAudioDownloader(),
             stemService: service,
@@ -467,7 +466,7 @@ struct StemSeparationViewModelTests {
         )
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
         let vm = StemSeparationViewModel(
             context: context,
             service: service,
@@ -530,7 +529,7 @@ struct StemSeparationViewModelTests {
         )
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: customWording, reason: .helperUnavailable)
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
         let vm = StemSeparationViewModel(context: context, service: service)
         _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
 
@@ -555,7 +554,7 @@ struct StemSeparationViewModelTests {
         let runner = JobRunner()
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: customWording, reason: .helperUnavailable)
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: runner)
         let workflow = YouTubeStemSeparationWorkflow(
             downloader: FakeViewModelYouTubeAudioDownloader(),
             stemService: service,
@@ -572,7 +571,7 @@ struct StemSeparationViewModelTests {
         )
         let localBackend = MockStemSeparationBackend()
         localBackend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
-        let localService = StemSeparationService(backend: localBackend, outputInboxStore: inbox, jobRunner: runner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let localService = StemSeparationService(backend: localBackend, outputInboxStore: inbox, jobRunner: runner)
         let vm = StemSeparationViewModel(context: context, service: localService, youtubeWorkflow: workflow)
         vm.youtubeURLText = "https://youtu.be/test"
 
@@ -604,7 +603,7 @@ struct StemSeparationViewModelTests {
         )
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: StemSeparationHelperCopy.missingBody)
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
         let vm = StemSeparationViewModel(context: context, service: service)
         _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
 
@@ -651,7 +650,7 @@ struct StemSeparationViewModelTests {
         )
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: "custom helper down XYZ", reason: .helperUnavailable)
-        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner, outputGuardProvider: { ToolOutputGuard(settings: .default) })
+        let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
         let vm = StemSeparationViewModel(context: context, service: service, healthChecker: readyChecker)
         _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
         vm.startSeparation()
@@ -703,8 +702,7 @@ struct StemSeparationViewModelTests {
         let service = StemSeparationService(
             backend: MockStemSeparationBackend(),
             outputInboxStore: FakeOutputInboxStore(),
-            jobRunner: JobRunner(),
-            outputGuardProvider: { ToolOutputGuard(settings: .default) }
+            jobRunner: JobRunner()
         )
 
         let vm = StemSeparationViewModel(context: context, service: service)
@@ -717,6 +715,54 @@ struct StemSeparationViewModelTests {
         vm.chooseHelperPath()
         #expect(vm.statusMessage == StemSeparationHelperCopy.settingsUnreadableNotSaved)
         #expect(defaults.data(forKey: "nikoMusicHub.settings") == blob)
+    }
+
+    /// The run's destination is read once at start; unreadable settings refuse
+    /// the run before any job exists, with the plain settings sentence.
+    @Test
+    func unreadableSettingsRefuseAFileRunBeforeAnyJob() throws {
+        let suite = "StemSeparationViewModelTests.unreadableStart.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data("not json".utf8), forKey: "nikoMusicHub.settings")
+        let runner = JobRunner()
+        let vm = makeViewModel(settingsStore: UserDefaultsSettingsStore(userDefaults: defaults), jobRunner: runner)
+        #expect(vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")]) == true)
+
+        vm.startSeparation()
+
+        #expect(runner.listJobs().isEmpty)
+        #expect(vm.isRunning == false)
+        #expect(vm.currentJobID == nil)
+        #expect(vm.errorMessage == StemSeparationHelperCopy.settingsUnreadable)
+    }
+
+    @Test
+    func unreadableSettingsRefuseAYouTubeRunBeforeDownloading() throws {
+        let suite = "StemSeparationViewModelTests.unreadableYouTube.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data("not json".utf8), forKey: "nikoMusicHub.settings")
+        let runner = JobRunner()
+        let inbox = FakeOutputInboxStore()
+        let workflow = YouTubeStemSeparationWorkflow(
+            downloader: FakeViewModelYouTubeAudioDownloader(),
+            stemService: StemSeparationService(backend: MockStemSeparationBackend(), outputInboxStore: inbox, jobRunner: runner),
+            jobRunner: runner
+        )
+        let vm = makeViewModel(
+            settingsStore: UserDefaultsSettingsStore(userDefaults: defaults),
+            outputInboxStore: inbox,
+            jobRunner: runner,
+            youtubeWorkflow: workflow
+        )
+        vm.youtubeURLText = "https://youtu.be/test"
+
+        vm.startYouTubeSeparation()
+
+        #expect(runner.listJobs().isEmpty, "nothing was downloaded")
+        #expect(vm.isRunning == false)
+        #expect(vm.errorMessage == StemSeparationHelperCopy.settingsUnreadable)
     }
 }
 
