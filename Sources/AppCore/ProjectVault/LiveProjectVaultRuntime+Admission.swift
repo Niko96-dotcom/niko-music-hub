@@ -369,15 +369,12 @@ extension LiveProjectVaultRuntime {
                         throw ProjectVaultRuntimeError.automaticArchivingDisabled
                     }
                 }
-                let keepLocalKeys = Set([
-                    executionSongID,
-                    authorization.songID,
-                    record.projectID.description,
-                    record.sourceURL.standardizedFileURL.path,
-                    record.sourceURL.standardizedFileURL.resolvingSymlinksInPath().path,
-                    canonicalRecordSource,
-                ])
-                guard liveSettings.vault.keepLocalProjectIDs.isDisjoint(with: keepLocalKeys) else {
+                let project = KeepLocalPins.Project(
+                    projectIDs: [record.projectID],
+                    songIDs: [executionSongID, authorization.songID],
+                    folders: [record.sourceURL]
+                )
+                guard !liveSettings.vault.keepLocalPins.contains(project) else {
                     throw ProjectVaultRuntimeError.keepLocal
                 }
             }

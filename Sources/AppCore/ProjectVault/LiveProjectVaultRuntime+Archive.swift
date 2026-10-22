@@ -133,16 +133,12 @@ extension LiveProjectVaultRuntime {
                     throw ProjectVaultRuntimeError.automaticArchivingDisabled
                 }
             }
-            var keys = Set([
-                song.id,
-                canonicalSource,
-                song.folderPath.standardizedFileURL.path,
-                song.folderPath.standardizedFileURL.resolvingSymlinksInPath().path,
-            ])
-            if let known = catalogProjectID {
-                keys.insert(known.description)
-            }
-            guard settings.vault.keepLocalProjectIDs.isDisjoint(with: keys) else {
+            let project = KeepLocalPins.Project(
+                projectIDs: catalogProjectID.map { [$0] } ?? [],
+                songIDs: [song.id],
+                folders: [song.folderPath]
+            )
+            guard !settings.vault.keepLocalPins.contains(project) else {
                 throw ProjectVaultRuntimeError.keepLocal
             }
         }
@@ -405,12 +401,8 @@ extension LiveProjectVaultRuntime {
         guard ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings.vault) else {
             throw ProjectVaultRuntimeError.automaticArchivingDisabled
         }
-        let keepLocalKeys = Set([
-            song.id,
-            song.folderPath.standardizedFileURL.path,
-            song.folderPath.standardizedFileURL.resolvingSymlinksInPath().path,
-        ])
-        guard settings.vault.keepLocalProjectIDs.isDisjoint(with: keepLocalKeys) else {
+        let project = KeepLocalPins.Project(songIDs: [song.id], folders: [song.folderPath])
+        guard !settings.vault.keepLocalPins.contains(project) else {
             throw ProjectVaultRuntimeError.keepLocal
         }
     }

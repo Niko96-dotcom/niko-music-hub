@@ -4,7 +4,7 @@ import NikoMusicCore
 extension LiveProjectVaultRuntime {
     public func snapshots() throws -> [ProjectVaultRuntimeSnapshot] {
         let configuration = try configuration()
-        let keepLocalProjectIDs = try settingsStore.loadSettings().vault.keepLocalProjectIDs
+        let keepLocalPins = try settingsStore.loadSettings().vault.keepLocalPins
         var entries = try catalogStore.loadEntries()
         _ = reconcileActiveLocationAvailability(in: &entries, configuration: configuration)
         let transfers: [VaultTransferRecord]
@@ -46,7 +46,7 @@ extension LiveProjectVaultRuntime {
                 transfer: transfer,
                 restore: restore,
                 configuration: configuration,
-                keepLocalProjectIDs: keepLocalProjectIDs
+                keepLocalPins: keepLocalPins
             )
         }
     }
@@ -64,7 +64,7 @@ extension LiveProjectVaultRuntime {
             transfer: transfer,
             restore: restore,
             configuration: configuration,
-            keepLocalProjectIDs: try settingsStore.loadSettings().vault.keepLocalProjectIDs
+            keepLocalPins: try settingsStore.loadSettings().vault.keepLocalPins
         )
     }
 
@@ -73,14 +73,14 @@ extension LiveProjectVaultRuntime {
         transfer: VaultTransferRecord?,
         restore: VaultRestoreRecord?,
         configuration: Configuration,
-        keepLocalProjectIDs: Set<String>
+        keepLocalPins: KeepLocalPins
     ) -> ProjectVaultRuntimeSnapshot {
         var record = entry.record
         record.pinned = isKeepLocal(
             record: record,
             transfer: transfer,
             configuration: configuration,
-            keepLocalProjectIDs: keepLocalProjectIDs
+            keepLocalPins: keepLocalPins
         )
         if let transfer {
             record.latestManifestID = transfer.manifestID
@@ -116,30 +116,22 @@ extension LiveProjectVaultRuntime {
         return ProjectVaultRuntimeSnapshot(record: record, transfer: transfer, restore: restore, linkedArchive: linkedArchive)
     }
 
-    /// Keep Local is stored under whichever key the browser had at the time: the
-    /// transfer's source path or the scanned song ID (its standardized folder
-    /// path); removal admission also honors the project ID and symlink-resolved
-    /// paths. `pinned` must agree with what the runtime would refuse to remove.
+    /// The project as the runtime knows it: its catalog ID, the transfer's
+    /// source folder and its Active locations. `pinned` must agree with what the
+    /// runtime would refuse to remove.
     private func isKeepLocal(
         record: ProjectRecord,
         transfer: VaultTransferRecord?,
         configuration: Configuration,
-        keepLocalProjectIDs: Set<String>
+        keepLocalPins: KeepLocalPins
     ) -> Bool {
-        guard !keepLocalProjectIDs.isEmpty else { return false }
         var folders: [URL] = []
         if let transfer { folders.append(transfer.sourceURL) }
         for location in record.locations
         where location.kind == .active && location.rootID == configuration.active.id {
             folders.append(configuration.active.url.appendingPathComponent(location.relativePath, isDirectory: true))
         }
-        var keys: Set<String> = [record.id.description]
-        for folder in folders {
-            keys.insert(folder.path)
-            keys.insert(folder.standardizedFileURL.path)
-            keys.insert(folder.standardizedFileURL.resolvingSymlinksInPath().path)
-        }
-        return !keepLocalProjectIDs.isDisjoint(with: keys)
+        return keepLocalPins.contains(KeepLocalPins.Project(projectIDs: [record.id], folders: folders))
     }
 
     /// Repairs availability flags written by older incremental reconciliation.
