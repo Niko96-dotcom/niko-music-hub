@@ -24,7 +24,7 @@ step's commit with `git log --grep='(recent step N)'`.
 | 2 Audio Recorder | done | `git log --grep='(recent step 2)'` | strict build, no warnings; `AudioRecorderViewModelTests` and `RecordingSettingsSnapshotTests` 34, `ToolRecentOutputsTests` 7 and `SwiftUIStateOwnershipSourceTests` 4, 0 failures |
 | 3 Stem Separation | done | `git log --grep='(recent step 3)'` | strict build, no warnings; `FeatureStemSeparationTests` 93 in 9 suites, `HandoffSurfacingSourceTests` 8 and `SwiftUIStateOwnershipSourceTests` 4, 0 failures |
 | 4 Guard the rule | done | `git log --grep='(recent step 4)'` | branch rebased on `main` at `fd4c7d1` (has `ac57335`); strict build; every `*SourceTests` in AppCore 93, 0 failures; a planted `listItems()` in `StemSeparationViewModel` failed the new test at `:277`, then was removed |
-| 5 Docs, full gates, live check | not started | | |
+| 5 Docs, full gates, live check | docs done (`git log --grep='(recent step 5)'`); gates and live check next | | link check of the changed docs: ok |
 
 ## Revisions
 

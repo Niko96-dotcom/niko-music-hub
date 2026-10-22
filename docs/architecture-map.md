@@ -161,6 +161,7 @@ into those closures; it imports neither SwiftUI nor AppKit.
 | Preview playback | `ArchivePreviewSession.shared`, `ArchivePlaybackCoordinator.shared` (singletons) | memory |
 | Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter` | memory |
 | Output Inbox | `JSONOutputInboxStore` | `output-inbox.json` |
+| A tool page's list of its own outputs | `ToolRecentOutputs` (AppCore), held by the tool's view model | derived from `output-inbox.json` |
 | Cross-tool requests | `QuickAccessRouter` (one-shot values) | memory |
 
 App data lives in `~/Library/Application Support/Niko Music Hub/`, or in `Isolated/<suite>/` below it when
@@ -215,6 +216,7 @@ These rules are documented and, where named, enforced. The full table is in
 | One registry of running work; quit reads it | [ADR 019](decisions/019-running-work-and-quit.md) | `HubTerminationSourceTests`, `ShellJobStatusCenterTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
 | A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
+| A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
 | One UI scaffold, header and chrome material | [design-contract.md](design-contract.md) | `HubDesignContractSourceTests` |
 | The Vault runtime leaves `AppCore` once it gets its own target | [AGENTS.md § Architecture](../AGENTS.md#architecture) | none; no date or trigger |

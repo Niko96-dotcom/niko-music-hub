@@ -283,6 +283,24 @@ snapshot, so a settings change during a run cannot move the rest of the run.
   file each and warn on a failed write. A shared delivery module would hold only item construction and a `do/catch`,
   and making the failure policy the same is a product decision. Revisit it only after that decision.
 
+## Tool recent outputs
+
+A tool page lists its own outputs through [`ToolRecentOutputs`](../Sources/AppCore/OutputInbox/ToolRecentOutputs.swift).
+The tool's view model creates it with the store, its tool ID and a limit (Audio Recorder 5, Stem Separation none) and
+calls `refresh()` on appear and after its own handoff. The view observes it directly, so a list change does not pass
+through the view model.
+
+- It follows `.outputInboxDidChange` and reads `listItems()` off the main actor; filter, sort (newest first) and limit
+  run there too. `items` changes only when the tool's slice changed, so another tool's output does not re-render the
+  page. Requests during a pass coalesce into one follow-up pass, as in `OutputInboxRefreshModel`.
+- It is read side only. It never writes the inbox, refreshes availability or takes the one-time corruption warning;
+  the Output Inbox panel (`OutputInboxRefreshModel`) owns those. A failed read keeps the last list, and the panel
+  shows read errors.
+- `HandoffSurfacingSourceTests` fails when a feature module calls `listItems()` or observes `.outputInboxDidChange`.
+- There is no inbox snapshot shared by the panel and the tool pages. Each tool would still need its own deduplicated
+  slice, and the snapshot's availability refresh would write the inbox while the panel is hidden. Revisit it only if
+  profiling shows the extra reads matter.
+
 ## Running work and quit
 
 [ADR 019](decisions/019-running-work-and-quit.md) has the full contract.
