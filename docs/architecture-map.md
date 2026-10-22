@@ -96,14 +96,14 @@ Hops in call order. Ownership detail is in [architecture.md](architecture.md).
 ### Run a tool and deliver its output
 
 `view → view model → use case or service → adapter (AVFoundation, ffmpeg, yt-dlp, demucs-mlx, CoreAudio)`,
-then `ToolOutputGuard(settings:)` admits the folder and the result goes to `OutputInboxStore`. Helpers run
+then the run's `ToolOutputDestination` (folder and guard from one settings read) admits the folder and the result goes to `OutputInboxStore`. Helpers run
 through `ExternalProcessRunning` in their own process groups. The layers differ per tool:
 
 | Tool | Runs as | Output guard in | Inbox write in |
 | --- | --- | --- | --- |
-| WAV Converter | own `Task` + extra source `converter` | `BatchAudioConversionUseCase` | `BatchAudioConversionUseCase` |
-| Downloader | `JobRunner` job (+ extra source `downloadStart` for the title lookup) | `DownloaderViewModel` | `DownloaderViewModel`, after it observes the job |
-| Stem Separation | `JobRunner` job | `StemSeparationService`, with the request's `ToolOutputDestination` | `StemSeparationService` |
+| WAV Converter | own `Task` + extra source `converter` | `BatchAudioConversionUseCase`, from its run snapshot | `BatchAudioConversionUseCase` |
+| Downloader | `JobRunner` job (+ extra source `downloadStart` for the title lookup) | `DownloaderViewModel` (`ToolOutputDestination.load`) | `DownloaderViewModel`, after it observes the job |
+| Stem Separation | `JobRunner` job | `StemSeparationViewModel` loads it into the request; `StemSeparationService` admits the run folder | `StemSeparationService` |
 | Audio Recorder | own `Task` + extra source `audioRecorder` | `ToolOutputDestination.load` / `RecordSystemAudioUseCase` | `AudioRecorderViewModel.finalizeRecording` |
 
 ### Project Vault: archive, restore, recover
@@ -214,6 +214,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Every feature registers through `ToolFeature`; the archive is not special | [architecture.md § Principles](architecture.md#principles) | judgment (see gap 1) |
 | One registry of running work; quit reads it | [ADR 019](decisions/019-running-work-and-quit.md) | `HubTerminationSourceTests`, `ShellJobStatusCenterTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
+| A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
 | One UI scaffold, header and chrome material | [design-contract.md](design-contract.md) | `HubDesignContractSourceTests` |
 | The Vault runtime leaves `AppCore` once it gets its own target | [AGENTS.md § Architecture](../AGENTS.md#architecture) | none; no date or trigger |
@@ -230,9 +231,10 @@ These rules are documented and, where named, enforced. The full table is in
 3. **Two ways to run work.** Downloader and Stem Separation use `JobRunner`; the converter, recorder,
    helper installs, archive scan and Vault queue run their own tasks and register as extra sources.
    ADR 019 documents the registry, not which way a new tool should choose.
-4. **Output guard and inbox handoff sit at different layers per tool** (table above). The guard rule holds
-   everywhere; its location does not. The Downloader's inbox write depends on the view model observing
-   the job.
+4. **The inbox handoff sits at a different layer per tool** (table above). Admission is one rule since
+   2026-10-22: every run admits through one `ToolOutputDestination`. The handoff differences are mostly
+   intended ([architecture.md § Tool output destination](architecture.md#tool-output-destination)). The
+   Downloader's inbox write depends on the view model observing the job.
 5. **Some dependencies are global, not injected:** `ArchivePreviewSession.shared`,
    `ArchivePlaybackCoordinator.shared`, `AudioCaptureActivity.shared`, `LiveProcessGroupRegistry.shared`,
    and `HelperToolLocator.standard()` built separately by each helper consumer.
@@ -268,8 +270,8 @@ Documents that disagree with the code:
 
 1. Should the archive keep its special wiring, or should roots and Vault settings get an owner that both
    Settings and the archive read, which would remove the early view model and the second `ToolContext`?
-2. Which layer owns the output guard and the inbox handoff for a new tool, and should a new tool use
-   `JobRunner` or an extra source?
+2. Which layer owns the inbox handoff for a new tool, and should a new tool use `JobRunner` or an extra
+   source? (Admission is settled: one `ToolOutputDestination` per run.)
 3. What triggers moving the Project Vault runtime out of `AppCore`?
 4. Should preview playback be injected instead of reached through singletons?
 5. Is background Vault archiving (inactivity, low space) still planned? If yes, it needs wiring; if no,

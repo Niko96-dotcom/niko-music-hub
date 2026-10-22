@@ -264,6 +264,25 @@ decision.
 - The Review Keep Local sheet's "N projects are currently pinned" counts stored keys, not projects; old keys cannot be
   grouped per project (ADR 021, Open).
 
+## Tool output destination
+
+A tool run writes only into a [`ToolOutputDestination`](../Sources/AppCore/Settings/ToolOutputDestination.swift): the
+output folder and the `ToolOutputGuard` that admits it, read from one settings snapshot. `load(from:)` reads settings
+with `try`; unreadable settings refuse the run and each tool shows its own sentence. A destination stays bound to its
+snapshot, so a settings change during a run cannot move the rest of the run.
+
+- Audio Recorder and Downloader load the destination in the view model when a run starts. The WAV Converter builds it
+  from the snapshot its run already holds (`BatchAudioConversionUseCase`). Stem Separation loads it in the view model
+  and passes it in `StemSeparationRequest` / `YouTubeStemSeparationRequest`; the service and the YouTube workflow
+  admit the run folder and the download folder with it.
+- Only three files build a `ToolOutputGuard` themselves: `ToolOutputDestination`, the Settings output picker (it checks
+  a candidate folder before saving it) and the recovery bundle export (a folder the person chose).
+  `OutputGuardSourceTests` lists them with their reasons and fails on any other.
+- The Output Inbox handoff stays in each tool on purpose. Stem Separation adds a set of stems as one unit and fails the
+  job when that write fails; the Downloader adds each verified file on its own; the converter and the recorder add one
+  file each and warn on a failed write. A shared delivery module would hold only item construction and a `do/catch`,
+  and making the failure policy the same is a product decision. Revisit it only after that decision.
+
 ## Running work and quit
 
 [ADR 019](decisions/019-running-work-and-quit.md) has the full contract.
@@ -290,7 +309,8 @@ try ReadOnlyArchivePolicy().enforceNoWrite(at: outputURL, archiveRoots: archiveR
 ```
 
 Tool output folders (converter, downloader, recorder, stems, and the Settings output picker)
-are admitted through [`ToolOutputGuard(settings:)`](../Sources/AppCore/Settings/ToolOutputGuard.swift),
+are admitted through [`ToolOutputGuard(settings:)`](../Sources/AppCore/Settings/ToolOutputGuard.swift)
+(a tool run gets it from its [`ToolOutputDestination`](#tool-output-destination)),
 which protects every configured music root, whatever its role or the Vault switch. It is
 deliberately not the browse list (`archiveRoots`), which hides Vault roots while Vault is off;
 retained archive generations stay write-protected. The archive browser's exports and New Song

@@ -23,7 +23,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 4 Downloader | done | `git log --grep='(output step 4)'` | strict build; `FeatureDownloaderTests` 206 (2 skipped), 0 failures |
 | 5 Stem Separation | done | `git log --grep='(output step 5)'` | strict build; `FeatureStemSeparationTests` 93, 0 failures; full gates in step 7 (see revision 4) |
 | 6 Guard the rule | done | `git log --grep='(output step 6)'` | strict build; every `*SourceTests` (AppCore 91, 0 failures); a planted `ToolOutputGuard(settings: .default)` in `DownloaderViewModel` failed the new test at the right line, then was removed |
-| 7 Docs, full gates, live check | not started | | |
+| 7 Docs, full gates, live check | docs done (`git log --grep='(output step 7)'`); gates and live check next | | link check of the changed docs: ok |
 
 ## Revisions
 
