@@ -23,7 +23,7 @@ step's commit with `git log --grep='(recent step N)'`.
 | 1 `ToolRecentOutputs` and its tests | done | `git log --grep='(recent step 1)'` | strict build, no warnings; `ToolRecentOutputsTests` 7 and `OutputInboxRefreshTests` 12, 0 failures; the new suite passed 10 runs in a row |
 | 2 Audio Recorder | done | `git log --grep='(recent step 2)'` | strict build, no warnings; `AudioRecorderViewModelTests` and `RecordingSettingsSnapshotTests` 34, `ToolRecentOutputsTests` 7 and `SwiftUIStateOwnershipSourceTests` 4, 0 failures |
 | 3 Stem Separation | done | `git log --grep='(recent step 3)'` | strict build, no warnings; `FeatureStemSeparationTests` 93 in 9 suites, `HandoffSurfacingSourceTests` 8 and `SwiftUIStateOwnershipSourceTests` 4, 0 failures |
-| 4 Guard the rule | not started | | |
+| 4 Guard the rule | done | `git log --grep='(recent step 4)'` | branch rebased on `main` at `fd4c7d1` (has `ac57335`); strict build; every `*SourceTests` in AppCore 93, 0 failures; a planted `listItems()` in `StemSeparationViewModel` failed the new test at `:277`, then was removed |
 | 5 Docs, full gates, live check | not started | | |
 
 ## Revisions

@@ -169,7 +169,45 @@ final class HandoffSurfacingSourceTests: XCTestCase {
         )
     }
 
+    // MARK: - A tool page's recent outputs
+
+    /// A tool page lists its own outputs only through `ToolRecentOutputs`, which reads off the
+    /// main actor. The read, its filter and its inbox observation were copied into the recorder,
+    /// Stem Separation and Downloader view models, each reading the inbox on the main actor.
+    func testFeatureModulesReadRecentOutputsOnlyThroughToolRecentOutputs() throws {
+        let inboxRead = try NSRegularExpression(pattern: #"\blistItems\s*\(|\boutputInboxDidChange\b"#)
+        let failures = try featureSourceFiles().flatMap { file in
+            OutputGuardSourceTests.lines(matching: inboxRead, in: SourceLex.stripped(try SourceTestSupport.read(file)))
+                .map { "\(file):\($0)" }
+        }
+        XCTAssertEqual(
+            failures,
+            [],
+            "A tool page reads its recent outputs through ToolRecentOutputs "
+                + "(Sources/AppCore/OutputInbox/ToolRecentOutputs.swift), never listItems() or "
+                + ".outputInboxDidChange itself:\n"
+                + failures.joined(separator: "\n")
+        )
+    }
+
     // MARK: - Private helpers
+
+    /// Every Swift file in a `Sources/Feature*` module, relative to the package root.
+    private func featureSourceFiles() throws -> [String] {
+        let root = SourceTestSupport.packageRoot.standardizedFileURL.path
+        let sources = SourceTestSupport.packageRoot.appendingPathComponent("Sources")
+        let files = try FileManager.default.contentsOfDirectory(atPath: sources.path)
+            .filter { $0.hasPrefix("Feature") }
+            .flatMap { module in
+                (FileManager.default.enumerator(at: sources.appendingPathComponent(module), includingPropertiesForKeys: nil)?
+                    .compactMap { $0 as? URL } ?? [])
+                    .filter { $0.pathExtension == "swift" }
+                    .map { String($0.standardizedFileURL.path.dropFirst(root.count + 1)) }
+            }
+            .sorted()
+        XCTAssertGreaterThan(files.count, 20, "Sources/Feature* walk found too few files")
+        return files
+    }
 
     private func appShellViewSource() throws -> String {
         try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
