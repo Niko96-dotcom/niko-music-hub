@@ -1,6 +1,6 @@
 # Plan: One read-side model for a tool's recent outputs
 
-**Status:** Waiting for approval. Do not implement before Niko approves.  
+**Status:** Approved by Niko on 2026-10-22, including requirement 7. In progress — see [Progress](#progress)  
 **Date:** 2026-10-22  
 **Source:** the "Recent outputs" follow-up of the tool output destination plan (removed in `b81e424`,
 readable with `git show b81e424^:docs/plans/tool-output-destination.md`).  
@@ -14,13 +14,13 @@ the target, which does not exist yet. When the plan is done, the lasting part mo
 
 ## Progress
 
-Resume from the first step that is not done. Each step is one commit on `main` (local, not pushed). Find a
+Resume from the first step that is not done. Each step is one commit (local, not pushed; see revision 1). Find a
 step's commit with `git log --grep='(recent step N)'`.
 
 | Step | State | Commit | Checks |
 | --- | --- | --- | --- |
-| 0 Baseline and prerequisite | not started | — | — |
-| 1 `ToolRecentOutputs` and its tests | not started | | |
+| 0 Baseline and prerequisite | done | — | `main` gained `ced1816` (Settings save error); its message reports `ci.sh` and strict E2E green, so no re-run. `ac57335` is not on `main` yet |
+| 1 `ToolRecentOutputs` and its tests | done | `git log --grep='(recent step 1)'` | strict build, no warnings; `ToolRecentOutputsTests` 7 and `OutputInboxRefreshTests` 12, 0 failures; the new suite passed 10 runs in a row |
 | 2 Audio Recorder | not started | | |
 | 3 Stem Separation | not started | | |
 | 4 Guard the rule | not started | | |
@@ -28,7 +28,14 @@ step's commit with `git log --grep='(recent step N)'`.
 
 ## Revisions
 
-None yet. Record every deviation from the steps below here, numbered, with its reason.
+Record every deviation from the steps below here, numbered, with its reason.
+
+1. **Commits land on the worktree branch.** This plan is carried out in the worktree branch
+   `claude/zealous-ellis-cab4f4`, rebased on `main` at `ced1816`. Niko merges it into `main`.
+2. **Step 1: the model follows through Combine, not an async sequence.** `NotificationCenter.publisher(for:)` with
+   `.receive(on: DispatchQueue.main)` subscribes in `init`, so a change posted right after `init` is never missed,
+   and the subscription ends with the model (no `deinit`). An async `notifications(named:)` loop subscribes only
+   once its task starts. The Output Inbox panel uses the same publisher.
 
 ## Terms
 
