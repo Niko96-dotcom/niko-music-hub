@@ -21,7 +21,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 1 `KeepLocalPins` and its tests | done | `git log --grep='(Keep Local step 1)'` | strict build; `KeepLocalPinsTests` 9/9 (2,000 generated cases for "never match less") |
 | 2 Runtime reads | done | `git log --grep='(Keep Local step 2)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
 | 3 Runtime writes | done | `git log --grep='(Keep Local step 3)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
-| 4 Browser reads | not started | | |
+| 4 Browser reads | done | `git log --grep='(Keep Local step 4)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
 | 5 Browser writes | not started | | |
 | 6 Close the raw set | not started | | |
 | 7 Docs, ADR, full gates, live check | not started | | |
@@ -33,6 +33,11 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    injected canonicalizer, which would be a seam with one adapter. The rule is kept by the code
    structure and its doc comment instead. The canonical-rule equality test lives in `KeepLocalPinsTests`
    (`AppCoreTests` imports `FeatureArchiveBrowser` with `@testable`).
+2. **Step 4: a temporary `keepLocalKeys(for:)`.** The browser's two writers still take a key set until
+   step 5, so `keepLocalKeys(for:)` stays for one step and returns exactly the keys
+   `pin(keepLocalProject(for:))` writes (the same four spellings as before, plus the IDs). The catalog
+   location match that `keepLocalKeys(for:)` and `snapshotsContainKeepLocalMatch` each wrote by hand
+   is now one helper, `catalogSnapshots(locatedAt:)`.
 
 ## Terms
 

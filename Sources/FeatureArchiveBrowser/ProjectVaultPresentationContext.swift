@@ -9,7 +9,7 @@ struct ProjectVaultPresentationContext: Equatable {
     let activeRoot: StoredMusicRoot?
     let archiveRoot: StoredMusicRoot?
     let generationReviewResolver: ProjectVaultGenerationReviewResolver?
-    let keepLocalProjectIDs: Set<String>
+    let keepLocalPins: KeepLocalPins
     /// Whether the live settings currently allow offering "Ready to free
     /// space": exactly the Done/manual removal gate
     /// (`permitsUserInitiatedRemoval` — user-initiated archiving base with a
@@ -31,7 +31,7 @@ struct ProjectVaultPresentationContext: Equatable {
         activeRoot = settings.musicRoots.first { $0.id == settings.vault.activeRootID }
         archiveRoot = settings.musicRoots.first { $0.id == settings.vault.archiveRootID }
         generationReviewResolver = ProjectVaultGenerationReviewResolver(settings: settings)
-        keepLocalProjectIDs = settings.vault.keepLocalProjectIDs
+        keepLocalPins = settings.vault.keepLocalPins
         allowsFreeSpaceOffer = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault)
         rootsConfigured = KeepLocalReviewPolicy.vaultRootsConfigured(in: settings)
     }

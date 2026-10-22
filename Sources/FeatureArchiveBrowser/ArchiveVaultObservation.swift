@@ -383,103 +383,66 @@ final class ArchiveVaultObservation: ObservableObject {
 
     // MARK: - Gating (pin OR, bound generation/restore, blocks)
 
-    /// Settings-side Keep Local check covering every key the browser ever
-    /// writes: the catalog project ID, the song ID (standardized Active path),
-    /// and the transfer source path in raw, standardized, and resolved form.
-    /// Always OR-ed with the runtime pin, never a replacement for it.
+    /// Settings-side Keep Local check for a card: the catalog project ID, the
+    /// song ID and the transfer source. Always OR-ed with the runtime pin,
+    /// never a replacement for it.
     static func isKeepLocalPinned(
         context: ProjectVaultPresentationContext,
         snapshot: ProjectVaultRuntimeSnapshot,
         song: Song
     ) -> Bool {
-        var keys: Set<String> = [snapshot.record.id.description, song.id]
-        if let sourceURL = snapshot.transfer?.sourceURL {
-            keys.insert(sourceURL.path)
-            keys.insert(sourceURL.standardizedFileURL.path)
-            keys.insert(sourceURL.standardizedFileURL.resolvingSymlinksInPath().path)
-        }
-        return !context.keepLocalProjectIDs.isDisjoint(with: keys)
+        context.keepLocalPins.contains(KeepLocalPins.Project(
+            projectIDs: [snapshot.record.id],
+            songIDs: [song.id],
+            folders: snapshot.transfer.map { [$0.sourceURL] } ?? []
+        ))
     }
 
-    /// Every settings key under which Keep Local can match this song: the
-    /// catalog project IDs (path-cached snapshot and catalog snapshots whose
-    /// Active location is this song), the song ID, the song folder and the
-    /// transfer source in raw, standardized, resolved, and canonical form.
-    /// Pinning writes and unpinning removes this same set, so no leftover
-    /// key keeps a pin.
-    func keepLocalKeys(for song: Song) -> Set<String> {
-        var keys: Set<String> = [song.id]
+    /// The song's project as the browser knows it: the song ID, the catalog
+    /// project IDs (the path-cached snapshot and catalog snapshots whose Active
+    /// location is this song), the song folder and the transfer source.
+    /// Pinning and unpinning use the same project, so no leftover key keeps a pin.
+    func keepLocalProject(for song: Song) -> KeepLocalPins.Project {
+        var projectIDs = catalogSnapshots(locatedAt: song).map(\.record.id)
         var folders: [URL] = [song.folderPath]
         if let snapshot = snapshot(for: song) {
-            keys.insert(snapshot.record.id.description)
+            projectIDs.append(snapshot.record.id)
             if let sourceURL = snapshot.transfer?.sourceURL { folders.append(sourceURL) }
         }
-        for folder in folders {
-            keys.insert(folder.path)
-            keys.insert(folder.standardizedFileURL.path)
-            keys.insert(folder.standardizedFileURL.resolvingSymlinksInPath().path)
-            keys.insert(Self.vaultCanonicalPath(folder))
-        }
-        if let activeRoot = context?.activeRoot {
-            let songPath = Self.vaultCanonicalPath(song.folderPath)
-            let activeBase = activeRoot.fallbackURL.standardizedFileURL.resolvingSymlinksInPath()
-            for snapshot in snapshots {
-                for location in snapshot.record.locations
-                    where location.kind == .active && location.rootID == activeRoot.id {
-                    let candidate = activeBase.appendingPathComponent(location.relativePath, isDirectory: true)
-                    if Self.vaultCanonicalPath(candidate) == songPath {
-                        keys.insert(snapshot.record.id.description)
-                    }
-                }
-            }
-        }
-        return keys
+        return KeepLocalPins.Project(projectIDs: projectIDs, songIDs: [song.id], folders: folders)
     }
 
-    /// Keep Local detection for the automatic Done path, using the same
-    /// identity/path keys as the snapshot and presentation logic. Every
-    /// source is OR-ed; a settings-only check never clears a runtime pin.
+    /// Temporary until the browser writes through `KeepLocalPins`
+    /// (docs/plans/keep-local-pins.md, step 5): the keys a pin would write.
+    func keepLocalKeys(for song: Song) -> Set<String> {
+        var pins = KeepLocalPins(storedKeys: [])
+        pins.pin(keepLocalProject(for: song))
+        return pins.storedKeys
+    }
+
+    /// Keep Local detection for the automatic Done path. Every source is OR-ed;
+    /// a settings-only check never clears a runtime pin.
     func isIntentionalKeepLocalSkip(for song: Song) -> Bool {
         guard let currentContext = context else { return false }
-        let keepLocal = currentContext.keepLocalProjectIDs
-        if keepLocal.contains(song.id) { return true }
-        let songPathKeys: Set<String> = [
-            song.folderPath.path,
-            song.folderPath.standardizedFileURL.path,
-            song.folderPath.standardizedFileURL.resolvingSymlinksInPath().path,
-            Self.vaultCanonicalPath(song.folderPath),
-        ]
-        if !keepLocal.isDisjoint(with: songPathKeys) { return true }
-        if let snapshot = snapshot(for: song) {
-            if snapshot.record.pinned { return true }
-            if keepLocal.contains(snapshot.record.id.description) { return true }
-            if Self.isKeepLocalPinned(context: currentContext, snapshot: snapshot, song: song) { return true }
-        }
+        if currentContext.keepLocalPins.contains(keepLocalProject(for: song)) { return true }
+        if snapshot(for: song)?.record.pinned == true { return true }
         if presentation(for: song)?.isKeepLocal == true { return true }
-        return snapshotsContainKeepLocalMatch(for: song, context: currentContext, keepLocal: keepLocal)
+        // Catalog snapshots that are not path-cached (no transfer, no linked
+        // archive) still carry the runtime pin.
+        return catalogSnapshots(locatedAt: song).contains { $0.record.pinned }
     }
 
-    /// Catalog snapshots that are not path-cached (no transfer, no linked
-    /// archive) still carry the runtime pin and record ID. Match them to the
-    /// song by canonical Active location so a Keep Local pin stored under the
-    /// catalog project ID also skips the automatic Done copy.
-    private func snapshotsContainKeepLocalMatch(
-        for song: Song,
-        context: ProjectVaultPresentationContext,
-        keepLocal: Set<String>
-    ) -> Bool {
-        guard let activeRoot = context.activeRoot else { return false }
+    /// Catalog snapshots whose Active location is this song's folder.
+    private func catalogSnapshots(locatedAt song: Song) -> [ProjectVaultRuntimeSnapshot] {
+        guard let activeRoot = context?.activeRoot else { return [] }
         let songPath = Self.vaultCanonicalPath(song.folderPath)
         let activeBase = activeRoot.fallbackURL.standardizedFileURL.resolvingSymlinksInPath()
-        for snapshot in snapshots {
-            guard snapshot.record.pinned || keepLocal.contains(snapshot.record.id.description) else { continue }
-            for location in snapshot.record.locations
-                where location.kind == .active && location.rootID == activeRoot.id {
-                let candidate = activeBase.appendingPathComponent(location.relativePath, isDirectory: true)
-                if Self.vaultCanonicalPath(candidate) == songPath { return true }
+        return snapshots.filter { snapshot in
+            snapshot.record.locations.contains { location in
+                location.kind == .active && location.rootID == activeRoot.id
+                    && Self.vaultCanonicalPath(activeBase.appendingPathComponent(location.relativePath, isDirectory: true)) == songPath
             }
         }
-        return false
     }
 
     /// Project Vault destinations are restore/review handles, never generic
@@ -692,7 +655,7 @@ final class ArchiveVaultObservation: ObservableObject {
         let record = ProjectRecord(
             canonicalTitle: song.effectiveDisplayTitle,
             locations: [ProjectLocation(rootID: active.id, relativePath: song.folderPath.lastPathComponent, kind: .active)],
-            pinned: context.keepLocalProjectIDs.contains(song.id),
+            pinned: context.keepLocalPins.contains(KeepLocalPins.Project(songIDs: [song.id])),
             workflowState: song.workflowStatus,
             lastActivityAt: song.effectiveLatestCPR?.modifiedAt
         )
