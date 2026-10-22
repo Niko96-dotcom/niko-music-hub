@@ -114,14 +114,14 @@ extension LiveProjectVaultRuntime {
     }
 
     /// Pins a restored Active copy under the catalog project ID plus the
-    /// actual Active folder identity (raw, standardized, and resolved paths),
-    /// so a later archive observes Keep Local before it can remove the copy.
+    /// actual Active folder, so a later archive observes Keep Local before it
+    /// can remove the copy.
     /// Metadata-only: the Vault generation, catalog rows, and song metadata
     /// are untouched, and workflow status never changes here.
     func persistRestoredKeepLocal(projectID: ProjectID, destinationURL: URL) {
-        let keys = keepLocalKeys(projectID: projectID, destinationURL: destinationURL)
+        let project = KeepLocalPins.Project(projectIDs: [projectID], folders: [destinationURL])
         try? settingsStore.updateSettings { settings in
-            settings.vault.keepLocalProjectIDs.formUnion(keys)
+            settings.vault.keepLocalPins.pin(project)
         }
     }
 
@@ -130,20 +130,10 @@ extension LiveProjectVaultRuntime {
     /// fail-closed so a settings-write failure never reports a successful
     /// unpinned restore.
     private func persistRestoredKeepLocalThrowing(projectID: ProjectID, destinationURL: URL) throws {
-        let keys = keepLocalKeys(projectID: projectID, destinationURL: destinationURL)
+        let project = KeepLocalPins.Project(projectIDs: [projectID], folders: [destinationURL])
         try settingsStore.updateSettings { settings in
-            settings.vault.keepLocalProjectIDs.formUnion(keys)
+            settings.vault.keepLocalPins.pin(project)
         }
-    }
-
-    private func keepLocalKeys(projectID: ProjectID, destinationURL: URL) -> Set<String> {
-        let standardized = destinationURL.standardizedFileURL
-        return [
-            projectID.description,
-            destinationURL.path,
-            standardized.path,
-            standardized.resolvingSymlinksInPath().path,
-        ]
     }
 
     /// Safely resolves an intended Active destination exactly like the restore
@@ -195,9 +185,8 @@ extension LiveProjectVaultRuntime {
         if let destination = safeRestoreDestinationURL(relativePath: relativePath, activeRoot: activeRoot) {
             try persistRestoredKeepLocalThrowing(projectID: projectID, destinationURL: destination)
         } else {
-            let identity: Set<String> = [projectID.description]
             try settingsStore.updateSettings { settings in
-                settings.vault.keepLocalProjectIDs.formUnion(identity)
+                settings.vault.keepLocalPins.pin(KeepLocalPins.Project(projectIDs: [projectID]))
             }
         }
     }
@@ -208,9 +197,8 @@ extension LiveProjectVaultRuntime {
         if let safe = safeContainedRestoreDestination(destinationURL, activeRoot: activeRoot) {
             try persistRestoredKeepLocalThrowing(projectID: projectID, destinationURL: safe)
         } else {
-            let identity: Set<String> = [projectID.description]
             try settingsStore.updateSettings { settings in
-                settings.vault.keepLocalProjectIDs.formUnion(identity)
+                settings.vault.keepLocalPins.pin(KeepLocalPins.Project(projectIDs: [projectID]))
             }
         }
     }
