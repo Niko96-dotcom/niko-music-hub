@@ -18,8 +18,8 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | `./script/ci.sh` green at `3ace650` (Terminal.app, 2026-10-22). `3bc0d67` changed docs only, so no re-run. |
 | 1 Footer type and tests | done | see `git log -- Sources/FeatureArchiveBrowser/ArchiveFooterStatus.swift` | strict build; `ArchiveFooterStatusTests` 13/13 |
-| 2 View model stores the footer | done | see `git log -- Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+StatusMessages.swift` (the commit that deletes it) | strict build; `FeatureArchiveBrowserTests` 631/631; all `*SourceTests` 88/88; full `ci.sh`: see step 2 row note below |
-| 3 Root-access kind | not started | | |
+| 2 View model stores the footer | done | see `git log -- Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+StatusMessages.swift` (the commit that deletes it) | strict build; `FeatureArchiveBrowserTests` 631/631; all `*SourceTests` 88/88; full `ci.sh` at `9b24264` green (Terminal.app): XCTest 2,813, 0 failures, 8 skipped; Swift Testing 93 |
+| 3 Root-access kind | done | `git log --grep='(step 3)'` | strict build; `FeatureArchiveBrowserTests` 631/631 |
 | 4 Settings kind | not started | | |
 | 5 Vault read kind, upload-wait withdraw | not started | | |
 | 6 Song-details host callback | not started | | |

@@ -69,7 +69,7 @@ extension ArchiveBrowserViewModel {
                             reason: Self.userFacingArchiveAccessReason(from: error),
                             storedRootID: root.id
                         )
-                        recordPersistenceWarning("Archive root access could not be restored: \(root.displayName).")
+                        recordPersistenceWarning(.rootAccess(rootName: root.displayName))
                     }
                     diagnostics.log(.error, "Archive root bookmark resolution failed: \(error)")
                     return nil
@@ -407,13 +407,6 @@ extension ArchiveBrowserViewModel {
         }
     }
 
-    /// Clears only the root-access footer warning once no stored root remains
-    /// unresolved. Unrelated persistence warnings (settings/metadata/save)
-    /// are left untouched so a successful repair never hides them.
-    private func clearStaleArchiveRootAccessWarning() {
-        removeFooterWarning { $0.text.hasPrefix("Archive root access could not be restored:") }
-    }
-
     /// First stored root that still fails to resolve, in persisted order.
     private func nextUnresolvedArchiveFailure() -> ArchiveAccessFailure? {
         // Runs right after persistRoots(), which appSettings publishes later; unreadable settings show no failure.
@@ -476,10 +469,10 @@ extension ArchiveBrowserViewModel {
             persistRoots()
             if let remaining = nextUnresolvedArchiveFailure() {
                 archiveAccessFailure = remaining
-                recordPersistenceWarning("Archive root access could not be restored: \(remaining.displayName).")
+                recordPersistenceWarning(.rootAccess(rootName: remaining.displayName))
             } else {
                 archiveAccessFailure = nil
-                clearStaleArchiveRootAccessWarning()
+                resolveFooterWarning(.rootAccess)
             }
             restartArchiveRootWatching()
             refreshFirstRunState()
@@ -554,10 +547,10 @@ extension ArchiveBrowserViewModel {
             roots = ArchiveRootDisplayPolicy.storedRoots(from: roots + [resolved])
             if let remaining = nextUnresolvedArchiveFailure() {
                 archiveAccessFailure = remaining
-                recordPersistenceWarning("Archive root access could not be restored: \(remaining.displayName).")
+                recordPersistenceWarning(.rootAccess(rootName: remaining.displayName))
             } else {
                 archiveAccessFailure = nil
-                clearStaleArchiveRootAccessWarning()
+                resolveFooterWarning(.rootAccess)
             }
             refreshFirstRunState()
             restartArchiveRootWatching()
@@ -570,7 +563,7 @@ extension ArchiveBrowserViewModel {
                 reason: Self.userFacingArchiveAccessReason(from: error),
                 storedRootID: failure.storedRootID
             )
-            recordPersistenceWarning("Archive root access could not be restored: \(failure.displayName).")
+            recordPersistenceWarning(.rootAccess(rootName: failure.displayName))
             diagnostics.log(.error, "Archive root bookmark resolution failed: \(error)")
             return false
         }
@@ -616,13 +609,12 @@ extension ArchiveBrowserViewModel {
         // remaining unresolved presentation so removing one root never drops it.
         if let remaining = nextUnresolvedArchiveFailure() {
             archiveAccessFailure = remaining
-            recordPersistenceWarning("Archive root access could not be restored: \(remaining.displayName).")
+            recordPersistenceWarning(.rootAccess(rootName: remaining.displayName))
         } else {
             archiveAccessFailure = nil
             // Only the root-access warning is stale now; an unrelated warning
             // cleared above must be restored so removal never hides it.
-            if let stashed = stashedWarning,
-               !stashed.text.hasPrefix("Archive root access could not be restored:") {
+            if let stashed = stashedWarning, stashed.kind != .rootAccess {
                 recordPersistenceWarning(stashed)
             }
         }
