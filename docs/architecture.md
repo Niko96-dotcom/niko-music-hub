@@ -2,6 +2,9 @@
 
 Last verified: 2026-09-27
 
+New here? Start with the [architecture map](architecture-map.md): entry points, main flows, state owners,
+seams, gates, and where the code differs from the principles below. This page holds the ownership detail.
+
 ## Principles
 
 1. **Maintain the shipped product** — extend and harden existing modules; no re-bootstrapping.
@@ -104,7 +107,7 @@ Archive domain and safety. No SwiftUI/AppKit.
   (router, menu bar model), `Navigation/` (`HubNavigationHistory`).
 - Shell jobs and quit: `ShellJobStatusCenter`, `CancelCopy`, `HubTerminationCoordinator` (see
   [Running work and quit](#running-work-and-quit)).
-- Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, and admission/capacity/activity probes; it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`.
+- Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, the admissions and the capacity probe (`FoundationProjectVaultCapacityProbe`); it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`. The activity probe (`SystemVaultAutomationActivityProbe`) lives in `NikoMusicCore/Vault/VaultAutomation.swift`.
 - Shared UI: `ToolHeaderBlock`, `HubInspectorPage`, hub design tokens (see `docs/design-contract.md`).
 - `HubRelativeTime` formats relative dates in English, matching the app's UI independently of the system locale.
 - Recorder startup explains the macOS system-audio prompt. Stop during startup waits for the capture backend to settle, shows why it is waiting, and reports when no recording began instead of silently returning to idle.
@@ -138,7 +141,7 @@ Archive domain and safety. No SwiftUI/AppKit.
 ## Persistence, services, composition
 
 - Settings: `UserDefaultsSettingsStore` owns `AppSettings` (music roots, vault bindings, Keep Local pins). Vault presentation reads settings only at explicit boundaries (`refreshProjectVaultPresentationContext`).
-- Archive persistence (production `AppComposition.swift:74-126`): one shared `SQLiteArchiveDatabase` backs `SQLiteArchiveIndexStore` (`ArchiveIndexStoring`), `SQLiteSongUserMetadataStore` (`SongUserMetadataStoring`), `SQLiteCollaboratorStore` (`CollaboratorStoring`), `SQLiteProjectCatalogStore`, and `SQLiteVaultTransferStore`. SQLite stores live in `NikoMusicCore/Persistence`; the Vault runtime (`LiveProjectVaultRuntime`, `ProjectVaultOperating`) lives in `AppCore`. Scans reconcile through `ArchiveCatalogCoordinator`.
+- Archive persistence (production `AppComposition.make()`): one shared `SQLiteArchiveDatabase` backs `SQLiteArchiveIndexStore` (`ArchiveIndexStoring`), `SQLiteSongUserMetadataStore` (`SongUserMetadataStoring`), `SQLiteCollaboratorStore` (`CollaboratorStoring`), `SQLiteProjectCatalogStore`, and `SQLiteVaultTransferStore`. SQLite stores live in `NikoMusicCore/Persistence`; the Vault runtime (`LiveProjectVaultRuntime`, `ProjectVaultOperating`) lives in `AppCore`. Scans reconcile with stored user metadata through `ArchiveCatalogCoordinator`. Project identity in `SQLiteProjectCatalogStore` is reconciled only by the Vault runtime, when a song is archived (`LiveProjectVaultRuntime+Catalog.swift`).
 - Song metadata: `SongUserMetadataStoring` SQLite rows (titles, aliases, notes, workflow status, collaborators); per-song merge/commit path with corrupt-row gating.
 - Vault transfers: `SQLiteVaultTransferStore` over `SQLiteArchiveDatabase` (transfer journal is authoritative for phases/recovery).
 - Vault catalog: `SQLiteProjectCatalogStore` (project records, locations, identity reviews).

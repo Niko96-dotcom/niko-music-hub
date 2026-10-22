@@ -33,7 +33,37 @@ behavior into Swift modules instead.
   enforce the edges (`docs/decisions/020-module-boundary-checks.md`).
 - App target is `NikoMusicHub`; bundle identity is fixed in `BUNDLE_ID`.
 
-Full detail: `docs/architecture.md`. Product intent: `docs/product-scope.md`.
+Start with `docs/architecture-map.md`: entry points, main flows, state owners, seams, gates, where the code
+differs from these rules, and open questions. Full detail: `docs/architecture.md`. Product intent (historical
+v0.1 scope): `docs/product-scope.md`.
+
+## Engineering baseline
+
+Priorities: maintainability, readability, clear responsibilities, and straightforward code a new developer
+can follow. Read `docs/architecture-map.md` before a structural change. When two rules below pull apart,
+pick the design that leaves the reader less to hold in mind.
+
+- **Keep related knowledge and invariants together.** Each rule and each piece of state has one owner (the
+  map's state-owner table). Put the check, its comment and its test with that owner, not in every caller:
+  output admission is only `ToolOutputGuard`, the Vault queue is only `ProjectVaultOperationCoordinator`.
+- **Make dependencies and control flow explicit.** Pass collaborators in through an initializer,
+  `ToolContext` or a host struct, and wire them in `AppComposition.make()`. Do not add `.shared` singletons,
+  `ProcessInfo` reads outside `MusicHubRuntimeEnvironment`, or `NotificationCenter` routing. Remove an
+  ordering constraint, or name it in the interface and test it.
+- **Require abstractions to reduce the reader's total mental workload.** A new protocol, wrapper,
+  coordinator, extension file or option must hide more than it adds. A protocol earns its place with two
+  adapters (production and test), as `WorkspaceOpening` and `ArchiveRootWatching` have. No pass-through
+  layers.
+- **Split by responsibility, not by file or function size.** Extract an owner when a set of state and rules
+  can be understood on its own, as `ArchiveMetadataEditingCoordinator` was. Do not cut a type into more
+  `+Extension.swift` files or helpers only to make it shorter: that adds jumps and keeps the shared state.
+- **Respect Swift's idioms and the project's constraints.** Swift 6 concurrency (`@MainActor` view models,
+  actors for shared mutable state, `Sendable` values), value types and enums over flags, `throws` for a
+  refusal, the SwiftUI state rules below, no warnings, the module edges of ADR 020, local-first and
+  read-only toward music archives.
+
+A change that adds a module or a module edge, moves a state owner, changes a main flow or settles an open
+question updates `docs/architecture-map.md` in the same commit.
 
 ## Reference material
 
