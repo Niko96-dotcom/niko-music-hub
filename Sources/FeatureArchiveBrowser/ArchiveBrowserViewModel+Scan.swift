@@ -45,7 +45,7 @@ extension ArchiveBrowserViewModel {
         metadataEditing.clearForRootChange()
         mixdownAnalysis.cancel()
         cprPlugins.cancel()
-        persistenceWarningMessage = nil
+        clearFooterWarning()
         scanOrchestrator.clearPendingPaths()
         ArchivePreviewPlayback.stopAll()
         ArchivePreviewPlayer.clearMetadataCaches()

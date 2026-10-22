@@ -18,7 +18,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | `./script/ci.sh` green at `3ace650` (Terminal.app, 2026-10-22). `3bc0d67` changed docs only, so no re-run. |
 | 1 Footer type and tests | done | see `git log -- Sources/FeatureArchiveBrowser/ArchiveFooterStatus.swift` | strict build; `ArchiveFooterStatusTests` 13/13 |
-| 2 View model stores the footer | not started | | |
+| 2 View model stores the footer | done | see `git log -- Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+StatusMessages.swift` (the commit that deletes it) | strict build; `FeatureArchiveBrowserTests` 631/631; all `*SourceTests` 88/88; full `ci.sh`: see step 2 row note below |
 | 3 Root-access kind | not started | | |
 | 4 Settings kind | not started | | |
 | 5 Vault read kind, upload-wait withdraw | not started | | |
@@ -35,6 +35,18 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    coordinator). Today a repair replaces any of them because it checks the text. So the plain
    initializer `Warning(_ text:)` now classifies with `SongMetadataIntegrityCopy.isIntegrityWarning`.
    This keeps repair behavior identical by construction, and step 6 only changes the host callback.
+2. **Step 2: the footer methods live in `ArchiveBrowserViewModel.swift`.** `private(set)` limits
+   the setter to the declaring file, so `ArchiveBrowserViewModel+StatusMessages.swift` was merged
+   into the main file ("Footer status" extension) and deleted. Root reset uses the permanent
+   `clearFooterWarning()`.
+3. **Step 2: publish only on change.** Every footer method goes through `updateFooter`, which
+   assigns `footer` only when the value changed. Before, every setter published, even a background
+   message that a Vault hold ignored. The text the view shows is unchanged.
+4. **Step 2: two more test edits.** `ArchiveBoardSongsViewTests.swift:30` and
+   `ArchiveBrowseRefreshDriverTests.swift:21` assigned `statusMessage` directly; they now call
+   `setBackgroundStatusMessage`. `ArchiveSettingsRepairTests.swift:115` now records an unrelated
+   warning instead of assigning nil, which still proves that onboarding records the settings
+   warning again.
 
 ## Terms
 

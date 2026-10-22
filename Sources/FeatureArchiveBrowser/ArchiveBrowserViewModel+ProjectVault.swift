@@ -185,10 +185,9 @@ extension ArchiveBrowserViewModel {
         guard let projectVaultRuntime else { return false }
         do {
             let snapshots = try await projectVaultRuntime.snapshots()
-            if persistenceWarningMessage == Self.projectVaultReadFailureMessage
-                || persistenceWarningMessage == Self.projectVaultUnreadableRecordsMessage {
-                persistenceWarningMessage = nil
-                statusMessage = combinedStatusMessage(base: statusBaseMessage)
+            removeFooterWarning { warning in
+                warning.text == Self.projectVaultReadFailureMessage
+                    || warning.text == Self.projectVaultUnreadableRecordsMessage
             }
             if statusBaseMessage == ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability),
                !snapshots.contains(where: { $0.transfer?.isWaitingForProviderUpload == true }) {

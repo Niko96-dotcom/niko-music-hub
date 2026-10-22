@@ -113,7 +113,12 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             publishShellJobStatus()
         }
     }
-    @Published var statusMessage: String?
+    /// What the archive footer shows. `ArchiveFooterStatus` owns the rules; the
+    /// footer methods at the end of this file are the only writers.
+    @Published private(set) var footer = ArchiveFooterStatus()
+    var statusMessage: String? { footer.text }
+    var statusBaseMessage: String? { footer.message }
+    var persistenceWarningMessage: String? { footer.warning?.text }
     /// NMH-049: nearby open failure recovery (footer `statusMessage` stays the log).
     @Published var openError: String?
     /// NMH-049: nearby scan failure body (footer keeps `Scan failed: …`).
@@ -204,7 +209,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                     self?.persistenceWarningMessage
                 },
                 setPersistenceWarningDirect: { [weak self] warning in
-                    self?.persistenceWarningMessage = warning
+                    if let warning {
+                        self?.recordPersistenceWarning(warning)
+                    } else {
+                        self?.clearFooterWarning()
+                    }
                 },
                 reportWarning: { [weak self] warning in
                     self?.recordPersistenceWarning(warning)
@@ -368,11 +377,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Keeps security-scoped access alive for bookmarked roots while the model lives.
     var securityScopedRootAccesses: [SecurityScopedRootAccess] = []
     public var requestConverterHandoff: ((URL) -> Void)?
-    var statusBaseMessage: String?
-    var persistenceWarningMessage: String?
-    /// Background archive scans must not replace a newer, user-facing Project Vault
-    /// operation status. Any non-Vault status update releases this ownership.
-    var projectVaultOwnsStatus = false
 
     // MARK: - Computed
 
@@ -637,5 +641,54 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     func chooseTemplateFolder() -> URL? {
         fileActions.chooseDirectory(prompt: "Choose Template Folder")
+    }
+}
+
+// MARK: - Footer status
+
+/// The only writers of `footer`. Each publishes only when the footer changes,
+/// so a background message that a Project Vault hold ignores costs no render.
+extension ArchiveBrowserViewModel {
+    func setStatusMessage(_ message: String?) {
+        updateFooter { $0.show(message, from: .action) }
+    }
+
+    func setProjectVaultStatusMessage(_ message: String?) {
+        updateFooter { $0.show(message, from: .projectVault) }
+    }
+
+    func setBackgroundStatusMessage(_ message: String?) {
+        updateFooter { $0.show(message, from: .background) }
+    }
+
+    func recordPersistenceWarning(_ warning: String) {
+        recordPersistenceWarning(ArchiveFooterStatus.Warning(warning))
+    }
+
+    func recordPersistenceWarning(_ warning: ArchiveFooterStatus.Warning) {
+        updateFooter { $0.raise(warning) }
+    }
+
+    func resolveFooterWarning(_ kind: ArchiveFooterStatus.Warning.Kind) {
+        updateFooter { $0.resolve(kind) }
+    }
+
+    /// Root change: no warning about the previous roots stays.
+    func clearFooterWarning() {
+        updateFooter { $0.clearWarning() }
+    }
+
+    /// Temporary until every resolvable warning family has a kind
+    /// (docs/plans/archive-footer-status.md, steps 3-5).
+    func removeFooterWarning(where shouldRemove: (ArchiveFooterStatus.Warning) -> Bool) {
+        guard let warning = footer.warning, shouldRemove(warning) else { return }
+        clearFooterWarning()
+    }
+
+    private func updateFooter(_ change: (inout ArchiveFooterStatus) -> Void) {
+        var next = footer
+        change(&next)
+        guard next != footer else { return }
+        footer = next
     }
 }

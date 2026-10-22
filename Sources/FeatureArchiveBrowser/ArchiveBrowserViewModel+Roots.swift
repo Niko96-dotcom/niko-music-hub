@@ -92,11 +92,9 @@ extension ArchiveBrowserViewModel {
     /// repaired them: drop the stale settings warning, reload the real archive
     /// roots, and rescan when they differ from what is showing.
     public func applyRepairedSettings() {
-        if let current = persistenceWarningMessage,
-           current.hasPrefix("Archive settings could not be")
-            || current == ArchiveWriteGuardError.settingsUnreadable.localizedDescription {
-            persistenceWarningMessage = nil
-            statusMessage = combinedStatusMessage(base: statusBaseMessage)
+        removeFooterWarning { warning in
+            warning.text.hasPrefix("Archive settings could not be")
+                || warning.text == ArchiveWriteGuardError.settingsUnreadable.localizedDescription
         }
         // Vault status read while settings were unreadable failed too; re-read
         // it now so its warning clears without a relaunch.
@@ -413,11 +411,7 @@ extension ArchiveBrowserViewModel {
     /// unresolved. Unrelated persistence warnings (settings/metadata/save)
     /// are left untouched so a successful repair never hides them.
     private func clearStaleArchiveRootAccessWarning() {
-        guard let current = persistenceWarningMessage,
-              current.hasPrefix("Archive root access could not be restored:")
-        else { return }
-        persistenceWarningMessage = nil
-        statusMessage = combinedStatusMessage(base: statusBaseMessage)
+        removeFooterWarning { $0.text.hasPrefix("Archive root access could not be restored:") }
     }
 
     /// First stored root that still fails to resolve, in persisted order.
@@ -613,7 +607,7 @@ extension ArchiveBrowserViewModel {
         roots.removeAll { Self.canonicalPath(for: $0) == canonical }
         guard before.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
         scanRootBookmarks.removeValue(forKey: Self.bookmarkKey(for: url))
-        let stashedWarning = persistenceWarningMessage
+        let stashedWarning = footer.warning
         clearRootBoundArchiveState(
             statusMessage: roots.isEmpty ? nil : "Archive roots changed. Scan to refresh."
         )
@@ -628,7 +622,7 @@ extension ArchiveBrowserViewModel {
             // Only the root-access warning is stale now; an unrelated warning
             // cleared above must be restored so removal never hides it.
             if let stashed = stashedWarning,
-               !stashed.hasPrefix("Archive root access could not be restored:") {
+               !stashed.text.hasPrefix("Archive root access could not be restored:") {
                 recordPersistenceWarning(stashed)
             }
         }

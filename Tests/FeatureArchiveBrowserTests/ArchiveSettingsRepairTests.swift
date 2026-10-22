@@ -112,7 +112,7 @@ final class ArchiveSettingsRepairTests: XCTestCase {
 
         viewModel.addRoot(root)
         XCTAssertEqual(viewModel.persistenceWarningMessage, plain)
-        viewModel.persistenceWarningMessage = nil
+        viewModel.recordPersistenceWarning("Unrelated warning.")
         viewModel.completeArchiveOnboarding()
         XCTAssertEqual(viewModel.persistenceWarningMessage, plain)
         XCTAssertEqual(defaults.data(forKey: key), blob, "nothing was written")

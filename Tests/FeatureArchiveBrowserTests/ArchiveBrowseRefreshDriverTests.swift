@@ -18,7 +18,7 @@ final class ArchiveBrowseRefreshDriverTests: XCTestCase {
         model.setSearchQuery("zzzzzzzzzzzz")
         model.recomputeBrowseResults()
         XCTAssertEqual(model.searchResultCountText, "0 results")
-        model.statusMessage = "Scan needs attention"
+        model.setBackgroundStatusMessage("Scan needs attention")
         model.setSearchQuery("")
         XCTAssertFalse(model.isSearching)
         XCTAssertNil(model.searchResultCountText)

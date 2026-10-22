@@ -27,7 +27,7 @@ final class ArchiveBoardSongsViewTests: XCTestCase {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         let songs = ["A", "B"].map { Song(folderPath: URL(fileURLWithPath: "/fixture-only/\($0)"), originalFolderName: $0, displayTitle: $0) }
         let original = ArchiveBoardSongsView(songs: songs, selectedSongID: nil, vaultPresentations: [:], viewModel: model, dropLayout: layout)
-        model.statusMessage = "Scan progress"
+        model.setBackgroundStatusMessage("Scan progress")
         model.searchQuery = "Typing before debounce"
         XCTAssertEqual(original, ArchiveBoardSongsView(songs: songs, selectedSongID: nil, vaultPresentations: [:], viewModel: model, dropLayout: layout))
         XCTAssertNotEqual(original, ArchiveBoardSongsView(songs: Array(songs.reversed()), selectedSongID: nil, vaultPresentations: [:], viewModel: model, dropLayout: layout))
