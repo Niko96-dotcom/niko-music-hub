@@ -205,15 +205,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                 applyReplacement: { [weak self] updated in
                     self?.replaceSong(updated)
                 },
-                currentPersistenceWarning: { [weak self] in
-                    self?.persistenceWarningMessage
-                },
-                setPersistenceWarningDirect: { [weak self] warning in
-                    if let warning {
-                        self?.recordPersistenceWarning(warning)
-                    } else {
-                        self?.clearFooterWarning()
-                    }
+                refreshSongDetailsWarning: { [weak self] warning in
+                    self?.refreshSongDetailsWarning(warning)
                 },
                 reportWarning: { [weak self] warning in
                     self?.recordPersistenceWarning(warning)
@@ -676,6 +669,17 @@ extension ArchiveBrowserViewModel {
     /// Root change: no warning about the previous roots stays.
     func clearFooterWarning() {
         updateFooter { $0.clearWarning() }
+    }
+
+    /// After a song-details repair: only a song-details warning is replaced,
+    /// by the catalog's current one, or cleared when the catalog has none.
+    func refreshSongDetailsWarning(_ warning: String?) {
+        guard footer.warning?.kind == .songDetails else { return }
+        if let warning {
+            recordPersistenceWarning(warning)
+        } else {
+            resolveFooterWarning(.songDetails)
+        }
     }
 
     /// Clears a Project Vault message once its condition is over, only while

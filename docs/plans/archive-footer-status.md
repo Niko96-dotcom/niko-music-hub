@@ -22,7 +22,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 3 Root-access kind | done | `git log --grep='(step 3)'` | strict build; `FeatureArchiveBrowserTests` 631/631 |
 | 4 Settings kind | done | `git log --grep='(step 4)'` | strict build; `FeatureArchiveBrowserTests` 631/631 |
 | 5 Vault read kind, upload-wait withdraw | done | `git log --grep='(step 5)'` | strict build; `FeatureArchiveBrowserTests` 631/631 before the new test; new `testRefreshWithdrawsTheUploadWaitMessageOnlyWhenNoUploadIsPending` passes |
-| 6 Song-details host callback | not started | | |
+| 6 Song-details host callback | done | `git log --grep='(step 6)'` | strict build; `FeatureArchiveBrowserTests` 633/633 (with the new repair test) |
 | 7 Remove temporary API, docs, full gates | not started | | |
 
 ## Revisions
@@ -53,6 +53,11 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    rewritten in this step, so `ArchiveVaultObservationTests` gained
    `testRefreshWithdrawsTheUploadWaitMessageOnlyWhenNoUploadIsPending`. The view model gained
    `withdrawFooterMessage(_:)` because `footer` is `private(set)`.
+
+6. **Step 6: a test that a repair keeps unrelated warnings.** The existing repair test checks that a
+   stale song-details warning clears; nothing checked the opposite. `SongMetadataRepairTests` gained
+   `testRepairRefreshLeavesOtherFooterWarningsAlone`. The host callback is implemented by the new
+   view-model method `refreshSongDetailsWarning(_:)`.
 
 ## Terms
 

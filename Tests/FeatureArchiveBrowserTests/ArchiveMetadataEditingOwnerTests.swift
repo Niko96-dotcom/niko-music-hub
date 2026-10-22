@@ -35,7 +35,6 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
         var requestedDone: [String] = []
         var revoked: [String] = []
         var replaced: [Song] = []
-        var persistenceWarning: String?
         var warnings: [String] = []
         var statuses: [String] = []
         var vaultStatuses: [String] = []
@@ -54,8 +53,7 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
                 requestDoneArchive: { [self] song in self.requestedDone.append(song.id) },
                 revokeDoneWork: { [self] songID in self.revoked.append(songID) },
                 applyReplacement: { [self] updated in self.replaced.append(updated) },
-                currentPersistenceWarning: { [self] in self.persistenceWarning },
-                setPersistenceWarningDirect: { [self] warning in self.persistenceWarning = warning },
+                refreshSongDetailsWarning: { _ in },
                 reportWarning: { [self] warning in self.warnings.append(warning) },
                 reportStatus: { [self] message in self.statuses.append(message) },
                 reportVaultStatus: { [self] message in self.vaultStatuses.append(message) }
@@ -512,8 +510,7 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
                     requestDoneArchive: { _ in },
                     revokeDoneWork: { _ in XCTFail("vanished host must not revoke") },
                     applyReplacement: { _ in XCTFail("vanished host must not replace") },
-                    currentPersistenceWarning: { [weak box] in box?.persistenceWarning },
-                    setPersistenceWarningDirect: { _ in },
+                    refreshSongDetailsWarning: { _ in },
                     reportWarning: { _ in },
                     reportStatus: { _ in },
                     reportVaultStatus: { _ in }

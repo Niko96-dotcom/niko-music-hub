@@ -46,8 +46,9 @@ struct ArchiveMetadataEditingHost {
     let requestDoneArchive: @MainActor (Song) -> Void
     let revokeDoneWork: @MainActor (String) -> Void
     let applyReplacement: @MainActor (Song) -> Void
-    let currentPersistenceWarning: @MainActor () -> String?
-    let setPersistenceWarningDirect: @MainActor (String?) -> Void
+    /// After a repair: a song-details warning on show becomes this one, or
+    /// clears when nil. Any other warning stays.
+    let refreshSongDetailsWarning: @MainActor (String?) -> Void
     let reportWarning: @MainActor (String) -> Void
     let reportStatus: @MainActor (String) -> Void
     let reportVaultStatus: @MainActor (String) -> Void
@@ -519,9 +520,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
             repairedNames.append(SongMetadataIntegrityCopy.name(of: merged))
         }
         syncRepairState()
-        if let current = host.currentPersistenceWarning(), SongMetadataIntegrityCopy.isIntegrityWarning(current) {
-            host.setPersistenceWarningDirect(catalog.metadataIntegrityWarning())
-        }
+        host.refreshSongDetailsWarning(catalog.metadataIntegrityWarning())
         var parts: [String] = []
         if !repairedNames.isEmpty {
             parts.append(SongMetadataIntegrityCopy.repaired(names: repairedNames, cleared: result.clearedLists))

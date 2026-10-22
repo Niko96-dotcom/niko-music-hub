@@ -190,6 +190,21 @@ final class SongMetadataRepairTests: XCTestCase {
         XCTAssertFalse(viewModel.metadataRepairSongIDs.contains(created.id), "unread is not corrupt; no repair offered")
     }
 
+    /// A repair replaces or clears only a song-details warning; a footer
+    /// warning about something else stays on show.
+    func testRepairRefreshLeavesOtherFooterWarningsAlone() {
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        viewModel.recordPersistenceWarning("Collaborators could not be saved.")
+        viewModel.refreshSongDetailsWarning(nil)
+        XCTAssertEqual(viewModel.persistenceWarningMessage, "Collaborators could not be saved.")
+
+        viewModel.recordPersistenceWarning(SongMetadataIntegrityCopy.corrupt(["Alpha", "Beta"]))
+        viewModel.refreshSongDetailsWarning(SongMetadataIntegrityCopy.corrupt(["Beta"]))
+        XCTAssertEqual(viewModel.persistenceWarningMessage, SongMetadataIntegrityCopy.corrupt(["Beta"]))
+        viewModel.refreshSongDetailsWarning(nil)
+        XCTAssertNil(viewModel.persistenceWarningMessage)
+    }
+
     // MARK: - Helpers
 
     private func makeTempDirectory(_ name: String) throws -> URL {
