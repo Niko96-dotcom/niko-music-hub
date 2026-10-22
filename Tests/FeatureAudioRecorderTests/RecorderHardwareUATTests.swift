@@ -27,8 +27,7 @@ final class RecorderHardwareUATTests: XCTestCase {
         let viewModel = AudioRecorderViewModel(
             capturePort: capturePort,
             useCase: RecordSystemAudioUseCase(capturePort: capturePort),
-            outputURL: outputDirectory,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: outputDirectory),
             outputInboxStore: inbox
         )
         await viewModel.startRecording()

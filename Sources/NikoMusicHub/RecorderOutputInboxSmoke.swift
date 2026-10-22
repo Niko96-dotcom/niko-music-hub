@@ -18,9 +18,8 @@ enum RecorderOutputInboxSmoke {
         let viewModel = AudioRecorderViewModel(
             capturePort: capturePort,
             useCase: RecordSystemAudioUseCase(capturePort: capturePort),
-            outputURL: outputDirectory,
             // A temporary folder outside every music root; nothing to protect.
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: ToolOutputDestination(settings: AppSettings(outputFolder: StoredFolderLocation(url: outputDirectory))),
             outputInboxStore: inboxStore
         )
 

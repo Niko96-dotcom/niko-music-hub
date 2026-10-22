@@ -34,7 +34,7 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         let inboxExistedBefore = FileManager.default.fileExists(atPath: defaultInbox.path)
 
         let port = CountingCapturePort()
-        let vm = makeViewModel(port: port) { try RecordingDestination.load(from: store) }
+        let vm = makeViewModel(port: port) { try ToolOutputDestination.load(from: store) }
 
         await vm.startRecording()
 
@@ -64,7 +64,7 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         let store = UserDefaultsSettingsStore(userDefaults: defaults)
 
-        let destination = try RecordingDestination.load(from: store)
+        let destination = try ToolOutputDestination.load(from: store)
 
         XCTAssertEqual(destination.folder, StoredFolderLocation.defaultOutputFolder)
         // Nothing saved means no music roots, so no folder is refused.
@@ -81,7 +81,7 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         ))
 
         let port = CountingCapturePort()
-        let vm = makeViewModel(port: port) { try RecordingDestination.load(from: store) }
+        let vm = makeViewModel(port: port) { try ToolOutputDestination.load(from: store) }
 
         await vm.startRecording()
 
@@ -105,7 +105,7 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         ))
 
         let port = CountingCapturePort()
-        let vm = makeViewModel(port: port) { try RecordingDestination.load(from: store) }
+        let vm = makeViewModel(port: port) { try ToolOutputDestination.load(from: store) }
 
         await vm.startRecording()
         for _ in 0..<200 where port.startedURLs.isEmpty {
@@ -121,7 +121,7 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
     }
 
     // B-002: every configured music root stays write-protected for recordings while the
-    // Vault switch is OFF. The real settings projection (`RecordingDestination.load`)
+    // Vault switch is OFF. The real settings projection (`ToolOutputDestination.load`)
     // feeds the real use case; only the capture port is a spy.
     func testVaultOffRefusesArchiveDestinationAndAliasBeforeCaptureOrDirectory() async throws {
         let fixture = try VaultOffOutputFixture()
@@ -131,7 +131,7 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         for destination in fixture.refusedDestinations {
             let store = FixtureSettingsStore(settings: fixture.settings(outputFolder: destination.url))
             let port = CountingCapturePort()
-            let vm = makeViewModel(port: port) { try RecordingDestination.load(from: store) }
+            let vm = makeViewModel(port: port) { try ToolOutputDestination.load(from: store) }
 
             await vm.startRecording()
 
@@ -150,7 +150,7 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
         let before = try fixture.archiveSnapshot()
         let store = FixtureSettingsStore(settings: fixture.settings(outputFolder: fixture.ordinaryOutput))
         let port = CountingCapturePort()
-        let vm = makeViewModel(port: port) { try RecordingDestination.load(from: store) }
+        let vm = makeViewModel(port: port) { try ToolOutputDestination.load(from: store) }
 
         await vm.startRecording()
         for _ in 0..<200 where port.startedURLs.isEmpty {
@@ -167,7 +167,7 @@ final class RecordingSettingsSnapshotTests: XCTestCase {
 
     private func makeViewModel(
         port: CountingCapturePort,
-        destination: @escaping @MainActor () throws -> RecordingDestination
+        destination: @escaping @MainActor () throws -> ToolOutputDestination
     ) -> AudioRecorderViewModel {
         AudioRecorderViewModel(
             capturePort: port,

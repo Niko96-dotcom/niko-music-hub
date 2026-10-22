@@ -48,29 +48,6 @@ private func messageIndicatesCapturePermissionFailure(_ message: String) -> Bool
     return markers.contains { lowered.contains($0) }
 }
 
-/// Where a take goes and the guard that admits it, read together from one
-/// settings snapshot.
-public struct RecordingDestination: Sendable {
-    public let folder: URL
-    public let outputGuard: ToolOutputGuard
-
-    public init(folder: URL, outputGuard: ToolOutputGuard) {
-        self.folder = folder
-        self.outputGuard = outputGuard
-    }
-
-    /// One throwing settings read. `loadSettings()` returns defaults when
-    /// nothing was ever saved (first run) and throws when saved data is
-    /// unreadable; that error is passed on rather than replaced by defaults.
-    public static func load(from settingsStore: any SettingsStore) throws -> RecordingDestination {
-        let settings = try settingsStore.loadSettings()
-        return RecordingDestination(
-            folder: settings.outputFolder.url,
-            outputGuard: ToolOutputGuard(settings: settings)
-        )
-    }
-}
-
 @MainActor
 public final class AudioRecorderViewModel: ObservableObject {
     public static let toolID = ToolFeatureID("audio-recorder")
@@ -134,7 +111,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     private let capturePort: AudioCapturePort
     private let useCase: RecordSystemAudioUseCase
     private let now: @Sendable () -> Date
-    private let destinationProvider: @MainActor () throws -> RecordingDestination
+    private let destinationProvider: @MainActor () throws -> ToolOutputDestination
     private let outputInboxStore: any OutputInboxStore
     private let jobStatusCenter: ShellJobStatusCenter?
     private var isStartInFlight = false
@@ -143,8 +120,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     public convenience init(
         capturePort: AudioCapturePort,
         useCase: RecordSystemAudioUseCase,
-        outputURL: URL,
-        outputGuard: ToolOutputGuard,
+        destination: ToolOutputDestination,
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30,
         jobStatusCenter: ShellJobStatusCenter? = nil,
@@ -153,7 +129,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.init(
             capturePort: capturePort,
             useCase: useCase,
-            destinationProvider: { RecordingDestination(folder: outputURL, outputGuard: outputGuard) },
+            destinationProvider: { destination },
             outputInboxStore: outputInboxStore,
             initialMaxDurationMinutes: initialMaxDurationMinutes,
             jobStatusCenter: jobStatusCenter,
@@ -164,7 +140,7 @@ public final class AudioRecorderViewModel: ObservableObject {
     public init(
         capturePort: AudioCapturePort,
         useCase: RecordSystemAudioUseCase,
-        destinationProvider: @escaping @MainActor () throws -> RecordingDestination,
+        destinationProvider: @escaping @MainActor () throws -> ToolOutputDestination,
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30,
         jobStatusCenter: ShellJobStatusCenter? = nil,
@@ -228,7 +204,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         // One settings snapshot supplies both the folder and its protected
         // roots. Unreadable settings must never fall back to defaults: those
         // carry no protected roots, so the guard would allow everything.
-        let destination: RecordingDestination
+        let destination: ToolOutputDestination
         do {
             destination = try destinationProvider()
         } catch {

@@ -16,7 +16,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let inbox = InMemoryOutputInboxStore()
         let vm = AudioRecorderViewModel(
             capturePort: port, useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: directory, outputGuard: ToolOutputGuard(settings: .default), outputInboxStore: inbox
+            destination: .noProtectedRoots(at: directory), outputInboxStore: inbox
         )
         await vm.startRecording()
         await fulfillment(of: [startEntered], timeout: 1)
@@ -51,8 +51,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: directory,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: directory),
             outputInboxStore: InMemoryOutputInboxStore()
         )
         let recording = expectation(description: "recording only after readiness")
@@ -80,8 +79,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: useCase,
-            outputURL: URL(fileURLWithPath: "/tmp"),
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: URL(fileURLWithPath: "/tmp")),
             outputInboxStore: outputInboxStore
         )
 
@@ -101,8 +99,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: useCase,
-            outputURL: URL(fileURLWithPath: "/tmp"),
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: URL(fileURLWithPath: "/tmp")),
             outputInboxStore: outputInboxStore
         )
 
@@ -123,8 +120,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: useCase,
-            outputURL: URL(fileURLWithPath: "/tmp"),
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: URL(fileURLWithPath: "/tmp")),
             outputInboxStore: outputInboxStore
         )
 
@@ -153,8 +149,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: useCase,
-            outputURL: URL(fileURLWithPath: "/tmp"),
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: URL(fileURLWithPath: "/tmp")),
             outputInboxStore: outputInboxStore
         )
 
@@ -181,8 +176,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: useCase,
-            outputURL: URL(fileURLWithPath: "/tmp"),
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: URL(fileURLWithPath: "/tmp")),
             outputInboxStore: InMemoryOutputInboxStore(),
             now: { frozen }
         )
@@ -199,8 +193,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: useCase,
-            outputURL: URL(fileURLWithPath: "/tmp"),
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: URL(fileURLWithPath: "/tmp")),
             outputInboxStore: outputInboxStore,
             initialMaxDurationMinutes: 90
         )
@@ -219,8 +212,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -245,8 +237,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -274,8 +265,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -301,8 +291,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: missingOutputDirectory,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: missingOutputDirectory),
             outputInboxStore: inbox
         )
 
@@ -329,8 +318,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -354,8 +342,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
         vm.maxDurationMinutes = 1
@@ -390,8 +377,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox,
             jobStatusCenter: center
         )
@@ -438,8 +424,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -465,8 +450,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -496,8 +480,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -523,8 +506,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: InMemoryOutputInboxStore()
         )
 
@@ -593,8 +575,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -624,8 +605,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -659,8 +639,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 
@@ -705,8 +684,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let vm = AudioRecorderViewModel(
             capturePort: port,
             useCase: RecordSystemAudioUseCase(capturePort: port),
-            outputURL: tempDir,
-            outputGuard: ToolOutputGuard(settings: .default),
+            destination: .noProtectedRoots(at: tempDir),
             outputInboxStore: inbox
         )
 

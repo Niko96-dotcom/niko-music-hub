@@ -37,7 +37,7 @@ public struct AudioRecorderFeature: ToolFeature {
         let viewModel = AudioRecorderViewModel(
             capturePort: capturePort,
             useCase: useCase,
-            destinationProvider: { try RecordingDestination.load(from: context.settingsStore) },
+            destinationProvider: { try ToolOutputDestination.load(from: context.settingsStore) },
             outputInboxStore: context.outputInboxStore,
             initialMaxDurationMinutes: RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes),
             jobStatusCenter: context.jobStatusCenter

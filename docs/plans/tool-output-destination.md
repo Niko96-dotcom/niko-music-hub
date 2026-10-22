@@ -18,7 +18,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates green on `63630fd`; `a6c3c59` changed docs only, so no re-run |
 | 1 `ToolOutputDestination` and its tests | done | `git log --grep='(output step 1)'` | strict build; `ToolOutputDestinationTests` 4/4 |
-| 2 Audio Recorder | not started | | |
+| 2 Audio Recorder | done | `git log --grep='(output step 2)'` | strict build; recorder suites 105 (3 skipped) and `ToolOutputDestinationTests`, 0 failures |
 | 3 WAV Converter | not started | | |
 | 4 Downloader | not started | | |
 | 5 Stem Separation | not started | | |
@@ -31,6 +31,14 @@ Resume from the first step that is not done. Each step is one commit on `main` (
    the default bookmark resolver, so a test cannot inject a moved bookmark. Moved roots stay covered
    where that rule lives: `VaultSettingsTests.testToolOutputGuardProtectsTheBookmarkedLocationOfAMovedRoot`.
    Adding a resolver parameter only for this test would be a seam with one adapter.
+2. **Step 2: the recorder's convenience initializer takes a destination.** The plan said "renames
+   only", but `AudioRecorderViewModel.init(…outputURL:outputGuard:…)` paired any folder with any
+   guard. All 26 test callers and the DEBUG `RecorderOutputInboxSmoke` passed
+   `ToolOutputGuard(settings: .default)`, a guard that protects nothing. Folding that into the
+   initializer would hide a "protect nothing" default, which AGENTS.md forbids. So the initializer now
+   takes `destination: ToolOutputDestination`, and tests say what they mean with
+   `.noProtectedRoots(at:)` (a test-target helper). `RecordSystemAudioUseCase.Config` still takes a
+   guard, as planned.
 
 ## Terms
 
