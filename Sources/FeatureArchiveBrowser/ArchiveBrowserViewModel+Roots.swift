@@ -81,7 +81,7 @@ extension ArchiveBrowserViewModel {
             // Settings that no longer decode: the settings-repair notice explains
             // the empty archive and offers the fix, so nothing is added here.
             if !(error is DecodingError) {
-                recordPersistenceWarning("Archive settings could not be loaded: \(error.localizedDescription)")
+                recordPersistenceWarning(.settingsLoadFailed(error))
             }
         }
         applyBootstrapRootWhenEmpty()
@@ -92,10 +92,7 @@ extension ArchiveBrowserViewModel {
     /// repaired them: drop the stale settings warning, reload the real archive
     /// roots, and rescan when they differ from what is showing.
     public func applyRepairedSettings() {
-        removeFooterWarning { warning in
-            warning.text.hasPrefix("Archive settings could not be")
-                || warning.text == ArchiveWriteGuardError.settingsUnreadable.localizedDescription
-        }
+        resolveFooterWarning(.settings)
         // Vault status read while settings were unreadable failed too; re-read
         // it now so its warning clears without a relaunch.
         Task { await refreshProjectVaultSnapshots() }
@@ -157,16 +154,11 @@ extension ArchiveBrowserViewModel {
     }
 
     /// A settings save the person asked for (archive roots, onboarding) failed.
-    /// Settings that no longer decode get the write guard's sentence, as the
-    /// archive's other refused writes do; the decoding error goes to
+    /// The decoding error of settings that no longer decode goes to
     /// diagnostics only.
     private func recordArchiveSettingsSaveFailure(_ error: any Error, context: String) {
         diagnostics.log(.error, "\(context): \(error)")
-        recordPersistenceWarning(
-            error is DecodingError
-                ? ArchiveWriteGuardError.settingsUnreadable.localizedDescription
-                : "Archive settings could not be saved: \(error.localizedDescription)"
-        )
+        recordPersistenceWarning(.settingsSaveFailed(error))
     }
 
     /// Archive roots plus the configured output folder (new-song drafts live there).
@@ -451,7 +443,7 @@ extension ArchiveBrowserViewModel {
                             changed = true
                         }
                     } catch {
-                        recordPersistenceWarning(error.localizedDescription)
+                        recordPersistenceWarning(.archiveWriteRefused(error))
                     }
                 }
                 continue
