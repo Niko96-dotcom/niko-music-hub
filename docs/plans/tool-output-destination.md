@@ -20,7 +20,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 1 `ToolOutputDestination` and its tests | done | `git log --grep='(output step 1)'` | strict build; `ToolOutputDestinationTests` 4/4 |
 | 2 Audio Recorder | done | `git log --grep='(output step 2)'` | strict build; recorder suites 105 (3 skipped) and `ToolOutputDestinationTests`, 0 failures |
 | 3 WAV Converter | done | `git log --grep='(output step 3)'` | strict build; `FeatureAudioConverterTests` 97, 0 failures |
-| 4 Downloader | not started | | |
+| 4 Downloader | done | `git log --grep='(output step 4)'` | strict build; `FeatureDownloaderTests` 206 (2 skipped), 0 failures |
 | 5 Stem Separation | not started | | |
 | 6 Guard the rule | not started | | |
 | 7 Docs, full gates, live check | not started | | |

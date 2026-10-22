@@ -199,9 +199,9 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             return
         }
 
-        let settings: AppSettings
+        let destination: ToolOutputDestination
         do {
-            settings = try context.settingsStore.loadSettings()
+            destination = try ToolOutputDestination.load(from: context.settingsStore)
         } catch {
             context.diagnostics.scoped(to: .downloader).log(.error, "Download start could not read settings: \(error)")
             downloadState = .failed(DownloaderCopy.settingsUnreadable)
@@ -210,7 +210,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         }
 
         do {
-            try ToolOutputGuard(settings: settings).validate(settings.outputFolder.url)
+            try destination.validate(destination.folder)
         } catch {
             context.diagnostics.scoped(to: .downloader).log(.error, "Download start failed: \(error.localizedDescription)")
             downloadState = .failed(error.localizedDescription)
@@ -223,7 +223,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         let capturedPlaylistMode = playlistMode
         let options = DownloadJobOptions(
             sourceURL: sourceURL,
-            outputDirectory: settings.outputFolder.url,
+            outputDirectory: destination.folder,
             formatSelection: capturedFormatSelection,
             playlistMode: capturedPlaylistMode
         )
