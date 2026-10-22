@@ -22,7 +22,7 @@ Resume from the first step that is not done. Each step is one commit on `main` (
 | 2 Runtime reads | done | `git log --grep='(Keep Local step 2)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
 | 3 Runtime writes | done | `git log --grep='(Keep Local step 3)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
 | 4 Browser reads | done | `git log --grep='(Keep Local step 4)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures |
-| 5 Browser writes | not started | | |
+| 5 Browser writes | done | `git log --grep='(Keep Local step 5)'` | strict build; `AppCoreTests` 794 (2 skipped) and `FeatureArchiveBrowserTests` 633, 0 failures; full gates: see the step 5 note below the table |
 | 6 Close the raw set | not started | | |
 | 7 Docs, ADR, full gates, live check | not started | | |
 

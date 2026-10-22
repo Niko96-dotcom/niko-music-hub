@@ -412,14 +412,6 @@ final class ArchiveVaultObservation: ObservableObject {
         return KeepLocalPins.Project(projectIDs: projectIDs, songIDs: [song.id], folders: folders)
     }
 
-    /// Temporary until the browser writes through `KeepLocalPins`
-    /// (docs/plans/keep-local-pins.md, step 5): the keys a pin would write.
-    func keepLocalKeys(for song: Song) -> Set<String> {
-        var pins = KeepLocalPins(storedKeys: [])
-        pins.pin(keepLocalProject(for: song))
-        return pins.storedKeys
-    }
-
     /// Keep Local detection for the automatic Done path. Every source is OR-ed;
     /// a settings-only check never clears a runtime pin.
     func isIntentionalKeepLocalSkip(for song: Song) -> Bool {

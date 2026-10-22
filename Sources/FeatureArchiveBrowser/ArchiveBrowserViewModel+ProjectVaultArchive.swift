@@ -407,9 +407,9 @@ extension ArchiveBrowserViewModel {
         vaultOperations.cancelPendingRetry(for: song.id)
         guard commitWorkflowDoneForConfirmation(song) else { return }
         do {
-            let keys = vaultObservation.keepLocalKeys(for: song)
+            let project = vaultObservation.keepLocalProject(for: song)
             try settingsStore.updateSettings { settings in
-                settings.vault.keepLocalProjectIDs.formUnion(keys)
+                settings.vault.keepLocalPins.pin(project)
             }
             refreshProjectVaultPresentationContext()
         } catch {
