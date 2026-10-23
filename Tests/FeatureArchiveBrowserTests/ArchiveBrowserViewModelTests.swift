@@ -10,7 +10,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
     /// Root identity as the model compares roots: the same folder reached through `/tmp`
     /// or `/private/tmp` (a checkout or TMPDIR outside the user's home) is one root.
     private static func rootIdentity(_ path: String) -> String {
-        ArchiveBrowserViewModel.canonicalPath(for: URL(fileURLWithPath: path, isDirectory: true))
+        ArchiveScanList.canonicalPath(for: URL(fileURLWithPath: path, isDirectory: true))
     }
 
     func testPersistsAddedArchiveRoot() async throws {
@@ -451,10 +451,20 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
     func testRemoveRootClearsRootBoundArchiveState() async throws {
         try CubaseFixtures.ensureGenerated()
-        setenv("NIKO_MUSIC_HUB_FIXTURE_ROOT", CubaseFixtures.archiveRoot.path, 1)
-        defer { unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT") }
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        unsetenv("NIKO_MUSIC_HUB_DEV_ARCHIVE_ROOT")
+        // The fixture-root hook pins the roots, so the archive is stored like a
+        // person's folder; removing it edits the stored scan list.
+        let settingsStore = UserDefaultsSettingsStore(
+            userDefaults: try XCTUnwrap(UserDefaults(suiteName: "FeatureArchiveBrowserTests.\(UUID())")),
+            key: "settings"
+        )
+        try settingsStore.updateSettings {
+            $0.musicRoots = [StoredMusicRoot(role: .scanOnly, url: CubaseFixtures.archiveRoot)]
+            $0.archiveOnboardingCompleted = true
+        }
 
-        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
+        let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: settingsStore))
         await viewModel.scan()
         let selected = try XCTUnwrap(viewModel.songs.first)
         viewModel.selectSong(selected)
@@ -503,11 +513,18 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             try? FileManager.default.removeItem(at: firstRoot)
             try? FileManager.default.removeItem(at: secondRoot)
         }
+        try settingsStore.updateSettings {
+            $0.musicRoots = [
+                StoredMusicRoot(role: .scanOnly, url: firstRoot),
+                StoredMusicRoot(role: .scanOnly, url: secondRoot),
+            ]
+            $0.archiveOnboardingCompleted = true
+        }
         let viewModel = ArchiveBrowserViewModel(
             context: TestToolContext.make(settingsStore: settingsStore),
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.roots = [firstRoot, secondRoot]
+        XCTAssertEqual(viewModel.roots.count, 2)
         viewModel.clearScanResults()
 
         viewModel.removeRoot(firstRoot)
@@ -727,7 +744,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         viewModel.addRoot(root)
 
-        XCTAssertEqual(viewModel.roots.map(\.path), [root.standardizedFileURL.path])
+        // A failed save changes nothing: the folder is not shown as if it were kept.
+        XCTAssertTrue(viewModel.roots.isEmpty)
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive settings could not be saved") == true)
     }
 
@@ -4423,7 +4441,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         defer { fixture.cleanUp() }
         let viewModel = fixture.makeViewModel()
         XCTAssertFalse(
-            viewModel.roots.contains { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: fixture.vaultArchive) },
+            viewModel.roots.contains { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: fixture.vaultArchive) },
             "precondition: the enabled Vault archive root is filtered out of the browser roots"
         )
 
@@ -4483,7 +4501,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         defer { fixture.cleanUp() }
         let viewModel = fixture.makeViewModel()
         XCTAssertFalse(
-            viewModel.roots.contains { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: fixture.vaultArchive) },
+            viewModel.roots.contains { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: fixture.vaultArchive) },
             "precondition: with Vault off the archive root is not browsed"
         )
         try FileManager.default.createDirectory(at: fixture.generation, withIntermediateDirectories: true)

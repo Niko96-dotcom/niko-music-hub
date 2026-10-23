@@ -208,9 +208,10 @@ extension ArchiveUserFlowSmoke {
                 "niko-music-hub-invalid-root-\(UUID().uuidString)",
                 isDirectory: true
             )
+        // Seeded like the truncation check: the smoke checks diagnostics for a
+        // missing root, so it must not store either folder in the run's settings.
         let invalidViewModel = ArchiveBrowserViewModel(context: context, runtime: runtime)
-        invalidViewModel.addRoot(fixtureRoot)
-        invalidViewModel.addRoot(missingRoot)
+        invalidViewModel.roots = [fixtureRoot.standardizedFileURL, missingRoot.standardizedFileURL]
         invalidViewModel.scanSync()
 
         guard let invalidDiagnostics = invalidViewModel.scanDiagnostics else {

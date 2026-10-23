@@ -23,7 +23,7 @@ commit with `git log --grep='(roots step N)'`.
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates passed on `9db2010` (its commit message), no code commits since; no re-run |
 | 1 One tool context | done | `git log --grep='(roots step 1)'` | strict build; `AppCoreTests` 813 (2 skipped), `FeatureArchiveBrowserTests` 662, converter 97, downloader 206 (2 skipped), stem 93 (Swift Testing), 0 failures; `archive-launch.swift` and `archive-tools.swift` typecheck |
-| 2 One module edits the scan list | not started | | |
+| 2 One module edits the scan list | done | `git log --grep='(roots step 2)'` | strict build; `ArchiveScanListTests` 13, `FeatureArchiveBrowserTests` 662, AppCore `*SourceTests` 96, 0 failures; changed test expectations in revisions 2 to 5 |
 | 3 The archive follows the store | not started | | |
 | 4 Settings and Set Up use the store | not started | | |
 | 5 Docs, full gates, live check | not started | | |
@@ -32,7 +32,31 @@ commit with `git log --grep='(roots step N)'`.
 
 Record every deviation from the steps below here, numbered, with its reason.
 
-(none yet)
+1. **Step 2: one canonical spelling, owned by `ArchiveScanList`.** `resolvingSymlinksInPath` strips a leading
+   `/private`, so the canonical form of `/private/var/…` is `/var/…`. `ArchiveBrowserViewModel.canonicalPath(for:)` and
+   `bookmarkKey(for:)` (the same value) are gone; tests use `ArchiveScanList.canonicalPath(for:)`.
+2. **Step 2: a failed save changes nothing.** Before, a failed root save still showed the folder until the next launch
+   and kept the fresh bookmark in memory for a later `persistRoots()`. Now the archive reloads only after a successful
+   save, so the folder does not show and the footer warning says why; the person adds it again.
+   `testArchiveRootPersistenceFailureIsVisible` now expects no root, and
+   `testPersistenceFailurePreservesActionableRecovery` repairs with a second Grant Access.
+3. **Step 2: tests seed the store, not memory.** `testRemoveOneRootClearsCatalogAndPersistsRemainingRoot` and
+   `testRemoveRootClearsRootBoundArchiveState` store their roots;
+   `testSameFolderReauthorizationRepairsWhenRootsAlreadyContainsDuplicateCanonical` no longer seeds `roots` and
+   bookmarks (the stored duplicate is the case). `testPartialSuccessPreservesAccessibleRootsAndBookmarkTokens` drops its
+   in-memory token check; the stored token is still checked.
+4. **Step 2: fixture runs keep the fixture root.** The fixture-root hook pins the loaded roots, so in a fixture run an
+   add or a remove is saved but the board keeps the fixture (before, an add showed until relaunch). The in-app
+   user-flow smoke's invalid-root check now seeds its two roots in memory, as its truncation check does, and no longer
+   writes them into the run's settings. The live check of steps 2 to 4 uses a run without the hook (`first-run`
+   profile and scratch folders). Requirement 8 holds for the E2E smoke, which adds no folder.
+5. **Step 2: no "ordinary persist" left.** The two tests that called `persistRoots()` alone
+   (`testVaultOffSameFolderPair…`, `testDisabledActiveSameFolderPair…`) make an unrelated folder add instead;
+   `testRetryKeepsHealthyRootsAndBookmarkForRecoveredRoot` and `testUnresolvedActiveRootIsNotDuplicatedByRepeatedRootChanges`
+   drop the call (retry writes nothing; remove saves itself).
+6. **Step 2: every add saves and scans.** Adding a folder that is already listed refreshes its bookmark and scans
+   (before: nothing). Adding a folder whose only record is disabled adds an enabled record and keeps the disabled one
+   (before: the disabled record blocked the add, so nothing was stored).
 
 ## Terms
 

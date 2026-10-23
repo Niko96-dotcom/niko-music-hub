@@ -153,7 +153,7 @@ final class OutputGuardSourceTests: XCTestCase {
         // nil keeps the last Vault health and hides cards; the observer lags the model's own saves.
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
         // First-run probe (no new-user sheet for damaged settings), and the access-failure
-        // check that runs right after persistRoots(), which the observer publishes later.
+        // check after a retry, which only presents the next failed root.
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 2,
         // Exclusions only hide folders from a read-only scan; refusing it would hide the library.
         "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,

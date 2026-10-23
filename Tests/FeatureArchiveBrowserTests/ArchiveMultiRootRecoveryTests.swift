@@ -124,20 +124,18 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
             scanOverride: { _ in ScanResult() }
         )
         // Healthy resolves via fallback; two bookmark failures collapse to first failure.
-        XCTAssertEqual(viewModel.roots.map(\.path), [ArchiveBrowserViewModel.bookmarkKey(for: healthyDir)])
+        XCTAssertEqual(viewModel.roots.map(\.path), [ArchiveScanList.canonicalPath(for: healthyDir)])
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, firstID)
 
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
 
-        let keys = Set(viewModel.roots.map { ArchiveBrowserViewModel.bookmarkKey(for: $0) })
-        XCTAssertTrue(keys.contains(ArchiveBrowserViewModel.bookmarkKey(for: healthyDir)))
-        XCTAssertTrue(keys.contains(ArchiveBrowserViewModel.bookmarkKey(for: firstDir)))
-        XCTAssertFalse(keys.contains(ArchiveBrowserViewModel.bookmarkKey(for: secondDir)))
+        let keys = Set(viewModel.roots.map { ArchiveScanList.canonicalPath(for: $0) })
+        XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: healthyDir)))
+        XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: firstDir)))
+        XCTAssertFalse(keys.contains(ArchiveScanList.canonicalPath(for: secondDir)))
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
         XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
-        // Recovered token preserved in memory.
-        XCTAssertEqual(viewModel.scanRootBookmarks[ArchiveBrowserViewModel.bookmarkKey(for: firstDir)], Data([0xA1]))
         // Persisted unresolved roots (with tokens) must survive the partial recovery.
         let persisted = try fixture.store.loadSettings()
         XCTAssertEqual(persisted.effectiveScanRoots.count, 3)
@@ -184,9 +182,9 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         XCTAssertNil(viewModel.archiveAccessFailure)
         XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
         XCTAssertFalse(viewModel.showsInlineArchiveAccessRecovery)
-        let keys = Set(viewModel.roots.map { ArchiveBrowserViewModel.bookmarkKey(for: $0) })
-        XCTAssertTrue(keys.contains(ArchiveBrowserViewModel.bookmarkKey(for: firstDir)))
-        XCTAssertTrue(keys.contains(ArchiveBrowserViewModel.bookmarkKey(for: secondDir)))
+        let keys = Set(viewModel.roots.map { ArchiveScanList.canonicalPath(for: $0) })
+        XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: firstDir)))
+        XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: secondDir)))
     }
 
     func testUserReselectAddsNewRootWithoutDroppingUnresolved() throws {
@@ -279,12 +277,12 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
 
         // Remove the recovered first root; healthy stays, second unresolved stays persisted.
-        let recoveredURL = viewModel.roots.first(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: firstDir) })
+        let recoveredURL = viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) })
         let recovered = try XCTUnwrap(recoveredURL)
         viewModel.removeRoot(recovered)
 
-        XCTAssertFalse(viewModel.roots.contains(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: firstDir) }))
-        XCTAssertTrue(viewModel.roots.contains(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: healthyDir) }))
+        XCTAssertFalse(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) }))
+        XCTAssertTrue(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: healthyDir) }))
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
         let persisted = try fixture.store.loadSettings()
         XCTAssertNotNil(persisted.effectiveScanRoots.first(where: { $0.id == secondID }))
@@ -342,10 +340,10 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         XCTAssertFalse(viewModel.showsInlineArchiveAccessRecovery)
         XCTAssertNil(viewModel.persistenceWarningMessage, "stale root-access footer must clear once the last failed root recovers")
         XCTAssertEqual(viewModel.statusMessage, "Scanning archive...")
-        let keys = Set(viewModel.roots.map { ArchiveBrowserViewModel.bookmarkKey(for: $0) })
-        XCTAssertTrue(keys.contains(ArchiveBrowserViewModel.bookmarkKey(for: healthyDir)))
-        XCTAssertTrue(keys.contains(ArchiveBrowserViewModel.bookmarkKey(for: firstDir)))
-        XCTAssertTrue(keys.contains(ArchiveBrowserViewModel.bookmarkKey(for: secondDir)))
+        let keys = Set(viewModel.roots.map { ArchiveScanList.canonicalPath(for: $0) })
+        XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: healthyDir)))
+        XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: firstDir)))
+        XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: secondDir)))
         let persisted = try fixture.store.loadSettings()
         XCTAssertEqual(Set(persisted.effectiveScanRoots.map(\.id)), Set([healthyID, firstID, secondID]))
         XCTAssertEqual(persisted.effectiveScanRoots.first(where: { $0.id == firstID })?.securityScopedBookmark, Data([0xA1]))
@@ -436,7 +434,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
 
         // Removing the recovered root keeps the remaining warning truthful.
-        let recoveredURL = try XCTUnwrap(viewModel.roots.first(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: firstDir) }))
+        let recoveredURL = try XCTUnwrap(viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) }))
         viewModel.removeRoot(recoveredURL)
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive root access could not be restored: Second.")
@@ -447,7 +445,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         XCTAssertNil(viewModel.archiveAccessFailure)
         XCTAssertNil(viewModel.persistenceWarningMessage)
         viewModel.recordPersistenceWarning("Archive settings could not be saved: disk full.")
-        let healthyURL = try XCTUnwrap(viewModel.roots.first(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: healthyDir) }))
+        let healthyURL = try XCTUnwrap(viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: healthyDir) }))
         viewModel.removeRoot(healthyURL)
         XCTAssertNil(viewModel.archiveAccessFailure)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive settings could not be saved: disk full.", "removal must not clear an unrelated warning")
@@ -492,8 +490,8 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
             scanOverride: { _ in ScanResult() }
         )
         // Vault-linked scan root is valid but filtered out of browser roots.
-        XCTAssertTrue(viewModel.roots.contains(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: healthyDir) }))
-        XCTAssertFalse(viewModel.roots.contains(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: vaultDir) }))
+        XCTAssertTrue(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: healthyDir) }))
+        XCTAssertFalse(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: vaultDir) }))
 
         // Add/reselect another folder; vault-linked root must keep ID/bookmark.
         viewModel.addRoots([newDir], bookmarksByURL: [newDir: Data([0xA9])])
@@ -554,9 +552,9 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
             bookmarkProvider: provider,
             scanOverride: { _ in ScanResult() }
         )
-        XCTAssertFalse(viewModel.roots.contains(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: vaultDir) }))
+        XCTAssertFalse(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: vaultDir) }))
 
-        let target = try XCTUnwrap(viewModel.roots.first(where: { ArchiveBrowserViewModel.bookmarkKey(for: $0) == ArchiveBrowserViewModel.bookmarkKey(for: otherDir) }))
+        let target = try XCTUnwrap(viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: otherDir) }))
         viewModel.removeRoot(target)
 
         let persisted = try fixture.store.loadSettings()

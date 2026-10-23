@@ -64,7 +64,7 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
 
         let provider = SwitchableBookmarkProvider()
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
-        XCTAssertEqual(viewModel.roots.map(\.path), [ArchiveBrowserViewModel.bookmarkKey(for: URL(fileURLWithPath: healthyPath))])
+        XCTAssertEqual(viewModel.roots.map(\.path), [ArchiveScanList.canonicalPath(for: URL(fileURLWithPath: healthyPath))])
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, recoveredID)
 
         provider.resolvesTo = recoveredURL
@@ -73,10 +73,10 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
         XCTAssertNil(viewModel.archiveAccessFailure)
         XCTAssertEqual(
             viewModel.roots.map(\.path),
-            [URL(fileURLWithPath: healthyPath), recoveredURL].map { ArchiveBrowserViewModel.bookmarkKey(for: $0) }
+            [URL(fileURLWithPath: healthyPath), recoveredURL].map { ArchiveScanList.canonicalPath(for: $0) }
         )
 
-        viewModel.persistRoots()
+        // Retry writes nothing: the stored roots keep the recovered root's bookmark.
         let reloaded = try fixture.store.loadSettings()
         let recovered = try XCTUnwrap(reloaded.archiveRoots.first { $0.securityScopedBookmark != nil })
         XCTAssertEqual(recovered.securityScopedBookmark, Data([9]))
@@ -86,7 +86,7 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
     func testBookmarkKeyMatchesCanonicalRootForSymlinkedTemporaryPath() {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("nmh-004-symlink", isDirectory: true)
         XCTAssertEqual(
-            ArchiveBrowserViewModel.bookmarkKey(for: url),
+            ArchiveScanList.canonicalPath(for: url),
             ArchiveRootDisplayPolicy.storedRoots(from: [url]).first?.path
         )
     }

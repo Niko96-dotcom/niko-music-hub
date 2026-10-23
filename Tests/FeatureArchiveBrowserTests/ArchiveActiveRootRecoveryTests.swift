@@ -80,12 +80,12 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertTrue(persisted.vault.isEnabled)
         XCTAssertEqual(persisted.vault.activeRootID, activeID)
         XCTAssertEqual(persisted.vault.archiveRootID, archiveID)
-        let activeCanonical = ArchiveBrowserViewModel.canonicalPath(for: activeDir)
+        let activeCanonical = ArchiveScanList.canonicalPath(for: activeDir)
         let duplicates = persisted.musicRoots.filter {
-            ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) == activeCanonical
+            ArchiveScanList.canonicalPath(for: $0.fallbackURL) == activeCanonical
         }
         XCTAssertEqual(duplicates.map(\.id), [activeID], "same canonical path must not mint a duplicate scanOnly")
-        XCTAssertFalse(persisted.musicRoots.contains(where: { $0.role == .scanOnly && ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) == activeCanonical }))
+        XCTAssertFalse(persisted.musicRoots.contains(where: { $0.role == .scanOnly && ArchiveScanList.canonicalPath(for: $0.fallbackURL) == activeCanonical }))
 
         // Unrelated roots preserved with tokens.
         XCTAssertEqual(persisted.musicRoots.first(where: { $0.id == secondID })?.securityScopedBookmark, Data([0xA2]))
@@ -95,7 +95,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
         XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
         XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
-        XCTAssertTrue(viewModel.roots.contains(where: { ArchiveBrowserViewModel.canonicalPath(for: $0) == activeCanonical }))
+        XCTAssertTrue(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == activeCanonical }))
 
         // Recovering the second root clears the failure without touching the repaired Active.
         provider.secondURL = secondDir
@@ -107,9 +107,9 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertEqual(repersisted.musicRoots.first(where: { $0.id == activeID })?.role, .active)
         XCTAssertEqual(repersisted.vault.activeRootID, activeID)
         XCTAssertEqual(repersisted.vault.archiveRootID, archiveID)
-        let keys = Set(viewModel.roots.map { ArchiveBrowserViewModel.canonicalPath(for: $0) })
+        let keys = Set(viewModel.roots.map { ArchiveScanList.canonicalPath(for: $0) })
         XCTAssertTrue(keys.contains(activeCanonical))
-        XCTAssertTrue(keys.contains(ArchiveBrowserViewModel.canonicalPath(for: secondDir)))
+        XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: secondDir)))
     }
 
     func testActiveReauthorizationIsCanonicalAliasAware() throws {
@@ -127,8 +127,8 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let standardizedURL = realDir.standardizedFileURL
         let canonicalURL = realDir.resolvingSymlinksInPath().standardizedFileURL
         XCTAssertEqual(
-            ArchiveBrowserViewModel.canonicalPath(for: standardizedURL),
-            ArchiveBrowserViewModel.canonicalPath(for: canonicalURL),
+            ArchiveScanList.canonicalPath(for: standardizedURL),
+            ArchiveScanList.canonicalPath(for: canonicalURL),
             "fixture must compare the same folder through both path forms"
         )
         // Store one form, reauthorize through the other to prove alias awareness.
@@ -179,9 +179,9 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let repaired = try XCTUnwrap(persisted.musicRoots.first(where: { $0.id == activeID }))
         XCTAssertEqual(repaired.securityScopedBookmark, Data([0xC1]))
         XCTAssertEqual(repaired.role, .active)
-        let activeCanonical = ArchiveBrowserViewModel.canonicalPath(for: realDir)
+        let activeCanonical = ArchiveScanList.canonicalPath(for: realDir)
         let duplicates = persisted.musicRoots.filter {
-            ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) == activeCanonical
+            ArchiveScanList.canonicalPath(for: $0.fallbackURL) == activeCanonical
         }
         XCTAssertEqual(duplicates.map(\.id), [activeID], "canonical alias must not mint a duplicate scanOnly")
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
@@ -244,7 +244,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertEqual(persisted.vault.activeRootID, activeID)
         XCTAssertEqual(persisted.vault.archiveRootID, archiveID)
         XCTAssertTrue(persisted.musicRoots.contains(where: {
-            $0.role == .scanOnly && ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) == ArchiveBrowserViewModel.canonicalPath(for: otherDir)
+            $0.role == .scanOnly && ArchiveScanList.canonicalPath(for: $0.fallbackURL) == ArchiveScanList.canonicalPath(for: otherDir)
         }))
         // Original Active remains the actionable failure.
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
@@ -293,12 +293,11 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
 
-        // Adding and removing an unrelated root persists each time; the stale
+        // Adding and removing an unrelated root saves each time; the stale
         // Active root must stay a single entry.
         viewModel.addRoots([otherDir], bookmarksByURL: [otherDir: Data([0xD1])])
         XCTAssertEqual(try fixture.store.loadSettings().musicRoots.filter { $0.id == activeID }.count, 1)
         viewModel.removeRoot(otherDir)
-        viewModel.persistRoots()
 
         let persisted = try fixture.store.loadSettings()
         XCTAssertEqual(persisted.musicRoots.filter { $0.id == activeID }.count, 1)
@@ -367,28 +366,27 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
 
         viewModel.addRoots([activeDir], bookmarksByURL: [activeDir: Data([0xC1])])
 
-        // Persist failed: the stored Active keeps its original token (never
+        // The save failed: the stored Active keeps its original token (never
         // discarded), vault binding is untouched, and recovery stays actionable.
         let stillPersisted = try backing.loadSettings()
         XCTAssertEqual(stillPersisted.musicRoots.first(where: { $0.id == activeID })?.securityScopedBookmark, Data([0xA1]))
         XCTAssertEqual(stillPersisted.vault.activeRootID, activeID)
         XCTAssertEqual(stillPersisted.vault.archiveRootID, archiveID)
         XCTAssertFalse(stillPersisted.musicRoots.contains(where: {
-            $0.role == .scanOnly && ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) == ArchiveBrowserViewModel.canonicalPath(for: activeDir)
+            $0.role == .scanOnly && ArchiveScanList.canonicalPath(for: $0.fallbackURL) == ArchiveScanList.canonicalPath(for: activeDir)
         }), "failed persist must not leave a duplicate scanOnly behind")
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID, "failed persist must keep the Active recovery actionable")
         XCTAssertNotNil(viewModel.persistenceWarningMessage)
-        // Fresh in-memory bookmark is retained for the next attempt, not discarded.
-        XCTAssertEqual(viewModel.scanRootBookmarks[ArchiveBrowserViewModel.bookmarkKey(for: activeDir)], Data([0xC1]))
 
-        // A later successful persist repairs in place with no duplicate.
+        // A failed save changes nothing, so the person grants access again; that
+        // save repairs in place with no duplicate.
         failing.failUpdates = false
-        viewModel.persistRoots()
+        viewModel.addRoots([activeDir], bookmarksByURL: [activeDir: Data([0xC1])])
         let repaired = try backing.loadSettings()
         XCTAssertEqual(repaired.musicRoots.first(where: { $0.id == activeID })?.securityScopedBookmark, Data([0xC1]))
-        let activeCanonical = ArchiveBrowserViewModel.canonicalPath(for: activeDir)
+        let activeCanonical = ArchiveScanList.canonicalPath(for: activeDir)
         XCTAssertEqual(
-            repaired.musicRoots.filter { ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) == activeCanonical }.map(\.id),
+            repaired.musicRoots.filter { ArchiveScanList.canonicalPath(for: $0.fallbackURL) == activeCanonical }.map(\.id),
             [activeID]
         )
     }
@@ -443,12 +441,9 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
 
-        // Live old-bug relaunch: `roots` already contains the same canonical via
-        // the erroneous enabled duplicate scanOnly, so the plain `addRoots` guard
-        // would previously no-op and never persist the repair.
-        viewModel.roots = [activeDir.standardizedFileURL]
-        viewModel.scanRootBookmarks[ArchiveBrowserViewModel.bookmarkKey(for: activeDir)] = duplicateBookmark
-
+        // Live old-bug relaunch: the stored roots already hold the same folder as
+        // an erroneous enabled duplicate scanOnly. Granting access must still
+        // repair the Active root and drop the duplicate.
         let freshBookmark = Data([0xC1])
         viewModel.addRoots([activeDir], bookmarksByURL: [activeDir: freshBookmark])
 
@@ -460,9 +455,9 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertTrue(persisted.vault.isEnabled)
         XCTAssertEqual(persisted.vault.activeRootID, activeID)
         XCTAssertEqual(persisted.vault.archiveRootID, archiveID)
-        let activeCanonical = ArchiveBrowserViewModel.canonicalPath(for: activeDir)
+        let activeCanonical = ArchiveScanList.canonicalPath(for: activeDir)
         XCTAssertEqual(
-            persisted.musicRoots.filter { ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) == activeCanonical }.map(\.id),
+            persisted.musicRoots.filter { ArchiveScanList.canonicalPath(for: $0.fallbackURL) == activeCanonical }.map(\.id),
             [activeID],
             "enabled duplicate scanOnly must be removed, original Vault root retained"
         )
@@ -470,7 +465,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertNotNil(persisted.musicRoots.first(where: { $0.id == archiveID }))
         XCTAssertNil(viewModel.archiveAccessFailure)
         XCTAssertFalse(viewModel.showsInlineArchiveAccessRecovery)
-        XCTAssertTrue(viewModel.roots.contains(where: { ArchiveBrowserViewModel.canonicalPath(for: $0) == activeCanonical }))
+        XCTAssertTrue(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == activeCanonical }))
     }
 
     func testDisabledScanOnlySameCanonicalIsPreservedThroughVaultRepair() throws {
@@ -545,9 +540,11 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         defer { fixture.tearDown() }
         let activeDir = try fixture.makeDirectory(prefix: "nmh-active-vaultoff-active")
         let archiveDir = try fixture.makeDirectory(prefix: "nmh-active-vaultoff-archive")
+        let otherDir = try fixture.makeDirectory(prefix: "nmh-active-vaultoff-other")
         defer {
             try? FileManager.default.removeItem(at: activeDir)
             try? FileManager.default.removeItem(at: archiveDir)
+            try? FileManager.default.removeItem(at: otherDir)
         }
 
         let activeID = UUID()
@@ -587,14 +584,14 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let provider = ActiveRecoveryBookmarkProvider()
         provider.activeURL = activeDir
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
-        let activeCanonical = ArchiveBrowserViewModel.canonicalPath(for: activeDir)
+        let activeCanonical = ArchiveScanList.canonicalPath(for: activeDir)
         XCTAssertTrue(
-            viewModel.roots.contains(where: { ArchiveBrowserViewModel.canonicalPath(for: $0) == activeCanonical }),
+            viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == activeCanonical }),
             "vault-off browsing must still show the scanOnly library root"
         )
 
-        // Ordinary persist (no same-folder repair): must not drop the only effective root.
-        viewModel.persistRoots()
+        // An unrelated edit (no same-folder repair) must not drop the only effective root.
+        viewModel.addRoots([otherDir], bookmarksByURL: [otherDir: Data([0xD1])])
 
         let persisted = try fixture.store.loadSettings()
         let preservedScanOnly = try XCTUnwrap(
@@ -605,7 +602,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertTrue(preservedScanOnly.isEnabled)
         XCTAssertNotNil(persisted.musicRoots.first(where: { $0.id == activeID }))
         let effectiveCanonicals = Set(
-            persisted.effectiveScanRoots.map { ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) }
+            persisted.effectiveScanRoots.map { ArchiveScanList.canonicalPath(for: $0.fallbackURL) }
         )
         XCTAssertTrue(
             effectiveCanonicals.contains(activeCanonical),
@@ -615,7 +612,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         // Reload must not silently lose the library root.
         let reloaded = fixture.makeViewModel(bookmarkProvider: provider)
         XCTAssertTrue(
-            reloaded.roots.contains(where: { ArchiveBrowserViewModel.canonicalPath(for: $0) == activeCanonical }),
+            reloaded.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == activeCanonical }),
             "reload after vault-off persist must still show the library root"
         )
     }
@@ -625,9 +622,11 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         defer { fixture.tearDown() }
         let activeDir = try fixture.makeDirectory(prefix: "nmh-active-disabledvault-active")
         let archiveDir = try fixture.makeDirectory(prefix: "nmh-active-disabledvault-archive")
+        let otherDir = try fixture.makeDirectory(prefix: "nmh-active-disabledvault-other")
         defer {
             try? FileManager.default.removeItem(at: activeDir)
             try? FileManager.default.removeItem(at: archiveDir)
+            try? FileManager.default.removeItem(at: otherDir)
         }
 
         let activeID = UUID()
@@ -669,14 +668,14 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let provider = ActiveRecoveryBookmarkProvider()
         provider.activeURL = activeDir
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
-        let activeCanonical = ArchiveBrowserViewModel.canonicalPath(for: activeDir)
+        let activeCanonical = ArchiveScanList.canonicalPath(for: activeDir)
         XCTAssertTrue(
-            viewModel.roots.contains(where: { ArchiveBrowserViewModel.canonicalPath(for: $0) == activeCanonical }),
+            viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == activeCanonical }),
             "disabled Active must not hide the enabled scanOnly library root"
         )
 
-        // Ordinary persist: a disabled Vault root must neither shadow nor delete the enabled scanOnly.
-        viewModel.persistRoots()
+        // An unrelated edit: a disabled Vault root must neither shadow nor delete the enabled scanOnly.
+        viewModel.addRoots([otherDir], bookmarksByURL: [otherDir: Data([0xD1])])
 
         let persisted = try fixture.store.loadSettings()
         let preservedScanOnly = try XCTUnwrap(
@@ -693,7 +692,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
             "disabled Vault root must not be repaired from the scanOnly snapshot"
         )
         let effectiveCanonicals = Set(
-            persisted.effectiveScanRoots.map { ArchiveBrowserViewModel.canonicalPath(for: $0.fallbackURL) }
+            persisted.effectiveScanRoots.map { ArchiveScanList.canonicalPath(for: $0.fallbackURL) }
         )
         XCTAssertTrue(
             effectiveCanonicals.contains(activeCanonical),
@@ -703,7 +702,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         // Reload must not silently lose the library root.
         let reloaded = fixture.makeViewModel(bookmarkProvider: provider)
         XCTAssertTrue(
-            reloaded.roots.contains(where: { ArchiveBrowserViewModel.canonicalPath(for: $0) == activeCanonical }),
+            reloaded.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == activeCanonical }),
             "reload after disabled-Active persist must still show the library root"
         )
     }
