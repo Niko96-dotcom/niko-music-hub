@@ -105,12 +105,45 @@ final class DownloaderViewModelTests: XCTestCase {
 
         XCTAssertEqual(
             viewModel.downloadState,
-            .failed(try XCTUnwrap(DownloadUseCaseError.ytDlpUnavailable("unsupported").errorDescription))
+            .ytDlpUnavailable(.broken(message: "unsupported"))
         )
     }
 
-    func testClearInputCancelsInFlightHealthCheck() async throws {
-        let runner = CancellableHealthRunner()
+    /// Set Up installs yt-dlp while a URL waits on the "yt-dlp Not Found" card:
+    /// the owner reports ready and the URL is checked again with no edit.
+    func testAURLThatFailedOnYtDlpBecomesReadyWhenYtDlpIsInstalled() async throws {
+        let installed = InstalledHelpers()
+        let probe = HelperToolProbe(
+            runner: SequencedHealthRunner(),
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: [],
+                isExecutable: { installed.contains($0) }
+            )
+        )
+        let job = Job(sourceToolID: "downloader", title: "Download")
+        let viewModel = makeViewModel(
+            useCase: FakeDownloaderUseCase(job: job),
+            jobRunner: StaticJobRunner(job: job),
+            outputInboxStore: RecordingOutputInboxStore(),
+            helperProbe: probe,
+            debounceDuration: .milliseconds(5)
+        )
+        viewModel.urlText = "https://example.com/a"
+        viewModel.urlTextDidChange()
+        try await waitUntil { viewModel.downloadState == .ytDlpUnavailable(.missing) }
+
+        installed.add("/fixture/yt-dlp")
+        viewModel.context.helperHealth.helpersChanged() // what Set Up does after an install
+
+        try await waitUntil { viewModel.downloadState == .readyToDownload }
+        XCTAssertEqual(viewModel.urlText, "https://example.com/a")
+    }
+
+    /// The yt-dlp probe belongs to the shared helper owner, so clearing the
+    /// input does not stop it; the Downloader drops its late answer.
+    func testClearInputDropsTheInFlightHealthCheck() async throws {
+        let runner = GatedHealthRunner()
         let checker = HelperToolProbe(
             runner: runner,
             locator: HelperToolLocator(
@@ -132,8 +165,9 @@ final class DownloaderViewModelTests: XCTestCase {
         try await waitUntil { runner.didStart }
 
         viewModel.clearInput()
+        runner.release()
 
-        try await waitUntil { runner.wasCanceled }
+        try await waitUntil { viewModel.context.helperHealth.statuses[.ytDlp] != nil }
         XCTAssertEqual(viewModel.downloadState, .idle)
     }
 
@@ -703,7 +737,7 @@ final class DownloaderViewModelTests: XCTestCase {
             fileActions: FixtureFileActions(),
             diagnostics: FixtureDiagnostics()
         )
-        let viewModel = DownloaderViewModel(context: context, useCase: useCase, helperProbe: context.helperHealth.probe)
+        let viewModel = DownloaderViewModel(context: context, useCase: useCase)
         viewModel.urlText = "https://example.com/audio"
         viewModel.downloadState = .readyToDownload
         viewModel.startDownload()
@@ -1114,7 +1148,7 @@ final class DownloaderViewModelTests: XCTestCase {
     func testFailedDownloadStartUnregistersPendingEntry() async throws {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
-        let useCase = GatedDownloaderUseCase(runner: runner, failure: .ytDlpUnavailable("x"))
+        let useCase = GatedDownloaderUseCase(runner: runner, failure: .ytDlpUnavailable(.broken(message: "x")))
         let viewModel = makeViewModel(
             useCase: useCase,
             jobRunner: runner,
@@ -1130,7 +1164,7 @@ final class DownloaderViewModelTests: XCTestCase {
 
         useCase.release()
         try await waitUntil { viewModel.downloadState != .downloading }
-        XCTAssertEqual(viewModel.downloadState, .failed("yt-dlp is required. x"))
+        XCTAssertEqual(viewModel.downloadState, .ytDlpUnavailable(.broken(message: "x")))
         XCTAssertTrue(center.quitBlockingWork.isEmpty)
     }
 
@@ -1271,22 +1305,25 @@ final class DownloaderViewModelTests: XCTestCase {
         debounceDuration: Duration = .milliseconds(500)
     ) -> DownloaderViewModel {
         let center = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
+        let store = settingsStore ?? FixtureSettingsStore(settings: settings ?? AppSettings(
+            outputFolder: StoredFolderLocation(url: outputFolder),
+            helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/fixture/yt-dlp"))
+        ))
+        let appSettings = AppSettingsObserver(store: store)
         let context = ToolContext(
-            settingsStore: settingsStore ?? FixtureSettingsStore(settings: settings ?? AppSettings(
-                outputFolder: StoredFolderLocation(url: outputFolder),
-                helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/fixture/yt-dlp"))
-            )),
+            settingsStore: store,
             preferences: preferences,
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
             diagnostics: FixtureDiagnostics(),
-            jobStatusCenter: center
+            jobStatusCenter: center,
+            appSettings: appSettings,
+            helperHealth: HelperToolHealth(probe: helperProbe, appSettings: appSettings)
         )
         return DownloaderViewModel(
             context: context,
             useCase: useCase,
-            helperProbe: helperProbe,
             debounceDuration: debounceDuration
         )
     }
@@ -1338,23 +1375,35 @@ private final class SequencedHealthRunner: ExternalProcessRunning, @unchecked Se
     }
 }
 
-private final class CancellableHealthRunner: ExternalProcessRunning, @unchecked Sendable {
+/// Holds the version check until `release()`.
+private final class GatedHealthRunner: ExternalProcessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var storedDidStart = false
-    private var storedWasCanceled = false
+    private var pending: CheckedContinuation<Void, Never>?
+    private var released = false
 
     var didStart: Bool { lock.downloaderTestWithLock { storedDidStart } }
-    var wasCanceled: Bool { lock.downloaderTestWithLock { storedWasCanceled } }
 
     func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
-        lock.downloaderTestWithLock { storedDidStart = true }
-        do {
-            try await Task.sleep(for: .seconds(10))
-            return ExternalProcessResult(exitCode: 0, standardOutput: "2099.01.01\n", standardError: "")
-        } catch {
-            lock.downloaderTestWithLock { storedWasCanceled = true }
-            throw error
+        await withCheckedContinuation { continuation in
+            let resumeNow = lock.downloaderTestWithLock { () -> Bool in
+                storedDidStart = true
+                if released { return true }
+                pending = continuation
+                return false
+            }
+            if resumeNow { continuation.resume() }
         }
+        return ExternalProcessResult(exitCode: 0, standardOutput: "2099.01.01\n", standardError: "")
+    }
+
+    func release() {
+        let continuation = lock.downloaderTestWithLock { () -> CheckedContinuation<Void, Never>? in
+            released = true
+            defer { pending = nil }
+            return pending
+        }
+        continuation?.resume()
     }
 }
 
@@ -1699,4 +1748,13 @@ private final class DownloadTestGate: @unchecked Sendable {
             lock.unlock()
         }
     }
+}
+
+/// Paths the fake locator treats as installed helpers; tests add one to install it.
+private final class InstalledHelpers: @unchecked Sendable {
+    private let lock = NSLock()
+    private var paths: Set<String> = []
+
+    func add(_ path: String) { lock.downloaderTestWithLock { _ = paths.insert(path) } }
+    func contains(_ path: String) -> Bool { lock.downloaderTestWithLock { paths.contains(path) } }
 }

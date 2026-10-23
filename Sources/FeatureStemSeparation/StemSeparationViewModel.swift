@@ -33,9 +33,8 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     private let context: ToolContext
     private let service: StemSeparationService
     private let youtubeWorkflow: YouTubeStemSeparationWorkflow?
-    private let helperProbe: HelperToolProbe
     private var jobObservationTask: Task<Void, Never>?
-    private var helperToolsObservation: AnyCancellable?
+    private var helperStatusObservation: AnyCancellable?
     private(set) var currentJobID: Job.ID?
     /// True while the visible error is helper-related and may be cleared when
     /// health becomes ready. Unrelated job/validation errors set this false so
@@ -50,7 +49,6 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         self.context = context
         self.service = service
         self.youtubeWorkflow = youtubeWorkflow
-        self.helperProbe = context.helperHealth.probe
         self.recentOutputs = ToolRecentOutputs(store: context.outputInboxStore, toolID: StemSeparationService.toolID)
         loadSettings()
     }
@@ -273,11 +271,15 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
 
     public func onAppear() {
         recentOutputs.refresh()
-        refreshHelperHealth()
-        if helperToolsObservation == nil {
-            helperToolsObservation = context.router.$helperToolsChangeCount
-                .dropFirst()
-                .sink { [weak self] _ in self?.refreshHelperHealth() }
+        // The owner probes once and again after an install or a saved path;
+        // its answers arrive here.
+        context.helperHealth.check(.demucsMlx)
+        if helperStatusObservation == nil {
+            helperStatusObservation = context.helperHealth.$statuses
+                .compactMap { $0[.demucsMlx] }
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] status in self?.applyHelperStatus(status) }
         }
     }
 
@@ -287,21 +289,23 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
             try context.settingsStore.updateSettings { settings in
                 settings.helperTools.demucsMlx = url
             }
-            refreshHelperHealth()
+            // `context.helperHealth` follows the saved path and probes again.
         } catch {
             settingsSaveFailed(error)
         }
     }
 
+    /// Try Again: probe demucs-mlx now.
     public func refreshHelperHealth() {
+        let helperHealth = context.helperHealth
         Task { @MainActor [weak self] in
-            await self?.runHelperHealthCheck()
+            let status = await helperHealth.recheck(.demucsMlx)
+            self?.applyHelperStatus(status)
         }
     }
 
-    private func runHelperHealthCheck() async {
-        let health = await helperProbe.status(of: .demucsMlx, settings: context.appSettings.settings.helperTools)
-        switch health {
+    private func applyHelperStatus(_ status: HelperToolStatus) {
+        switch status {
         case .missing:
             helperNeedsSetup = true
             helperSetupDiagnostic = nil

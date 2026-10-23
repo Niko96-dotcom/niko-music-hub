@@ -3,7 +3,15 @@ import SwiftUI
 
 struct HelperToolsHealthStrip: View {
     let context: ToolContext
-    var onInstallTools: (() -> Void)? = nil
+    var onInstallTools: (() -> Void)?
+    /// The app's one helper-status owner; this strip only shows it.
+    @ObservedObject private var helperHealth: HelperToolHealth
+
+    init(context: ToolContext, onInstallTools: (() -> Void)? = nil) {
+        self.context = context
+        self.onInstallTools = onInstallTools
+        self.helperHealth = context.helperHealth
+    }
 
     private func handleInstallTools() {
         if let onInstallTools {
@@ -13,7 +21,13 @@ struct HelperToolsHealthStrip: View {
         }
     }
 
-    @State private var snapshot = HelperToolsHealthStripModel.checking
+    private var snapshot: HelperToolsHealthStripModel {
+        HelperToolsHealthStripModel.make(
+            ytDlp: state(of: .ytDlp),
+            ffmpeg: state(of: .ffmpeg),
+            demucsMLX: state(of: .demucsMlx)
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -103,23 +117,18 @@ struct HelperToolsHealthStrip: View {
         }
     }
 
+    /// Opening the popover probes every helper again, as before; the rows
+    /// show the owner's answers as they arrive.
     private func refresh() async {
-        let helperSettings = context.appSettings.settings.helperTools
-        let probe = context.helperHealth.probe
-
-        let ytDlp = await probe.status(of: .ytDlp, settings: helperSettings)
-        let ffmpeg = await probe.status(of: .ffmpeg, settings: helperSettings)
-        let demucsMLX = await probe.status(of: .demucsMlx, settings: helperSettings)
-
-        snapshot = HelperToolsHealthStripModel.make(
-            ytDlp: state(from: ytDlp),
-            ffmpeg: state(from: ffmpeg),
-            demucsMLX: state(from: demucsMLX)
-        )
+        for tool in [HelperTool.ytDlp, .ffmpeg, .demucsMlx] {
+            await helperHealth.recheck(tool)
+        }
     }
 
-    private func state(from status: HelperToolStatus) -> HelperToolsHealthItem.State {
-        switch status {
+    private func state(of tool: HelperTool) -> HelperToolsHealthItem.State {
+        switch helperHealth.statuses[tool] {
+        case nil:
+            return .checking
         case .missing:
             return .missing
         case .ready(let version):

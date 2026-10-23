@@ -185,9 +185,6 @@ struct AppShellView: View {
         .onChange(of: router.helperSetupRequest) { _, request in
             applyHelperSetupRequest(request)
         }
-        .onChange(of: helperSetup.installGeneration) { _, _ in
-            router.noteHelperToolsChanged()
-        }
         .background {
             GeometryReader { proxy in
                 Color.clear

@@ -729,6 +729,61 @@ struct StemSeparationViewModelTests {
 
     /// The run's destination is read once at start; unreadable settings refuse
     /// the run before any job exists, with the plain settings sentence.
+    /// A demucs-mlx path saved anywhere (Settings → Helpers, this tool's own
+    /// Choose) reaches the card through the shared helper owner, with no call.
+    @Test
+    func savedHelperPathUpdatesTheSetupCardWithNoCall() async throws {
+        let suite = "StemSeparationViewModelTests.savedPath.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settingsStore = UserDefaultsSettingsStore(userDefaults: defaults)
+        struct ModelListRunner: ExternalProcessRunning {
+            func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+                .init(exitCode: 0, standardOutput: "htdemucs\tStandard\n", standardError: "")
+            }
+        }
+        let custom = "/custom/demucs-mlx"
+        let appSettings = AppSettingsObserver(store: settingsStore)
+        let inbox = FakeOutputInboxStore()
+        let jobRunner = JobRunner()
+        let context = ToolContext(
+            settingsStore: settingsStore,
+            preferences: InMemoryPreferenceStore(),
+            outputInboxStore: inbox,
+            jobRunner: jobRunner,
+            fileActions: FixtureFileActions(),
+            diagnostics: FakeDiagnostics(),
+            appSettings: appSettings,
+            helperHealth: HelperToolHealth(
+                probe: HelperToolProbe(
+                    runner: ModelListRunner(),
+                    locator: HelperToolLocator(
+                        managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                        systemDirectories: [],
+                        isExecutable: { $0 == custom }
+                    )
+                ),
+                appSettings: appSettings
+            )
+        )
+        let vm = StemSeparationViewModel(
+            context: context,
+            service: StemSeparationService(backend: MockStemSeparationBackend(), outputInboxStore: inbox, jobRunner: jobRunner)
+        )
+        vm.onAppear()
+        for _ in 0..<200 where vm.helperNeedsSetup == false {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(vm.helperNeedsSetup == true)
+
+        try settingsStore.updateSettings { $0.helperTools.demucsMlx = URL(fileURLWithPath: custom) }
+
+        for _ in 0..<200 where vm.helperNeedsSetup == true {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(vm.helperNeedsSetup == false)
+    }
+
     @Test
     func unreadableSettingsRefuseAFileRunBeforeAnyJob() throws {
         let suite = "StemSeparationViewModelTests.unreadableStart.\(UUID().uuidString)"

@@ -119,14 +119,6 @@ public final class QuickAccessRouter: ObservableObject {
         helperSetupRequest &+= 1
     }
 
-    /// Bumped after the setup sheet installs helpers, so mounted tool panes
-    /// (which never re-run `onAppear`) re-check their helper health.
-    @Published public private(set) var helperToolsChangeCount: UInt64 = 0
-
-    public func noteHelperToolsChanged() {
-        helperToolsChangeCount &+= 1
-    }
-
     public func clearOpenSettingsPane() {
         openSettingsPane = nil
     }

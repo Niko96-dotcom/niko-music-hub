@@ -23,7 +23,7 @@ commit with `git log --grep='(helpers step N)'`.
 | 0 Baseline | done | — | full gates passed on `4e94856`; `7646b88` changed docs only; no re-run |
 | 1 One probe in AppCore | done | `git log --grep='(helpers step 1)'` | strict build; `AppCoreTests` 845 (2 skipped), Downloader 191 (2 skipped), Converter 89, Stem Separation 85 (Swift Testing), 0 failures; each tool suite lost exactly its moved checker tests |
 | 2 One status owner and one locator | done | `git log --grep='(helpers step 2)'` | strict build; `AppCoreTests` 852 (2 skipped), Downloader 191 (2 skipped), Converter 89, Stem Separation 85, 0 failures; with the Set Up model's call to the owner removed, `testSuccessfulInstallTellsHelperHealth` failed |
-| 3 Tools and the strip read the owner | not started | | |
+| 3 Tools and the strip read the owner | done | `git log --grep='(helpers step 3)'` | strict build; `AppCoreTests` 853 (2 skipped), Downloader 192 (2 skipped), Converter 89, Stem Separation 86, 0 failures; with the Downloader's status subscription removed, `testAURLThatFailedOnYtDlpBecomesReadyWhenYtDlpIsInstalled` failed |
 | 4 Docs, full gates, live check | not started | | |
 
 ## Revisions
@@ -64,6 +64,20 @@ Record every deviation from the steps below here, numbered, with its reason.
     Downloader's resolver already did. That is the child's environment, not a setting.
 13. **Step 2: the install test lives in `HelperToolSetupModelTests`,** next to its install fakes:
     `testSuccessfulInstallTellsHelperHealth` (yt-dlp turns from missing to ready after Set Up installs it).
+14. **Step 3: the URL check probes through the owner.** It calls `helperHealth.recheck(.ytDlp)` after its settings
+    gate (it probed on every check before, so the count stays); unreadable settings still refuse the check.
+15. **Step 3: the yt-dlp state is typed end to end.** `DownloadState.ytDlpUnavailable(HelperToolStatus)` and
+    `DownloadUseCaseError.ytDlpUnavailable(HelperToolStatus)`; a job that fails with `.downloaderHelperUnavailable`
+    (yt-dlp gone during a run) shows `.ytDlpUnavailable(.missing)`. A broken yt-dlp reads "yt-dlp could not start:
+    <message>"; the plan named only the labels and the missing sentence.
+16. **Step 3: clearing the input no longer stops the probe.** The probe belongs to the shared owner, so
+    `testClearInputCancelsInFlightHealthCheck` became `testClearInputDropsTheInFlightHealthCheck`: the late answer is
+    dropped and the state stays idle. `testFailedDownloadStartUnregistersPendingEntry` expects the typed state.
+17. **Step 3: Stem Separation probes less.** It asks the owner on appear (`check`, once) instead of probing on every
+    appear, and its own Choose no longer probes itself: the owner follows the saved path. Try Again still probes now.
+18. **Step 3: `DownloaderViewModel.context` is internal** (was private), so a test can reach the owner.
+19. **Step 3: `HelperToolSetupModel.installGeneration` stays;** Set Up's tests read it. Its comment no longer promises
+    observers.
 
 ## Terms
 

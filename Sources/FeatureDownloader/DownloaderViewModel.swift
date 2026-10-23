@@ -10,6 +10,8 @@ public enum DownloadState: Equatable {
     case downloading
     case completed
     case canceled
+    /// yt-dlp cannot run: missing, outdated or broken. The card follows the status.
+    case ytDlpUnavailable(HelperToolStatus)
     case failed(String)
 
     public static func == (lhs: DownloadState, rhs: DownloadState) -> Bool {
@@ -20,6 +22,7 @@ public enum DownloadState: Equatable {
         case (.downloading, .downloading): return true
         case (.completed, .completed): return true
         case (.canceled, .canceled): return true
+        case let (.ytDlpUnavailable(lhsStatus), .ytDlpUnavailable(rhsStatus)): return lhsStatus == rhsStatus
         case let (.failed(lhsMsg), .failed(rhsMsg)): return lhsMsg == rhsMsg
         default: return false
         }
@@ -60,10 +63,10 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         return String(format: "Elapsed %d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
 
-    private let context: ToolContext
+    let context: ToolContext
     private let useCase: any DownloaderUseCaseRunning
-    private let helperProbe: HelperToolProbe
     private let debounceDuration: Duration
+    private var helperStatusObservation: AnyCancellable?
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var downloadStartTask: Task<Void, Never>?
@@ -79,15 +82,36 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     public init(
         context: ToolContext,
         useCase: any DownloaderUseCaseRunning,
-        helperProbe: HelperToolProbe,
         formatSelection: DownloadFormatSelection? = nil,
         debounceDuration: Duration = .milliseconds(500)
     ) {
         self.context = context
         self.useCase = useCase
-        self.helperProbe = helperProbe
         self.debounceDuration = debounceDuration
         self.formatSelection = formatSelection ?? Self.loadPersistedFormatSelection(preferences: context.preferences)
+        helperStatusObservation = context.helperHealth.$statuses
+            .map { $0[.ytDlp] }
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in self?.helperStatusChanged(status) }
+    }
+
+    /// Set Up installed yt-dlp, or a path was saved: a URL that failed on
+    /// yt-dlp is checked again once it is ready; a ready URL shows the problem.
+    private func helperStatusChanged(_ status: HelperToolStatus?) {
+        guard let status else { return }
+        switch (status, downloadState) {
+        case (.ready, .ytDlpUnavailable):
+            retryHelperSetup()
+        case (.ready, _):
+            break
+        case (_, .readyToDownload), (_, .ytDlpUnavailable):
+            downloadState = .ytDlpUnavailable(status)
+            statusMessage = nil
+        default:
+            break
+        }
     }
 
     private static func loadPersistedFormatSelection(preferences: any PreferenceStore) -> DownloadFormatSelection {
@@ -109,7 +133,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         let generation = validationGeneration
         let input = urlText
         let duration = debounceDuration
-        let helperProbe = helperProbe
+        let helperHealth = context.helperHealth
         let settingsStore = context.settingsStore
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
@@ -122,8 +146,9 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
             let status: HelperToolStatus
             do {
-                let settings = try settingsStore.loadSettings()
-                status = await helperProbe.status(of: .ytDlp, settings: settings.helperTools)
+                // Unreadable settings refuse the check instead of probing with defaults.
+                _ = try settingsStore.loadSettings()
+                status = await helperHealth.recheck(.ytDlp)
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.context.diagnostics.scoped(to: .downloader).log(.error, "URL check could not read settings: \(error)")
@@ -161,15 +186,9 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             downloadState = .readyToDownload
             statusMessage = DownloaderCopy.readyToDownload
             detectedFileName = DownloaderUseCase.fallbackJobTitle(for: url)
-        case .missing:
-            downloadState = .failed(DownloaderCopy.missingYtDlp)
-            statusMessage = nil
-        case let .broken(message):
+        case .missing, .outdated, .broken:
             // The check only runs `yt-dlp --version`, so this is a helper failure, not a URL failure.
-            downloadState = .failed(DownloadUseCaseError.ytDlpUnavailable(message).errorDescription ?? message)
-            statusMessage = nil
-        case let .outdated(current, minimumExpected):
-            downloadState = .failed(DownloaderCopy.outdatedYtDlp(current: current, minimumExpected: minimumExpected))
+            downloadState = .ytDlpUnavailable(status)
             statusMessage = nil
         }
     }
@@ -304,7 +323,11 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     private func applyStartError(_ error: any Error, generation: UInt64) {
         guard observationGeneration == generation else { return }
         context.diagnostics.scoped(to: .downloader).log(.error, "Download start failed: \(error.localizedDescription)")
-        downloadState = .failed(error.localizedDescription)
+        if case let .ytDlpUnavailable(status)? = error as? DownloadUseCaseError {
+            downloadState = .ytDlpUnavailable(status)
+        } else {
+            downloadState = .failed(error.localizedDescription)
+        }
         statusMessage = nil
         endDownloadProgressFeedback()
     }
@@ -409,6 +432,13 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 statusMessage = DownloaderCopy.alreadyExistsInInbox
                 endDownloadProgressFeedback()
                 HubAccessibilityAnnouncer.announce(DownloaderCopy.alreadyExistsInInbox)
+                return true
+            }
+            if observedJob.failureReason == .downloaderHelperUnavailable {
+                // The job only fails this way when yt-dlp is gone (`DownloaderUseCase`).
+                downloadState = .ytDlpUnavailable(.missing)
+                statusMessage = nil
+                endDownloadProgressFeedback()
                 return true
             }
             let handoff = handOffOutputsToInbox(

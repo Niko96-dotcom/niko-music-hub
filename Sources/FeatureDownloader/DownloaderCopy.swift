@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 
 public enum DownloaderCopy {
@@ -33,10 +34,30 @@ public enum DownloaderCopy {
     public static let audioFormatLabel = "Audio format"
     public static let videoQualityLabel = "Video quality"
 
-    public static let missingYtDlp = "yt-dlp is required. Choose yt-dlp in Settings → Helpers."
-    public static let ytDlpMissing = "yt-dlp is not installed. Use Install Tools to add it."
+    public static let ytDlpMissing = "yt-dlp is not installed. Use Install Tools, or choose it in Settings → Helpers."
     public static func outdatedYtDlp(current: String, minimumExpected: String) -> String {
         "yt-dlp \(current) is outdated (expected \(minimumExpected) or newer). Use Install Tools to update it."
+    }
+    public static func ytDlpCannotStart(_ message: String) -> String {
+        "yt-dlp could not start: \(message)"
+    }
+
+    /// One sentence per yt-dlp problem, for the card body and the status line.
+    public static func ytDlpProblem(_ status: HelperToolStatus) -> String {
+        switch status {
+        case .missing, .ready: ytDlpMissing
+        case let .outdated(current, minimumExpected): outdatedYtDlp(current: current, minimumExpected: minimumExpected)
+        case let .broken(message): ytDlpCannotStart(message)
+        }
+    }
+
+    /// The card label per yt-dlp problem.
+    public static func ytDlpProblemLabel(_ status: HelperToolStatus) -> String {
+        switch status {
+        case .missing, .ready: "yt-dlp Not Found"
+        case .outdated: "yt-dlp Outdated"
+        case .broken: "yt-dlp Can't Start"
+        }
     }
     public static let unsupportedURL = "This URL is not supported or yt-dlp could not access it."
     public static let settingsUnreadable = "Settings couldn’t be read, so the download didn’t start. Repair them in Settings, then try again."

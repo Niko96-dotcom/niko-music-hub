@@ -142,7 +142,7 @@ public enum DownloadError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .missingYtDlp:
-            return DownloaderCopy.missingYtDlp
+            return DownloaderCopy.ytDlpMissing
         case let .failed(failure):
             return failure.message
         case .outputNotFound:

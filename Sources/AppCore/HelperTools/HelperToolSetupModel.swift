@@ -19,7 +19,7 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
         .downloadAndConvert: .checking,
         .stemSeparation: .checking,
     ]
-    /// Increments after every successful install; feature views may observe it later.
+    /// Counts successful installs. Surfaces learn of an install through `HelperToolHealth`.
     @Published public private(set) var installGeneration: Int = 0
 
     private let locator: HelperToolLocator

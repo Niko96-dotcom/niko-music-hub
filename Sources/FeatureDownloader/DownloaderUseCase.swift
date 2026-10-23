@@ -28,7 +28,8 @@ public struct DownloadJobOptions: Sendable {
 }
 
 public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
-    case ytDlpUnavailable(String)
+    /// yt-dlp is missing, outdated or broken (never `.ready`).
+    case ytDlpUnavailable(HelperToolStatus)
     case unsupportedURL(String)
     /// Typed external failure from the adapter contract (kind, retryability,
     /// and kept verified outputs travel in the payload; never parsed text).
@@ -44,8 +45,8 @@ public enum DownloadUseCaseError: LocalizedError, Sendable, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case let .ytDlpUnavailable(message):
-            return "yt-dlp is required. \(message)"
+        case let .ytDlpUnavailable(status):
+            return DownloaderCopy.ytDlpProblem(status)
         case let .unsupportedURL(message):
             return "This URL is not supported or yt-dlp could not access it. \(message)"
         case let .failed(failure):
@@ -108,21 +109,12 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         let settings = try loadSettingsForDownload()
 
         let status = await helperProbe.status(of: .ytDlp, settings: settings.helperTools)
-        switch status {
-        case .missing:
-            throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
-        case let .broken(message):
-            throw DownloadUseCaseError.ytDlpUnavailable(message)
-        case let .outdated(current, minimumExpected):
-            throw DownloadUseCaseError.ytDlpUnavailable(
-                DownloaderCopy.outdatedYtDlp(current: current, minimumExpected: minimumExpected)
-            )
-        case .ready:
-            break
+        guard case .ready = status else {
+            throw DownloadUseCaseError.ytDlpUnavailable(status)
         }
 
         guard let ytDlpURL = locator.resolve(.ytDlp, settings: settings.helperTools) else {
-            throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
+            throw DownloadUseCaseError.ytDlpUnavailable(.missing)
         }
 
         let simulateRequest = ExternalProcessRequest(
@@ -215,7 +207,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
             do {
                 let settings = try loadSettingsForDownload()
                 guard let ytDlpURL = locator.resolve(.ytDlp, settings: settings.helperTools) else {
-                    throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
+                    throw DownloadUseCaseError.ytDlpUnavailable(.missing)
                 }
 
                 let request = DownloadRequest(

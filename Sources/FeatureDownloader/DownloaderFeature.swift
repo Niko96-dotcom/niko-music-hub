@@ -36,7 +36,7 @@ public struct DownloaderFeature: ToolFeature {
             jobRunner: context.jobRunner,
             settingsStore: context.settingsStore
         )
-        let viewModel = DownloaderViewModel(context: context, useCase: useCase, helperProbe: helperProbe)
+        let viewModel = DownloaderViewModel(context: context, useCase: useCase)
         session.viewModel = viewModel
         return viewModel
     }

@@ -1,3 +1,4 @@
+import AppCore
 @testable import FeatureDownloader
 import XCTest
 
@@ -28,8 +29,8 @@ final class DownloaderTrustAndErrorTests: XCTestCase {
 
     func testErrorMessagesAreActionable() {
         XCTAssertEqual(
-            DownloaderCopy.missingYtDlp,
-            "yt-dlp is required. Choose yt-dlp in Settings → Helpers."
+            DownloaderCopy.ytDlpMissing,
+            "yt-dlp is not installed. Use Install Tools, or choose it in Settings → Helpers."
         )
         XCTAssertEqual(
             DownloaderCopy.unsupportedURL,
@@ -37,35 +38,38 @@ final class DownloaderTrustAndErrorTests: XCTestCase {
         )
     }
 
+    /// The card follows the yt-dlp status, never the message text: each problem
+    /// has its own label and sentence and the same three recoveries.
     @MainActor
-    func testMissingYtDlpCardOpensSettingsAndChoosePathNotTerminal() {
-        let card = DownloaderView.errorCard(for: DownloaderCopy.missingYtDlp)
+    func testYtDlpCardLabelFollowsTheStatus() {
+        let cases: [(HelperToolStatus, String, String)] = [
+            (.missing, "yt-dlp Not Found", "yt-dlp is not installed. Use Install Tools, or choose it in Settings → Helpers."),
+            (
+                .outdated(current: "2023.01.01", minimumExpected: "2024.01.01"),
+                "yt-dlp Outdated",
+                "yt-dlp 2023.01.01 is outdated (expected 2024.01.01 or newer). Use Install Tools to update it."
+            ),
+            (.broken(message: "Permission denied"), "yt-dlp Can't Start", "yt-dlp could not start: Permission denied"),
+        ]
+        for (status, label, body) in cases {
+            let card = DownloaderView.helperCard(for: status)
 
-        XCTAssertEqual(card.category, .helperTool)
-        XCTAssertEqual(
-            card.recoveryActions.map(\.label),
-            ["Install Tools", "Choose Path", "Try Again"]
-        )
-        XCTAssertEqual(
-            card.recoveryActions.map(\.action),
-            [.installHelperTools, .chooseToolPath, .tryAgain]
-        )
-        XCTAssertFalse(card.recoveryActions.contains { $0.action == .openTerminal })
-        XCTAssertFalse(card.recoveryActions.contains { $0.label == "Open Terminal" })
-        XCTAssertFalse(card.recoveryActions.contains { $0.label == "Retry" })
+            XCTAssertEqual(card.category, .helperTool, "\(status)")
+            XCTAssertEqual(card.label, label)
+            XCTAssertEqual(card.body, body)
+            XCTAssertEqual(card.recoveryActions.map(\.label), ["Install Tools", "Choose Path", "Try Again"])
+            XCTAssertEqual(card.recoveryActions.map(\.action), [.installHelperTools, .chooseToolPath, .tryAgain])
+            XCTAssertFalse(card.recoveryActions.contains { $0.action == .openTerminal })
+        }
     }
 
+    /// Message text no longer picks the helper card: a download failure that
+    /// mentions "outdated" is a download failure.
     @MainActor
-    func testOutdatedYtDlpCardUsesTheSameSettingsRecovery() {
-        let message = DownloaderCopy.outdatedYtDlp(current: "2023.01.01", minimumExpected: "2024.01.01")
-        let card = DownloaderView.errorCard(for: message)
+    func testMessageTextNeverPicksTheHelperCard() {
+        let card = DownloaderView.errorCard(for: "Download failed: ERROR: this format is outdated")
 
-        XCTAssertEqual(card.category, .helperTool)
-        XCTAssertEqual(
-            card.recoveryActions.map(\.action),
-            [.installHelperTools, .chooseToolPath, .tryAgain]
-        )
-        XCTAssertFalse(card.recoveryActions.contains { $0.action == .openTerminal })
+        XCTAssertNotEqual(card.category, .helperTool)
     }
 
     func testRetryableErrorHasGuidance() {

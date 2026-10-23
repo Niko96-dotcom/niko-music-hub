@@ -586,8 +586,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             )
             XCTFail("Expected missing error")
         } catch let error as DownloadUseCaseError {
-            XCTAssertEqual(error, .ytDlpUnavailable(DownloaderCopy.ytDlpMissing))
-            XCTAssertEqual(DownloaderCopy.ytDlpMissing, "yt-dlp is not installed. Use Install Tools to add it.")
+            XCTAssertEqual(error, .ytDlpUnavailable(.missing))
+            XCTAssertEqual(error.errorDescription, "yt-dlp is not installed. Use Install Tools, or choose it in Settings → Helpers.")
         } catch {
             XCTFail("Unexpected error: \(error)")
         }

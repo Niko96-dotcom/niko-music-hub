@@ -62,6 +62,8 @@ public struct DownloaderView: View {
             // already-exists skip reads as status, not a generic failure.
             // Normal completions set "Downloaded", identical to the fallback.
             return viewModel.statusMessage ?? DownloaderCopy.downloadComplete
+        case let .ytDlpUnavailable(status):
+            return DownloaderCopy.ytDlpProblem(status)
         case let .failed(message):
             return message
         }
@@ -74,6 +76,9 @@ public struct DownloaderView: View {
         }
         if viewModel.downloadState == .completed, let message = viewModel.errorMessage {
             handoffWarningSection(message: message)
+        }
+        if case let .ytDlpUnavailable(status) = viewModel.downloadState {
+            helperSection(status: status)
         }
         if case let .failed(message) = viewModel.downloadState {
             errorSection(message: message)
@@ -382,16 +387,27 @@ public struct DownloaderView: View {
         }
     }
 
+    private func helperSection(status: HelperToolStatus) -> some View {
+        StandardErrorCard(card: Self.helperCard(for: status)) { action in
+            switch action {
+            case .tryAgain:
+                viewModel.retryHelperSetup()
+            case .installHelperTools:
+                context.router.requestHelperToolSetup()
+            case .chooseToolPath:
+                viewModel.chooseYtDlpPath()
+            default:
+                break
+            }
+        }
+    }
+
     private func errorSection(message: String) -> some View {
         let card = Self.errorCard(for: message)
         return StandardErrorCard(card: card) { action in
             switch action {
             case .tryAgain:
-                if card.category == .helperTool {
-                    viewModel.retryHelperSetup()
-                } else {
-                    viewModel.retryAfterFailure()
-                }
+                viewModel.retryAfterFailure()
             case .installHelperTools:
                 context.router.requestHelperToolSetup()
             case .chooseToolPath:
@@ -412,21 +428,24 @@ public struct DownloaderView: View {
             .hubCard(cornerRadius: HubDesignSystem.Radius.row, state: .warning)
     }
 
+    /// The yt-dlp card: its label and sentence follow the status, the three
+    /// recoveries are the same for every problem.
+    static func helperCard(for status: HelperToolStatus) -> AppErrorCard {
+        AppErrorCard(
+            category: .helperTool,
+            label: DownloaderCopy.ytDlpProblemLabel(status),
+            icon: "tool.badge.xmark",
+            body: DownloaderCopy.ytDlpProblem(status),
+            recoveryActions: [
+                AppErrorCard.RecoveryAction(label: "Install Tools", style: .primary, action: .installHelperTools),
+                AppErrorCard.RecoveryAction(label: "Choose Path", style: .secondary, action: .chooseToolPath),
+                AppErrorCard.RecoveryAction(label: "Try Again", style: .secondary, action: .tryAgain)
+            ]
+        )
+    }
+
     static func errorCard(for message: String) -> AppErrorCard {
         let lower = message.lowercased()
-        if lower.contains("yt-dlp is required") || lower.contains("yt-dlp path") || lower.contains("outdated") {
-            return AppErrorCard(
-                category: .helperTool,
-                label: "yt-dlp Not Found",
-                icon: "tool.badge.xmark",
-                body: message,
-                recoveryActions: [
-                    AppErrorCard.RecoveryAction(label: "Install Tools", style: .primary, action: .installHelperTools),
-                    AppErrorCard.RecoveryAction(label: "Choose Path", style: .secondary, action: .chooseToolPath),
-                    AppErrorCard.RecoveryAction(label: "Try Again", style: .secondary, action: .tryAgain)
-                ]
-            )
-        }
         if lower.contains("http error 403") || lower.contains("forbidden") {
             return AppErrorCard(
                 category: .conversionFile,

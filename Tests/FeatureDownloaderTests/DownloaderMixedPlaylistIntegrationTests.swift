@@ -164,18 +164,20 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
         outputInboxStore: RecordingIntegrationInboxStore,
         helperProbe: HelperToolProbe
     ) -> DownloaderViewModel {
+        let appSettings = AppSettingsObserver(store: settingsStore)
         let context = ToolContext(
             settingsStore: settingsStore,
             preferences: FixtureIntegrationPreferenceStore(),
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
             fileActions: FixtureIntegrationFileActions(),
-            diagnostics: FixtureIntegrationDiagnostics()
+            diagnostics: FixtureIntegrationDiagnostics(),
+            appSettings: appSettings,
+            helperHealth: HelperToolHealth(probe: helperProbe, appSettings: appSettings)
         )
         return DownloaderViewModel(
             context: context,
             useCase: useCase,
-            helperProbe: helperProbe,
             formatSelection: .default,
             debounceDuration: .milliseconds(5)
         )
