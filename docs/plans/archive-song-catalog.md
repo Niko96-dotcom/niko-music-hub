@@ -22,7 +22,7 @@ commit with `git log --grep='(catalog step N)'`.
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates passed on `b04cc55` (code equal to `2570ffa`), no re-run; 10k data prepared (`BAKEOFF_NAME=catalog-writer`, 6,958 songs seeded in the database) |
 | 1 `SongCatalog` and its tests | done | `git log --grep='(catalog step 1)'` | strict build; `SongCatalogTests` 9, 0 failures |
-| 2 Storage moves into `SongCatalog` | not started | | |
+| 2 Storage moves into `SongCatalog` | done | `git log --grep='(catalog step 2)'` | strict build; `FeatureArchiveBrowserTests` 642 and AppCore `*SourceTests` 93, 0 failures; no test edited |
 | 3 Scan and cache load through one writer | not started | | |
 | 4 Vault reprojection and New Song | not started | | |
 | 5 Metadata edits and collaborator removal | not started | | |

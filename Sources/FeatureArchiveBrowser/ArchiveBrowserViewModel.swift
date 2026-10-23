@@ -54,36 +54,46 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             invalidateActiveScanForRootChange()
         }
     }
-    @Published var songs: [Song] = [] {
-        willSet {
-            // Cards ask for their Project Vault state while SwiftUI reconciles a
-            // selection change. Build that immutable lookup before publishing a
-            // new catalog so card rendering never needs to decode settings or
-            // canonicalize filesystem paths.
-            guard !newValue.equalsConcurrently(songs) else { return }
-            songsByID = Dictionary(
-                newValue.map { ($0.id, $0) },
-                uniquingKeysWith: { _, latest in latest }
-            )
-            rebuildProjectVaultPresentationCache(for: newValue, notifyWhenChanged: false)
-        }
+    /// The songs this browser holds: the scan baseline and the visible list,
+    /// with an id index. `songs` and `scannedSongs` read it.
+    private(set) var songCatalog = SongCatalog()
+
+    /// The visible list: the scan baseline plus archive-only Vault projections
+    /// when they are shown. Views read it.
+    var songs: [Song] {
+        get { songCatalog.visible }
+        // Transitional: removed in catalog step 7.
+        set { storeCatalogForMigration(scanned: songCatalog.scanned, visible: newValue, publishes: true) }
     }
-    /// O(1) live catalog lookup for detail views. Rebuilt before `songs`
-    /// publishes so every body pass sees a cache matching the new snapshot.
-    private var songsByID: [String: Song] = [:]
 
     func liveSong(id: String, fallback: Song) -> Song {
-        songsByID[id] ?? fallback
+        songCatalog.song(id: id) ?? fallback
     }
 
     /// The catalog's song with this id, or nil when the catalog has none.
     func heldSong(id: String) -> Song? {
-        songsByID[id]
+        songCatalog.song(id: id)
     }
 
     /// The songs of `incoming` that the catalog does not hold as they are (new or different).
     func changedSongs(in incoming: [Song]) -> [Song] {
-        incoming.songsDiffering(from: songsByID)
+        songCatalog.changedSongs(in: incoming)
+    }
+
+    // Transitional: removed in catalog step 7. Keeps what the stored properties
+    // did: a new visible list rebuilds the Vault card cache before the publish
+    // (cards ask for their Vault state while SwiftUI reconciles a selection
+    // change), a `songs` write publishes, a `scannedSongs` write does not.
+    private func storeCatalogForMigration(scanned: [Song], visible: [Song], publishes: Bool) {
+        var next = songCatalog
+        let change = next.replaceAll(scanned: scanned, visible: visible)
+        if change.visibleChanged {
+            rebuildProjectVaultPresentationCache(for: next.visible, notifyWhenChanged: false)
+        }
+        if publishes {
+            objectWillChange.send()
+        }
+        songCatalog = next
     }
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
@@ -304,7 +314,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Songs discovered by the configured active/scan roots. Project Vault archive
     /// generations are projected into `songs` only when the user opts into them, so
     /// toggling that view never loses the clean scan baseline.
-    var scannedSongs: [Song] = []
+    var scannedSongs: [Song] {
+        get { songCatalog.scanned }
+        // Transitional: removed in catalog step 7.
+        set { storeCatalogForMigration(scanned: newValue, visible: songCatalog.visible, publishes: false) }
+    }
     // Updated before filteredSongs publishes, so Board uses the applied query mode.
     var isSearching = false
     var projectVaultRestoreOptionsLoading = false
