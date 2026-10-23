@@ -95,6 +95,59 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
         songCatalog = next
     }
+
+    /// The ways the catalog changes. `applyCatalogEdit(_:)` applies them.
+    enum SongCatalogEdit {
+        /// The cached index at launch.
+        case load([Song])
+        /// A scan result: unique by id and sharing the held values, then projected.
+        case rescan([Song])
+    }
+
+    /// The catalog's writer. Projects the edit through the Vault observation,
+    /// writes `songCatalog` and runs the follow-up work in one place:
+    ///
+    /// - a new visible list rebuilds the Vault card cache, then publishes;
+    /// - any change recomputes the browse results (they reconcile the
+    ///   selection), refreshes intelligence and open analytics, and updates
+    ///   the per-song caches;
+    /// - `.load` and `.rescan` sync the repair state; `.rescan` persists the
+    ///   index even when the songs are equal, because it carries the scan date.
+    ///
+    /// Returns the change, so a writer can do the work only it knows about.
+    @discardableResult
+    func applyCatalogEdit(_ edit: SongCatalogEdit) -> SongCatalogChange {
+        var next = songCatalog
+        let change: SongCatalogChange
+        switch edit {
+        case .load(let songs):
+            let projected = projectVaultCatalog(from: songs)
+            change = next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
+        case .rescan(let songs):
+            // Share before projecting, so the visible list shares the held values too.
+            let projected = projectVaultCatalog(from: next.sharingHeldValues(songs))
+            change = next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
+        }
+        if !change.isEmpty {
+            if change.visibleChanged {
+                // Cards ask for their Project Vault state while SwiftUI reconciles a
+                // selection change: the lookup is built before the publish.
+                rebuildProjectVaultPresentationCache(for: next.visible, notifyWhenChanged: false)
+                objectWillChange.send()
+            }
+            songCatalog = next
+            refreshAfterCatalogChange()
+            updatePerSongCaches(for: change)
+        }
+        switch edit {
+        case .load:
+            syncMetadataRepairState()
+        case .rescan:
+            syncMetadataRepairState()
+            scheduleIndexPersist(afterNanoseconds: 0)
+        }
+        return change
+    }
     @Published var filteredSongs: [Song] = []
     @Published var searchMatchSummaries: [String: String] = [:]
     @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []

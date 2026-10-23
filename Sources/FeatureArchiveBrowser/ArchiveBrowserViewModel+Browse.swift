@@ -21,8 +21,17 @@ extension ArchiveBrowserViewModel {
         applyBrowseChange(shouldRefreshIntelligence: false, updates)
     }
 
+    // Transitional: removed in catalog step 7, when `applyCatalogEdit(_:)` is the only writer.
     func mutateCatalog(_ updates: () -> Void) {
-        applyBrowseChange(shouldRefreshIntelligence: true, updates)
+        browseRefreshDriver.cancelPendingDebounce()
+        updates()
+        refreshAfterCatalogChange()
+    }
+
+    /// The browse follow-up of a catalog change: recompute the browse results
+    /// (they reconcile the selection) and refresh intelligence.
+    func refreshAfterCatalogChange() {
+        applyBrowseChange(shouldRefreshIntelligence: true) {}
         // Analytics stays on screen (a `switch` case, no re-appear), so a scan
         // or status edit that lands while it is open must refresh the snapshot.
         // Browse inputs (keystrokes, filters, sort) and selection go through

@@ -111,11 +111,7 @@ extension ArchiveBrowserViewModel {
                 if let integrityWarning = self.catalog.metadataIntegrityWarning() {
                     self.recordPersistenceWarning(integrityWarning)
                 }
-                self.mutateCatalog {
-                    self.scannedSongs = songs
-                    self.songs = songs
-                }
-                self.syncMetadataRepairState()
+                self.applyCatalogEdit(.load(songs))
                 // While the launch scan runs, its status line stays in charge.
                 if !self.isScanning {
                     let relative = HubRelativeTime.string(for: scannedAt)

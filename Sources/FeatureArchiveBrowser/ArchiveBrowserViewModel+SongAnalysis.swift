@@ -59,6 +59,57 @@ extension ArchiveBrowserViewModel {
         ArchiveCPRPluginCoordinator.invalidate(path: path, cache: &cprPluginSummaryByCPRPath)
     }
 
+    /// Per-song caches follow a catalog change. A changed main preview drops the
+    /// song's mixdown analysis, a changed project its plugin summary, and removed
+    /// songs leave the mixdown caches. Only the changed songs are looked at, never
+    /// the whole catalog. A song new to the catalog has no cache entry yet, so it
+    /// is skipped: the first load of 10,000 songs does no per-song work.
+    func updatePerSongCaches(for change: SongCatalogChange) {
+        var invalidatedSelectedSongAnalysis = false
+        var didInvalidateCPRPluginSummary = false
+        for entry in change.changed {
+            guard let held = entry.before else { continue }
+            let song = entry.after
+            let previewIDChanged = held.mainPreviewCandidateID != song.mainPreviewCandidateID
+            let previewModifiedAtChanged = mainPreviewModifiedAt(for: held) != mainPreviewModifiedAt(for: song)
+            if previewIDChanged || previewModifiedAtChanged {
+                invalidateMixdownAnalysis(for: song.id)
+                if selectedSong?.id == song.id {
+                    invalidatedSelectedSongAnalysis = true
+                }
+            }
+            if let currentCPR = effectiveCPRIdentity(for: song),
+               let previousCPR = effectiveCPRIdentity(for: held),
+               previousCPR.path != currentCPR.path || previousCPR.modifiedAt != currentCPR.modifiedAt {
+                invalidateCPRPluginSummary(for: previousCPR.path)
+                didInvalidateCPRPluginSummary = true
+                if previousCPR.path != currentCPR.path {
+                    invalidateCPRPluginSummary(for: currentCPR.path)
+                }
+            }
+        }
+        if invalidatedSelectedSongAnalysis, let selectedSong {
+            refreshMixdownAnalysis(for: selectedSong)
+        }
+        // CPR summaries share one load task: invalidating ANY changed CPR
+        // cancels a pending selected load too, which would otherwise leave an
+        // expanded plugins section on "Loading plugin list..." with no new
+        // refresh. Restart the selected summary when needed after
+        // invalidations. `refresh` is a no-op for a cached summary or a song
+        // without a CPR, so cache hits are preserved and unrelated changes do
+        // no extra work (gated on an actual invalidation).
+        if didInvalidateCPRPluginSummary, pluginsSectionExpanded, let selectedSong {
+            refreshCPRPluginSummary(for: selectedSong)
+        }
+        if !change.removedIDs.isEmpty {
+            ArchiveMixdownAnalysisCoordinator.prune(
+                remainingSongIDs: Set(songs.map(\.id)),
+                bpmCache: &mixdownBPMBySongID,
+                keyCache: &mixdownKeyBySongID
+            )
+        }
+    }
+
     func refreshCPRPluginSummary(for song: Song) {
         cprPlugins.refresh(
             for: song,

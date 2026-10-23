@@ -23,7 +23,7 @@ commit with `git log --grep='(catalog step N)'`.
 | 0 Baseline | done | — | full gates passed on `b04cc55` (code equal to `2570ffa`), no re-run; 10k data prepared (`BAKEOFF_NAME=catalog-writer`, 6,958 songs seeded in the database) |
 | 1 `SongCatalog` and its tests | done | `git log --grep='(catalog step 1)'` | strict build; `SongCatalogTests` 9, 0 failures |
 | 2 Storage moves into `SongCatalog` | done | `git log --grep='(catalog step 2)'` | strict build; `FeatureArchiveBrowserTests` 642 and AppCore `*SourceTests` 93, 0 failures; no test edited |
-| 3 Scan and cache load through one writer | not started | | |
+| 3 Scan and cache load through one writer | done | `git log --grep='(catalog step 3)'` | strict build; `FeatureArchiveBrowserTests` 643 and AppCore `*SourceTests` 93, 0 failures; the new B1 test failed with an unprojected cache load, then passed |
 | 4 Vault reprojection and New Song | not started | | |
 | 5 Metadata edits and collaborator removal | not started | | |
 | 6 Root reset and per-song caches | not started | | |
@@ -32,7 +32,19 @@ commit with `git log --grep='(catalog step N)'`.
 
 ## Revisions
 
-None yet. Record every deviation from the steps below here, numbered, with its reason.
+Record every deviation from the steps below here, numbered, with its reason.
+
+1. **Step 3: repair sync and index persist run per edit, not per change.** The plan's table ran every follow-up only
+   for a non-empty change. But an unchanged rescan still syncs the repair state (the scan's metadata load can change
+   the corrupt-row gate) and persists the index (it carries the scan date). So `applyCatalogEdit` runs those two by
+   edit kind, even for an empty change; the rest runs only for a non-empty change.
+2. **Step 3: the per-song cache step skips songs new to the catalog.** The scan's loop also looked at new songs, which
+   cannot have a cache entry; it only cancelled the selected song's analysis in flight and wrote two `@Published`
+   dictionaries per song. Run for a cache load into an empty catalog, that would be 20,000 publishes. New songs are
+   skipped. Mixdown entries are pruned when the change removes songs, not on every visible change (only removed
+   songs can leave stale entries once every write goes through `applyCatalogEdit`).
+3. **Step 3: the scan records its persistence warning before the catalog write.** It used to come after the browse
+   recompute. It still comes before the repair-state sync, which is the order that matters for the footer.
 
 ## Terms
 

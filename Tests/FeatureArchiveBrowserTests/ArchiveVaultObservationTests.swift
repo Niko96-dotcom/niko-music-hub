@@ -329,6 +329,46 @@ final class ArchiveVaultObservationTests: XCTestCase {
         XCTAssertEqual(observation.archivedCount, 0, "full refresh with the same list updates the count")
     }
 
+    // MARK: - Catalog edits are projected
+
+    /// A cached index that arrives after the Vault snapshots goes through the
+    /// projection like every catalog write, so an archived project's old Active
+    /// path does not come back from the cache (catalog plan, B1).
+    func testCacheLoadAfterVaultSnapshotsIsProjected() async throws {
+        let harness = try makeHarness()
+        defer { harness.cleanup() }
+        let runtime = ObservationTestRuntime()
+        let archivedSong = makeSong(in: harness.active, named: "Archived From Cache")
+        let keptSong = makeSong(in: harness.active, named: "Kept From Cache")
+        let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [])
+        try await waitUntil { runtime.snapshotsCalls >= 1 && runtime.dueCalls >= 1 }
+        let resolver = try XCTUnwrap(viewModel.vaultObservation.context?.generationReviewResolver)
+        let recordID = ProjectID()
+        let transferID = UUID()
+        let archived = ProjectVaultRuntimeSnapshot(
+            record: ProjectRecord(id: recordID, canonicalTitle: archivedSong.effectiveDisplayTitle, locations: []),
+            transfer: VaultTransferRecord(
+                id: transferID,
+                projectID: recordID,
+                sourceURL: archivedSong.folderPath,
+                stagingURL: archivedSong.folderPath.appendingPathComponent(".nmh-test-staging"),
+                destinationURL: resolver.archiveRootURL
+                    .appendingPathComponent("generations", isDirectory: true)
+                    .appendingPathComponent(recordID.description, isDirectory: true)
+                    .appendingPathComponent("generation-\(transferID.uuidString.lowercased())", isDirectory: true),
+                state: .archiveVerified
+            )
+        )
+        runtime.setServed([archived])
+        _ = await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.archivedProjectCount, 1, "fixture must be archived-only")
+
+        viewModel.applyCatalogEdit(.load([archivedSong, keptSong]))
+
+        XCTAssertEqual(viewModel.scannedSongs.map(\.id), [keptSong.id], "the archived path leaves the baseline")
+        XCTAssertEqual(viewModel.songs.map(\.id), [keptSong.id], "archived projects stay hidden by default")
+    }
+
     // MARK: - Unavailable clear vs journal-failure preservation
 
     func testUnavailableClearsWhileJournalFailurePreserves() async throws {

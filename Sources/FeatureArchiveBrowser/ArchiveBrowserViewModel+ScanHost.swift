@@ -4,101 +4,37 @@ import NikoMusicCore
 
 extension ArchiveBrowserViewModel: ArchiveScanHost {
     func applyCatalogScanUpdate(_ update: ArchiveCatalogCoordinator.CatalogScanApplyResult, roots: [URL]) {
-        let uniqueIncomingSongs = SongCatalogDeduplicator.sharingUnchangedValues(
-            SongCatalogDeduplicator.uniqueByID(update.songs), from: scannedSongs
-        )
-        let projected = projectVaultCatalog(from: uniqueIncomingSongs)
-        let scannedUnchanged = projected.scannedSongs.equalsConcurrently(scannedSongs)
-        let visibleUnchanged = projected.visibleSongs.equalsConcurrently(songs)
-        // Songs the rescan changed or added, with what the catalog held for them. Whatever reacts to a song's
-        // preview or project below depends only on the song's value, so a song equal to the one held cannot
-        // invalidate anything: only these are looked at, not all 10,000 on every rescan.
-        let changedSongs = visibleUnchanged ? [] : changedSongs(in: uniqueIncomingSongs)
-        let heldBefore = Dictionary(
-            changedSongs.compactMap { song in heldSong(id: song.id).map { (song.id, $0) } },
-            uniquingKeysWith: { _, latest in latest }
-        )
-        // A rescan that finds nothing new produces a second, equal copy of the catalog already held (the
-        // one decoded from the cached index on a normal launch). Keep the held arrays and let the new
-        // ones go, instead of carrying two copies of every song, version and preview for the whole session.
-        // When nothing the browse list reads changed either, it is not projected again.
-        let browseInputsUnchanged = scannedUnchanged && visibleUnchanged
-            && update.diagnostics.skippedEntries == (scanDiagnostics?.skippedEntries ?? [])
-        if browseInputsUnchanged {
-            scanDiagnostics = update.diagnostics
-            setBackgroundStatusMessage(update.statusMessage)
-            // "Until the next scan" dismissals end with the scan, so the intelligence pass still runs.
-            refreshIntelligence()
-            if viewMode == .analytics { refreshAnalytics() }
-        } else {
-            mutateCatalog {
-                if !scannedUnchanged { scannedSongs = projected.scannedSongs }
-                if !visibleUnchanged { songs = projected.visibleSongs }
-                scanDiagnostics = update.diagnostics
-                setBackgroundStatusMessage(update.statusMessage)
-            }
-        }
-        // Refresh or clear selection against the new catalog (keep if still present even when
-        // filtered out — browse recompute will clear filtered-out selections next).
-        reconcileSelectedSong(requireVisibleInFilteredList: false)
-        var invalidatedSelectedSongAnalysis = false
-        var didInvalidateCPRPluginSummary = false
-        for song in changedSongs {
-            let held = heldBefore[song.id]
-            let previewIDChanged = held?.mainPreviewCandidateID != song.mainPreviewCandidateID
-            let previewModifiedAtChanged = held.flatMap(mainPreviewModifiedAt(for:)) != mainPreviewModifiedAt(for: song)
-            if previewIDChanged || previewModifiedAtChanged {
-                invalidateMixdownAnalysis(for: song.id)
-                if selectedSong?.id == song.id {
-                    invalidatedSelectedSongAnalysis = true
-                }
-            }
-            if let currentCPR = effectiveCPRIdentity(for: song),
-               let previousCPR = held.flatMap(effectiveCPRIdentity(for:)),
-               previousCPR.path != currentCPR.path || previousCPR.modifiedAt != currentCPR.modifiedAt {
-                invalidateCPRPluginSummary(for: previousCPR.path)
-                didInvalidateCPRPluginSummary = true
-                if previousCPR.path != currentCPR.path {
-                    invalidateCPRPluginSummary(for: currentCPR.path)
-                }
-            }
-        }
-        if invalidatedSelectedSongAnalysis, let selectedSong {
-            refreshMixdownAnalysis(for: selectedSong)
-        }
-        // CPR summaries share one load task: invalidating ANY changed CPR
-        // cancels a pending selected load too, which would otherwise leave an
-        // expanded plugins section on "Loading plugin list..." with no new
-        // refresh. Restart the selected summary when needed after
-        // invalidations. `refresh` is a no-op for a cached summary or a song
-        // without a CPR, so cache hits are preserved and unrelated scans do
-        // no extra work (gated on an actual invalidation).
-        if didInvalidateCPRPluginSummary, pluginsSectionExpanded, let selectedSong {
-            refreshCPRPluginSummary(for: selectedSong)
-        }
-        // Drop analysis for songs that disappeared (none did while the catalog is unchanged).
-        if !visibleUnchanged {
-            ArchiveMixdownAnalysisCoordinator.prune(
-                remainingSongIDs: Set(songs.map(\.id)),
-                bpmCache: &mixdownBPMBySongID,
-                keyCache: &mixdownKeyBySongID
-            )
-        }
+        // Skipped entries feed the browse list (skipped search matches), so a scan that
+        // changes only them still recomputes it.
+        let skippedEntriesUnchanged = update.diagnostics.skippedEntries == (scanDiagnostics?.skippedEntries ?? [])
+        scanDiagnostics = update.diagnostics
+        setBackgroundStatusMessage(update.statusMessage)
         // P0 data-loss fix: scan applies never write song metadata. Per-song edits
         // persist single rows via commitSongMetadataUpdate/createNewSong; the former
         // whole-catalog scan-time upsert overwrote stored titles/notes/status whenever
         // the metadata load failed, and blocked the main actor on a full-table write.
-        // Any load degradation arrives as update.persistenceWarning instead.
+        // Any load degradation arrives as update.persistenceWarning instead; it is
+        // recorded before the repair-state sync, as before.
         if let warning = update.persistenceWarning {
             recordPersistenceWarning(warning)
         }
-        syncMetadataRepairState()
+        // A rescan that finds nothing new keeps the held catalog (no second copy of
+        // every song) and an empty change: the browse list is not projected again.
+        let change = applyCatalogEdit(.rescan(update.songs))
+        if change.isEmpty {
+            if skippedEntriesUnchanged {
+                // "Until the next scan" dismissals end with the scan, so the intelligence pass still runs.
+                refreshIntelligence()
+                if viewMode == .analytics { refreshAnalytics() }
+            } else {
+                refreshAfterCatalogChange()
+            }
+        }
         // NMH-042: announce only full scans (announceCompletion), not every
         // incremental filesystem apply. Failures stay on statusMessage (NMH-049).
         if update.announceCompletion {
             HubAccessibilityAnnouncer.announce(HubAccessibilityCopy.scanComplete)
         }
-        scheduleIndexPersist(afterNanoseconds: 0)
         Task { await refreshProjectVaultSnapshots() }
     }
 
