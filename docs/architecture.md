@@ -206,7 +206,9 @@ The Archive Browser's page (`viewMode`: board, board detail, list, analytics; `l
 detail) belongs to `ArchiveBrowserViewModel`. Views state intent and never write it: `openSongDetail(_:)`,
 `showBoard()` (back from the detail or analytics, keeping the selection), `setBrowseLayout(list:)`, `showAnalytics()`,
 `clearSelection(stopPlayback:)` and `restoreNavigationRoute(_:)`. `ArchiveViewIntentSourceTests` fails on a write
-outside `ArchiveBrowserViewModel*.swift`.
+outside `ArchiveBrowserViewModel*.swift`. When the page changes, `ArchiveBrowserView` gives the archive the keyboard
+(unless the search field has it), so Esc and the song shortcuts work after a page change that did not come from a
+click: VoiceOver's "Open song detail", the Song menu, Back/Forward (`ArchiveKeyboardFocusTests`).
 
 Gates follow the same rule: a view asks the view model the question the edit coordinator also asks. The song detail's
 status menu uses `canMutateWorkflowStatus(for:)`, like board drops and the Song menu; the shorter

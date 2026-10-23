@@ -194,6 +194,15 @@ struct ArchiveBrowserView: View {
         .onChange(of: isActiveTool) { _, active in
             updateArrowKeyMonitor(active: active)
         }
+        // A page change that does not come from a click (VoiceOver's "Open song
+        // detail", the Song menu, Back/Forward) would leave the keyboard where it
+        // was: Esc and the song shortcuts would do nothing until a click. Search
+        // keeps the keyboard while the person types.
+        .onChange(of: viewModel.viewMode) { _, _ in
+            guard isActiveTool, keyboardFocus != .search else { return }
+            ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
+            keyboardFocus = .archive
+        }
         .onMoveCommand(perform: handleArchiveMoveCommand)
         .onKeyPress(.upArrow) {
             guard allowsSongShortcuts else { return .ignored }
