@@ -48,6 +48,42 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         XCTAssertFalse(current.activity.isScrolling, "A lane without a board owner must unsubscribe")
     }
 
+    /// A song detail hides the board, and a song edited there reaches the lane while it
+    /// is hidden. Its card must show the edit as soon as the board is visible again
+    /// (the detail's Back), not only after the next unrelated refresh.
+    func testCardEditedWhileTheBoardIsHiddenShowsTheEditWhenTheBoardReturns() throws {
+        let fixture = makeFixture()
+        defer { fixture.window.close() }
+        fixture.window.contentView?.layoutSubtreeIfNeeded()
+        let table = try XCTUnwrap(fixture.list.documentView as? NSTableView)
+        func lane(_ songs: [Song], visible: Bool) -> ArchiveBoardNativeSongList {
+            ArchiveBoardNativeSongList(
+                songs: songs, selectedSongID: nil, vaultPresentations: [:], vaultActivity: [:],
+                viewModel: fixture.model, dropLayout: fixture.layout, colorScheme: .light, reduceMotion: true,
+                isBoardVisible: visible
+            )
+        }
+        func firstCardTitle() -> String? {
+            (table.view(atColumn: 0, row: 0, makeIfNecessary: false) as? ArchiveBoardCardCell)?
+                .displayedContent?.card.song.effectiveDisplayTitle
+        }
+        XCTAssertEqual(firstCardTitle(), "Song")
+
+        // The detail opens: the column host hides the lane (`ArchiveBoardDropHostingView`).
+        fixture.container.isHidden = true
+        fixture.list.apply(lane(fixture.songs, visible: false), animated: false)
+        var edited = fixture.songs
+        edited[0].virtualTitle = "Song Edited"
+        fixture.list.apply(lane(edited, visible: false), animated: false)
+
+        // Back: the board shows again with the songs it already has.
+        fixture.container.isHidden = false
+        fixture.list.apply(lane(edited, visible: true), animated: false)
+        fixture.window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(firstCardTitle(), "Song Edited")
+    }
+
     func testEndOfLongLaneIsRealizedAndCardSpacingHasNoTableInsets() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }

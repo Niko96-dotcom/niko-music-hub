@@ -133,6 +133,9 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
             contentView.scroll(to: contentView.constrainBoundsRect(top).origin)
             reflectScrolledClipView(contentView)
         }
+        // A hidden lane has no visible rows, so a change applied while the board was
+        // hidden (a song detail's edit) never reached its cards: refresh them on return.
+        let boardReturned = !wasBoardVisible && next.isBoardVisible
         wasBoardVisible = next.isBoardVisible
         let nextIDs = next.songs.map(\.id)
         let oldIDs = old?.songs.map(\.id) ?? []
@@ -195,7 +198,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                 || old.vaultPresentations[song.id] != next.vaultPresentations[song.id]
                 || old.vaultActivity[song.id] != next.vaultActivity[song.id]
             let selectionChanged = (old.selectedSongID == song.id) != (next.selectedSongID == song.id)
-            guard contentChanged || selectionChanged || old.viewModel !== next.viewModel
+            guard contentChanged || selectionChanged || boardReturned || old.viewModel !== next.viewModel
                     || old.colorScheme != next.colorScheme || old.reduceMotion != next.reduceMotion
                     || old.boardScroll !== next.boardScroll else { continue }
             if let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ArchiveBoardCardCell {
@@ -203,7 +206,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                              interaction: interaction, width: table.tableColumns[0].width,
                              scrollActivity: next.boardScroll?.activity, reduceMotion: next.reduceMotion)
             }
-            if contentChanged { changedHeights.insert(row) }
+            if contentChanged || boardReturned { changedHeights.insert(row) }
         }
         if !changedHeights.isEmpty { table.noteHeightOfRows(withIndexesChanged: changedHeights) }
     }
