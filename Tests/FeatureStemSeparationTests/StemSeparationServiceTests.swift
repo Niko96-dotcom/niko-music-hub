@@ -256,10 +256,9 @@ struct StemSeparationServiceTests {
             systemDirectories: [],
             isExecutable: { _ in false }
         )
-        let healthChecker = DemucsMLXHealthChecker(locator: emptyLocator)
         let backend = DemucsMLXBackend(
             settings: HelperToolSettings(),
-            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: emptyLocator)
+            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator)
         )
         let runner = JobRunner()
         let service = StemSeparationService(
@@ -431,11 +430,9 @@ struct StemSeparationServiceTests {
             systemDirectories: [],
             isExecutable: { $0 == executable.path }
         )
-        let healthChecker = DemucsMLXHealthChecker(locator: locator)
         let backend = DemucsMLXBackend(
             settings: HelperToolSettings(demucsMlx: executable),
-            healthChecker: healthChecker,
-            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: locator),
+            commandBuilder: DemucsMLXCommandBuilder(locator: locator),
             runner: processRunner
         )
         let runner = JobRunner()

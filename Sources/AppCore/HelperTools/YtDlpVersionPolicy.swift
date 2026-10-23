@@ -1,10 +1,12 @@
 import Foundation
 
-enum YtDlpVersionPolicy {
-    static let stalenessDays = 90
-    static let youtubeCompatibilityFloor = "2026.08.19"
+/// When a yt-dlp build is too old for YouTube: older than 90 days, or older
+/// than the last release YouTube needed.
+public enum YtDlpVersionPolicy {
+    public static let stalenessDays = 90
+    public static let youtubeCompatibilityFloor = "2026.08.19"
 
-    static func parseVersionDate(_ version: String) -> Date? {
+    public static func parseVersionDate(_ version: String) -> Date? {
         let trimmed = version.trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern = #"^(20\d{2})\.(\d{2})\.(\d{2})"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
@@ -28,13 +30,13 @@ enum YtDlpVersionPolicy {
         return components.date
     }
 
-    static func isStale(version: String, referenceDate: Date = Date()) -> Bool {
+    public static func isStale(version: String, referenceDate: Date = Date()) -> Bool {
         guard let versionDate = parseVersionDate(version) else { return false }
         guard let threshold = effectiveMinimumDate(referenceDate: referenceDate) else { return false }
         return versionDate < threshold
     }
 
-    static func minimumExpectedVersion(referenceDate: Date = Date()) -> String {
+    public static func minimumExpectedVersion(referenceDate: Date = Date()) -> String {
         guard let threshold = effectiveMinimumDate(referenceDate: referenceDate) else {
             return "recent release"
         }

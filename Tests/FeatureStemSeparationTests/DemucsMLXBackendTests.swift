@@ -176,10 +176,9 @@ struct DemucsMLXBackendTests {
             systemDirectories: [],
             isExecutable: { _ in false }
         )
-        let healthChecker = DemucsMLXHealthChecker(locator: emptyLocator)
         let backend = DemucsMLXBackend(
             settings: settings,
-            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: emptyLocator)
+            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator)
         )
 
         let result = await backend.separate(request: request) { _, _ in }
@@ -204,10 +203,9 @@ struct DemucsMLXBackendTests {
             systemDirectories: [],
             isExecutable: { _ in false }
         )
-        let healthChecker = DemucsMLXHealthChecker(locator: emptyLocator)
         let backend = DemucsMLXBackend(
             settings: settings,
-            commandBuilder: DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: emptyLocator)
+            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator)
         )
 
         let result = await backend.separate(request: request) { _, _ in }
@@ -484,11 +482,9 @@ private func makeBackend(settings: HelperToolSettings, runner: any StreamingExte
         systemDirectories: [],
         isExecutable: { executables.contains($0) }
     )
-    let healthChecker = DemucsMLXHealthChecker(locator: locator)
-    let commandBuilder = DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: locator)
+    let commandBuilder = DemucsMLXCommandBuilder(locator: locator)
     return DemucsMLXBackend(
         settings: settings,
-        healthChecker: healthChecker,
         commandBuilder: commandBuilder,
         runner: runner
     )

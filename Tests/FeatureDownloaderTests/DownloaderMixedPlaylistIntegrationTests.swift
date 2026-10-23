@@ -27,7 +27,7 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
             isExecutable: { $0 == "/fixture/yt-dlp" }
         )
         let versionRunner = IntegrationVersionRunner()
-        let healthChecker = YtDlpHealthChecker(runner: versionRunner, referenceDate: YtDlpVersionPolicy.parseVersionDate("2026.09.27"), locator: locator)
+        let helperProbe = HelperToolProbe(runner: versionRunner, referenceDate: YtDlpVersionPolicy.parseVersionDate("2026.09.27"), locator: locator)
         let jobRunner = JobRunner()
         let settings = AppSettings(
             outputFolder: StoredFolderLocation(url: outputDir),
@@ -42,11 +42,10 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
         let downloader = YtDlpDownloader(runner: downloadRunner)
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker,
+            helperProbe: helperProbe,
             jobRunner: jobRunner,
             settingsStore: settingsStore,
-            simulateRunner: versionRunner,
-            locator: locator
+            simulateRunner: versionRunner
         )
         let inbox = RecordingIntegrationInboxStore()
         let viewModel = makeIntegrationViewModel(
@@ -54,7 +53,7 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
             useCase: useCase,
             jobRunner: jobRunner,
             outputInboxStore: inbox,
-            healthChecker: healthChecker
+            helperProbe: helperProbe
         )
 
         let sourceURL = "https://example.com/playlist?list=abc"
@@ -117,7 +116,7 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
             isExecutable: { $0 == "/fixture/yt-dlp" }
         )
         let versionRunner = IntegrationVersionRunner()
-        let healthChecker = YtDlpHealthChecker(runner: versionRunner, referenceDate: YtDlpVersionPolicy.parseVersionDate("2026.09.27"), locator: locator)
+        let helperProbe = HelperToolProbe(runner: versionRunner, referenceDate: YtDlpVersionPolicy.parseVersionDate("2026.09.27"), locator: locator)
         let jobRunner = JobRunner()
         let settings = AppSettings(
             outputFolder: StoredFolderLocation(url: outputDir),
@@ -127,11 +126,10 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
         let downloader = YtDlpDownloader(runner: EmptyFailureIntegrationRunner())
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker,
+            helperProbe: helperProbe,
             jobRunner: jobRunner,
             settingsStore: settingsStore,
-            simulateRunner: versionRunner,
-            locator: locator
+            simulateRunner: versionRunner
         )
         let inbox = RecordingIntegrationInboxStore()
         let viewModel = makeIntegrationViewModel(
@@ -139,7 +137,7 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
             useCase: useCase,
             jobRunner: jobRunner,
             outputInboxStore: inbox,
-            healthChecker: healthChecker
+            helperProbe: helperProbe
         )
 
         viewModel.urlText = "https://example.com/watch?v=missing"
@@ -164,7 +162,7 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
         useCase: DownloaderUseCase,
         jobRunner: JobRunner,
         outputInboxStore: RecordingIntegrationInboxStore,
-        healthChecker: YtDlpHealthChecker
+        helperProbe: HelperToolProbe
     ) -> DownloaderViewModel {
         let context = ToolContext(
             settingsStore: settingsStore,
@@ -177,7 +175,7 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
         return DownloaderViewModel(
             context: context,
             useCase: useCase,
-            healthChecker: healthChecker,
+            helperProbe: helperProbe,
             formatSelection: .default,
             debounceDuration: .milliseconds(5)
         )

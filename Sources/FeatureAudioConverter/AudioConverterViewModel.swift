@@ -16,7 +16,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     private let scanner: AudioFileIntakeScanner
     private let batchUseCase: BatchAudioConversionUseCase
     private let outputFileNamer: OutputFileNamer
-    private let ffmpegHealthChecker: FFmpegHealthChecker
+    private let helperProbe: HelperToolProbe
     private var stopController: StopAfterCurrentController?
     private var conversionTask: Task<[BatchAudioConversionOutcome], Never>?
     private var isCancelRequested = false
@@ -32,7 +32,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         scanner: AudioFileIntakeScanner = AudioFileIntakeScanner(),
         batchUseCase: BatchAudioConversionUseCase? = nil,
         outputFileNamer: OutputFileNamer = OutputFileNamer(),
-        ffmpegHealthChecker: FFmpegHealthChecker = FFmpegHealthChecker()
+        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard())
     ) {
         self.context = context
         self.scanner = scanner
@@ -41,7 +41,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             outputInboxStore: context.outputInboxStore
         )
         self.outputFileNamer = outputFileNamer
-        self.ffmpegHealthChecker = ffmpegHealthChecker
+        self.helperProbe = helperProbe
         self.currentAudioPreset = context.appSettings.settings.audioPreset
         settingsSubscription = context.appSettings.$settings
             .receive(on: DispatchQueue.main)
@@ -377,8 +377,8 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
             var helperTools = try context.settingsStore.loadSettings().helperTools
             helperTools.ffmpeg = ffmpegURL
 
-            switch await ffmpegHealthChecker.availability(settings: helperTools) {
-            case .available:
+            switch await helperProbe.status(of: .ffmpeg, settings: helperTools) {
+            case .ready, .outdated:
                 try context.settingsStore.updateSettings { settings in
                     settings.helperTools.ffmpeg = ffmpegURL
                 }
@@ -388,7 +388,7 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
                     rowID: rowID,
                     message: AudioConverterCopy.selectedFFmpegMissing
                 )
-            case let .unusable(message):
+            case let .broken(message):
                 markFFmpegSelectionFailed(
                     rowID: rowID,
                     message: AudioConverterCopy.selectedFFmpegUnusable(message)

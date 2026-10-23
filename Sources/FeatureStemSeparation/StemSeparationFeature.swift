@@ -41,10 +41,10 @@ public struct StemSeparationFeature: ToolFeature {
             outputInboxStore: context.outputInboxStore,
             jobRunner: context.jobRunner
         )
-        let healthChecker = YtDlpHealthChecker()
+        let helperProbe = HelperToolProbe(locator: .standard())
         let downloaderUseCase = DownloaderUseCase(
             downloader: YtDlpDownloader(),
-            healthChecker: healthChecker,
+            helperProbe: helperProbe,
             jobRunner: context.jobRunner,
             settingsStore: context.settingsStore
         )

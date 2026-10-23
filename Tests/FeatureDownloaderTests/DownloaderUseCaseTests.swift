@@ -11,8 +11,8 @@ final class DownloaderUseCaseTests: XCTestCase {
         )
     }
 
-    private func healthChecker(runner: any ExternalProcessRunning) -> YtDlpHealthChecker {
-        YtDlpHealthChecker(runner: runner, referenceDate: YtDlpVersionPolicy.parseVersionDate("2026.09.27"), locator: ytDlpLocator())
+    private func helperProbe(runner: any ExternalProcessRunning) -> HelperToolProbe {
+        HelperToolProbe(runner: runner, referenceDate: YtDlpVersionPolicy.parseVersionDate("2026.09.27"), locator: ytDlpLocator())
     }
 
     func testYtDlpFailureMessagePrefersStderr() {
@@ -41,11 +41,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = SpyJobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner,
-            locator: ytDlpLocator()
+            simulateRunner: simulateRunner
         )
 
         let url = URL(string: "https://example.com/watch?v=bad")!
@@ -77,11 +76,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = SpyJobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: healthChecker(runner: simulateRunner),
+            helperProbe: helperProbe(runner: simulateRunner),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner,
-            locator: ytDlpLocator()
+            simulateRunner: simulateRunner
         )
 
         let url = URL(string: "https://example.com/watch?v=ok")!
@@ -101,11 +99,10 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: SuccessfulDownloader(outputs: [
                 VerifiedDownloadOutput(url: outputURL, isAlreadyExisting: false),
             ]),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: AvailableVersionRunner(),
-            locator: ytDlpLocator()
+            simulateRunner: AvailableVersionRunner()
         )
 
         let url = URL(string: "https://youtu.be/jNQXAC9IVRw")!
@@ -127,11 +124,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = SpyJobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner,
-            locator: ytDlpLocator()
+            simulateRunner: simulateRunner
         )
 
         let url = URL(string: "https://youtu.be/jNQXAC9IVRw")!
@@ -151,11 +147,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = SpyJobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner,
-            locator: ytDlpLocator()
+            simulateRunner: simulateRunner
         )
 
         let url = URL(string: "https://www.youtube.com/playlist?list=PLfixture")!
@@ -174,10 +169,9 @@ final class DownloaderUseCaseTests: XCTestCase {
         let downloader = InternalTimeoutMessageDownloader()
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://www.youtube.com/watch?v=internal")!
 
@@ -212,10 +206,9 @@ final class DownloaderUseCaseTests: XCTestCase {
         let downloader = YtDlpDownloader(runner: downloadRunner)
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(outputRoot: outputDir),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore(outputRoot: outputDir)
         )
         let sourceURL = URL(string: "https://example.com/watch?v=permanent")!
 
@@ -256,11 +249,10 @@ final class DownloaderUseCaseTests: XCTestCase {
                 VerifiedDownloadOutput(url: freshURL, isAlreadyExisting: false),
                 VerifiedDownloadOutput(url: existingURL, isAlreadyExisting: true),
             ]),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(outputRoot: outputDir),
-            simulateRunner: AvailableVersionRunner(),
-            locator: ytDlpLocator()
+            simulateRunner: AvailableVersionRunner()
         )
 
         let url = URL(string: "https://example.com/playlist?list=abc")!
@@ -288,11 +280,10 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: SuccessfulDownloader(outputs: [
                 VerifiedDownloadOutput(url: existingURL, isAlreadyExisting: true),
             ]),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(outputRoot: outputDir),
-            simulateRunner: AvailableVersionRunner(),
-            locator: ytDlpLocator()
+            simulateRunner: AvailableVersionRunner()
         )
 
         let url = URL(string: "https://example.com/watch?v=skip")!
@@ -316,14 +307,13 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = JobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: YtDlpHealthChecker(runner: AvailableVersionRunner(), locator: missingLocator),
+            helperProbe: HelperToolProbe(runner: AvailableVersionRunner(), locator: missingLocator),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(settings: AppSettings(
                 outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
                 helperTools: HelperToolSettings(ytDlp: nil)
             )),
-            simulateRunner: CapturingSimulateRunner(),
-            locator: missingLocator
+            simulateRunner: CapturingSimulateRunner()
         )
         let url = URL(string: "https://example.com/watch?v=ok")!
         do {
@@ -342,10 +332,9 @@ final class DownloaderUseCaseTests: XCTestCase {
         let downloader = StallThrowingDownloader()
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://example.com/watch?v=stall")!
 
@@ -376,10 +365,9 @@ final class DownloaderUseCaseTests: XCTestCase {
         let downloader = FirstAttempt403Downloader(outputURL: outputURL)
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://www.youtube.com/watch?v=retry")!
 
@@ -401,11 +389,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let simulateRunner = CapturingSimulateRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: simulateRunner,
-            locator: ytDlpLocator()
+            simulateRunner: simulateRunner
         )
 
         let url = URL(string: "https://example.com/watch?v=ok")!
@@ -508,14 +495,13 @@ final class DownloaderUseCaseTests: XCTestCase {
         )
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: YtDlpHealthChecker(
+            helperProbe: HelperToolProbe(
                 runner: AvailableVersionRunner(),
                 locator: fixtureLocator
             ),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(settings: settings),
-            simulateRunner: AvailableVersionRunner(),
-            locator: fixtureLocator
+            simulateRunner: AvailableVersionRunner()
         )
 
         let url = URL(string: "https://example.com/audio")!
@@ -546,26 +532,25 @@ final class DownloaderUseCaseTests: XCTestCase {
             outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
             helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/deleted/yt-dlp"))
         )
-        let checker = YtDlpHealthChecker(
+        let checker = HelperToolProbe(
             runner: AvailableVersionRunner(),
             // Close to the fake's 2026.08.19 so the freshness policy passes.
             referenceDate: Date(timeIntervalSince1970: 1_790_000_000),
             locator: fixtureLocator
         )
-        let availability = await checker.availability(settings: settings.helperTools)
-        guard case .available = availability else {
-            return XCTFail("Expected available via fallback, got \(availability)")
+        let status = await checker.status(of: .ytDlp, settings: settings.helperTools)
+        guard case .ready = status else {
+            return XCTFail("Expected ready via fallback, got \(status)")
         }
-        XCTAssertEqual(checker.resolvedYtDlpURL(settings: settings.helperTools), fixtureURL)
+        XCTAssertEqual(checker.locator.resolve(.ytDlp, settings: settings.helperTools), fixtureURL)
 
         let simulateRunner = CapturingSimulateRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: checker,
+            helperProbe: checker,
             jobRunner: SpyJobRunner(),
             settingsStore: FixtureSettingsStore(settings: settings),
-            simulateRunner: simulateRunner,
-            locator: fixtureLocator
+            simulateRunner: simulateRunner
         )
         let url = URL(string: "https://example.com/watch?v=ok")!
         _ = try await useCase.simulateAndEnqueue(
@@ -578,7 +563,7 @@ final class DownloaderUseCaseTests: XCTestCase {
     func testMissingYtDlpUsesInstallToolsCopy() async {
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: YtDlpHealthChecker(
+            helperProbe: HelperToolProbe(
                 runner: AvailableVersionRunner(),
                 locator: HelperToolLocator(
                     managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
@@ -591,12 +576,7 @@ final class DownloaderUseCaseTests: XCTestCase {
                 outputFolder: StoredFolderLocation(url: URL(fileURLWithPath: "/tmp/out")),
                 helperTools: HelperToolSettings(ytDlp: nil)
             )),
-            simulateRunner: CapturingSimulateRunner(),
-            locator: HelperToolLocator(
-                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
-                systemDirectories: [],
-                isExecutable: { _ in false }
-            )
+            simulateRunner: CapturingSimulateRunner()
         )
         let url = URL(string: "https://example.com/watch?v=ok")!
         do {
@@ -629,11 +609,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = SpyJobRunner()
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: UserDefaultsSettingsStore(userDefaults: defaults),
-            simulateRunner: simulateRunner,
-            locator: ytDlpLocator()
+            simulateRunner: simulateRunner
         )
         let url = URL(string: "https://example.com/watch?v=unreadable")!
         let options = DownloadJobOptions(sourceURL: url, outputDirectory: URL(fileURLWithPath: "/tmp/out"), retries: 1)
@@ -666,10 +645,9 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: SuccessfulDownloader(outputs: [
                 VerifiedDownloadOutput(url: existingURL, isAlreadyExisting: true),
             ]),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://example.com/watch?v=skip")!
         let outputs = try await useCase.download(
@@ -689,10 +667,9 @@ final class DownloaderUseCaseTests: XCTestCase {
         let downloader = FreshThenEmptyFailureDownloader(freshURL: freshURL)
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://example.com/playlist?list=abc")!
         do {
@@ -722,10 +699,9 @@ final class DownloaderUseCaseTests: XCTestCase {
         let downloader = FreshFailureThenSkipSuccessDownloader(fileURL: fileURL)
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://example.com/watch?v=same")!
         let outputs = try await useCase.download(
@@ -746,11 +722,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = JobRunner()
         let useCase = DownloaderUseCase(
             downloader: FreshFailureThenSkipSuccessDownloader(fileURL: fileURL),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: AvailableVersionRunner(),
-            locator: ytDlpLocator()
+            simulateRunner: AvailableVersionRunner()
         )
         let url = URL(string: "https://example.com/watch?v=same")!
         let job = try await useCase.simulateAndEnqueue(
@@ -769,11 +744,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = JobRunner()
         let useCase = DownloaderUseCase(
             downloader: downloader,
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: AvailableVersionRunner(),
-            locator: ytDlpLocator()
+            simulateRunner: AvailableVersionRunner()
         )
         let url = URL(string: "https://example.com/watch?v=empty-final")!
         let job = try await useCase.simulateAndEnqueue(
@@ -791,10 +765,9 @@ final class DownloaderUseCaseTests: XCTestCase {
     func testSingleEmptySuccessFailsWithOutputNotFound() async throws {
         let useCase = DownloaderUseCase(
             downloader: SuccessfulDownloader(outputs: []),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://example.com/watch?v=empty")!
 
@@ -822,10 +795,9 @@ final class DownloaderUseCaseTests: XCTestCase {
         let wavURL = URL(fileURLWithPath: "/tmp/out/retry-\(UUID().uuidString).wav")
         let useCase = DownloaderUseCase(
             downloader: FreshM4aThenFreshWavDownloader(m4aURL: m4aURL, wavURL: wavURL),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://example.com/watch?v=retry-format")!
 
@@ -847,11 +819,10 @@ final class DownloaderUseCaseTests: XCTestCase {
         let jobRunner = JobRunner()
         let useCase = DownloaderUseCase(
             downloader: FreshM4aThenFreshWavDownloader(m4aURL: m4aURL, wavURL: wavURL),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: jobRunner,
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: AvailableVersionRunner(),
-            locator: ytDlpLocator()
+            simulateRunner: AvailableVersionRunner()
         )
         let url = URL(string: "https://example.com/watch?v=retry-format")!
         let job = try await useCase.simulateAndEnqueue(
@@ -882,10 +853,9 @@ final class DownloaderUseCaseTests: XCTestCase {
         let conformer = NonzeroNilFailureDownloader(outputs: outputs)
         let failingUseCase = DownloaderUseCase(
             downloader: conformer,
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(),
-            locator: ytDlpLocator()
+            settingsStore: FixtureSettingsStore()
         )
         let sourceURL = URL(string: "https://example.com/watch?v=bad")!
         do {
@@ -912,11 +882,10 @@ final class DownloaderUseCaseTests: XCTestCase {
     func testSimulateCancellationPropagates() async {
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(runner: NeverCalledDownloadRunner()),
-            healthChecker: healthChecker(runner: AvailableVersionRunner()),
+            helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
             settingsStore: FixtureSettingsStore(),
-            simulateRunner: CancellingSimulateRunner(),
-            locator: ytDlpLocator()
+            simulateRunner: CancellingSimulateRunner()
         )
         let url = URL(string: "https://example.com/watch?v=ok")!
         do {

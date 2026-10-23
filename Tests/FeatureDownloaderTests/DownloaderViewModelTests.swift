@@ -23,9 +23,9 @@ final class DownloaderViewModelTests: XCTestCase {
         XCTAssertEqual(try title("https://www.youtube.com/playlist?list=PL1"), "www.youtube.com")
     }
 
-    func testCanceledDebounceNeverInvokesHealthChecker() async throws {
+    func testCanceledDebounceNeverProbesYtDlp() async throws {
         let runner = SequencedHealthRunner()
-        let checker = YtDlpHealthChecker(
+        let checker = HelperToolProbe(
             runner: runner,
             locator: HelperToolLocator(
                 managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
@@ -37,7 +37,7 @@ final class DownloaderViewModelTests: XCTestCase {
             useCase: FakeDownloaderUseCase(job: Job(sourceToolID: "downloader", title: "Download")),
             jobRunner: StaticJobRunner(job: Job(sourceToolID: "downloader", title: "Download")),
             outputInboxStore: RecordingOutputInboxStore(),
-            healthChecker: checker,
+            helperProbe: checker,
             debounceDuration: .milliseconds(40)
         )
         viewModel.urlText = "https://example.com/a"
@@ -51,7 +51,7 @@ final class DownloaderViewModelTests: XCTestCase {
 
     func testSlowURLAResultCannotOverwriteURLB() async throws {
         let runner = SequencedHealthRunner(firstDelay: .milliseconds(150), firstExitCode: 1)
-        let checker = YtDlpHealthChecker(
+        let checker = HelperToolProbe(
             runner: runner,
             locator: HelperToolLocator(
                 managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
@@ -64,7 +64,7 @@ final class DownloaderViewModelTests: XCTestCase {
             useCase: FakeDownloaderUseCase(job: job),
             jobRunner: StaticJobRunner(job: job),
             outputInboxStore: RecordingOutputInboxStore(),
-            healthChecker: checker,
+            helperProbe: checker,
             debounceDuration: .milliseconds(5)
         )
         viewModel.urlText = "https://example.com/a"
@@ -83,7 +83,7 @@ final class DownloaderViewModelTests: XCTestCase {
 
     func testUnusableYtDlpReportsHelperFailureNotUnsupportedURL() async throws {
         let runner = SequencedHealthRunner(firstExitCode: 1)
-        let checker = YtDlpHealthChecker(
+        let checker = HelperToolProbe(
             runner: runner,
             locator: HelperToolLocator(
                 managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
@@ -96,7 +96,7 @@ final class DownloaderViewModelTests: XCTestCase {
             useCase: FakeDownloaderUseCase(job: job),
             jobRunner: StaticJobRunner(job: job),
             outputInboxStore: RecordingOutputInboxStore(),
-            healthChecker: checker,
+            helperProbe: checker,
             debounceDuration: .milliseconds(5)
         )
         viewModel.urlText = "https://example.com/a"
@@ -111,7 +111,7 @@ final class DownloaderViewModelTests: XCTestCase {
 
     func testClearInputCancelsInFlightHealthCheck() async throws {
         let runner = CancellableHealthRunner()
-        let checker = YtDlpHealthChecker(
+        let checker = HelperToolProbe(
             runner: runner,
             locator: HelperToolLocator(
                 managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
@@ -124,7 +124,7 @@ final class DownloaderViewModelTests: XCTestCase {
             useCase: FakeDownloaderUseCase(job: job),
             jobRunner: StaticJobRunner(job: job),
             outputInboxStore: RecordingOutputInboxStore(),
-            healthChecker: checker,
+            helperProbe: checker,
             debounceDuration: .milliseconds(5)
         )
         viewModel.urlText = "https://example.com/a"
@@ -1264,7 +1264,7 @@ final class DownloaderViewModelTests: XCTestCase {
         outputInboxStore: any OutputInboxStore,
         jobStatusCenter: ShellJobStatusCenter? = nil,
         preferences: any PreferenceStore = InMemoryPreferenceStore(),
-        healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
+        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard()),
         debounceDuration: Duration = .milliseconds(500)
     ) -> DownloaderViewModel {
         let center = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
@@ -1283,7 +1283,7 @@ final class DownloaderViewModelTests: XCTestCase {
         return DownloaderViewModel(
             context: context,
             useCase: useCase,
-            healthChecker: healthChecker,
+            helperProbe: helperProbe,
             debounceDuration: debounceDuration
         )
     }

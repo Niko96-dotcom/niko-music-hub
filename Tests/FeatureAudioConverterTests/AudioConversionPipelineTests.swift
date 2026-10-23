@@ -69,7 +69,7 @@ final class AudioConversionPipelineTests: XCTestCase {
             native: native,
             helperSettings: HelperToolSettings(ffmpeg: nil),
             ffmpegConverterFactory: factory.makeConverter,
-            healthChecker: FFmpegHealthChecker(
+            helperProbe: HelperToolProbe(
                 runner: FakeExternalProcessRunner(result: .success(
                     ExternalProcessResult(
                         exitCode: 0,
@@ -91,7 +91,7 @@ final class AudioConversionPipelineTests: XCTestCase {
     func testFFmpegHealthCheckedAtMostOnceAcrossFiles() async throws {
         let runner = CountingHealthRunner()
         let fixtureURL = URL(fileURLWithPath: "/fixture/bin/ffmpeg")
-        let checker = FFmpegHealthChecker(
+        let checker = HelperToolProbe(
             runner: runner,
             locator: locator(executables: [fixtureURL.path])
         )
@@ -106,7 +106,7 @@ final class AudioConversionPipelineTests: XCTestCase {
             native: FakeAudioConverter(result: .failure(AudioConversionError.unsupportedSourceType(URL(fileURLWithPath: "/tmp/x")))),
             helperSettings: HelperToolSettings(ffmpeg: nil),
             ffmpegConverterFactory: factory.makeConverter,
-            healthChecker: checker
+            helperProbe: checker
         )
         for name in ["A.flac", "B.flac", "C.flac"] {
             _ = try await pipeline.convert(makeRequest(sourceName: name, sourceType: .flac))
@@ -119,7 +119,7 @@ final class AudioConversionPipelineTests: XCTestCase {
         let runner = FlakyHealthRunner()
         let fixtureURL = URL(fileURLWithPath: "/fixture/bin/ffmpeg")
         // First call fails (missing), second succeeds. Locator always resolves.
-        let checker = FFmpegHealthChecker(
+        let checker = HelperToolProbe(
             runner: runner,
             locator: locator(executables: [fixtureURL.path])
         )
@@ -134,7 +134,7 @@ final class AudioConversionPipelineTests: XCTestCase {
             native: FakeAudioConverter(result: .failure(AudioConversionError.unsupportedSourceType(URL(fileURLWithPath: "/tmp/x")))),
             helperSettings: HelperToolSettings(ffmpeg: nil),
             ffmpegConverterFactory: factory.makeConverter,
-            healthChecker: checker
+            helperProbe: checker
         )
         do {
             _ = try await pipeline.convert(makeRequest(sourceName: "A.flac", sourceType: .flac))
@@ -159,7 +159,7 @@ final class AudioConversionPipelineTests: XCTestCase {
             native: native,
             helperSettings: HelperToolSettings(ffmpeg: nil),
             ffmpegConverterFactory: nil,
-            healthChecker: FFmpegHealthChecker(
+            helperProbe: HelperToolProbe(
                 runner: FakeExternalProcessRunner(result: .success(
                     ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
                 )),
@@ -231,7 +231,7 @@ final class AudioConversionPipelineTests: XCTestCase {
             native: NativeAudioConverter(),
             helperSettings: HelperToolSettings(ffmpeg: nil),
             ffmpegConverterFactory: factory.makeConverter,
-            healthChecker: FFmpegHealthChecker(
+            helperProbe: HelperToolProbe(
                 runner: FakeExternalProcessRunner(result: .success(
                     ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
                 )),
@@ -281,7 +281,7 @@ final class AudioConversionPipelineTests: XCTestCase {
             native: native,
             helperSettings: HelperToolSettings(ffmpeg: ffmpegURL),
             ffmpegConverterFactory: factory.makeConverter,
-            healthChecker: FFmpegHealthChecker(
+            helperProbe: HelperToolProbe(
                 runner: FakeExternalProcessRunner(result: .success(
                     ExternalProcessResult(
                         exitCode: 0,

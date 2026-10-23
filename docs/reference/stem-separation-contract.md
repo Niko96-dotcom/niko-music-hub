@@ -13,7 +13,6 @@ This document describes the backend boundary used by the v1.7 stem separation fe
 ```swift
 public protocol StemSeparationBackend: Sendable {
     var supportedPresets: [StemSeparationPreset] { get }
-    func health(settings: HelperToolSettings) async -> StemBackendHealth
     func separate(
         request: StemSeparationBackendRequest,
         onProgress: @escaping @Sendable (Double, String?) -> Void
@@ -23,7 +22,6 @@ public protocol StemSeparationBackend: Sendable {
 ```
 
 Responsibilities:
-- Report whether the backend is runnable (`StemBackendHealth`).
 - Run separation on one input file and write stems to a folder.
 - Publish `(progress, message)` tuples for UI feedback.
 - Respond to cancellation.
@@ -64,17 +62,6 @@ public enum StemSeparationResult {
 }
 ```
 
-### `StemBackendHealth`
-
-```swift
-public enum StemBackendHealth {
-    case ready(version: String)
-    case missing(message: String)
-    case unusable(message: String)
-    case modelCacheMissing(message: String)
-}
-```
-
 ## Presets
 
 `StemSeparationPreset` is a domain enum owned by `FeatureStemSeparation`:
@@ -109,24 +96,22 @@ Only stems verified by the scanner are published as `OutputInboxItem` values.
 
 1. Create a new type conforming to `StemSeparationBackend`.
 2. Map `StemSeparationPreset` values to the backend's model/configuration.
-3. Implement `health(settings:)`, `separate(request:onProgress:)`, and `cancel()`.
+3. Implement `separate(request:onProgress:)` and `cancel()`.
 4. Keep process spawning shell-safe: build `ExternalProcessRequest` with explicit executable URL and argument arrays.
 5. Wire the new backend into `StemSeparationFeature.makeView(context:)` or make it selectable via settings.
 
 No UI or job code should need changes if the contract is respected.
 
-## Health-check pattern
+## Helper health
 
-`DemucsMLXHealthChecker` demonstrates the recommended pattern:
+Whether a helper can run is not part of the backend contract. `HelperToolProbe` (AppCore) checks every helper
+the same way:
 
-1. Resolve the executable from settings override, known install paths, or `PATH`.
-2. Run a lightweight command (`demucs-mlx --version`).
-3. If the executable is missing → `.missing`.
-4. If the command fails → `.unusable`.
-5. If the model cache directory is absent → `.modelCacheMissing`.
-6. Otherwise → `.ready`.
+1. Resolve the executable with `HelperToolLocator`: the saved path, then the app's Tools folder, then system folders.
+2. Run a light command (`demucs-mlx --list-models`, 30 s).
+3. Not found → `.missing`; the command fails or does not answer → `.broken(message:)`; otherwise `.ready(version:)`.
 
-The UI may still allow a run when the model cache is missing because the backend can download it on first use.
+A second backend that needs another helper adds a `HelperTool` case and its command to the probe.
 
 ## Command safety
 

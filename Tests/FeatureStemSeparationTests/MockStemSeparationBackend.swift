@@ -17,10 +17,6 @@ final class MockStemSeparationBackend: StemSeparationBackend, @unchecked Sendabl
         StemSeparationPreset.allCases
     }
 
-    func health(settings: HelperToolSettings) async -> StemBackendHealth {
-        .ready(version: "mock")
-    }
-
     func separate(
         request: StemSeparationBackendRequest,
         onProgress: @escaping @Sendable (Double, String?) -> Void

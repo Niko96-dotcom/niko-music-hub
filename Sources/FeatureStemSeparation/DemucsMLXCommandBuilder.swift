@@ -5,7 +5,6 @@ public enum StemSeparationHelperCopy {
     public static let missingLabel = "Stem helper missing"
     public static let unusableLabel = "Stem helper can’t start"
     public static let missingBody = "demucs-mlx is not installed. Use Install Tools to add it, or choose an existing copy."
-    public static let modelCacheMissingBody = "demucs-mlx is installed, but its model files are missing. Use Install Tools to set it up again."
     public static let settingsUnreadable = "Settings couldn’t be read, so separation didn’t start. Repair them in Settings, then try again."
     public static let settingsUnreadableNotSaved = "Settings couldn’t be read, so the change wasn’t saved. Repair them in Settings, then try again."
 }
@@ -22,14 +21,9 @@ public enum DemucsMLXCommandBuilderError: LocalizedError, Equatable, Sendable {
 }
 
 public struct DemucsMLXCommandBuilder: Sendable {
-    private let healthChecker: DemucsMLXHealthChecker
     private let locator: HelperToolLocator
 
-    public init(
-        healthChecker: DemucsMLXHealthChecker = DemucsMLXHealthChecker(),
-        locator: HelperToolLocator = .standard()
-    ) {
-        self.healthChecker = healthChecker
+    public init(locator: HelperToolLocator = .standard()) {
         self.locator = locator
     }
 
@@ -37,7 +31,7 @@ public struct DemucsMLXCommandBuilder: Sendable {
         backendRequest: StemSeparationBackendRequest,
         settings: HelperToolSettings
     ) throws -> ExternalProcessRequest {
-        guard let executableURL = healthChecker.resolvedExecutableURL(settings: settings) else {
+        guard let executableURL = locator.resolve(.demucsMlx, settings: settings) else {
             throw DemucsMLXCommandBuilderError.missingExecutable
         }
 

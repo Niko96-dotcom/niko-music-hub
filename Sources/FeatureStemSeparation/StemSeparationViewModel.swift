@@ -33,7 +33,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     private let context: ToolContext
     private let service: StemSeparationService
     private let youtubeWorkflow: YouTubeStemSeparationWorkflow?
-    private let healthChecker: DemucsMLXHealthChecker
+    private let helperProbe: HelperToolProbe
     private var jobObservationTask: Task<Void, Never>?
     private var helperToolsObservation: AnyCancellable?
     private(set) var currentJobID: Job.ID?
@@ -46,12 +46,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         context: ToolContext,
         service: StemSeparationService,
         youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil,
-        healthChecker: DemucsMLXHealthChecker = DemucsMLXHealthChecker()
+        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard())
     ) {
         self.context = context
         self.service = service
         self.youtubeWorkflow = youtubeWorkflow
-        self.healthChecker = healthChecker
+        self.helperProbe = helperProbe
         self.recentOutputs = ToolRecentOutputs(store: context.outputInboxStore, toolID: StemSeparationService.toolID)
         loadSettings()
     }
@@ -301,28 +301,24 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     }
 
     private func runHelperHealthCheck() async {
-        let health = await healthChecker.availability(settings: context.appSettings.settings.helperTools)
+        let health = await helperProbe.status(of: .demucsMlx, settings: context.appSettings.settings.helperTools)
         switch health {
         case .missing:
             helperNeedsSetup = true
             helperSetupDiagnostic = nil
             errorMessage = StemSeparationHelperCopy.missingBody
             helperRelatedErrorActive = true
-        case .ready:
+        case .ready, .outdated:
+            // Only yt-dlp is ever outdated; a demucs-mlx that answers is usable.
             if helperRelatedErrorActive {
                 errorMessage = nil
                 helperRelatedErrorActive = false
             }
             helperNeedsSetup = false
             helperSetupDiagnostic = nil
-        case let .unusable(message):
+        case let .broken(message):
             helperNeedsSetup = true
             helperSetupDiagnostic = Self.startFailureMessage(from: message)
-            errorMessage = helperSetupDiagnostic
-            helperRelatedErrorActive = true
-        case .modelCacheMissing:
-            helperNeedsSetup = true
-            helperSetupDiagnostic = StemSeparationHelperCopy.modelCacheMissingBody
             errorMessage = helperSetupDiagnostic
             helperRelatedErrorActive = true
         }

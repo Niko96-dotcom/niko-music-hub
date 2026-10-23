@@ -376,7 +376,7 @@ struct StemSeparationViewModelTests {
         let vm = StemSeparationViewModel(
             context: context,
             service: service,
-            healthChecker: DemucsMLXHealthChecker(locator: emptyLocator)
+            helperProbe: HelperToolProbe(locator: emptyLocator)
         )
         _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
         #expect(vm.canStart == true)
@@ -420,7 +420,7 @@ struct StemSeparationViewModelTests {
             context: context,
             service: service,
             youtubeWorkflow: workflow,
-            healthChecker: DemucsMLXHealthChecker(locator: emptyLocator)
+            helperProbe: HelperToolProbe(locator: emptyLocator)
         )
         vm.youtubeURLText = "https://youtu.be/test"
         #expect(vm.canStartYouTube == true)
@@ -468,7 +468,7 @@ struct StemSeparationViewModelTests {
         let vm = StemSeparationViewModel(
             context: context,
             service: service,
-            healthChecker: DemucsMLXHealthChecker(runner: FailingRunner(), locator: fixtureLocator)
+            helperProbe: HelperToolProbe(runner: FailingRunner(), locator: fixtureLocator)
         )
         vm.refreshHelperHealth()
         for _ in 0..<100 where vm.helperNeedsSetup == false {
@@ -625,7 +625,7 @@ struct StemSeparationViewModelTests {
                 .init(exitCode: 0, standardOutput: "model\tinfo", standardError: "")
             }
         }
-        let readyChecker = DemucsMLXHealthChecker(runner: ReadyRunner(), locator: fixtureLocator)
+        let readyChecker = HelperToolProbe(runner: ReadyRunner(), locator: fixtureLocator)
 
         // Helper error is cleared by ready health.
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -645,7 +645,7 @@ struct StemSeparationViewModelTests {
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: "custom helper down XYZ", reason: .helperUnavailable)
         let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
-        let vm = StemSeparationViewModel(context: context, service: service, healthChecker: readyChecker)
+        let vm = StemSeparationViewModel(context: context, service: service, helperProbe: readyChecker)
         _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
         vm.startSeparation()
         for _ in 0..<200 where vm.isRunning {
@@ -854,10 +854,6 @@ private final class BlockingAfterFirstStemBackend: StemSeparationBackend, @unche
     var cancelRequested: Bool { lock.withLock { canceled } }
 
     var supportedPresets: [StemSeparationPreset] { StemSeparationPreset.allCases }
-
-    func health(settings: HelperToolSettings) async -> StemBackendHealth {
-        .ready(version: "mock")
-    }
 
     func separate(
         request: StemSeparationBackendRequest,

@@ -84,46 +84,44 @@ public protocol DownloaderUseCaseRunning: Sendable {
 public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Sendable {
     static let jobTitlePrefix = "Download: "
     private let downloader: any DownloadRunning
-    private let healthChecker: YtDlpHealthChecker
+    private let helperProbe: HelperToolProbe
     private let jobRunner: any JobRunning
     private let settingsStore: any SettingsStore
     private let simulateRunner: any ExternalProcessRunning
-    private let locator: HelperToolLocator
+    private var locator: HelperToolLocator { helperProbe.locator }
 
     public init(
         downloader: any DownloadRunning,
-        healthChecker: YtDlpHealthChecker,
+        helperProbe: HelperToolProbe,
         jobRunner: any JobRunning,
         settingsStore: any SettingsStore,
-        simulateRunner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
-        locator: HelperToolLocator = .standard()
+        simulateRunner: any ExternalProcessRunning = FoundationExternalProcessRunner()
     ) {
         self.downloader = downloader
-        self.healthChecker = healthChecker
+        self.helperProbe = helperProbe
         self.jobRunner = jobRunner
         self.settingsStore = settingsStore
         self.simulateRunner = simulateRunner
-        self.locator = locator
     }
 
     public func simulateAndEnqueue(url: URL, options: DownloadJobOptions) async throws -> Job {
         let settings = try loadSettingsForDownload()
 
-        let availability = await healthChecker.availability(settings: settings.helperTools)
-        switch availability {
+        let status = await helperProbe.status(of: .ytDlp, settings: settings.helperTools)
+        switch status {
         case .missing:
             throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
-        case let .unusable(message):
+        case let .broken(message):
             throw DownloadUseCaseError.ytDlpUnavailable(message)
         case let .outdated(current, minimumExpected):
             throw DownloadUseCaseError.ytDlpUnavailable(
                 DownloaderCopy.outdatedYtDlp(current: current, minimumExpected: minimumExpected)
             )
-        case .available:
+        case .ready:
             break
         }
 
-        guard let ytDlpURL = healthChecker.resolvedYtDlpURL(settings: settings.helperTools) else {
+        guard let ytDlpURL = locator.resolve(.ytDlp, settings: settings.helperTools) else {
             throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
         }
 
@@ -216,7 +214,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         for attempt in 0..<options.retries {
             do {
                 let settings = try loadSettingsForDownload()
-                guard let ytDlpURL = healthChecker.resolvedYtDlpURL(settings: settings.helperTools) else {
+                guard let ytDlpURL = locator.resolve(.ytDlp, settings: settings.helperTools) else {
                     throw DownloadUseCaseError.ytDlpUnavailable(DownloaderCopy.ytDlpMissing)
                 }
 

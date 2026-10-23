@@ -6,7 +6,7 @@ public typealias FFmpegConverterFactory = @Sendable (URL) -> any AudioConverting
 public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
     private let native: any AudioConverting
     private let ffmpegConverterFactory: FFmpegConverterFactory?
-    private let healthChecker: FFmpegHealthChecker
+    private let helperProbe: HelperToolProbe
     private let helperSettings: HelperToolSettings
     private let cachedFFmpegURL: LockedFFmpegURL
 
@@ -16,12 +16,12 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
         ffmpegConverterFactory: FFmpegConverterFactory? = {
             FFmpegAudioConverter(ffmpegURL: $0)
         },
-        healthChecker: FFmpegHealthChecker = FFmpegHealthChecker()
+        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard())
     ) {
         self.native = native
         self.helperSettings = helperSettings
         self.ffmpegConverterFactory = ffmpegConverterFactory
-        self.healthChecker = healthChecker
+        self.helperProbe = helperProbe
         self.cachedFFmpegURL = LockedFFmpegURL()
     }
 
@@ -50,9 +50,9 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
             return try await ffmpeg.convert(request)
         }
 
-        switch await healthChecker.availability(settings: helperSettings) {
-        case .available:
-            guard let ffmpegURL = healthChecker.resolvedFFmpegURL(settings: helperSettings) else {
+        switch await helperProbe.status(of: .ffmpeg, settings: helperSettings) {
+        case .ready, .outdated:
+            guard let ffmpegURL = helperProbe.locator.resolve(.ffmpeg, settings: helperSettings) else {
                 throw missingFFmpegError()
             }
             cachedFFmpegURL.value = ffmpegURL
@@ -60,7 +60,7 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
             return try await ffmpeg.convert(request)
         case .missing:
             throw missingFFmpegError()
-        case let .unusable(message):
+        case let .broken(message):
             // Helper-unavailable category keeps the Choose FFmpeg recovery; the row shows fixed copy.
             throw AudioConversionError.missingFFmpeg(message: "FFmpeg is unavailable: \(message)")
         }

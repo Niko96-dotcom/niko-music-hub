@@ -1,7 +1,4 @@
 import AppCore
-import FeatureAudioConverter
-import FeatureDownloader
-import FeatureStemSeparation
 import SwiftUI
 
 struct HelperToolsHealthStrip: View {
@@ -108,52 +105,29 @@ struct HelperToolsHealthStrip: View {
 
     private func refresh() async {
         let helperSettings = context.appSettings.settings.helperTools
+        let probe = HelperToolProbe(locator: .standard())
 
-        let ytAvailability = await YtDlpHealthChecker().availability(settings: helperSettings)
-        let ffmpegAvailability = await FFmpegHealthChecker().availability(settings: helperSettings)
-        let demucsHealth = await DemucsMLXHealthChecker().availability(settings: helperSettings)
+        let ytDlp = await probe.status(of: .ytDlp, settings: helperSettings)
+        let ffmpeg = await probe.status(of: .ffmpeg, settings: helperSettings)
+        let demucsMLX = await probe.status(of: .demucsMlx, settings: helperSettings)
 
         snapshot = HelperToolsHealthStripModel.make(
-            ytDlp: state(from: ytAvailability),
-            ffmpeg: state(from: ffmpegAvailability),
-            demucsMLX: state(from: demucsHealth)
+            ytDlp: state(from: ytDlp),
+            ffmpeg: state(from: ffmpeg),
+            demucsMLX: state(from: demucsMLX)
         )
     }
 
-    private func state(from availability: YtDlpAvailability) -> HelperToolsHealthItem.State {
-        switch availability {
-        case .missing:
-            return .missing
-        case .available(let version):
-            return .available(version: version)
-        case .outdated(let current, let minimum):
-            return .outdated(current: current, minimum: minimum)
-        case .unusable(let message):
-            return .unusable(message: message)
-        }
-    }
-
-    private func state(from availability: FFmpegAvailability) -> HelperToolsHealthItem.State {
-        switch availability {
-        case .missing:
-            return .missing
-        case .available(let version):
-            return .available(version: version)
-        case .unusable(let message):
-            return .unusable(message: message)
-        }
-    }
-
-    private func state(from health: StemBackendHealth) -> HelperToolsHealthItem.State {
-        switch health {
+    private func state(from status: HelperToolStatus) -> HelperToolsHealthItem.State {
+        switch status {
         case .missing:
             return .missing
         case .ready(let version):
             return .available(version: version)
-        case .unusable(let message):
+        case .outdated(let current, let minimum):
+            return .outdated(current: current, minimum: minimum)
+        case .broken(let message):
             return .unusable(message: message)
-        case .modelCacheMissing:
-            return .unusable(message: "Model cache missing")
         }
     }
 }

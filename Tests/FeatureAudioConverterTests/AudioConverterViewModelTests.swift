@@ -200,7 +200,7 @@ final class AudioConverterViewModelTests: XCTestCase {
                 message: "FFmpeg is required for this file. Choose FFmpeg, then convert this file again."
             )
         }
-        let healthChecker = FFmpegHealthChecker(
+        let helperProbe = HelperToolProbe(
             runner: FakeExternalProcessRunner(result: .success(
                 ExternalProcessResult(
                     exitCode: 0,
@@ -218,7 +218,7 @@ final class AudioConverterViewModelTests: XCTestCase {
             outputFolder: directory,
             converter: converter,
             settingsStore: settingsStore,
-            ffmpegHealthChecker: healthChecker
+            helperProbe: helperProbe
         )
         viewModel.addFileURLs([source])
         _ = await viewModel.convertQueuedRows()
@@ -242,7 +242,7 @@ final class AudioConverterViewModelTests: XCTestCase {
                 message: "FFmpeg is required for this file. Choose FFmpeg, then convert this file again."
             )
         }
-        let healthChecker = FFmpegHealthChecker(
+        let helperProbe = HelperToolProbe(
             runner: FakeExternalProcessRunner(result: .success(
                 ExternalProcessResult(exitCode: 1, standardOutput: "", standardError: "bad helper")
             )),
@@ -255,7 +255,7 @@ final class AudioConverterViewModelTests: XCTestCase {
         let viewModel = makeViewModel(
             outputFolder: directory,
             converter: converter,
-            ffmpegHealthChecker: healthChecker
+            helperProbe: helperProbe
         )
         viewModel.addFileURLs([source])
         _ = await viewModel.convertQueuedRows()
@@ -1104,7 +1104,7 @@ final class AudioConverterViewModelTests: XCTestCase {
         },
         settingsStore: (any SettingsStore)? = nil,
         outputInboxStore: any OutputInboxStore = FixtureOutputInboxStore(),
-        ffmpegHealthChecker: FFmpegHealthChecker = FFmpegHealthChecker(),
+        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard()),
         diagnostics: any Diagnostics = FixtureDiagnostics()
     ) -> AudioConverterViewModel {
         let settingsStore = settingsStore ?? FixtureSettingsStore(
@@ -1125,7 +1125,7 @@ final class AudioConverterViewModelTests: XCTestCase {
                 outputInboxStore: context.outputInboxStore,
                 converterFactory: { _ in converter }
             ),
-            ffmpegHealthChecker: ffmpegHealthChecker
+            helperProbe: helperProbe
         )
     }
 

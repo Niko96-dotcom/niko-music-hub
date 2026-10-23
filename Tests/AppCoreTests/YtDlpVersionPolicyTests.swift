@@ -1,4 +1,4 @@
-@testable import FeatureDownloader
+import AppCore
 import XCTest
 
 final class YtDlpVersionPolicyTests: XCTestCase {

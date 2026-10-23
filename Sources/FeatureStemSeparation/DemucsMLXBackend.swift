@@ -4,7 +4,6 @@ import NikoMusicCore
 
 public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable {
     private let settingsProvider: @Sendable () throws -> HelperToolSettings
-    private let healthChecker: DemucsMLXHealthChecker
     private let commandBuilder: DemucsMLXCommandBuilder
     private let runner: any ExternalProcessRunning
     private let progressParser: DemucsMLXProgressParser
@@ -18,7 +17,6 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
 
     public init(
         settings: HelperToolSettings = HelperToolSettings(),
-        healthChecker: DemucsMLXHealthChecker = DemucsMLXHealthChecker(),
         commandBuilder: DemucsMLXCommandBuilder = DemucsMLXCommandBuilder(),
         runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
         progressParser: DemucsMLXProgressParser = DemucsMLXProgressParser(),
@@ -27,7 +25,6 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
     ) {
         let captured = settings
         self.settingsProvider = settingsProvider ?? { captured }
-        self.healthChecker = healthChecker
         self.commandBuilder = commandBuilder
         self.runner = runner
         self.progressParser = progressParser
@@ -40,10 +37,6 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
 
     public var configuredDemucsURL: URL? {
         lock.withLock { lastConfiguredDemucsURL }
-    }
-
-    public func health(settings: HelperToolSettings) async -> StemBackendHealth {
-        await healthChecker.availability(settings: settings)
     }
 
     public func separate(

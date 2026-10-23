@@ -15,8 +15,7 @@ struct DemucsMLXCommandBuilderTests {
 
     private func builder(executables: Set<String>) -> DemucsMLXCommandBuilder {
         let fixtureLocator = locator(executables: executables)
-        let healthChecker = DemucsMLXHealthChecker(locator: fixtureLocator)
-        return DemucsMLXCommandBuilder(healthChecker: healthChecker, locator: fixtureLocator)
+        return DemucsMLXCommandBuilder(locator: fixtureLocator)
     }
 
     @Test

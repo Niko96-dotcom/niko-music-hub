@@ -29,14 +29,14 @@ public struct DownloaderFeature: ToolFeature {
         if let viewModel = session.viewModel {
             return viewModel
         }
-        let healthChecker = YtDlpHealthChecker()
+        let helperProbe = HelperToolProbe(locator: .standard())
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(),
-            healthChecker: healthChecker,
+            helperProbe: helperProbe,
             jobRunner: context.jobRunner,
             settingsStore: context.settingsStore
         )
-        let viewModel = DownloaderViewModel(context: context, useCase: useCase, healthChecker: healthChecker)
+        let viewModel = DownloaderViewModel(context: context, useCase: useCase, helperProbe: helperProbe)
         session.viewModel = viewModel
         return viewModel
     }

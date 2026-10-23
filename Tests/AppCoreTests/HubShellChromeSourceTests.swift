@@ -133,7 +133,7 @@ final class HubShellChromeSourceTests: XCTestCase {
             "HubDesignSystem.Colors.warning",
             "HubDesignSystem.Colors.danger",
             "label: \"Install Tools\"",
-            "DemucsMLXHealthChecker",
+            "HelperToolProbe",
             "requestHelperToolSetup",
             "onInstallTools",
         ].forEach { required in

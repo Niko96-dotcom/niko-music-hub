@@ -62,7 +62,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
 
     private let context: ToolContext
     private let useCase: any DownloaderUseCaseRunning
-    private let healthChecker: YtDlpHealthChecker
+    private let helperProbe: HelperToolProbe
     private let debounceDuration: Duration
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
@@ -79,13 +79,13 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     public init(
         context: ToolContext,
         useCase: any DownloaderUseCaseRunning,
-        healthChecker: YtDlpHealthChecker = YtDlpHealthChecker(),
+        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard()),
         formatSelection: DownloadFormatSelection? = nil,
         debounceDuration: Duration = .milliseconds(500)
     ) {
         self.context = context
         self.useCase = useCase
-        self.healthChecker = healthChecker
+        self.helperProbe = helperProbe
         self.debounceDuration = debounceDuration
         self.formatSelection = formatSelection ?? Self.loadPersistedFormatSelection(preferences: context.preferences)
     }
@@ -109,7 +109,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         let generation = validationGeneration
         let input = urlText
         let duration = debounceDuration
-        let healthChecker = healthChecker
+        let helperProbe = helperProbe
         let settingsStore = context.settingsStore
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
@@ -120,10 +120,10 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             }
             guard self?.beginURLCheck(input: input, generation: generation) == true else { return }
 
-            let availability: YtDlpAvailability
+            let status: HelperToolStatus
             do {
                 let settings = try settingsStore.loadSettings()
-                availability = await healthChecker.availability(settings: settings.helperTools)
+                status = await helperProbe.status(of: .ytDlp, settings: settings.helperTools)
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.context.diagnostics.scoped(to: .downloader).log(.error, "URL check could not read settings: \(error)")
@@ -131,7 +131,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 return
             }
             guard !Task.isCancelled else { return }
-            self?.applyURLCheckResult(availability, input: input, generation: generation)
+            self?.applyURLCheckResult(status, input: input, generation: generation)
         }
     }
 
@@ -150,21 +150,21 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     }
 
     private func applyURLCheckResult(
-        _ availability: YtDlpAvailability,
+        _ status: HelperToolStatus,
         input: String,
         generation: UInt64
     ) {
         guard isCurrentValidation(input: input, generation: generation),
               let url = Self.validatedHTTPURL(input) else { return }
-        switch availability {
-        case .available:
+        switch status {
+        case .ready:
             downloadState = .readyToDownload
             statusMessage = DownloaderCopy.readyToDownload
             detectedFileName = DownloaderUseCase.fallbackJobTitle(for: url)
         case .missing:
             downloadState = .failed(DownloaderCopy.missingYtDlp)
             statusMessage = nil
-        case let .unusable(message):
+        case let .broken(message):
             // The check only runs `yt-dlp --version`, so this is a helper failure, not a URL failure.
             downloadState = .failed(DownloadUseCaseError.ytDlpUnavailable(message).errorDescription ?? message)
             statusMessage = nil
