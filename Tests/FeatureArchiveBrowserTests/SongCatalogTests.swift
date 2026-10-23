@@ -23,6 +23,16 @@ final class SongCatalogTests: XCTestCase {
         return catalog
     }
 
+    func testAFirstLoadListsNoChangedSongs() {
+        var catalog = SongCatalog()
+
+        let change = catalog.replaceAll(scanned: [song("A"), song("B")], visible: [song("A"), song("B")])
+
+        XCTAssertTrue(change.visibleChanged && change.scannedChanged)
+        XCTAssertEqual(change.changed, [], "new songs have no old value to compare")
+        XCTAssertEqual(change.removed, [])
+    }
+
     func testEqualListsGiveAnEmptyChangeAndKeepTheHeldStorage() {
         let songs = [song("A"), song("B")]
         var catalog = loaded(songs)
@@ -44,10 +54,8 @@ final class SongCatalogTests: XCTestCase {
 
         XCTAssertTrue(change.scannedChanged)
         XCTAssertTrue(change.visibleChanged)
-        XCTAssertEqual(change.changed, [
-            SongCatalogChange.ChangedSong(before: b, after: renamedB),
-            SongCatalogChange.ChangedSong(before: nil, after: c),
-        ])
+        XCTAssertEqual(change.changed, [SongCatalogChange.ChangedSong(before: b, after: renamedB)],
+                       "a new song is not a changed song")
         XCTAssertEqual(change.removed, [a])
     }
 

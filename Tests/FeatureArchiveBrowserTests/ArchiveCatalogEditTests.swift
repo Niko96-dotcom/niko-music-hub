@@ -45,6 +45,17 @@ final class ArchiveCatalogEditTests: XCTestCase {
         return model
     }
 
+    /// With no archived project shown, the visible list is the baseline itself, so the
+    /// catalog holds one copy of its songs, not two.
+    func testLoadWithoutArchivedProjectsKeepsOneCopyOfTheSongs() {
+        let model = makeModel([song("A"), song("B")])
+
+        let sameStorage = model.songs.withUnsafeBufferPointer { visible in
+            model.scannedSongs.withUnsafeBufferPointer { scanned in visible.baseAddress == scanned.baseAddress }
+        }
+        XCTAssertTrue(sameStorage)
+    }
+
     /// Replacing a song with an equal value changes nothing, so nothing publishes (B6).
     func testReplacingWithAnEqualSongPublishesNothing() {
         let neon = song("A", title: "Neon Hook")

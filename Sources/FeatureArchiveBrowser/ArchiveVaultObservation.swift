@@ -334,7 +334,11 @@ final class ArchiveVaultObservation: ObservableObject {
                 return makeArchivedSong(from: snapshot, metadata: sourceMetadata ?? archiveMetadata ?? metadata[snapshot.record.id.description], collaborators: collaborators)
             }
         }
-        let visibleSongs = SongCatalogDeduplicator.uniqueByID(cleanScannedSongs + archivedSongs)
+        // With no archived project shown, the visible list is the baseline itself (same
+        // storage), so the catalog keeps one copy of 10,000 songs, not two.
+        let visibleSongs = SongCatalogDeduplicator.uniqueByID(
+            archivedSongs.isEmpty ? cleanScannedSongs : cleanScannedSongs + archivedSongs
+        )
         return (cleanScannedSongs, visibleSongs)
     }
 

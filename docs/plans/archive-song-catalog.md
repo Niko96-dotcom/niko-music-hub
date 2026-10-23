@@ -76,6 +76,13 @@ Record every deviation from the steps below here, numbered, with its reason.
    `songs_published` one run-loop turn after `objectWillChange` sees a non-empty `songs`. It builds against both
    commits, so both sides of the A/B measure the same way; the mark lands after the edit's browse recompute, so it
    is not comparable with older reports.
+10. **Step 8: the first A/B run showed +33 MiB at the end** (`footprint_mib_end` 1,282 → 1,315 MiB, outside the
+    base spread; launch main-thread CPU 1,172 → 937 ms and the scan apply unchanged). Two causes in this plan's code:
+    `SongCatalogChange.changed` listed every new song (10,000 entries when a first load or a rescan brings new ids,
+    and nothing uses them since revision 2), and the projection copied the baseline into a second array even with no
+    archived project shown, which the projected cache load (B1) then kept. `changed` now lists only songs held
+    before (`before` is no longer optional), and `ArchiveVaultObservation.projectCatalog` returns the baseline's own
+    storage when it adds no archived song. Both are tested; the benchmark runs again.
 
 ## Terms
 

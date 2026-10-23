@@ -62,13 +62,13 @@ extension ArchiveBrowserViewModel {
     /// Per-song caches follow a catalog change. A changed main preview drops the
     /// song's mixdown analysis, a changed project its plugin summary, and removed
     /// songs leave both caches. Only the changed and removed songs are looked at,
-    /// never the whole catalog. A song new to the catalog has no cache entry yet,
-    /// so it is skipped: the first load of 10,000 songs does no per-song work.
+    /// never the whole catalog. A song new to the catalog has no cache entry yet
+    /// (and is not in `change.changed`): the first load does no per-song work.
     func updatePerSongCaches(for change: SongCatalogChange) {
         var invalidatedSelectedSongAnalysis = false
         var didInvalidateCPRPluginSummary = false
         for entry in change.changed {
-            guard let held = entry.before else { continue }
+            let held = entry.before
             let song = entry.after
             let previewIDChanged = held.mainPreviewCandidateID != song.mainPreviewCandidateID
             let previewModifiedAtChanged = mainPreviewModifiedAt(for: held) != mainPreviewModifiedAt(for: song)

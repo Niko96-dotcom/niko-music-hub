@@ -57,8 +57,12 @@ struct SongCatalog: Sendable {
         }
         if !newVisible.equalsConcurrently(visible) {
             change.visibleChanged = true
-            change.changed = newVisible.songsDiffering(from: visibleByID).map {
-                SongCatalogChange.ChangedSong(before: visibleByID[$0.id], after: $0)
+            // Only songs held before can have changed; new songs are not listed, so
+            // a first load of 10,000 songs builds no list at all.
+            if !visibleByID.isEmpty {
+                change.changed = newVisible.songsDiffering(from: visibleByID).compactMap { song in
+                    visibleByID[song.id].map { SongCatalogChange.ChangedSong(before: $0, after: song) }
+                }
             }
             let nextByID = Dictionary(newVisible.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
             change.removed = visible.filter { nextByID[$0.id] == nil }
@@ -109,14 +113,15 @@ struct SongCatalog: Sendable {
 /// What one catalog edit changed.
 struct SongCatalogChange: Equatable, Sendable {
     struct ChangedSong: Equatable, Sendable {
-        /// The visible song before the edit; nil when the song is new.
-        let before: Song?
+        /// The visible song before the edit.
+        let before: Song
         let after: Song
     }
 
     var scannedChanged = false
     var visibleChanged = false
-    /// Visible songs that are new or differ, in visible-list order.
+    /// Visible songs the catalog held before the edit and that now differ, in
+    /// visible-list order. Songs new to the catalog are not listed.
     var changed: [ChangedSong] = []
     /// Songs the visible list held before the edit and no longer holds, with
     /// their old values (per-song caches are keyed by id and by project path).
