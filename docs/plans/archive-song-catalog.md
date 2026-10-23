@@ -71,6 +71,11 @@ Record every deviation from the steps below here, numbered, with its reason.
    type-check against the release modules shows no error on the rewritten seed line. Repairing the harness is outside
    this plan. `script/benchmark_archive_startup.sh` (used in step 8) also handles the single-object layout
    (`<bin>/<Module>.o`) that the current SwiftPM writes, so the step 8 benchmark can still build.
+9. **Step 8: the launch benchmark observed `model.$songs`.** Step 7 searched `Sources` and `Tests` for the publisher,
+   not `script`, so the catalog binary of the first A/B run did not build. `archive-launch.swift` now marks
+   `songs_published` one run-loop turn after `objectWillChange` sees a non-empty `songs`. It builds against both
+   commits, so both sides of the A/B measure the same way; the mark lands after the edit's browse recompute, so it
+   is not comparable with older reports.
 
 ## Terms
 

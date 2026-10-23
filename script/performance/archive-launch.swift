@@ -214,8 +214,13 @@ struct ArchiveLaunchBenchmark {
         var cancellables = Set<AnyCancellable>()
         var scanStarted = false
         var scanFinished = false
-        model.$songs.dropFirst().sink { songs in
-            if !songs.isEmpty, !events.contains(where: { $0.name == "songs_published" }) { mark("songs_published") }
+        // The catalog has no publisher of its own (it is written through `applyCatalogEdit`); read
+        // `songs` one run-loop turn after a change is announced. Builds against older commits too,
+        // so an A/B run measures both sides the same way.
+        model.objectWillChange.sink { _ in
+            RunLoop.main.perform {
+                if !model.songs.isEmpty, !events.contains(where: { $0.name == "songs_published" }) { mark("songs_published") }
+            }
         }.store(in: &cancellables)
         model.$filteredSongs.dropFirst().sink { songs in
             if !songs.isEmpty, !events.contains(where: { $0.name == "filtered_songs_published" }) { mark("filtered_songs_published") }
