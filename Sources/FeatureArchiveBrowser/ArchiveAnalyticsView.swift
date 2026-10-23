@@ -40,7 +40,7 @@ struct ArchiveAnalyticsView: View {
                 help: "Back to the board (Esc)",
                 isSelected: true
             ) {
-                viewModel.viewMode = .board
+                viewModel.showBoard()
             }
         }
     }

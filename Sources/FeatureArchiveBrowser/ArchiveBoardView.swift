@@ -44,7 +44,7 @@ struct ArchiveBoardView: View {
                 ArchiveBoardEmptyState(
                     isScanning: viewModel.isScanning,
                     onChooseRoot: onChooseRoot,
-                    onOpenListView: { viewModel.viewMode = .list }
+                    onOpenListView: { viewModel.setBrowseLayout(list: true) }
                 )
                 .padding(.top, HubToolLayout.sectionSpacing)
             } else {

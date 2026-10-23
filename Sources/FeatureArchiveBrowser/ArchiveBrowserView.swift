@@ -88,7 +88,6 @@ struct ArchiveBrowserView: View {
                             VStack(alignment: .leading, spacing: 0) {
                                 if !splitView {
                                     Button("Back to Songs") {
-                                        viewModel.listShowsDetail = false
                                         viewModel.clearSelection(stopPlayback: false)
                                     }
                                         .buttonStyle(.plain)
@@ -254,7 +253,7 @@ struct ArchiveBrowserView: View {
             }
             switch viewModel.viewMode {
             case .boardDetail, .analytics:
-                viewModel.viewMode = .board
+                viewModel.showBoard()
                 return .handled
             case .board, .list:
                 return .ignored
@@ -356,7 +355,7 @@ struct ArchiveBrowserView: View {
             VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
                 HStack {
                     HubLabeledButton(icon: "chevron.backward", label: "Board", style: .ghost,
-                        help: "Back to the board (Esc)") { viewModel.viewMode = .board }
+                        help: "Back to the board (Esc)") { viewModel.showBoard() }
                     Spacer()
                 }
 

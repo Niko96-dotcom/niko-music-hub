@@ -67,6 +67,12 @@ extension ArchiveBrowserViewModel {
         }
     }
 
+    /// Back to the board from its detail or from analytics. The selection stays,
+    /// so the board highlights the song the person came from.
+    func showBoard() {
+        viewMode = .board
+    }
+
     /// Switches between the board and the classic list without disturbing
     /// the selection; detail/analytics fold back to their parent board.
     func setBrowseLayout(list: Bool) {

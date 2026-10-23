@@ -143,12 +143,4 @@ extension ArchiveBrowserViewModel {
             self.openSongDetail(song)
         }
     }
-
-    func audition(_ song: Song, candidate: PreviewCandidate? = nil) {
-        ArchivePreviewSession.shared.audition(song: song, candidate: candidate) { [weak self] in
-            guard let self, let current = self.songs.first(where: { $0.id == song.id }) else { return }
-            self.selectSong(current)
-            self.viewMode = .boardDetail
-        }
-    }
 }

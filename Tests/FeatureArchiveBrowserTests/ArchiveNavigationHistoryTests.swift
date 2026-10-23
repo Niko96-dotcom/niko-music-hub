@@ -152,6 +152,40 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         XCTAssertEqual(history.current?.route, "board")
     }
 
+    /// Back from the detail (its Board button and Esc call `showBoard()`): the
+    /// board shows, the song stays highlighted, and the route is `board`.
+    func testShowBoardFromTheDetailKeepsTheSelectionAndRecordsTheBoard() {
+        let context = TestToolContext.make()
+        let viewModel = ArchiveBrowserViewModel(context: context)
+        let song = fixtureSong()
+        viewModel.applyCatalogEdit(.load([song]))
+        viewModel.openSongDetail(song)
+        XCTAssertEqual(context.navigationHistory.lastRoute(for: ArchiveBrowserViewModel.navigationToolID), "detail:\(song.id)")
+
+        viewModel.showBoard()
+
+        XCTAssertEqual(viewModel.viewMode, .board)
+        XCTAssertEqual(viewModel.selectedSong, song)
+        XCTAssertEqual(context.navigationHistory.lastRoute(for: ArchiveBrowserViewModel.navigationToolID), "board")
+    }
+
+    func testShowBoardFromAnalyticsRecordsTheBoardAndOnTheBoardAddsNoEntry() {
+        let context = TestToolContext.make()
+        let viewModel = ArchiveBrowserViewModel(context: context)
+        let history = context.navigationHistory
+        viewModel.applyCatalogEdit(.load([fixtureSong()]))
+        viewModel.showAnalytics()
+        XCTAssertEqual(history.lastRoute(for: ArchiveBrowserViewModel.navigationToolID), "analytics")
+
+        viewModel.showBoard()
+        XCTAssertEqual(viewModel.viewMode, .board)
+        XCTAssertEqual(history.lastRoute(for: ArchiveBrowserViewModel.navigationToolID), "board")
+
+        let entries = history.entries.count
+        viewModel.showBoard()
+        XCTAssertEqual(history.entries.count, entries, "the board again is not a new history entry")
+    }
+
     private func fixtureSong() -> Song {
         Song(
             folderPath: URL(fileURLWithPath: "/fixture/nav-history/Nav Song", isDirectory: true),
