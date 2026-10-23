@@ -48,7 +48,7 @@ final class SongCatalogTests: XCTestCase {
             SongCatalogChange.ChangedSong(before: b, after: renamedB),
             SongCatalogChange.ChangedSong(before: nil, after: c),
         ])
-        XCTAssertEqual(change.removedIDs, [a.id])
+        XCTAssertEqual(change.removed, [a])
     }
 
     func testBaselineAndVisibleListChangeIndependently() {
@@ -142,7 +142,7 @@ final class SongCatalogTests: XCTestCase {
 
         let change = catalog.removeAll()
 
-        XCTAssertEqual(change.removedIDs, [a.id, archived.id])
+        XCTAssertEqual(change.removed, [a, archived])
         XCTAssertTrue(change.scannedChanged && change.visibleChanged)
         XCTAssertTrue(catalog.visible.isEmpty && catalog.scanned.isEmpty)
         XCTAssertNil(catalog.song(id: a.id))

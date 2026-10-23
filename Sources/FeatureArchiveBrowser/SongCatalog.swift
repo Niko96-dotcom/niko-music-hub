@@ -61,7 +61,7 @@ struct SongCatalog: Sendable {
                 SongCatalogChange.ChangedSong(before: visibleByID[$0.id], after: $0)
             }
             let nextByID = Dictionary(newVisible.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
-            change.removedIDs = Set(visibleByID.keys.filter { nextByID[$0] == nil })
+            change.removed = visible.filter { nextByID[$0.id] == nil }
             visible = newVisible
             visibleByID = nextByID
         }
@@ -98,7 +98,7 @@ struct SongCatalog: Sendable {
         var change = SongCatalogChange()
         change.scannedChanged = !scanned.isEmpty
         change.visibleChanged = !visible.isEmpty
-        change.removedIDs = Set(visibleByID.keys)
+        change.removed = visible
         scanned = []
         visible = []
         visibleByID = [:]
@@ -118,8 +118,9 @@ struct SongCatalogChange: Equatable, Sendable {
     var visibleChanged = false
     /// Visible songs that are new or differ, in visible-list order.
     var changed: [ChangedSong] = []
-    /// Ids the visible list held before the edit and no longer holds.
-    var removedIDs: Set<String> = []
+    /// Songs the visible list held before the edit and no longer holds, with
+    /// their old values (per-song caches are keyed by id and by project path).
+    var removed: [Song] = []
 
     var isEmpty: Bool { !scannedChanged && !visibleChanged }
 }

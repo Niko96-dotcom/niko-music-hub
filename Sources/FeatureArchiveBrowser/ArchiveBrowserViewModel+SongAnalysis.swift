@@ -61,9 +61,9 @@ extension ArchiveBrowserViewModel {
 
     /// Per-song caches follow a catalog change. A changed main preview drops the
     /// song's mixdown analysis, a changed project its plugin summary, and removed
-    /// songs leave the mixdown caches. Only the changed songs are looked at, never
-    /// the whole catalog. A song new to the catalog has no cache entry yet, so it
-    /// is skipped: the first load of 10,000 songs does no per-song work.
+    /// songs leave both caches. Only the changed and removed songs are looked at,
+    /// never the whole catalog. A song new to the catalog has no cache entry yet,
+    /// so it is skipped: the first load of 10,000 songs does no per-song work.
     func updatePerSongCaches(for change: SongCatalogChange) {
         var invalidatedSelectedSongAnalysis = false
         var didInvalidateCPRPluginSummary = false
@@ -101,12 +101,29 @@ extension ArchiveBrowserViewModel {
         if didInvalidateCPRPluginSummary, pluginsSectionExpanded, let selectedSong {
             refreshCPRPluginSummary(for: selectedSong)
         }
-        if !change.removedIDs.isEmpty {
+        if !change.removed.isEmpty {
             ArchiveMixdownAnalysisCoordinator.prune(
                 remainingSongIDs: Set(songs.map(\.id)),
                 bpmCache: &mixdownBPMBySongID,
                 keyCache: &mixdownKeyBySongID
             )
+            pruneCPRPluginSummaries(of: change.removed)
+        }
+    }
+
+    /// Drops the plugin summaries of removed songs, in one write. With no song
+    /// left (a root change) every summary goes without resolving a path per song.
+    private func pruneCPRPluginSummaries(of removed: [Song]) {
+        guard !cprPluginSummaryByCPRPath.isEmpty else { return }
+        let kept: [String: CPRPluginSummary]
+        if songs.isEmpty {
+            kept = [:]
+        } else {
+            let removedPaths = Set(removed.compactMap { effectiveCPRIdentity(for: $0)?.path })
+            kept = cprPluginSummaryByCPRPath.filter { !removedPaths.contains($0.key) }
+        }
+        if kept.count != cprPluginSummaryByCPRPath.count {
+            cprPluginSummaryByCPRPath = kept
         }
     }
 

@@ -49,7 +49,6 @@ extension ArchiveBrowserViewModel {
         scanOrchestrator.clearPendingPaths()
         ArchivePreviewPlayback.stopAll()
         ArchivePreviewPlayer.clearMetadataCaches()
-        songs = []
         isSearching = false
         filteredSongs = []
         searchMatchSummaries = [:]
@@ -64,17 +63,16 @@ extension ArchiveBrowserViewModel {
         songDetailsExpanded = false
         pluginsSectionExpanded = false
         showArchivedProjects = false
-        scannedSongs = []
         vaultObservation.clearForRootChange(notifyWhenChanged: false)
         scanDiagnostics = nil
         pendingCollaboratorSuggestions = []
         dismissedCollaboratorSuggestionIDs.removeAll()
         duplicateSongHints = []
         missingAudioReport = nil
-        mixdownBPMBySongID = [:]
-        mixdownKeyBySongID = [:]
-        cprPluginSummaryByCPRPath = [:]
         cachedSearchIndex = MusicSearchIndex()
+        // Last, so the browse recompute of the edit sees the reset inputs. Its
+        // per-song step drops every mixdown result and plugin summary.
+        applyCatalogEdit(.clear)
         // Repair IDs and delayed index persistence are owned by
         // `ArchiveMetadataEditingCoordinator` (`clearForRootChange` above).
         setStatusMessage(nextStatusMessage)

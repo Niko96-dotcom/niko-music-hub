@@ -26,7 +26,7 @@ commit with `git log --grep='(catalog step N)'`.
 | 3 Scan and cache load through one writer | done | `git log --grep='(catalog step 3)'` | strict build; `FeatureArchiveBrowserTests` 643 and AppCore `*SourceTests` 93, 0 failures; the new B1 test failed with an unprojected cache load, then passed |
 | 4 Vault reprojection and New Song | done | `git log --grep='(catalog step 4)'` | strict build; `FeatureArchiveBrowserTests` 646 and AppCore `*SourceTests` 93, 0 failures; B2 and B4 tests failed with the old behavior planted, then passed |
 | 5 Metadata edits and collaborator removal | done | `git log --grep='(catalog step 5)'` | strict build; `FeatureArchiveBrowserTests` 650 and AppCore `*SourceTests` 93, 0 failures; B3 and B6 tests failed with the old behavior planted, then passed |
-| 6 Root reset and per-song caches | not started | | |
+| 6 Root reset and per-song caches | done | `git log --grep='(catalog step 6)'` | strict build; `FeatureArchiveBrowserTests` 652 and AppCore `*SourceTests` 93, 0 failures; both B5 tests failed with the plugin prune removed, then passed |
 | 7 Tests seed through the writer; the old writers go | not started | | |
 | 8 Docs, full gates, benchmark, live check | not started | | |
 
@@ -54,6 +54,11 @@ Record every deviation from the steps below here, numbered, with its reason.
    `mutateCatalog` clears the selection first, and `replaceSong` re-selected only a song that was still selected. So
    `.replace` needs no selection step of its own; requirement 5, the follow-up table and the live check now describe
    today's rule, and `ArchiveCatalogEditTests` pins both cases.
+6. **Step 6: the change carries the removed songs, not only their ids.** Plugin summaries are keyed by project path,
+   so dropping them needs each removed song's old value: `SongCatalogChange.removedIDs` became `removed: [Song]`. With
+   no song left (a root change) every summary goes at once, without resolving a path per song. `.clear` runs the
+   normal follow-ups, so a root reset now also recomputes the (empty) browse list and refreshes intelligence once; it
+   still sets its other browse state by hand, which is outside this plan.
 
 ## Terms
 

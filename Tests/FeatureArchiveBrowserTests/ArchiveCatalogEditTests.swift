@@ -16,6 +16,29 @@ final class ArchiveCatalogEditTests: XCTestCase {
         )
     }
 
+    /// A song with a main preview and a project, so it has per-song cache keys.
+    private func analyzedSong(_ index: Int) -> Song {
+        let folder = URL(fileURLWithPath: "/tmp/catalog-edit/Analyzed \(index)", isDirectory: true)
+        let candidate = PreviewCandidate(
+            filePath: folder.appendingPathComponent("Mixdown/mix.wav"), fileName: "mix.wav",
+            folderRole: .mixdown, modifiedAt: Date(timeIntervalSince1970: 1_000), detectedRole: .mainMix)
+        let version = ProjectVersion(
+            filePath: folder.appendingPathComponent("Analyzed \(index).cpr"), fileName: "Analyzed \(index).cpr",
+            modifiedAt: Date(timeIntervalSince1970: 1_000))
+        return Song(folderPath: folder, originalFolderName: "Analyzed \(index)", displayTitle: "Analyzed \(index)",
+                    projectVersions: [version], previewCandidates: [candidate], mainPreviewCandidateID: candidate.id,
+                    latestCPR: version)
+    }
+
+    /// Seeds a mixdown result and a plugin summary for `song`; returns their keys.
+    private func seedPerSongCaches(for song: Song, in model: ArchiveBrowserViewModel) throws -> (mixdown: String, plugins: String) {
+        let mixdownKey = try XCTUnwrap(ArchiveMixdownAnalysisCoordinator.cacheKey(for: song))
+        let pluginsKey = try XCTUnwrap(song.effectiveLatestCPR).filePath.standardizedFileURL.path
+        model.mixdownBPMBySongID[mixdownKey] = MixdownBPMEstimate(bpm: 120, confidence: "low")
+        model.cprPluginSummaryByCPRPath[pluginsKey] = CPRPluginSummary(pluginNames: ["EQ"], source: "fixture")
+        return (mixdownKey, pluginsKey)
+    }
+
     private func makeModel(_ songs: [Song]) -> ArchiveBrowserViewModel {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make(), archiveRootWatcher: NoopArchiveRootWatcher())
         model.applyCatalogEdit(.load(songs))
@@ -48,6 +71,38 @@ final class ArchiveCatalogEditTests: XCTestCase {
 
         XCTAssertEqual(model.selectedSong, renamed)
         XCTAssertEqual(model.filteredSongs, [renamed])
+    }
+
+    /// Per-song caches follow every edit, not only rescans: a song that leaves the
+    /// catalog takes its mixdown result and plugin summary with it (B5).
+    func testAnEditThatRemovesASongDropsItsPerSongResults() throws {
+        let gone = analyzedSong(1), kept = analyzedSong(2)
+        let model = makeModel([gone, kept])
+        let goneKeys = try seedPerSongCaches(for: gone, in: model)
+        let keptKeys = try seedPerSongCaches(for: kept, in: model)
+
+        let change = model.applyCatalogEdit(.load([kept]))
+
+        XCTAssertEqual(change.removed, [gone])
+        XCTAssertNil(model.mixdownBPMBySongID[goneKeys.mixdown])
+        XCTAssertNil(model.cprPluginSummaryByCPRPath[goneKeys.plugins])
+        XCTAssertNotNil(model.mixdownBPMBySongID[keptKeys.mixdown])
+        XCTAssertNotNil(model.cprPluginSummaryByCPRPath[keptKeys.plugins])
+    }
+
+    /// A root change empties the catalog, and the per-song caches with it.
+    func testRootResetLeavesNoPerSongResults() throws {
+        let first = analyzedSong(1), second = analyzedSong(2)
+        let model = makeModel([first, second])
+        _ = try seedPerSongCaches(for: first, in: model)
+        _ = try seedPerSongCaches(for: second, in: model)
+
+        model.clearRootBoundArchiveState(statusMessage: nil)
+
+        XCTAssertTrue(model.songs.isEmpty)
+        XCTAssertTrue(model.scannedSongs.isEmpty)
+        XCTAssertTrue(model.mixdownBPMBySongID.isEmpty)
+        XCTAssertTrue(model.cprPluginSummaryByCPRPath.isEmpty)
     }
 
     /// An edit that moves the selected song out of the filtered list deselects it:

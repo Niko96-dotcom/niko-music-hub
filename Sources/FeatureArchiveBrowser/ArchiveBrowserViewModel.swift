@@ -110,6 +110,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         /// Metadata edits and collaborator removal: songs replaced by id, in one
         /// batch, without a projection.
         case replace([Song])
+        /// A root change: both lists empty.
+        case clear
     }
 
     /// The catalog's writer. Projects the edit through the Vault observation,
@@ -146,6 +148,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         case .replace(let songs):
             // An archive-only projection is replaced in the visible list but never joins the baseline.
             change = next.replace(songs, isArchiveOnly: isArchivedProject)
+        case .clear:
+            change = next.removeAll()
         }
         if !change.isEmpty {
             if change.visibleChanged {
@@ -170,6 +174,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
         case .replace:
             // `ArchiveMetadataEditingCoordinator` owns the delayed index persist of edits.
+            break
+        case .clear:
+            // The root reset cancels pending persists and clears the repair state itself.
             break
         }
         return change
