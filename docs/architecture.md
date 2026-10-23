@@ -161,7 +161,7 @@ Archive domain and safety. No SwiftUI/AppKit.
 [`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) owns the prepared settings context, provider health, runtime snapshots and canonical path index, immutable card cache, archived count, and automatic-recovery task/deadline/backoff.
 
 - Settings enter through `refreshContext(settings:songs:)`. Card reads use the prepared map without loading settings. `rebuildCards(for:)` derives the map before comparing values.
-- Normal refresh uses `stageSnapshots(_:)`, projects the catalog, then refreshes cards. A changed catalog also prebuilds cards in `songs.willSet` before publishing songs. The operation-scoped phase poller uses `applyPolledSnapshots(_:songs:)`, which reuses staging and publishes a changed snapshot once; unchanged snapshots are a no-op.
+- Normal refresh uses `stageSnapshots(_:)`, projects the catalog, then refreshes cards. A changed catalog also prebuilds cards in `applyCatalogEdit(_:)` before publishing songs. The operation-scoped phase poller uses `applyPolledSnapshots(_:songs:)`, which reuses staging and publishes a changed snapshot once; unchanged snapshots are a no-op.
 - Snapshot/path validation, Keep Local pins, and generic-action blocking live beside their inputs. Archive projection may inspect filesystem paths and load metadata; it reports metadata-read failures through the supplied warning callback. It does not initiate scans or reload settings.
 - `scheduleRecovery` / `cancelRecovery` own deadline deduplication, busy checks, the 30-second backoff, and cancellation on deinitialization. Runtime execution and subsequent refresh enter through callbacks with weak view-model captures.
 - The view model retains runtime refresh orchestration, status composition, archived-visibility choice, and Done enqueue decisions. An unavailable runtime clears snapshots; an unreadable journal preserves the last presentation and reports a warning. Read-only peers and a weak `objectWillChange` subscription connect the owner to existing views.
@@ -190,14 +190,37 @@ The remaining ownership is intentional:
 
 | Owner | Retained responsibility and boundary |
 | --- | --- |
-| View model: catalog/browse | `songs` / `scannedSongs`, selected shelf/filter/search state, prepared search index, catalog replacement and selection reconciliation. Owners read current inputs and return results rather than keeping a second catalog. |
+| View model: catalog/browse | The song catalog through `applyCatalogEdit(_:)` (see [Archive song catalog](#archive-song-catalog)), selected shelf/filter/search state, prepared search index and selection reconciliation. Owners read current inputs and return results rather than keeping a second catalog. |
 | View model: roots/scan host | Roots, bookmarks, root generation and scan-result application; `ArchiveScanOrchestrator` owns scan execution. |
 | View model: UI integration | Selection/navigation, playback and preview-analysis invalidation, collaborator/intelligence projections, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
 | View model: Vault authorization | Capture/confirmation/restore presentation, runtime dispatch, and the Done revocation bridge. Metadata commands request Done capture or revocation through callbacks; they do not create or reuse authorization. |
 | `ProjectVaultOperationCoordinator` | Queue, active/busy state, cancellation, retry and capacity accounting. The observation and editing owners do not mutate its storage. |
 | `ArchiveCatalogCoordinator` | Scan reconciliation, persistence and per-song metadata integrity. The editing owner controls transaction ordering above this layer. |
 
-The metadata extension retains the user-created-folder flow and the catalog/selection applier, plus preview/playback integration. It delegates editing and undo commands through the owner API; bound Done and ordinary status commits keep their existing distinct authorization paths.
+The metadata extension retains the user-created-folder flow, plus preview/playback integration; edited songs reach the catalog through `applyCatalogEdit(.replace(_:))`. It delegates editing and undo commands through the owner API; bound Done and ordinary status commits keep their existing distinct authorization paths.
+
+## Archive song catalog
+
+[`SongCatalog`](../Sources/FeatureArchiveBrowser/SongCatalog.swift) holds the songs the Archive Browser knows: the
+scan baseline (`scannedSongs`, which the index persist writes), the visible list (`songs`: the baseline plus
+archive-only Vault projections when "Show archived" is on) and an id index. It is a value with no I/O. Every edit
+reports a `SongCatalogChange`: the changed songs with their old values and the removed songs.
+
+- `ArchiveBrowserViewModel.applyCatalogEdit(_:)` is its only writer. The setter of `songCatalog` is private to
+  `ArchiveBrowserViewModel.swift`, and `songs` and `scannedSongs` are read-only, so another writer does not compile.
+- Six edits: `load` (the cached index; tests seed the catalog through it), `rescan`, `reproject` (Vault snapshots,
+  "Show archived", Vault settings, roots), `add` (New Song), `replace` (metadata edits and collaborator removal, one
+  batch) and `clear` (a root change). All but `replace` and `clear` run the Vault projection.
+- The follow-up work of a change lives in that function. A new visible list rebuilds the Vault card cache before it
+  publishes. Every change recomputes the browse results (they reconcile the selection), refreshes intelligence and
+  open analytics, and updates the per-song caches (`updatePerSongCaches(for:)`: changed and removed songs only, never
+  new ones). `load`, `rescan` and `add` sync the repair state; `rescan` and `add` persist the index, and `reproject`
+  does when it changed the baseline. Edits leave the index persist to `ArchiveMetadataEditingCoordinator`.
+- Equal lists stay as held: an unchanged 10,000-song rescan keeps one copy of the catalog and reports an empty
+  change. The scan shares unchanged song values with the held baseline before it projects.
+- An owner object like `ArchiveVaultObservation` was considered and not chosen: the follow-ups are view-model state,
+  so each edit would cross two objects and a callback, and the card cache must still be built before the publish.
+  Revisit that only if the projection gets a second user.
 
 ## Archive footer ownership
 

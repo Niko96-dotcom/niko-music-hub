@@ -86,7 +86,8 @@ Hops in call order. Ownership detail is in [architecture.md](architecture.md).
    is dropped.
 3. `ArchiveCatalogCoordinator` merges stored user metadata (`ArchiveMetadataMerger`). Scans never write
    metadata.
-4. `applyCatalogScanUpdate` (`+ScanHost.swift`) publishes `songs`; `mutateCatalog` (`+Browse.swift`) runs
+4. `applyCatalogScanUpdate` (`+ScanHost.swift`) applies `.rescan` through `applyCatalogEdit(_:)`
+   (`ArchiveBrowserViewModel.swift`), which projects the result, writes `SongCatalog` and runs
    `ArchiveBrowseProjection` and `MusicSearchIndex`; `ArchiveMetadataEditingCoordinator.scheduleIndexPersist`
    saves the snapshot.
 5. Open: `openLatestCPR(for:)` (`+Exports.swift`) checks the Vault block, then
@@ -151,7 +152,8 @@ into those closures; it imports neither SwiftUI nor AppKit.
 | Selected tool, panels, Set Up sheet | `HubShellSession` (AppCore) | `PreferenceStore` keys `hub.shell.*` |
 | Back/forward | `HubNavigationHistory`, one instance shared by the shell and the archive | memory |
 | Durable settings (music roots, output folder, Vault, helpers) | `SettingsStore` → `UserDefaultsSettingsStore`; display mirror `AppSettingsObserver` | UserDefaults key `nikoMusicHub.settings` (JSON) |
-| Archive roots, catalog (`scannedSongs`, `songs`), selection, browse inputs | `ArchiveBrowserViewModel` | snapshot in `SQLiteArchiveIndexStore` |
+| Archive song catalog (scan baseline, visible list, id index) | `SongCatalog`, written only by `ArchiveBrowserViewModel.applyCatalogEdit(_:)` | snapshot in `SQLiteArchiveIndexStore` |
+| Archive roots, selection, browse inputs | `ArchiveBrowserViewModel` | roots in the settings JSON; the rest memory |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
 | Keep Local pins | `KeepLocalPins` over `VaultSettings.keepLocalProjectIDs` ([ADR 021](decisions/021-keep-local-pin-format.md)) | settings JSON in UserDefaults |
@@ -216,6 +218,7 @@ These rules are documented and, where named, enforced. The full table is in
 | One registry of running work; quit reads it | [ADR 019](decisions/019-running-work-and-quit.md) | `HubTerminationSourceTests`, `ShellJobStatusCenterTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
 | A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
+| The archive song catalog is written only through `applyCatalogEdit(_:)` | [architecture.md § Archive song catalog](architecture.md#archive-song-catalog) | the compiler (`songCatalog`'s setter is private to its file), `SongCatalogTests`, `ArchiveCatalogEditTests` |
 | A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
 | One UI scaffold, header and chrome material | [design-contract.md](design-contract.md) | `HubDesignContractSourceTests` |
@@ -241,9 +244,10 @@ These rules are documented and, where named, enforced. The full table is in
    `ArchivePlaybackCoordinator.shared`, `AudioCaptureActivity.shared`, `LiveProcessGroupRegistry.shared`,
    and `HelperToolLocator.standard()` built separately by each helper consumer.
 6. **`ArchiveBrowserViewModel` is one type in 22 files** (the main file plus 21 `+*.swift` extensions,
-   4,598 lines; the footer rules moved out to `ArchiveFooterStatus` on 2026-10-22). Four owners were extracted (scan orchestrator, catalog, metadata editing, Vault queue and
-   observation); the extensions still share one set of state. The catalog is held three ways
-   (`scannedSongs`, `songs`, `songsByID`) and every writer keeps them consistent.
+   4,615 lines; the footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog`
+   on 2026-10-23). Four owners were extracted (scan orchestrator, catalog, metadata editing, Vault queue and
+   observation); the extensions still share one set of state. The song catalog has one writer since 2026-10-23,
+   but the root reset still resets about 35 other properties by hand.
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, except the scenario structs after
    the `#endif` in `ArchiveUserFlowSmokeScenarios.swift`. `DevToolFeature` always compiles and is shown

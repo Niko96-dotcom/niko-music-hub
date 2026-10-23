@@ -28,7 +28,7 @@ commit with `git log --grep='(catalog step N)'`.
 | 5 Metadata edits and collaborator removal | done | `git log --grep='(catalog step 5)'` | strict build; `FeatureArchiveBrowserTests` 650 and AppCore `*SourceTests` 93, 0 failures; B3 and B6 tests failed with the old behavior planted, then passed |
 | 6 Root reset and per-song caches | done | `git log --grep='(catalog step 6)'` | strict build; `FeatureArchiveBrowserTests` 652 and AppCore `*SourceTests` 93, 0 failures; both B5 tests failed with the plugin prune removed, then passed |
 | 7 Tests seed through the writer; the old writers go | done | `git log --grep='(catalog step 7)'` | strict build; `FeatureArchiveBrowserTests` 652 and AppCore `*SourceTests` 93, 0 failures; a planted `songs = []` and `songCatalog = …` in `+Selection.swift` did not compile; `archive-ui.swift` could not be built: its build script and 4 other lines were already stale (revision 8) |
-| 8 Docs, full gates, benchmark, live check | not started | | |
+| 8 Docs, full gates, benchmark, live check | docs done (`git log --grep='(catalog step 8)'`); gates, benchmark and live check next | | link check of the changed docs: ok |
 
 ## Revisions
 
@@ -69,7 +69,8 @@ Record every deviation from the steps below here, numbered, with its reason.
    `<bin>/<Module>.build/output-file-map.json`, which the current SwiftPM layout (`.build/out/Products/Release`) no
    longer writes, and `archive-ui.swift` has 4 type errors from older API drift (lines 106, 207, 217, 219). A
    type-check against the release modules shows no error on the rewritten seed line. Repairing the harness is outside
-   this plan; `script/benchmark_archive_startup.sh` (used in step 8) reads the same files, see step 8.
+   this plan. `script/benchmark_archive_startup.sh` (used in step 8) also handles the single-object layout
+   (`<bin>/<Module>.o`) that the current SwiftPM writes, so the step 8 benchmark can still build.
 
 ## Terms
 
