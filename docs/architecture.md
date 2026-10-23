@@ -182,6 +182,7 @@ must be rewritten before the unchanged-row memo is enabled.
 [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) owns edit validation and persistence ordering, notes/status undo, repair-song IDs, and delayed index persistence. It holds no catalog copy. The required immutable `ArchiveMetadataEditingHost` supplies live inputs and narrow mutation callbacks together; weak view-model captures and absent-input checks prevent edits after the host disappears.
 
 - Notes and ordinary workflow commands pass through the per-song integrity gate and authoritative metadata persistence before requesting a catalog replacement. Late corruption refuses replacement; ordinary storage failure retains the visible edit with a warning. `ArchiveCatalogCoordinator` retains the store and integrity-reporting machinery.
+- Every notes commit (title, aliases, note, the three-field save, the draft flush) and every ordinary status commit registers its own Undo in the editing owner: only when it was not refused and a value changed, with the values the catalog held before. Views only keep their drafts and read the outcome.
 - Owned, injected, and weak window-bound undo managers live in the editing owner. Explicit bind/unbind methods scrub only this owner's registrations. The weak undo target routes inverses back to the driving manager; native window behavior remains in `ArchiveWorkflowUndoBridge`.
 - `scheduleIndexPersist` serializes behind its predecessor, reads live songs when firing, and checks the captured root generation. Root reset cancels but retains an in-flight predecessor so its detached write cannot overwrite a newer snapshot. Deinitialization cancels pending work.
 - `repairSongMetadata` reloads and merges repaired rows and updates the repair-ID projection. Its status and warning callbacks write the archive footer through the view model; after a repair, `refreshSongDetailsWarning` replaces only a song-details warning (see [Archive footer ownership](#archive-footer-ownership)).
@@ -192,12 +193,25 @@ The remaining ownership is intentional:
 | --- | --- |
 | View model: catalog/browse | The song catalog through `applyCatalogEdit(_:)` (see [Archive song catalog](#archive-song-catalog)), selected shelf/filter/search state, prepared search index and selection reconciliation. Owners read current inputs and return results rather than keeping a second catalog. |
 | View model: roots/scan host | Roots, bookmarks, root generation and scan-result application; `ArchiveScanOrchestrator` owns scan execution. |
-| View model: UI integration | Selection/navigation, playback and preview-analysis invalidation, collaborator/intelligence projections, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
+| View model: UI integration | Selection/navigation (see [Archive page state](#archive-page-state)), playback and preview-analysis invalidation, collaborator/intelligence projections, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
 | View model: Vault authorization | Capture/confirmation/restore presentation, runtime dispatch, and the Done revocation bridge. Metadata commands request Done capture or revocation through callbacks; they do not create or reuse authorization. |
 | `ProjectVaultOperationCoordinator` | Queue, active/busy state, cancellation, retry and capacity accounting. The observation and editing owners do not mutate its storage. |
 | `ArchiveCatalogCoordinator` | Scan reconciliation, persistence and per-song metadata integrity. The editing owner controls transaction ordering above this layer. |
 
 The metadata extension retains the user-created-folder flow, plus preview/playback integration; edited songs reach the catalog through `applyCatalogEdit(.replace(_:))`. It delegates editing and undo commands through the owner API; bound Done and ordinary status commits keep their existing distinct authorization paths.
+
+## Archive page state
+
+The Archive Browser's page (`viewMode`: board, board detail, list, analytics; `listShowsDetail` for the compact list's
+detail) belongs to `ArchiveBrowserViewModel`. Views state intent and never write it: `openSongDetail(_:)`,
+`showBoard()` (back from the detail or analytics, keeping the selection), `setBrowseLayout(list:)`, `showAnalytics()`,
+`clearSelection(stopPlayback:)` and `restoreNavigationRoute(_:)`. `ArchiveViewIntentSourceTests` fails on a write
+outside `ArchiveBrowserViewModel*.swift`.
+
+Gates follow the same rule: a view asks the view model the question the edit coordinator also asks. The song detail's
+status menu uses `canMutateWorkflowStatus(for:)`, like board drops and the Song menu; the shorter
+`blocksGenericProjectVaultFileActions(for:)` stays the gate for metadata edits and file actions. (Board and list cards
+still use only the card-state policy; see the map's open questions.)
 
 ## Archive song catalog
 

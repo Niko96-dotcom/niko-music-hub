@@ -154,6 +154,7 @@ into those closures; it imports neither SwiftUI nor AppKit.
 | Durable settings (music roots, output folder, Vault, helpers) | `SettingsStore` → `UserDefaultsSettingsStore`; display mirror `AppSettingsObserver` | UserDefaults key `nikoMusicHub.settings` (JSON) |
 | Archive song catalog (scan baseline, visible list, id index) | `SongCatalog`, written only by `ArchiveBrowserViewModel.applyCatalogEdit(_:)` | snapshot in `SQLiteArchiveIndexStore` |
 | Archive roots, selection, browse inputs | `ArchiveBrowserViewModel` | roots in the settings JSON; the rest memory |
+| Archive page (`viewMode`, `listShowsDetail`) | `ArchiveBrowserViewModel`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
 | Keep Local pins | `KeepLocalPins` over `VaultSettings.keepLocalProjectIDs` ([ADR 021](decisions/021-keep-local-pin-format.md)) | settings JSON in UserDefaults |
@@ -218,6 +219,7 @@ These rules are documented and, where named, enforced. The full table is in
 | One registry of running work; quit reads it | [ADR 019](decisions/019-running-work-and-quit.md) | `HubTerminationSourceTests`, `ShellJobStatusCenterTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
 | A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
+| Archive views state intent; only the view model writes the archive page, and the song detail uses the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `ArchiveViewIntentSourceTests` |
 | The archive song catalog is written only through `applyCatalogEdit(_:)` | [architecture.md § Archive song catalog](architecture.md#archive-song-catalog) | the compiler (`songCatalog`'s setter is private to its file), `SongCatalogTests`, `ArchiveCatalogEditTests` |
 | A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
@@ -289,6 +291,10 @@ Documents that disagree with the code:
 9. Not verified at runtime: in E2E smoke mode the production archive view model probably exists beside
    the smoke's own view models, because `AppComposition.make()` runs before
    `applicationWillFinishLaunching`.
+10. Board and list cards decide whether to offer a status change from the card-state policy alone, not from
+    `canMutateWorkflowStatus(for:)`. From the code, a transfer in state `superseded` on a song that keeps its Active
+    folder shows a card that offers a change the edit coordinator refuses. Should the card presentation carry the
+    full gate?
 
 ## Check baseline (2026-10-22)
 
