@@ -153,7 +153,8 @@ into those closures; it imports neither SwiftUI nor AppKit.
 | Back/forward | `HubNavigationHistory`, one instance shared by the shell and the archive | memory |
 | Durable settings (music roots, output folder, Vault, helpers) | `SettingsStore` → `UserDefaultsSettingsStore`; display mirror `AppSettingsObserver` | UserDefaults key `nikoMusicHub.settings` (JSON) |
 | Archive song catalog (scan baseline, visible list, id index) | `SongCatalog`, written only by `ArchiveBrowserViewModel.applyCatalogEdit(_:)` | snapshot in `SQLiteArchiveIndexStore` |
-| Archive roots, selection, browse inputs | `ArchiveBrowserViewModel` | roots in the settings JSON; the rest memory |
+| Archive scan list (the folders the archive scans) | the settings store; edited only through `ArchiveScanList` (AppCore); the archive follows `appSettings` ([architecture.md § Archive scan list](architecture.md#archive-scan-list)) | settings JSON in UserDefaults |
+| Loaded roots, selection, browse inputs | `ArchiveBrowserViewModel` | memory |
 | Archive page (`viewMode`, `listShowsDetail`) | `ArchiveBrowserViewModel`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
@@ -229,9 +230,10 @@ These rules are documented and, where named, enforced. The full table is in
 ## Where the code differs from the intent (observed)
 
 1. **The archive feature is wired specially.** `AppComposition.make()` builds `ArchiveBrowserViewModel`
-   before the registry and passes it to `AppShellView` and the Settings scene (`HubSettingsScene` →
-   `SettingsView`, which adds and removes music roots through it). The shell imports
-   `FeatureArchiveBrowser` for `ArchivePersistentPlayerView`.
+   before the registry and passes it to `AppShellView` (persistent player, Set Up's Choose Folder), the
+   settings-repair handler and first-launch onboarding. The shell imports `FeatureArchiveBrowser` for
+   `ArchivePersistentPlayerView`. The Settings scene no longer holds it (2026-10-23): Settings saves the scan
+   list and the archive follows the store.
 2. **`ToolContext.init` creates a new job center, settings observer, router and repair model** when a
    caller leaves them out. The two production callers are correct: `AppComposition` passes them all, and
    `ArchiveSmokeCommands` runs alone. (The second context and the hand-counted tool number went on
@@ -277,8 +279,9 @@ Documents that disagree with the code:
 
 ## Open questions
 
-1. Should the archive keep its special wiring, or should roots and Vault settings get an owner that both
-   Settings and the archive read, which would remove the early view model and the second `ToolContext`?
+1. Settled on 2026-10-23: the stored settings own the scan list, `ArchiveScanList` edits it, and the archive
+   follows `appSettings` ([architecture.md § Archive scan list](architecture.md#archive-scan-list)). One
+   `ToolContext` serves the launch. The archive view model stays built by the composition for the shell.
 2. Which layer owns the inbox handoff for a new tool, and should a new tool use `JobRunner` or an extra
    source? (Admission is settled: one `ToolOutputDestination` per run.)
 3. What triggers moving the Project Vault runtime out of `AppCore`?

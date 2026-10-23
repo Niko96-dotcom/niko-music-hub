@@ -115,7 +115,7 @@ Archive domain and safety. No SwiftUI/AppKit.
 ### `FeatureArchiveBrowser` (SwiftUI feature)
 
 - [`ArchiveBrowserFeature.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserFeature.swift): `ToolFeature` conformance (`archive-browser`).
-- [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): roots, browse, selection, scan host, and integration with metadata/Vault owners.
+- [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): loaded roots (it follows the stored scan list, see [Archive scan list](#archive-scan-list)), browse, selection, scan host, and integration with metadata/Vault owners.
 - Vault operation extensions: `+ProjectVaultQueue.swift`, `+ProjectVaultArchive.swift`, `+ProjectVault.swift`, `+ProjectVaultActions.swift`, `+ProjectVaultRestore.swift`, `+ProjectVaultRecovery.swift`, `+Metadata.swift` (Done revoke), `+Scan.swift` (root-bound clears).
 - Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift), [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) (song-metadata mutation ordering), [`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) (Vault observation/presentation).
 - Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
@@ -140,13 +140,13 @@ Archive domain and safety. No SwiftUI/AppKit.
 
 ## Persistence, services, composition
 
-- Settings: `UserDefaultsSettingsStore` owns `AppSettings` (music roots, vault bindings, Keep Local pins). Vault presentation reads settings only at explicit boundaries (`refreshProjectVaultPresentationContext`).
+- Settings: `UserDefaultsSettingsStore` owns `AppSettings` (music roots, vault bindings, Keep Local pins). Vault presentation reads settings only at explicit boundaries (`refreshProjectVaultPresentationContext`). The archive's scan list is edited only through `ArchiveScanList` ([Archive scan list](#archive-scan-list)).
 - Archive persistence (production `AppComposition.make()`): one shared `SQLiteArchiveDatabase` backs `SQLiteArchiveIndexStore` (`ArchiveIndexStoring`), `SQLiteSongUserMetadataStore` (`SongUserMetadataStoring`), `SQLiteCollaboratorStore` (`CollaboratorStoring`), `SQLiteProjectCatalogStore`, and `SQLiteVaultTransferStore`. SQLite stores live in `NikoMusicCore/Persistence`; the Vault runtime (`LiveProjectVaultRuntime`, `ProjectVaultOperating`) lives in `AppCore`. Scans reconcile with stored user metadata through `ArchiveCatalogCoordinator`. Project identity in `SQLiteProjectCatalogStore` is reconciled only by the Vault runtime, when a song is archived (`LiveProjectVaultRuntime+Catalog.swift`).
 - Song metadata: `SongUserMetadataStoring` SQLite rows (titles, aliases, notes, workflow status, collaborators); per-song merge/commit path with corrupt-row gating.
 - Vault transfers: `SQLiteVaultTransferStore` over `SQLiteArchiveDatabase` (transfer journal is authoritative for phases/recovery).
 - Vault catalog: `SQLiteProjectCatalogStore` (project records, locations, identity reviews).
 - Runtime composition: `LiveProjectVaultRuntime` is built with the settings, transfer and catalog stores and a project opener; storage providers and activity/capacity probes use their production defaults. It is injected into the archive view model as `ProjectVaultOperating`.
-- App composition builds one `HubNavigationHistory`, one settings store suite, job center, diagnostics, and file actions. It builds two `ToolContext` values over those same services: one for the archive view model, built before the registry, and a final one for the shell and features that also carries a registry-failure persistence issue.
+- App composition builds one `HubNavigationHistory`, one settings store suite, job center, diagnostics, and file actions, and one `ToolContext` over them, before the archive view model (whose feature value the registry needs). Launch warnings (a store that failed to open, a failed registry) go to `AppShellView` as `persistenceIssues`, their only reader.
 
 ## Project Vault operation ownership
 
@@ -237,6 +237,34 @@ reports a `SongCatalogChange`: the changed songs with their old values and the r
 - An owner object like `ArchiveVaultObservation` was considered and not chosen: the follow-ups are view-model state,
   so each edit would cross two objects and a callback, and the card cache must still be built before the publish.
   Revisit that only if the projection gets a second user.
+
+## Archive scan list
+
+The folders the Archive Browser scans live only in the stored settings (`AppSettings.musicRoots`).
+[`ArchiveScanList`](../Sources/AppCore/Settings/ArchiveScanList.swift) (AppCore) owns their rules; it edits settings
+values and never a file.
+
+- `scannedRoots(in:)`: which stored roots the archive scans (enabled Scan-only roots, plus the Vault Active root while
+  Vault is on; never the Vault Archive root). Settings > Music archive lists the same roots, so a root whose access
+  failed is listed and can be removed; the Vault Active root shows without Remove.
+- `adding(_:bookmark:to:)` and `removing(_:from:)`: the two edits a person makes. An edit changes only the matching
+  record, matched by canonical path or by where its bookmark points, so Vault roots, disabled records and roots whose
+  access failed keep their records. Adding the folder of the Vault Active root repairs that root in place; a different
+  folder never rebinds a Vault root. Vault roots change in the Project Vault pane (`VaultRootManager`).
+- Writers: Settings > Music archive (through `HubSettingsSession.persistSettings`, so a failure shows in Settings'
+  banner), and the board's Add Folder and Grant Access and Set Up's Choose Folder (through
+  `ArchiveBrowserViewModel.addRoots`, failures in the archive footer). A failed save changes nothing.
+- The archive follows the store. It subscribes to `ToolContext.appSettings` and answers every save, whoever made it,
+  with `followStoredSettings()`. The reaction reads the store, so a late publish cannot roll it back, and compares
+  with what it last loaded (`ArchiveFollowedSettings`). A Keep Local pin or another Vault choice only refreshes the
+  cards. Changed roots load again: added folders keep the catalog and scan; a removal or a new Vault binding resets
+  the root-bound state, keeps an unrelated footer warning and scans what is left; a Vault binding change also runs
+  Vault recovery. The archive's own add runs the reaction at once, and the later publish finds nothing new. A
+  settings repair calls it too, after clearing the settings warning.
+- The archive keeps the read side: resolving bookmarks, holding security-scoped access, the access failure,
+  `writeProtectedRoots()`.
+- Limits: fixture runs (`NIKO_MUSIC_HUB_FIXTURE_ROOT`) pin the loaded roots to the fixture, so an edit is saved but
+  the board keeps the fixture. A writer in another process (the CLI) is not followed.
 
 ## Archive footer ownership
 

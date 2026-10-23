@@ -26,7 +26,7 @@ commit with `git log --grep='(roots step N)'`.
 | 2 One module edits the scan list | done | `git log --grep='(roots step 2)'` | strict build; `ArchiveScanListTests` 13, `FeatureArchiveBrowserTests` 662, AppCore `*SourceTests` 96, 0 failures; changed test expectations in revisions 2 to 5 |
 | 3 The archive follows the store | done | `git log --grep='(roots step 3)'` | strict build; `ArchiveStoredRootsFollowTests` 5, `FeatureArchiveBrowserTests` 667, AppCore `*SourceTests` 96, 0 failures; with the subscription removed all 5 new tests failed; with every publish counted as a root change the pin and own-add tests failed; changed expectations in revisions 7 to 10 |
 | 4 Settings and Set Up use the store | done | `git log --grep='(roots step 4)'` | strict build; `FeatureArchiveBrowserTests` 667, AppCore `*SourceTests` 97, `ArchiveScanListTests` + Settings/Set Up source tests 29, 0 failures; a planted `import FeatureArchiveBrowser` in `HubSettingsScene.swift` failed the new guard, then was removed |
-| 5 Docs, full gates, live check | not started | | |
+| 5 Docs, full gates, live check | docs done (`git log --grep='(roots step 5)'`); gates and live check next | | link check of the changed docs: ok |
 
 ## Revisions
 
