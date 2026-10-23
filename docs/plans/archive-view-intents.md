@@ -22,7 +22,7 @@ commit with `git log --grep='(intent step N)'`.
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates passed on `7204854` (its commit message), no code commits since; no re-run |
 | 1 Navigation intents | done | `git log --grep='(intent step 1)'` | strict build; `FeatureArchiveBrowserTests` 657 and AppCore `*SourceTests` 93, 0 failures |
-| 2 Guard the page rule | not started | | |
+| 2 Guard the page rule | done | `git log --grep='(intent step 2)'` | strict build; `ArchiveViewIntentSourceTests` 2 and every AppCore `*SourceTests` (95), 0 failures; a planted `viewModel.viewMode = .list` failed the guard at `ArchiveBoardView.swift:47`, then was removed |
 | 3 One status gate in the song detail | not started | | |
 | 4 Notes Undo in the coordinator | not started | | |
 | 5 Docs, full gates, live check | not started | | |
