@@ -152,6 +152,11 @@ struct AppComposition {
                 settingsStore: settingsStore
             )
         }()
+        // One locator for every helper consumer, from this run's Tools settings.
+        let helperHealth = HelperToolHealth(
+            probe: HelperToolProbe(locator: HelperToolLocator(runtime: runtime)),
+            appSettings: appSettings
+        )
         let context = ToolContext(
             settingsStore: settingsStore,
             preferences: preferences,
@@ -165,7 +170,8 @@ struct AppComposition {
             appSettings: appSettings,
             router: quickAccessRouter,
             recoveryService: recoveryService,
-            settingsRepair: settingsRepair
+            settingsRepair: settingsRepair,
+            helperHealth: helperHealth
         )
         let archiveRootWatcher: any ArchiveRootWatching =
             runtime.disableArchiveWatcher
@@ -192,8 +198,10 @@ struct AppComposition {
             navigationHistory: navigationHistory
         )
         let helperSetup = HelperToolSetupModel(
+            locator: helperHealth.locator,
             settingsProvider: { appSettings.settings.helperTools },
-            jobStatusCenter: jobStatusCenter
+            jobStatusCenter: jobStatusCenter,
+            helperHealth: helperHealth
         )
         helperSetup.refresh()
         // First-launch rule, decided here before any scene exists (no side

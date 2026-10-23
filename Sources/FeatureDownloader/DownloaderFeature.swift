@@ -29,7 +29,7 @@ public struct DownloaderFeature: ToolFeature {
         if let viewModel = session.viewModel {
             return viewModel
         }
-        let helperProbe = HelperToolProbe(locator: .standard())
+        let helperProbe = context.helperHealth.probe
         let useCase = DownloaderUseCase(
             downloader: YtDlpDownloader(),
             helperProbe: helperProbe,

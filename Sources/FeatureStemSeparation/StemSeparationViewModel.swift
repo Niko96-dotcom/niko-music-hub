@@ -45,13 +45,12 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
     public init(
         context: ToolContext,
         service: StemSeparationService,
-        youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil,
-        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard())
+        youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil
     ) {
         self.context = context
         self.service = service
         self.youtubeWorkflow = youtubeWorkflow
-        self.helperProbe = helperProbe
+        self.helperProbe = context.helperHealth.probe
         self.recentOutputs = ToolRecentOutputs(store: context.outputInboxStore, toolID: StemSeparationService.toolID)
         loadSettings()
     }

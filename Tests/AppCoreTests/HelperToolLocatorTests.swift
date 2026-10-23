@@ -147,8 +147,8 @@ final class HelperToolLocatorTests: XCTestCase {
 
     func testIgnoreSystemHelpersEnvironmentEmptiesSystemDirectories() {
         let home = URL(fileURLWithPath: "/Users/tester", isDirectory: true)
-        let locator = HelperToolLocator.standard(
-            environment: [HelperToolLocator.ignoreSystemHelpersEnvironmentKey: "1"],
+        let locator = HelperToolLocator(
+            runtime: MusicHubRuntimeEnvironment(environment: [MusicHubRuntimeEnvironment.ignoreSystemHelpersKey: "1"]),
             homeDirectory: home
         )
 
@@ -158,8 +158,8 @@ final class HelperToolLocatorTests: XCTestCase {
     func testToolsDirectoryEnvironmentOverridesManagedRoot() {
         let home = URL(fileURLWithPath: "/Users/tester", isDirectory: true)
         let custom = URL(fileURLWithPath: "/tmp/custom-nmh-tools", isDirectory: true)
-        let locator = HelperToolLocator.standard(
-            environment: [HelperToolLocator.toolsDirectoryEnvironmentKey: custom.path],
+        let locator = HelperToolLocator(
+            runtime: MusicHubRuntimeEnvironment(environment: [MusicHubRuntimeEnvironment.helperToolsDirectoryKey: custom.path]),
             homeDirectory: home
         )
 

@@ -23,7 +23,7 @@ public enum DemucsMLXCommandBuilderError: LocalizedError, Equatable, Sendable {
 public struct DemucsMLXCommandBuilder: Sendable {
     private let locator: HelperToolLocator
 
-    public init(locator: HelperToolLocator = .standard()) {
+    public init(locator: HelperToolLocator) {
         self.locator = locator
     }
 
@@ -51,7 +51,7 @@ public struct DemucsMLXCommandBuilder: Sendable {
         return ExternalProcessRequest(
             executableURL: executableURL,
             arguments: arguments,
-            environment: locator.processEnvironment(settings: settings)
+            environment: locator.processEnvironment(settings: settings, base: ProcessInfo.processInfo.environment)
         )
     }
 }

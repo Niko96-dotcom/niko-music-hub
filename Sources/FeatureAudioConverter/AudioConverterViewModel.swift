@@ -31,14 +31,17 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         context: ToolContext,
         scanner: AudioFileIntakeScanner = AudioFileIntakeScanner(),
         batchUseCase: BatchAudioConversionUseCase? = nil,
-        outputFileNamer: OutputFileNamer = OutputFileNamer(),
-        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard())
+        outputFileNamer: OutputFileNamer = OutputFileNamer()
     ) {
+        let helperProbe = context.helperHealth.probe
         self.context = context
         self.scanner = scanner
         self.batchUseCase = batchUseCase ?? BatchAudioConversionUseCase(
             settingsStore: context.settingsStore,
-            outputInboxStore: context.outputInboxStore
+            outputInboxStore: context.outputInboxStore,
+            converterFactory: { settings in
+                AudioConversionPipeline(helperSettings: settings.helperTools, helperProbe: helperProbe)
+            }
         )
         self.outputFileNamer = outputFileNamer
         self.helperProbe = helperProbe

@@ -33,6 +33,8 @@ public struct ToolContext: Sendable {
     public let recoveryService: ProjectVaultRecoveryService?
     /// Explicit repair for settings that no longer decode (see `SettingsRepairModel`).
     public let settingsRepair: SettingsRepairModel
+    /// What each helper (yt-dlp, FFmpeg, demucs-mlx) can do now, and its locator.
+    public let helperHealth: HelperToolHealth
 
     public init(
         settingsStore: any SettingsStore,
@@ -47,7 +49,8 @@ public struct ToolContext: Sendable {
         appSettings: AppSettingsObserver? = nil,
         router: QuickAccessRouter? = nil,
         recoveryService: ProjectVaultRecoveryService? = nil,
-        settingsRepair: SettingsRepairModel? = nil
+        settingsRepair: SettingsRepairModel? = nil,
+        helperHealth: HelperToolHealth? = nil
     ) {
         self.settingsStore = settingsStore
         self.preferences = preferences
@@ -62,5 +65,9 @@ public struct ToolContext: Sendable {
         self.router = router ?? QuickAccessRouter()
         self.recoveryService = recoveryService
         self.settingsRepair = settingsRepair ?? SettingsRepairModel(store: settingsStore, backupDirectory: nil)
+        self.helperHealth = helperHealth ?? HelperToolHealth(
+            probe: HelperToolProbe(locator: HelperToolLocator(runtime: .current)),
+            appSettings: self.appSettings
+        )
     }
 }

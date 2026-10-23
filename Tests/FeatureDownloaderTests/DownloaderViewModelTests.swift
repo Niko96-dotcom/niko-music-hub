@@ -703,7 +703,7 @@ final class DownloaderViewModelTests: XCTestCase {
             fileActions: FixtureFileActions(),
             diagnostics: FixtureDiagnostics()
         )
-        let viewModel = DownloaderViewModel(context: context, useCase: useCase)
+        let viewModel = DownloaderViewModel(context: context, useCase: useCase, helperProbe: context.helperHealth.probe)
         viewModel.urlText = "https://example.com/audio"
         viewModel.downloadState = .readyToDownload
         viewModel.startDownload()
@@ -1264,7 +1264,10 @@ final class DownloaderViewModelTests: XCTestCase {
         outputInboxStore: any OutputInboxStore,
         jobStatusCenter: ShellJobStatusCenter? = nil,
         preferences: any PreferenceStore = InMemoryPreferenceStore(),
-        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard()),
+        helperProbe: HelperToolProbe = HelperToolProbe(locator: HelperToolLocator(
+            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+            systemDirectories: []
+        )),
         debounceDuration: Duration = .milliseconds(500)
     ) -> DownloaderViewModel {
         let center = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)

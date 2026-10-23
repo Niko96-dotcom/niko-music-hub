@@ -38,9 +38,6 @@ public enum HelperTool: String, CaseIterable, Sendable {
 }
 
 public struct HelperToolLocator: Sendable {
-    public static let toolsDirectoryEnvironmentKey = "NIKO_MUSIC_HUB_TOOLS_DIR"
-    public static let ignoreSystemHelpersEnvironmentKey = "NIKO_MUSIC_HUB_IGNORE_SYSTEM_HELPERS"
-
     public let managedRoot: URL
     public let systemDirectories: [URL]
     private let isExecutable: @Sendable (String) -> Bool
@@ -61,36 +58,27 @@ public struct HelperToolLocator: Sendable {
         self.isExecutable = isExecutable
     }
 
-    public static func standard(
-        environment: [String: String] = ProcessInfo.processInfo.environment,
+    /// The app's locator: the run's Tools folder or the one in Application
+    /// Support, then the usual system folders (none when the run ignores them).
+    /// Built once by `AppComposition` and shared through `HelperToolHealth`.
+    public init(
+        runtime: MusicHubRuntimeEnvironment,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
-    ) -> HelperToolLocator {
-        let managedRoot: URL
-        if let override = environment[toolsDirectoryEnvironmentKey], !override.isEmpty {
-            managedRoot = URL(fileURLWithPath: override, isDirectory: true)
-        } else {
-            managedRoot = homeDirectory
-                .appendingPathComponent("Library", isDirectory: true)
-                .appendingPathComponent("Application Support", isDirectory: true)
-                .appendingPathComponent("Niko Music Hub", isDirectory: true)
-                .appendingPathComponent("Tools", isDirectory: true)
-        }
-
-        let systemDirectories: [URL]
-        if environment[ignoreSystemHelpersEnvironmentKey] == "1" {
-            systemDirectories = []
-        } else {
-            systemDirectories = [
-                URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true),
-                URL(fileURLWithPath: "/usr/local/bin", isDirectory: true),
-                URL(fileURLWithPath: "/opt/local/bin", isDirectory: true),
-                homeDirectory
-                    .appendingPathComponent(".local", isDirectory: true)
-                    .appendingPathComponent("bin", isDirectory: true),
-            ]
-        }
-
-        return HelperToolLocator(managedRoot: managedRoot, systemDirectories: systemDirectories)
+    ) {
+        let managedRoot = runtime.helperToolsDirectoryURL ?? homeDirectory
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("Niko Music Hub", isDirectory: true)
+            .appendingPathComponent("Tools", isDirectory: true)
+        let systemDirectories = runtime.ignoresSystemHelpers ? [] : [
+            URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true),
+            URL(fileURLWithPath: "/usr/local/bin", isDirectory: true),
+            URL(fileURLWithPath: "/opt/local/bin", isDirectory: true),
+            homeDirectory
+                .appendingPathComponent(".local", isDirectory: true)
+                .appendingPathComponent("bin", isDirectory: true),
+        ]
+        self.init(managedRoot: managedRoot, systemDirectories: systemDirectories)
     }
 
     public var candidateDirectories: [URL] {
@@ -140,9 +128,11 @@ public struct HelperToolLocator: Sendable {
         return Self.deduplicated(ordered)
     }
 
+    /// `base` is the environment the helper inherits; its PATH gets the
+    /// helper folders first.
     public func processEnvironment(
         settings: HelperToolSettings,
-        base: [String: String] = ProcessInfo.processInfo.environment
+        base: [String: String]
     ) -> [String: String] {
         let searchPaths = searchDirectories(settings: settings).map(\.path)
         let basePathValue = base["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"

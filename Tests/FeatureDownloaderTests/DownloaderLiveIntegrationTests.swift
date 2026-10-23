@@ -101,7 +101,8 @@ final class DownloaderLiveIntegrationTests: XCTestCase {
     }
 
     private static func resolveFfmpegLocationURL() -> URL? {
-        DownloaderHelperToolResolver.ffmpegLocationURL(settings: HelperToolSettings())
+        // Live test: the machine's helpers, as the app finds them.
+        DownloaderHelperToolResolver.ffmpegLocationURL(settings: HelperToolSettings(), locator: HelperToolLocator(runtime: .current))
     }
 
     private static func helperSearchDirectories(for ytDlpURL: URL) -> [URL] {

@@ -6,7 +6,10 @@ import XCTest
 @MainActor
 final class HelperToolSetupModelTests: XCTestCase {
     func testInitialStatesAreChecking() {
-        let model = HelperToolSetupModel(settingsProvider: { HelperToolSettings() })
+        let model = HelperToolSetupModel(
+            locator: HelperToolLocator(managedRoot: URL(fileURLWithPath: "/nonexistent-managed"), systemDirectories: []),
+            settingsProvider: { HelperToolSettings() }
+        )
 
         XCTAssertEqual(model.states[.downloadAndConvert], .checking)
         XCTAssertEqual(model.states[.stemSeparation], .checking)
@@ -181,6 +184,37 @@ final class HelperToolSetupModelTests: XCTestCase {
         XCTAssertEqual(model.installGeneration, 1)
     }
 
+    /// Every surface reads helper status from `HelperToolHealth`; an install
+    /// tells it, so a Downloader that showed "missing" sees the new yt-dlp.
+    func testSuccessfulInstallTellsHelperHealth() async throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let locator = HelperToolLocator(
+            managedRoot: root.appendingPathComponent("Tools", isDirectory: true),
+            systemDirectories: []
+        )
+        let store = UserDefaultsSettingsStore(
+            userDefaults: try XCTUnwrap(UserDefaults(suiteName: "HelperToolSetupModelTests.\(UUID())")),
+            key: "settings"
+        )
+        let health = HelperToolHealth(
+            probe: HelperToolProbe(runner: VersionAnsweringRunner(), referenceDate: Date(timeIntervalSince1970: 1_800_000_000), locator: locator),
+            appSettings: AppSettingsObserver(store: store)
+        )
+        health.check(.ytDlp)
+        try await waitUntil { health.statuses[.ytDlp] == .missing }
+        let model = HelperToolSetupModel(
+            locator: locator,
+            installer: HelperToolInstaller(locator: locator, downloader: ChecksummedSetupDownloader(), processRunner: ExtractingSetupRunner()),
+            settingsProvider: { HelperToolSettings() },
+            helperHealth: health
+        )
+
+        model.install(.downloadAndConvert)
+
+        try await waitUntil { health.statuses[.ytDlp] == .ready(version: "2027.01.01") }
+    }
+
     func testStemCancellationAfterPublicationAndDuringWarmupIsRetryable() async throws {
         for phase in StemSetupGateRunner.Phase.allCases {
             let root = try makeTempRoot()
@@ -217,6 +251,14 @@ final class HelperToolSetupModelTests: XCTestCase {
             .appendingPathComponent("HelperToolSetupModelTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(2)
+        while !condition() {
+            guard Date() < deadline else { return XCTFail("condition did not hold within two seconds") }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
     }
 
     private func waitUntilNotInstalling(_ model: HelperToolSetupModel) async throws {
@@ -326,5 +368,12 @@ private final class ExtractingSetupRunner: StreamingExternalProcessRunning, @unc
         onStandardError: @escaping @Sendable (String) -> Void
     ) async throws -> ExternalProcessResult {
         try await run(request)
+    }
+}
+
+/// Answers every helper's version check with a current yt-dlp version.
+private struct VersionAnsweringRunner: ExternalProcessRunning {
+    func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
+        ExternalProcessResult(exitCode: 0, standardOutput: "2027.01.01\n", standardError: "")
     }
 }

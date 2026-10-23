@@ -25,9 +25,7 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
     public init(
         settingsStore: any SettingsStore,
         outputInboxStore: any OutputInboxStore,
-        converterFactory: @escaping AudioConversionPipelineFactory = { settings in
-            AudioConversionPipeline(helperSettings: settings.helperTools)
-        }
+        converterFactory: @escaping AudioConversionPipelineFactory
     ) {
         self.settingsStore = settingsStore
         self.outputInboxStore = outputInboxStore

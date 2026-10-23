@@ -5,7 +5,7 @@ enum DownloaderHelperToolResolver {
     static func ffmpegLocationURL(
         settings: HelperToolSettings,
         fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
-        locator: HelperToolLocator = .standard()
+        locator: HelperToolLocator
     ) -> URL? {
         _ = fileExists
         return locator.resolve(.ffmpeg, settings: settings)?.deletingLastPathComponent()
@@ -14,7 +14,7 @@ enum DownloaderHelperToolResolver {
     static func helperSearchDirectories(
         settings: HelperToolSettings,
         fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
-        locator: HelperToolLocator = .standard()
+        locator: HelperToolLocator
     ) -> [URL] {
         _ = fileExists
         return locator.searchDirectories(settings: settings)
@@ -41,7 +41,7 @@ enum DownloaderHelperToolResolver {
         settings: HelperToolSettings,
         base: [String: String] = ProcessInfo.processInfo.environment,
         fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
-        locator: HelperToolLocator = .standard()
+        locator: HelperToolLocator
     ) -> [String: String]? {
         _ = fileExists
         return locator.processEnvironment(settings: settings, base: base)

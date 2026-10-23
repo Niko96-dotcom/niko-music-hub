@@ -86,6 +86,10 @@ struct StemSeparationViewModelTests {
         let jobRunner = JobRunner()
         let processRunner = StubStemProcessRunner()
         let backend = DemucsMLXBackend(
+            commandBuilder: DemucsMLXCommandBuilder(locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: []
+            )),
             runner: processRunner,
             settingsProvider: {
                 try settingsStore.loadSettings().helperTools
@@ -367,7 +371,11 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            helperHealth: HelperToolHealth(
+                probe: HelperToolProbe(locator: emptyLocator),
+                appSettings: AppSettingsObserver(store: settingsStore)
+            )
         )
         let backend = MockStemSeparationBackend()
         backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
@@ -375,8 +383,7 @@ struct StemSeparationViewModelTests {
         let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
         let vm = StemSeparationViewModel(
             context: context,
-            service: service,
-            helperProbe: HelperToolProbe(locator: emptyLocator)
+            service: service
         )
         _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
         #expect(vm.canStart == true)
@@ -414,13 +421,16 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: runner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            helperHealth: HelperToolHealth(
+                probe: HelperToolProbe(locator: emptyLocator),
+                appSettings: AppSettingsObserver(store: settingsStore)
+            )
         )
         let vm = StemSeparationViewModel(
             context: context,
             service: service,
-            youtubeWorkflow: workflow,
-            helperProbe: HelperToolProbe(locator: emptyLocator)
+            youtubeWorkflow: workflow
         )
         vm.youtubeURLText = "https://youtu.be/test"
         #expect(vm.canStartYouTube == true)
@@ -460,15 +470,18 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            helperHealth: HelperToolHealth(
+                probe: HelperToolProbe(runner: FailingRunner(), locator: fixtureLocator),
+                appSettings: AppSettingsObserver(store: settingsStore)
+            )
         )
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
         let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
         let vm = StemSeparationViewModel(
             context: context,
-            service: service,
-            helperProbe: HelperToolProbe(runner: FailingRunner(), locator: fixtureLocator)
+            service: service
         )
         vm.refreshHelperHealth()
         for _ in 0..<100 where vm.helperNeedsSetup == false {
@@ -640,12 +653,16 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            helperHealth: HelperToolHealth(
+                probe: readyChecker,
+                appSettings: AppSettingsObserver(store: settingsStore)
+            )
         )
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: "custom helper down XYZ", reason: .helperUnavailable)
         let service = StemSeparationService(backend: backend, outputInboxStore: inbox, jobRunner: jobRunner)
-        let vm = StemSeparationViewModel(context: context, service: service, helperProbe: readyChecker)
+        let vm = StemSeparationViewModel(context: context, service: service)
         _ = vm.handleDrop(urls: [URL(fileURLWithPath: "/Users/music/song.wav")])
         vm.startSeparation()
         for _ in 0..<200 where vm.isRunning {

@@ -16,7 +16,7 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
         ffmpegConverterFactory: FFmpegConverterFactory? = {
             FFmpegAudioConverter(ffmpegURL: $0)
         },
-        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard())
+        helperProbe: HelperToolProbe
     ) {
         self.native = native
         self.helperSettings = helperSettings

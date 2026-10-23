@@ -26,6 +26,8 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
     private let installer: HelperToolInstaller
     private let settingsProvider: @MainActor () -> HelperToolSettings
     private let jobStatusCenter: ShellJobStatusCenter?
+    /// Told after every finished install, so every surface sees the new helpers.
+    private let helperHealth: HelperToolHealth?
     private var installTask: Task<Void, Never>?
     /// Runs whose Task has not returned yet. A cancelled run still unwinds
     /// (staging removal, helper teardown), so quit waits for it (ADR-019).
@@ -37,15 +39,17 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
     private var installRunID: UInt64 = 0
 
     public init(
-        locator: HelperToolLocator = .standard(),
+        locator: HelperToolLocator,
         installer: HelperToolInstaller? = nil,
         settingsProvider: @escaping @MainActor () -> HelperToolSettings,
-        jobStatusCenter: ShellJobStatusCenter? = nil
+        jobStatusCenter: ShellJobStatusCenter? = nil,
+        helperHealth: HelperToolHealth? = nil
     ) {
         self.locator = locator
         self.installer = installer ?? HelperToolInstaller(locator: locator)
         self.settingsProvider = settingsProvider
         self.jobStatusCenter = jobStatusCenter
+        self.helperHealth = helperHealth
     }
 
     /// Synchronous file checks only. Bundles currently installing keep their progress.
@@ -174,6 +178,7 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
             states[bundle] = .checking
             refresh()
             installGeneration += 1
+            helperHealth?.helpersChanged()
         } catch is CancellationError {
             // A run cancelled and replaced by a newer install must not reset the
             // row the newer run is now driving.

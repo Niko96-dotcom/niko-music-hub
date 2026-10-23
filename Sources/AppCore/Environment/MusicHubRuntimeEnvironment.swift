@@ -14,6 +14,10 @@ public struct MusicHubRuntimeEnvironment: Sendable, Equatable {
     public static let bookmarkProofModeKey = "NIKO_MUSIC_HUB_BOOKMARK_PROOF_MODE"
     public static let bookmarkProofActiveRootKey = "NIKO_MUSIC_HUB_BOOKMARK_PROOF_ACTIVE_ROOT"
     public static let bookmarkProofArchiveRootKey = "NIKO_MUSIC_HUB_BOOKMARK_PROOF_ARCHIVE_ROOT"
+    /// A Tools folder for this run instead of Application Support (E2E, `verify-niko-music-hub`).
+    public static let helperToolsDirectoryKey = "NIKO_MUSIC_HUB_TOOLS_DIR"
+    /// "1": find helpers only in the saved paths and the Tools folder, never in system folders.
+    public static let ignoreSystemHelpersKey = "NIKO_MUSIC_HUB_IGNORE_SYSTEM_HELPERS"
 
     public let dryRunOpen: Bool
     public let fixtureRootURL: URL?
@@ -26,6 +30,8 @@ public struct MusicHubRuntimeEnvironment: Sendable, Equatable {
     public let bookmarkProofMode: String?
     public let bookmarkProofActiveRootURL: URL?
     public let bookmarkProofArchiveRootURL: URL?
+    public let helperToolsDirectoryURL: URL?
+    public let ignoresSystemHelpers: Bool
 
     public var usesFixtureRoot: Bool { fixtureRootURL != nil }
 
@@ -42,6 +48,8 @@ public struct MusicHubRuntimeEnvironment: Sendable, Equatable {
         bookmarkProofMode = environment[Self.bookmarkProofModeKey]
         bookmarkProofActiveRootURL = Self.directoryURL(for: environment[Self.bookmarkProofActiveRootKey])
         bookmarkProofArchiveRootURL = Self.directoryURL(for: environment[Self.bookmarkProofArchiveRootKey])
+        helperToolsDirectoryURL = Self.directoryURL(for: environment[Self.helperToolsDirectoryKey])
+        ignoresSystemHelpers = environment[Self.ignoreSystemHelpersKey] == "1"
     }
 
     /// Snapshot of the process environment at call time (safe for tests that `setenv` before init).

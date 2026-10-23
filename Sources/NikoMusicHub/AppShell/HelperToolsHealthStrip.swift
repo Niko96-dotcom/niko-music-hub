@@ -105,7 +105,7 @@ struct HelperToolsHealthStrip: View {
 
     private func refresh() async {
         let helperSettings = context.appSettings.settings.helperTools
-        let probe = HelperToolProbe(locator: .standard())
+        let probe = context.helperHealth.probe
 
         let ytDlp = await probe.status(of: .ytDlp, settings: helperSettings)
         let ffmpeg = await probe.status(of: .ffmpeg, settings: helperSettings)

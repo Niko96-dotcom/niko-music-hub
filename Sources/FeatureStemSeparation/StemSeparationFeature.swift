@@ -31,7 +31,9 @@ public struct StemSeparationFeature: ToolFeature {
             return viewModel
         }
         let settingsStore = context.settingsStore
+        let helperProbe = context.helperHealth.probe
         let backend = DemucsMLXBackend(
+            commandBuilder: DemucsMLXCommandBuilder(locator: helperProbe.locator),
             settingsProvider: {
                 try settingsStore.loadSettings().helperTools
             }
@@ -41,7 +43,6 @@ public struct StemSeparationFeature: ToolFeature {
             outputInboxStore: context.outputInboxStore,
             jobRunner: context.jobRunner
         )
-        let helperProbe = HelperToolProbe(locator: .standard())
         let downloaderUseCase = DownloaderUseCase(
             downloader: YtDlpDownloader(),
             helperProbe: helperProbe,

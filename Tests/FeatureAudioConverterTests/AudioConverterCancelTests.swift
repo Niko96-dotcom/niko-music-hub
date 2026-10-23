@@ -160,7 +160,11 @@ final class AudioConverterCancelTests: XCTestCase {
             ffmpegConverterFactory: { _ in
                 factoryCalls.set()
                 return ThrowingConverter(error: AudioConversionError.conversionFailed("unused"))
-            }
+            },
+            helperProbe: HelperToolProbe(locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: []
+            ))
         )
         let request = ConversionRequest(
             sourceURL: URL(fileURLWithPath: "/tmp/Canceled.flac"),

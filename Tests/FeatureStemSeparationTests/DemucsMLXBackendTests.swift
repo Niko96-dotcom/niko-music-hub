@@ -225,7 +225,13 @@ struct DemucsMLXBackendTests {
             outputFolderURL: makeOutputFolder(),
             preset: .fast4
         )
-        let backend = DemucsMLXBackend(settingsProvider: { throw Unreadable() })
+        let backend = DemucsMLXBackend(
+            commandBuilder: DemucsMLXCommandBuilder(locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: []
+            )),
+            settingsProvider: { throw Unreadable() }
+        )
 
         let result = await backend.separate(request: request) { _, _ in }
 

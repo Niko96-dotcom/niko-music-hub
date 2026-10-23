@@ -79,7 +79,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
     public init(
         context: ToolContext,
         useCase: any DownloaderUseCaseRunning,
-        helperProbe: HelperToolProbe = HelperToolProbe(locator: .standard()),
+        helperProbe: HelperToolProbe,
         formatSelection: DownloadFormatSelection? = nil,
         debounceDuration: Duration = .milliseconds(500)
     ) {

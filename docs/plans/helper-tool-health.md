@@ -22,7 +22,7 @@ commit with `git log --grep='(helpers step N)'`.
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates passed on `4e94856`; `7646b88` changed docs only; no re-run |
 | 1 One probe in AppCore | done | `git log --grep='(helpers step 1)'` | strict build; `AppCoreTests` 845 (2 skipped), Downloader 191 (2 skipped), Converter 89, Stem Separation 85 (Swift Testing), 0 failures; each tool suite lost exactly its moved checker tests |
-| 2 One status owner and one locator | not started | | |
+| 2 One status owner and one locator | done | `git log --grep='(helpers step 2)'` | strict build; `AppCoreTests` 852 (2 skipped), Downloader 191 (2 skipped), Converter 89, Stem Separation 85, 0 failures; with the Set Up model's call to the owner removed, `testSuccessfulInstallTellsHelperHealth` failed |
 | 3 Tools and the strip read the owner | not started | | |
 | 4 Docs, full gates, live check | not started | | |
 
@@ -46,6 +46,24 @@ Record every deviation from the steps below here, numbered, with its reason.
    Step 2 removes the `.standard()` defaults.
 6. **Step 1: `outdated` means usable outside yt-dlp.** Only yt-dlp is ever outdated; the Converter's FFmpeg fallback and
    Stem Separation treat `.outdated` like `.ready` (the helper answered).
+7. **Step 2: the router signal goes in step 3.** Stem Separation listens to `router.helperToolsChangeCount` until it
+   reads the owner in step 3, so `helperToolsChangeCount`, `noteHelperToolsChanged()` and the shell's `onChange` stay
+   one more step.
+8. **Step 2: a change keeps the last status.** The sketch said a change resets a status to unknown. The owner keeps the
+   last answer until the new probe answers, so a surface never flashes back to "checking".
+9. **Step 2: `HelperToolHealth` has a plain init and `@MainActor` methods,** like `AppSettingsObserver`, not a
+   `@MainActor` class: `ToolContext.init` is not main-actor isolated and builds a default owner (from
+   `MusicHubRuntimeEnvironment.current`) for tests that pass none. `AppComposition` passes the real one.
+10. **Step 2: the Converter and Stem Separation view models take the probe from the context already.** Their
+    `helperProbe` init parameters went in this step, which saved editing their tests twice. `BatchAudioConversionUseCase`
+    now requires its converter factory; the Converter view model builds the default with the shared probe.
+11. **Step 2: tests stop finding the machine's helpers by default.** The Converter, Downloader and stem test helpers
+    use a locator that finds nothing; only the opt-in live Downloader test uses `HelperToolLocator(runtime: .current)`.
+12. **Step 2: the inherited environment is explicit.** `HelperToolLocator.processEnvironment(settings:base:)` takes the
+    environment a helper inherits; the demucs-mlx command builder passes `ProcessInfo.processInfo.environment`, as the
+    Downloader's resolver already did. That is the child's environment, not a setting.
+13. **Step 2: the install test lives in `HelperToolSetupModelTests`,** next to its install fakes:
+    `testSuccessfulInstallTellsHelperHealth` (yt-dlp turns from missing to ready after Set Up installs it).
 
 ## Terms
 
