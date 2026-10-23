@@ -25,7 +25,7 @@ commit with `git log --grep='(catalog step N)'`.
 | 2 Storage moves into `SongCatalog` | done | `git log --grep='(catalog step 2)'` | strict build; `FeatureArchiveBrowserTests` 642 and AppCore `*SourceTests` 93, 0 failures; no test edited |
 | 3 Scan and cache load through one writer | done | `git log --grep='(catalog step 3)'` | strict build; `FeatureArchiveBrowserTests` 643 and AppCore `*SourceTests` 93, 0 failures; the new B1 test failed with an unprojected cache load, then passed |
 | 4 Vault reprojection and New Song | done | `git log --grep='(catalog step 4)'` | strict build; `FeatureArchiveBrowserTests` 646 and AppCore `*SourceTests` 93, 0 failures; B2 and B4 tests failed with the old behavior planted, then passed |
-| 5 Metadata edits and collaborator removal | not started | | |
+| 5 Metadata edits and collaborator removal | done | `git log --grep='(catalog step 5)'` | strict build; `FeatureArchiveBrowserTests` 650 and AppCore `*SourceTests` 93, 0 failures; B3 and B6 tests failed with the old behavior planted, then passed |
 | 6 Root reset and per-song caches | not started | | |
 | 7 Tests seed through the writer; the old writers go | not started | | |
 | 8 Docs, full gates, benchmark, live check | not started | | |
@@ -49,6 +49,11 @@ Record every deviation from the steps below here, numbered, with its reason.
    corrupt, so the repair-state sync must follow it; the sync now runs inside `.add`. `SongCatalog` gained
    `scannedAdding(_:)` (the "add by title" rule, pure and tested), and `rebuildProjectVaultCatalog()` is gone a step
    early: no test called it.
+5. **Step 5: an edit that moves the selected song out of the filter deselects it, as today.** The plan said the
+   edited song stays selected. A probe on the step 4 code showed the opposite: the browse recompute inside
+   `mutateCatalog` clears the selection first, and `replaceSong` re-selected only a song that was still selected. So
+   `.replace` needs no selection step of its own; requirement 5, the follow-up table and the live check now describe
+   today's rule, and `ArchiveCatalogEditTests` pins both cases.
 
 ## Terms
 
@@ -90,8 +95,8 @@ Other facts the design depends on:
   refresh while analytics is open. `applyScanFailure` also uses it without a catalog change (`+ScanHost.swift:105-113`).
   `ArchiveScanHost` requires it (`ArchiveScanOrchestrator.swift:30`), but the orchestrator never calls it.
 - The browse recompute reconciles the selection and clears a selected song that left the filtered list
-  (`+Browse.swift:130-135`). `replaceSong` then selects the edited song again. So today an edited song stays selected
-  even when the edit moves it out of the current filter.
+  (`+Browse.swift:130-135`). `replaceSong` re-selects the edited song only while it is still selected, so an edit
+  that moves the selected song out of the current filter deselects it (checked at runtime, revision 5).
 - The projection removes archived paths from the baseline and adds archive-only songs when they are shown
   (`ArchiveVaultObservation.swift:292-339`). It can read the metadata store, so it stays outside a pure value type.
 - The delayed index persist writes the baseline (`ArchiveMetadataEditingCoordinator.swift:452`).
@@ -180,7 +185,6 @@ Two parts with different jobs:
    | --- | --- | --- |
    | Rebuild the Vault card cache for the new visible list, then `objectWillChange.send()`, then store | visible list changed | `songs.willSet` |
    | Browse recompute (it reconciles the selection), intelligence refresh, analytics refresh while open | any change | `mutateCatalog` |
-   | Keep an edited selected song selected with its new value | `.replace` | `replaceSong` |
    | Invalidate mixdown analysis and the CPR plugin summary of changed songs whose main preview or effective CPR changed; drop removed IDs; restart the selected song's analysis or plugin list when invalidated | any change | scan apply only; root reset by hand |
    | Repair-state sync | `.load`, `.rescan`, `.add` | the same writers |
    | Index persist now (`scheduleIndexPersist(afterNanoseconds: 0)`) | `.rescan`, `.add`, and `.reproject` when the baseline changed | scan and New Song only |
@@ -286,8 +290,8 @@ No new module or module edge. `SongCatalog` imports only Foundation and NikoMusi
 4. **The 10k work survives.** Equality short-cuts, value sharing before the projection (the scan keeps today's order:
    dedupe and share against the held baseline, then project), per-song work only for changed songs, and
    `OffMainRelease` stay. Step 8 measures it.
-5. **Selection.** An edited song stays selected with its new value even when the edit moves it out of the filtered
-   list. Every other edit keeps today's rule (the browse recompute clears a selection that left the filtered list).
+5. **Selection.** Every edit keeps today's rule: the browse recompute updates a selected song to its new value and
+   clears a selection that left the filtered list (revision 5).
 6. **Index persist reads the baseline,** as today.
 7. **Unchanged contracts.** `applyCatalogScanUpdate(_:roots:)`, the metadata coordinator's host closures (reads stay
    `currentSongs`/`currentScannedSongs`), the views, `ArchiveScanHost.scannedSongs`.
@@ -371,8 +375,8 @@ step, tagged `(catalog step N)` in the subject.
 - `.replace` replaces `replaceSong`. The metadata host's `applyReplacement` calls `.replace([song])`; collaborator
   removal calls `.replace(updatedSongs)` once (B3).
 - Tests: removing a collaborator from three songs runs one browse recompute (B3); an equal replacement publishes
-  nothing (B6, count `objectWillChange`); an edit that moves the selected song out of the filtered list keeps it
-  selected with the new value (requirement 5).
+  nothing (B6, count `objectWillChange`); an edited selected song stays selected with its new value, and one that
+  leaves the filtered list is deselected (requirement 5).
 - **Verify:** `B`, then `ARCH`.
 
 ### Step 6: Root reset and per-song caches
@@ -414,8 +418,8 @@ step, tagged `(catalog step N)` in the subject.
   - **Live check** with `verify-niko-music-hub`, in an isolated archive run:
     1. Relaunch: the board shows the fixture songs from the cache ("Loaded … from cache"), then the same songs after
        the rescan.
-    2. Change a song's title or status in the song detail: the card shows it; a status change that moves the selected
-       song off the current shelf keeps it selected.
+    2. Change a song's title or status in the song detail: the card shows it, and the song stays selected with the
+       new value.
     3. New Song: the draft appears once and is selected.
     4. Assign one collaborator to two songs, remove the collaborator: both cards lose it.
     5. Settings > Archive: add a second root with one copied song folder, then remove it: its song leaves the board.

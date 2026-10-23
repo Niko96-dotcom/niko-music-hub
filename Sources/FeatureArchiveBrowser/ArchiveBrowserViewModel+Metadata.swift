@@ -10,9 +10,9 @@ import NikoMusicCore
 // integration: user-created folder operation (`createNewSong`), root
 // authorization via `NewSongFolderCreator`, preview cache/audio-analysis
 // invalidation and view selection/playback, and Done authorization capture and
-// revoke (`revokeBoundDoneWork` + Vault queue). `replaceSong` stays here as the
-// catalog/selection applier invoked through the coordinator's
-// `applyReplacement` callback. Read-only peers (`metadataRepairSongIDs`,
+// revoke (`revokeBoundDoneWork` + Vault queue). The coordinator's
+// `applyReplacement` callback writes the catalog through
+// `applyCatalogEdit(.replace(_:))`. Read-only peers (`metadataRepairSongIDs`,
 // `workflowUndoManager`, `indexPersistTask`) live in the primary view-model
 // file with no writable forwards.
 
@@ -314,31 +314,4 @@ extension ArchiveBrowserViewModel {
     /// into the live catalog and updates the integrity warning.
     func repairSongMetadata(songIDs: [String]) {
         metadataEditing.repairSongMetadata(songIDs: songIDs)
-    }
-
-    /// Catalog/selection applier. Retained here as VM integration; invoked by
-    /// the coordinator through `applyReplacement` so browse recompute and
-    /// selection stay with the view model.
-    func replaceSong(_ updated: Song) {
-        mutateCatalog {
-            if let index = songs.firstIndex(where: { $0.id == updated.id }) {
-                var updatedSongs = songs
-                updatedSongs[index] = updated
-                songs = updatedSongs
-            }
-            if let index = scannedSongs.firstIndex(where: { $0.id == updated.id }) {
-                var updatedScannedSongs = scannedSongs
-                updatedScannedSongs[index] = updated
-                scannedSongs = updatedScannedSongs
-            } else if !isArchivedProject(updated) {
-                // Keep manually injected/test catalogs and newly-created local
-                // projects on the scan baseline as well. Archive-only projections
-                // are intentionally not promoted back into that baseline.
-                scannedSongs.append(updated)
-            }
-        }
-        if selectedSong?.id == updated.id {
-            selectedSong = updated
-        }
-    }
-}
+    }}

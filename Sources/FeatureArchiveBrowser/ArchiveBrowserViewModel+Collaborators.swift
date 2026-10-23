@@ -197,9 +197,8 @@ extension ArchiveBrowserViewModel {
                 return
             }
         }
-        for updated in updatedSongs {
-            replaceSong(updated)
-        }
+        // One edit for all songs: one browse recompute, not one per song.
+        applyCatalogEdit(.replace(updatedSongs))
         if !updatedSongs.isEmpty {
             scheduleDebouncedIndexPersist()
         }

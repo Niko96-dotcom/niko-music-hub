@@ -107,6 +107,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         case reproject
         /// New Song: added to the baseline by title, then projected.
         case add(Song)
+        /// Metadata edits and collaborator removal: songs replaced by id, in one
+        /// batch, without a projection.
+        case replace([Song])
     }
 
     /// The catalog's writer. Projects the edit through the Vault observation,
@@ -125,20 +128,25 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @discardableResult
     func applyCatalogEdit(_ edit: SongCatalogEdit) -> SongCatalogChange {
         var next = songCatalog
-        let baseline: [Song]
+        func project(_ baseline: [Song]) -> SongCatalogChange {
+            let projected = projectVaultCatalog(from: baseline)
+            return next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
+        }
+        let change: SongCatalogChange
         switch edit {
         case .load(let songs):
-            baseline = songs
+            change = project(songs)
         case .rescan(let songs):
             // Share before projecting, so the visible list shares the held values too.
-            baseline = next.sharingHeldValues(songs)
+            change = project(next.sharingHeldValues(songs))
         case .reproject:
-            baseline = next.scanned
+            change = project(next.scanned)
         case .add(let song):
-            baseline = next.scannedAdding(song)
+            change = project(next.scannedAdding(song))
+        case .replace(let songs):
+            // An archive-only projection is replaced in the visible list but never joins the baseline.
+            change = next.replace(songs, isArchiveOnly: isArchivedProject)
         }
-        let projected = projectVaultCatalog(from: baseline)
-        let change = next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
         if !change.isEmpty {
             if change.visibleChanged {
                 // Cards ask for their Project Vault state while SwiftUI reconciles a
@@ -160,6 +168,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             if change.scannedChanged {
                 scheduleIndexPersist(afterNanoseconds: 0)
             }
+        case .replace:
+            // `ArchiveMetadataEditingCoordinator` owns the delayed index persist of edits.
+            break
         }
         return change
     }
@@ -281,7 +292,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
                     self?.revokeBoundDoneWork(for: songID)
                 },
                 applyReplacement: { [weak self] updated in
-                    self?.replaceSong(updated)
+                    self?.applyCatalogEdit(.replace([updated]))
                 },
                 refreshSongDetailsWarning: { [weak self] warning in
                     self?.refreshSongDetailsWarning(warning)

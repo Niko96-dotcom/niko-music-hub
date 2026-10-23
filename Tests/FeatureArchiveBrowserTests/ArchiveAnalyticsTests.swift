@@ -127,6 +127,34 @@ final class ArchiveAnalyticsTests: XCTestCase {
         XCTAssertEqual(model.songs.filter { $0.id == created.id }.count, 1)
     }
 
+    /// Removing a collaborator from several songs is one catalog edit, so the open
+    /// analytics page refreshes once, not once per song (B3).
+    func testCollaboratorRemovalFromThreeSongsRefreshesOnce() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("analytics-collaborator-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+        let store = HistoryCountingStore()
+        let model = ArchiveBrowserViewModel(
+            context: TestToolContext.make(),
+            songMetadataStore: store,
+            collaboratorStore: try SQLiteCollaboratorStore(databaseURL: databaseURL)
+        )
+        let jamie = try XCTUnwrap(model.upsertCollaborator(name: "Jamie"))
+        model.applyCatalogEdit(.load([song("One"), song("Two"), song("Three")]))
+        for song in model.songs {
+            model.assignCollaborators(to: song, collaboratorIDs: [jamie.id])
+        }
+        XCTAssertEqual(model.songs.map(\.collaboratorIDs), [[jamie.id], [jamie.id], [jamie.id]])
+        model.showAnalytics()
+        let baselineReads = store.historyReadCount
+
+        model.requestRemoveCollaborator(jamie)
+        model.confirmRemoveCollaborator()
+
+        XCTAssertEqual(model.songs.map(\.collaboratorIDs), [[], [], []])
+        XCTAssertEqual(store.historyReadCount, baselineReads + 1, "one catalog edit, one analytics refresh")
+    }
+
     func testSearchAndSelectionWhileAnalyticsOpenAvoidHistoryReads() {
         let store = HistoryCountingStore()
         let model = ArchiveBrowserViewModel(
