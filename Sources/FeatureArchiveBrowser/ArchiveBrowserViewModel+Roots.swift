@@ -98,14 +98,14 @@ extension ArchiveBrowserViewModel {
         Task { await refreshProjectVaultSnapshots() }
         guard !runtime.usesFixtureRoot else {
             refreshProjectVaultPresentationContext()
-            rebuildProjectVaultCatalog()
+            applyCatalogEdit(.reproject)
             return
         }
         let previousRoots = roots.standardizedArchivePaths
         loadRootsFromSettings()
         refreshProjectVaultPresentationContext()
         guard previousRoots != roots.standardizedArchivePaths else {
-            rebuildProjectVaultCatalog()
+            applyCatalogEdit(.reproject)
             return
         }
         clearRootBoundArchiveState(statusMessage: roots.isEmpty ? nil : "Scanning your archive…")

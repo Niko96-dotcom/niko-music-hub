@@ -100,6 +100,33 @@ final class ArchiveAnalyticsTests: XCTestCase {
         )
     }
 
+    /// New Song is one catalog edit, so the open analytics page refreshes once (B4).
+    func testNewSongWhileAnalyticsOpenRefreshesOnce() throws {
+        unsetenv("NIKO_MUSIC_HUB_FIXTURE_ROOT")
+        setenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN", "1", 1)
+        defer { unsetenv("NIKO_MUSIC_HUB_DRY_RUN_OPEN") }
+        let archiveRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("analytics-new-song-\(UUID().uuidString)", isDirectory: true)
+        let draftRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("analytics-new-song-drafts-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: archiveRoot, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: archiveRoot)
+            try? FileManager.default.removeItem(at: draftRoot)
+        }
+        let store = HistoryCountingStore()
+        let model = ArchiveBrowserViewModel(context: TestToolContext.make(), songMetadataStore: store)
+        model.roots = [archiveRoot]
+        model.applyCatalogEdit(.load([song("Neon Hook")]))
+        model.showAnalytics()
+        let baselineReads = store.historyReadCount
+
+        let created = try model.createNewSong(request: NewSongRequest(name: "Fresh Draft", root: draftRoot, appNote: "test"))
+
+        XCTAssertEqual(store.historyReadCount, baselineReads + 1, "one catalog edit, one analytics refresh")
+        XCTAssertEqual(model.songs.filter { $0.id == created.id }.count, 1)
+    }
+
     func testSearchAndSelectionWhileAnalyticsOpenAvoidHistoryReads() {
         let store = HistoryCountingStore()
         let model = ArchiveBrowserViewModel(

@@ -342,24 +342,7 @@ final class ArchiveVaultObservationTests: XCTestCase {
         let keptSong = makeSong(in: harness.active, named: "Kept From Cache")
         let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [])
         try await waitUntil { runtime.snapshotsCalls >= 1 && runtime.dueCalls >= 1 }
-        let resolver = try XCTUnwrap(viewModel.vaultObservation.context?.generationReviewResolver)
-        let recordID = ProjectID()
-        let transferID = UUID()
-        let archived = ProjectVaultRuntimeSnapshot(
-            record: ProjectRecord(id: recordID, canonicalTitle: archivedSong.effectiveDisplayTitle, locations: []),
-            transfer: VaultTransferRecord(
-                id: transferID,
-                projectID: recordID,
-                sourceURL: archivedSong.folderPath,
-                stagingURL: archivedSong.folderPath.appendingPathComponent(".nmh-test-staging"),
-                destinationURL: resolver.archiveRootURL
-                    .appendingPathComponent("generations", isDirectory: true)
-                    .appendingPathComponent(recordID.description, isDirectory: true)
-                    .appendingPathComponent("generation-\(transferID.uuidString.lowercased())", isDirectory: true),
-                state: .archiveVerified
-            )
-        )
-        runtime.setServed([archived])
+        runtime.setServed([try archivedOnlySnapshot(of: archivedSong, in: viewModel)])
         _ = await viewModel.refreshProjectVaultSnapshots()
         XCTAssertEqual(viewModel.archivedProjectCount, 1, "fixture must be archived-only")
 
@@ -367,6 +350,53 @@ final class ArchiveVaultObservationTests: XCTestCase {
 
         XCTAssertEqual(viewModel.scannedSongs.map(\.id), [keptSong.id], "the archived path leaves the baseline")
         XCTAssertEqual(viewModel.songs.map(\.id), [keptSong.id], "archived projects stay hidden by default")
+    }
+
+    /// The index persist writes the baseline, so a reprojection that changes the
+    /// baseline persists it at once; one that changes nothing does not (B2).
+    func testReprojectionThatChangesTheBaselinePersistsTheIndex() async throws {
+        let harness = try makeHarness()
+        defer { harness.cleanup() }
+        let runtime = ObservationTestRuntime()
+        let archivedSong = makeSong(in: harness.active, named: "Archived Later")
+        let keptSong = makeSong(in: harness.active, named: "Kept Later")
+        let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [])
+        try await waitUntil { runtime.snapshotsCalls >= 1 && runtime.dueCalls >= 1 }
+        viewModel.roots = [harness.active]
+        viewModel.applyCatalogEdit(.load([archivedSong, keptSong]))
+        let beforeArchive = viewModel.indexPersistTask
+
+        runtime.setServed([try archivedOnlySnapshot(of: archivedSong, in: viewModel)])
+        _ = await viewModel.refreshProjectVaultSnapshots()
+
+        XCTAssertEqual(viewModel.scannedSongs.map(\.id), [keptSong.id])
+        let afterArchive = try XCTUnwrap(viewModel.indexPersistTask, "a changed baseline schedules an index persist")
+        XCTAssertNotEqual(afterArchive, beforeArchive)
+
+        _ = await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertEqual(viewModel.indexPersistTask, afterArchive, "an unchanged baseline persists nothing")
+    }
+
+    /// An archived-only snapshot for `song`: a verified transfer to a bound
+    /// generation path, with no Active copy left.
+    private func archivedOnlySnapshot(of song: Song, in viewModel: ArchiveBrowserViewModel) throws -> ProjectVaultRuntimeSnapshot {
+        let resolver = try XCTUnwrap(viewModel.vaultObservation.context?.generationReviewResolver)
+        let recordID = ProjectID()
+        let transferID = UUID()
+        return ProjectVaultRuntimeSnapshot(
+            record: ProjectRecord(id: recordID, canonicalTitle: song.effectiveDisplayTitle, locations: []),
+            transfer: VaultTransferRecord(
+                id: transferID,
+                projectID: recordID,
+                sourceURL: song.folderPath,
+                stagingURL: song.folderPath.appendingPathComponent(".nmh-test-staging"),
+                destinationURL: resolver.archiveRootURL
+                    .appendingPathComponent("generations", isDirectory: true)
+                    .appendingPathComponent(recordID.description, isDirectory: true)
+                    .appendingPathComponent("generation-\(transferID.uuidString.lowercased())", isDirectory: true),
+                state: .archiveVerified
+            )
+        )
     }
 
     // MARK: - Unavailable clear vs journal-failure preservation

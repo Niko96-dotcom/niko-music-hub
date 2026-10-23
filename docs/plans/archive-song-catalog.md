@@ -24,7 +24,7 @@ commit with `git log --grep='(catalog step N)'`.
 | 1 `SongCatalog` and its tests | done | `git log --grep='(catalog step 1)'` | strict build; `SongCatalogTests` 9, 0 failures |
 | 2 Storage moves into `SongCatalog` | done | `git log --grep='(catalog step 2)'` | strict build; `FeatureArchiveBrowserTests` 642 and AppCore `*SourceTests` 93, 0 failures; no test edited |
 | 3 Scan and cache load through one writer | done | `git log --grep='(catalog step 3)'` | strict build; `FeatureArchiveBrowserTests` 643 and AppCore `*SourceTests` 93, 0 failures; the new B1 test failed with an unprojected cache load, then passed |
-| 4 Vault reprojection and New Song | not started | | |
+| 4 Vault reprojection and New Song | done | `git log --grep='(catalog step 4)'` | strict build; `FeatureArchiveBrowserTests` 646 and AppCore `*SourceTests` 93, 0 failures; B2 and B4 tests failed with the old behavior planted, then passed |
 | 5 Metadata edits and collaborator removal | not started | | |
 | 6 Root reset and per-song caches | not started | | |
 | 7 Tests seed through the writer; the old writers go | not started | | |
@@ -45,6 +45,10 @@ Record every deviation from the steps below here, numbered, with its reason.
    songs can leave stale entries once every write goes through `applyCatalogEdit`).
 3. **Step 3: the scan records its persistence warning before the catalog write.** It used to come after the browse
    recompute. It still comes before the repair-state sync, which is the order that matters for the footer.
+4. **Step 4: New Song saves the new song's metadata before the catalog write.** `persistUserMetadata` can mark rows
+   corrupt, so the repair-state sync must follow it; the sync now runs inside `.add`. `SongCatalog` gained
+   `scannedAdding(_:)` (the "add by title" rule, pure and tested), and `rebuildProjectVaultCatalog()` is gone a step
+   early: no test called it.
 
 ## Terms
 

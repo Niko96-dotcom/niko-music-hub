@@ -102,6 +102,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         case load([Song])
         /// A scan result: unique by id and sharing the held values, then projected.
         case rescan([Song])
+        /// The baseline again through the projection: Vault snapshots, "Show
+        /// archived", Vault settings or roots changed.
+        case reproject
+        /// New Song: added to the baseline by title, then projected.
+        case add(Song)
     }
 
     /// The catalog's writer. Projects the edit through the Vault observation,
@@ -111,23 +116,29 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// - any change recomputes the browse results (they reconcile the
     ///   selection), refreshes intelligence and open analytics, and updates
     ///   the per-song caches;
-    /// - `.load` and `.rescan` sync the repair state; `.rescan` persists the
-    ///   index even when the songs are equal, because it carries the scan date.
+    /// - `.load`, `.rescan` and `.add` sync the repair state;
+    /// - `.rescan` and `.add` persist the index (a rescan even when the songs are
+    ///   equal, because the index carries the scan date), `.reproject` when the
+    ///   baseline changed (the index persist writes the baseline).
     ///
     /// Returns the change, so a writer can do the work only it knows about.
     @discardableResult
     func applyCatalogEdit(_ edit: SongCatalogEdit) -> SongCatalogChange {
         var next = songCatalog
-        let change: SongCatalogChange
+        let baseline: [Song]
         switch edit {
         case .load(let songs):
-            let projected = projectVaultCatalog(from: songs)
-            change = next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
+            baseline = songs
         case .rescan(let songs):
             // Share before projecting, so the visible list shares the held values too.
-            let projected = projectVaultCatalog(from: next.sharingHeldValues(songs))
-            change = next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
+            baseline = next.sharingHeldValues(songs)
+        case .reproject:
+            baseline = next.scanned
+        case .add(let song):
+            baseline = next.scannedAdding(song)
         }
+        let projected = projectVaultCatalog(from: baseline)
+        let change = next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
         if !change.isEmpty {
             if change.visibleChanged {
                 // Cards ask for their Project Vault state while SwiftUI reconciles a
@@ -142,9 +153,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         switch edit {
         case .load:
             syncMetadataRepairState()
-        case .rescan:
+        case .rescan, .add:
             syncMetadataRepairState()
             scheduleIndexPersist(afterNanoseconds: 0)
+        case .reproject:
+            if change.scannedChanged {
+                scheduleIndexPersist(afterNanoseconds: 0)
+            }
         }
         return change
     }

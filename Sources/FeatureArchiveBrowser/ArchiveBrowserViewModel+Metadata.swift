@@ -256,27 +256,14 @@ extension ArchiveBrowserViewModel {
         // failed read must not pause every song's edits — only the new one's.
         let newSongMerge = catalog.mergeUserMetadataForNewSong(created, collaborators: collaborators)
         created = newSongMerge.song
-        mutateCatalog {
-            var updatedScannedSongs = scannedSongs
-            if let index = updatedScannedSongs.firstIndex(where: { $0.id == created.id }) {
-                updatedScannedSongs[index] = created
-            } else {
-                updatedScannedSongs.append(created)
-                updatedScannedSongs.sort {
-                    $0.effectiveDisplayTitle.localizedCaseInsensitiveCompare($1.effectiveDisplayTitle) == .orderedAscending
-                }
-            }
-            scannedSongs = updatedScannedSongs
-        }
-        rebuildProjectVaultCatalog()
         if let warning = newSongMerge.warning {
             // Stored details for this path are unknown: never write defaults over them.
             recordPersistenceWarning(warning)
         } else if let warning = catalog.persistUserMetadata(for: [created]) {
             recordPersistenceWarning(warning)
         }
-        syncMetadataRepairState()
-        scheduleIndexPersist(afterNanoseconds: 0)
+        // One catalog write; its repair-state sync runs after the metadata save above.
+        applyCatalogEdit(.add(created))
         selectSong(created)
         if created.effectiveLatestCPR != nil {
             // The song exists on disk and in the catalog now. A failed open is

@@ -126,6 +126,15 @@ final class SongCatalogTests: XCTestCase {
                       "an unchanged scan hands back the held baseline")
     }
 
+    func testScannedAddingSortsANewSongByTitleAndReplacesAKnownOne() {
+        let alpha = song("Alpha"), charlie = song("Charlie")
+        let catalog = loaded([charlie, alpha])
+
+        XCTAssertEqual(catalog.scannedAdding(song("Bravo")).map(\.originalFolderName), ["Alpha", "Bravo", "Charlie"])
+        let renamedAlpha = song("Alpha", title: "Zulu")
+        XCTAssertEqual(catalog.scannedAdding(renamedAlpha), [charlie, renamedAlpha], "a known song keeps its place")
+    }
+
     func testRemoveAllReportsEveryVisibleID() {
         let a = song("A"), archived = song("Archived")
         var catalog = loaded([a])

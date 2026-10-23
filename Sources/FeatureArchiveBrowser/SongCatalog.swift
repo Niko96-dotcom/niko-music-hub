@@ -33,6 +33,21 @@ struct SongCatalog: Sendable {
         SongCatalogDeduplicator.sharingUnchangedValues(SongCatalogDeduplicator.uniqueByID(incoming), from: scanned)
     }
 
+    /// The baseline with `song` added: in place of a song with the same id, or
+    /// appended, with the baseline then sorted by display title (New Song).
+    func scannedAdding(_ song: Song) -> [Song] {
+        var baseline = scanned
+        if let index = baseline.firstIndex(where: { $0.id == song.id }) {
+            baseline[index] = song
+        } else {
+            baseline.append(song)
+            baseline.sort {
+                $0.effectiveDisplayTitle.localizedCaseInsensitiveCompare($1.effectiveDisplayTitle) == .orderedAscending
+            }
+        }
+        return baseline
+    }
+
     /// Replaces both lists. A list equal to the held one stays as held.
     mutating func replaceAll(scanned newScanned: [Song], visible newVisible: [Song]) -> SongCatalogChange {
         var change = SongCatalogChange()

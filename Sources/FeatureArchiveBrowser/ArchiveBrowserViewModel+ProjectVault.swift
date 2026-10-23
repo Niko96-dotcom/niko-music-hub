@@ -49,7 +49,7 @@ extension ArchiveBrowserViewModel {
     public func applyProjectVaultSettingsChange() {
         guard !runtime.usesFixtureRoot else {
             refreshProjectVaultPresentationContext()
-            rebuildProjectVaultCatalog()
+            applyCatalogEdit(.reproject)
             Task {
                 await recoverProjectVaultAndRefresh()
             }
@@ -72,7 +72,7 @@ extension ArchiveBrowserViewModel {
                 Task { await scanInBackground() }
             }
         } else {
-            rebuildProjectVaultCatalog()
+            applyCatalogEdit(.reproject)
         }
 
         Task {
@@ -91,7 +91,7 @@ extension ArchiveBrowserViewModel {
             return
         }
         showArchivedProjects = isShown
-        rebuildProjectVaultCatalog()
+        applyCatalogEdit(.reproject)
         if isShown {
             Task { await refreshProjectVaultSnapshots() }
         }
@@ -183,9 +183,9 @@ extension ArchiveBrowserViewModel {
                 withdrawFooterMessage(ProjectVaultActivityExplanation.transfer(.awaitingProviderDurability))
             }
             vaultObservation.stageSnapshots(snapshots)
-            rebuildProjectVaultCatalog()
+            applyCatalogEdit(.reproject)
             // Refresh cards even when catalog values stayed unchanged. A
-            // changed catalog also prebuilds cards in `songs.willSet`, before
+            // changed catalog also prebuilds cards in `applyCatalogEdit`, before
             // publishing the new songs.
             vaultObservation.rebuildCards(for: songs, notifyWhenChanged: false)
             // Single coalesced publish for the whole refresh (snapshots,
@@ -199,7 +199,7 @@ extension ArchiveBrowserViewModel {
         } catch ProjectVaultRuntimeError.unavailable {
             vaultObservation.cancelRecovery()
             vaultObservation.stageSnapshots([])
-            rebuildProjectVaultCatalog()
+            applyCatalogEdit(.reproject)
             vaultObservation.rebuildCards(for: songs, notifyWhenChanged: false)
             objectWillChange.send()
             return false
