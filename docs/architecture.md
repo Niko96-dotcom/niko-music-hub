@@ -102,8 +102,8 @@ Archive domain and safety. No SwiftUI/AppKit.
 `AppCore` holds two things: the shared shell kit, and (until it gets its own target) the Project Vault runtime.
 
 - Shell kit: `ToolFeature` / `ToolRegistry` / `ToolContext`, `JobRunner`, the Output Inbox (`OutputInbox/`),
-  `SettingsStore` (`UserDefaultsSettingsStore`), diagnostics, `HelperTools/` (helper locator, installer, Set Up
-  model), `Archive/` (FSEvents archive-root watcher), `Audio/` (WAV output spec and verification), `QuickAccess/`
+  `SettingsStore` (`UserDefaultsSettingsStore`), diagnostics, `HelperTools/` (helper locator, probe, status owner,
+  installer, Set Up model; see [Helper tools](#helper-tools)), `Archive/` (FSEvents archive-root watcher), `Audio/` (WAV output spec and verification), `QuickAccess/`
   (router, menu bar model), `Navigation/` (`HubNavigationHistory`).
 - Shell jobs and quit: `ShellJobStatusCenter`, `CancelCopy`, `HubTerminationCoordinator` (see
   [Running work and quit](#running-work-and-quit)).
@@ -265,6 +265,26 @@ values and never a file.
   `writeProtectedRoots()`.
 - Limits: fixture runs (`NIKO_MUSIC_HUB_FIXTURE_ROOT`) pin the loaded roots to the fixture, so an edit is saved but
   the board keeps the fixture. A writer in another process (the CLI) is not followed.
+
+## Helper tools
+
+The outside programs the tools run (yt-dlp, FFmpeg, ffprobe, demucs-mlx) are found, checked and reported by
+`AppCore/HelperTools/`:
+
+- `HelperToolLocator` finds a helper: the saved path, then the Tools folder, then system folders. One instance is
+  built by `AppComposition` from `MusicHubRuntimeEnvironment`, which reads `NIKO_MUSIC_HUB_TOOLS_DIR` and
+  `NIKO_MUSIC_HUB_IGNORE_SYSTEM_HELPERS`; the locator reads no process environment.
+- `HelperToolProbe` runs a helper's version check (yt-dlp `--version` with the staleness rule, FFmpeg `-version`,
+  demucs-mlx `--list-models`) and returns one `HelperToolStatus`: ready, missing, outdated (yt-dlp only) or broken.
+  Run-time gates (a download, the Converter's FFmpeg fallback) call it at start.
+- `HelperToolHealth`, one per app in `ToolContext.helperHealth`, holds the last status per helper. It probes a helper
+  when a surface first asks (`check`), again when its saved path changes (it follows `appSettings`) and when the Set Up
+  model finishes an install, never at launch. `recheck` probes now (Try Again, the sidebar strip opening).
+- The Downloader shows `DownloadState.ytDlpUnavailable(status)` with one card per status and checks a failed URL again
+  once yt-dlp is ready; Stem Separation and the sidebar strip show the owner's statuses. No feature module builds a
+  probe or a locator (`HelperToolHealthTests` source test).
+- Set Up's Installed / Not Installed rows stay a file check (`HelperToolSetupModel`): a bundle can be installed while
+  one of its helpers is broken.
 
 ## Archive footer ownership
 

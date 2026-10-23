@@ -167,6 +167,7 @@ into those closures; it imports neither SwiftUI nor AppKit.
 | Output Inbox | `JSONOutputInboxStore` | `output-inbox.json` |
 | A tool page's list of its own outputs | `ToolRecentOutputs` (AppCore), held by the tool's view model | derived from `output-inbox.json` |
 | Cross-tool requests | `QuickAccessRouter` (one-shot values) | memory |
+| Helper status (yt-dlp, FFmpeg, demucs-mlx) | `HelperToolHealth`, one per app in `ToolContext` ([architecture.md § Helper tools](architecture.md#helper-tools)) | memory; helper paths in the settings JSON |
 
 App data lives in `~/Library/Application Support/Niko Music Hub/`, or in `Isolated/<suite>/` below it when
 `NIKO_MUSIC_HUB_SETTINGS_SUITE` is set (`AppPaths` in `AppComposition.swift`).
@@ -246,8 +247,8 @@ These rules are documented and, where named, enforced. The full table is in
    intended ([architecture.md § Tool output destination](architecture.md#tool-output-destination)). The
    Downloader's inbox write depends on the view model observing the job.
 5. **Some dependencies are global, not injected:** `ArchivePreviewSession.shared`,
-   `ArchivePlaybackCoordinator.shared`, `AudioCaptureActivity.shared`, `LiveProcessGroupRegistry.shared`,
-   and `HelperToolLocator.standard()` built separately by each helper consumer.
+   `ArchivePlaybackCoordinator.shared`, `AudioCaptureActivity.shared` and `LiveProcessGroupRegistry.shared`.
+   (Helper consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23.)
 6. **`ArchiveBrowserViewModel` is one type in 22 files** (the main file plus 21 `+*.swift` extensions,
    4,615 lines; the footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog`
    on 2026-10-23). Four owners were extracted (scan orchestrator, catalog, metadata editing, Vault queue and

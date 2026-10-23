@@ -24,7 +24,7 @@ commit with `git log --grep='(helpers step N)'`.
 | 1 One probe in AppCore | done | `git log --grep='(helpers step 1)'` | strict build; `AppCoreTests` 845 (2 skipped), Downloader 191 (2 skipped), Converter 89, Stem Separation 85 (Swift Testing), 0 failures; each tool suite lost exactly its moved checker tests |
 | 2 One status owner and one locator | done | `git log --grep='(helpers step 2)'` | strict build; `AppCoreTests` 852 (2 skipped), Downloader 191 (2 skipped), Converter 89, Stem Separation 85, 0 failures; with the Set Up model's call to the owner removed, `testSuccessfulInstallTellsHelperHealth` failed |
 | 3 Tools and the strip read the owner | done | `git log --grep='(helpers step 3)'` | strict build; `AppCoreTests` 853 (2 skipped), Downloader 192 (2 skipped), Converter 89, Stem Separation 86, 0 failures; with the Downloader's status subscription removed, `testAURLThatFailedOnYtDlpBecomesReadyWhenYtDlpIsInstalled` failed |
-| 4 Docs, full gates, live check | not started | | |
+| 4 Docs, full gates, live check | docs done (`git log --grep='(helpers step 4)'`); gates and live check next | | link check of the changed docs: ok |
 
 ## Revisions
 
