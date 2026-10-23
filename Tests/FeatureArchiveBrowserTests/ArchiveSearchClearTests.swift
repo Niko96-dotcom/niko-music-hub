@@ -6,7 +6,7 @@ import XCTest
 final class ArchiveSearchClearTests: XCTestCase {
     func testClearSearchResetsQueryAndResults() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = [
+        model.applyCatalogEdit(.load([
             Song(
                 folderPath: URL(fileURLWithPath: "/fixture-only/Neon Hook"),
                 originalFolderName: "Neon Hook",
@@ -17,7 +17,7 @@ final class ArchiveSearchClearTests: XCTestCase {
                 originalFolderName: "Ocean Drive",
                 displayTitle: "Ocean Drive"
             ),
-        ]
+        ]))
         model.recomputeBrowseResults()
         let unfilteredShelf = model.filteredSongs
         XCTAssertEqual(unfilteredShelf.count, 2)

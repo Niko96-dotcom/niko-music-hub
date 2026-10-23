@@ -140,8 +140,7 @@ final class ArchiveVaultObservationTests: XCTestCase {
             projectVaultRuntime: runtime,
             scanOverride: { _ in ScanResult(songs: songs) }
         )
-        viewModel.scannedSongs = songs
-        viewModel.songs = songs
+        viewModel.applyCatalogEdit(.load(songs))
         viewModel.filteredSongs = songs
         viewModel.refreshProjectVaultPresentationContext()
         return viewModel

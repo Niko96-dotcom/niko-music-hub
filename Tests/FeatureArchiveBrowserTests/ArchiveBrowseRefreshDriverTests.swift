@@ -7,7 +7,7 @@ import XCTest
 final class ArchiveBrowseRefreshDriverTests: XCTestCase {
     func testResultCountTracksAppliedSearchAndClears() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = state("").songs
+        model.applyCatalogEdit(.load(state("").songs))
         model.recomputeBrowseResults()
         XCTAssertNil(model.searchResultCountText)
         model.setSearchQuery("neon")
@@ -28,7 +28,7 @@ final class ArchiveBrowseRefreshDriverTests: XCTestCase {
 
     func testTypingPublishesTextWithoutInvalidatingArchiveUntilResultsApply() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = state("").songs
+        model.applyCatalogEdit(.load(state("").songs))
         model.filteredSongs = model.songs
         var archiveChanges = 0
         var enteredText: [String] = []
@@ -108,7 +108,7 @@ final class ArchiveBrowseRefreshDriverTests: XCTestCase {
 
     func testImmediateClearAndRootResetSupersedePendingLiveSearch() async throws {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make(), browseSearchDebounceNanoseconds: 0)
-        model.songs = state("").songs
+        model.applyCatalogEdit(.load(state("").songs))
         model.filteredSongs = model.songs
         model.setSearchQuery("neon")
         model.setSearchQuery("", immediate: true)

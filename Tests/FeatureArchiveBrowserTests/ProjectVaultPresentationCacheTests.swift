@@ -66,7 +66,7 @@ final class ProjectVaultPresentationCacheTests: XCTestCase {
 
         XCTAssertTrue(viewModel.projectVaultPresentationContext != nil)
         let loadsBeforeCatalogUpdate = store.loadCount
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         XCTAssertEqual(viewModel.projectVaultPresentation(for: song)?.state, .active)
         XCTAssertEqual(
             store.loadCount,

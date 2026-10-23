@@ -27,7 +27,6 @@ protocol ArchiveScanHost: AnyObject {
     /// before it reads the filesystem, so a test can hold the scan in flight.
     var incrementalRescanHold: (() async -> Void)? { get }
 
-    func mutateCatalog(_ updates: () -> Void)
     func setStatusMessage(_ message: String?)
     func setBackgroundStatusMessage(_ message: String?)
     func applyCatalogScanUpdate(_ update: ArchiveCatalogCoordinator.CatalogScanApplyResult, roots: [URL])

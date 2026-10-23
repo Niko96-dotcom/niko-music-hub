@@ -38,7 +38,7 @@ final class ArchiveListSelectionTests: XCTestCase {
 
     private func makeViewModel(songs: [Song], viewMode: ArchiveBrowserViewModel.ArchiveViewMode) -> ArchiveBrowserViewModel {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
-        viewModel.songs = songs
+        viewModel.applyCatalogEdit(.load(songs))
         viewModel.filteredSongs = songs
         viewModel.viewMode = viewMode
         return viewModel

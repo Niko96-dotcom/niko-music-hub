@@ -23,7 +23,7 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
 
     func testEmptyQueryKeepsIndexEmpty() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = songs()
+        model.applyCatalogEdit(.load(songs()))
         model.recomputeBrowseResults()
         XCTAssertTrue(model.cachedSearchIndex.songs.isEmpty)
         XCTAssertEqual(model.filteredSongs.count, 2)
@@ -32,7 +32,7 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
 
     func testFilterToggleWithEmptyQueryKeepsIndexEmptyAndAppliesFilter() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = songs()
+        model.applyCatalogEdit(.load(songs()))
         model.recomputeBrowseResults()
         model.toggleBrowseFilter(.hasWarnings)
         XCTAssertTrue(model.cachedSearchIndex.songs.isEmpty)
@@ -60,13 +60,13 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
                 scanWarnings: ["missing preview"]
             ),
         ]
-        model.songs = titled
+        model.applyCatalogEdit(.load(titled))
         model.setSearchQuery("neon", immediate: true)
         XCTAssertEqual(model.filteredSongs.map(\.effectiveDisplayTitle), ["Neon Hook"])
 
         var updated = titled
         updated[0].virtualTitle = "Ocean Revised Title"
-        model.songs = updated
+        model.applyCatalogEdit(.load(updated))
         model.recomputeBrowseResults()
         // Old term no longer matches; the index now serves the edited title.
         XCTAssertTrue(model.filteredSongs.isEmpty)
@@ -77,7 +77,7 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
 
     func testNonSearchEditReturnsFreshSongPreservingScores() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = songs()
+        model.applyCatalogEdit(.load(songs()))
         model.setSearchQuery("neon", immediate: true)
         let beforeSummary = model.searchMatchSummaries
         XCTAssertEqual(model.filteredSongs.count, 1)
@@ -85,7 +85,7 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
         var updated = songs()
         updated[0].collaboratorIDs = ["collab-2"]
         updated[0].previewSelectionMode = .manual
-        model.songs = updated
+        model.applyCatalogEdit(.load(updated))
         model.recomputeBrowseResults()
         XCTAssertEqual(model.filteredSongs.map(\.id), [updated[0].id])
         XCTAssertEqual(model.searchMatchSummaries, beforeSummary)
@@ -95,18 +95,18 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
 
     func testRemovalAndReorderReflectedWithActiveQuery() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = songs()
+        model.applyCatalogEdit(.load(songs()))
         model.setSearchQuery("ocean", immediate: true)
         XCTAssertEqual(model.filteredSongs.map(\.displayTitle), ["Ocean Drive"])
 
         // Removal drops the match.
-        model.songs = [songs()[0]]
+        model.applyCatalogEdit(.load([songs()[0]]))
         model.recomputeBrowseResults()
         XCTAssertTrue(model.filteredSongs.isEmpty)
 
         // Re-adding plus reorder still resolves the live Song value.
         let reordered = [songs()[1], songs()[0]]
-        model.songs = reordered
+        model.applyCatalogEdit(.load(reordered))
         model.recomputeBrowseResults()
         XCTAssertEqual(model.filteredSongs.map(\.displayTitle), ["Ocean Drive"])
         XCTAssertEqual(model.cachedSearchIndex.songs.map(\.id), reordered.map(\.id))
@@ -114,7 +114,7 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
 
     func testActiveQueryKeepsRelevanceOrderOverSortMode() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = songs()
+        model.applyCatalogEdit(.load(songs()))
         model.setSearchQuery("neon", immediate: true)
         let relevanceOrder = model.filteredSongs.map(\.id)
         model.setSortMode(.titleAZ)

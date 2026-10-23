@@ -23,8 +23,7 @@ final class CollaboratorRemoveTests: XCTestCase {
             originalFolderName: "Fixture Song",
             displayTitle: "Fixture Song"
         )
-        viewModel.scannedSongs = [song]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.assignCollaborators(to: song, collaboratorIDs: [jamie.id])
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
 
@@ -59,8 +58,7 @@ final class CollaboratorRemoveTests: XCTestCase {
             originalFolderName: "Fixture Song",
             displayTitle: "Fixture Song"
         )
-        viewModel.scannedSongs = [song]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.assignCollaborators(to: song, collaboratorIDs: [jamie.id])
 
         viewModel.requestRemoveCollaborator(jamie)

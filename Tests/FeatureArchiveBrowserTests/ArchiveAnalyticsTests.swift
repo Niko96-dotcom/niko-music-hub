@@ -35,17 +35,15 @@ final class ArchiveAnalyticsTests: XCTestCase {
 
     func testCatalogAppendWhileAnalyticsOpenUpdatesSnapshot() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.mutateCatalog {
-            model.songs = [song("Alpha", status: .prod), song("Beta", status: .song)]
-        }
+        model.applyCatalogEdit(.load([song("Alpha", status: .prod), song("Beta", status: .song)]))
         model.showAnalytics()
         XCTAssertTrue(model.viewMode == .analytics)
         XCTAssertEqual(model.analyticsSnapshot?.overview.totalSongs, 2)
 
-        model.mutateCatalog {
+        do {
             var updated = model.songs
             updated.append(song("Gamma", status: .done))
-            model.songs = updated
+            model.applyCatalogEdit(.load(updated))
         }
 
         XCTAssertTrue(model.viewMode == .analytics, "must stay on the analytics page")
@@ -55,16 +53,14 @@ final class ArchiveAnalyticsTests: XCTestCase {
 
     func testStatusChangeWhileAnalyticsOpenUpdatesSnapshot() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.mutateCatalog {
-            model.songs = [song("Alpha", status: .prod), song("Beta", status: .song)]
-        }
+        model.applyCatalogEdit(.load([song("Alpha", status: .prod), song("Beta", status: .song)]))
         model.showAnalytics()
         XCTAssertEqual(model.analyticsSnapshot?.overview.finished, 0)
 
-        model.mutateCatalog {
+        do {
             var updated = model.songs
             updated[0].workflowStatus = .done
-            model.songs = updated
+            model.applyCatalogEdit(.load(updated))
         }
 
         XCTAssertEqual(model.analyticsSnapshot?.overview.finished, 1)
@@ -73,15 +69,13 @@ final class ArchiveAnalyticsTests: XCTestCase {
 
     func testCatalogUpdatesStayLazyOutsideAnalytics() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.mutateCatalog {
-            model.songs = [song("Alpha")]
-        }
+        model.applyCatalogEdit(.load([song("Alpha")]))
         XCTAssertNil(model.analyticsSnapshot, "no snapshot before entering analytics")
 
-        model.mutateCatalog {
+        do {
             var updated = model.songs
             updated.append(song("Beta"))
-            model.songs = updated
+            model.applyCatalogEdit(.load(updated))
         }
         XCTAssertNil(model.analyticsSnapshot, "catalog churn outside analytics must stay lazy")
 
@@ -89,10 +83,10 @@ final class ArchiveAnalyticsTests: XCTestCase {
         XCTAssertEqual(model.analyticsSnapshot?.overview.totalSongs, 2)
 
         model.viewMode = .board
-        model.mutateCatalog {
+        do {
             var updated = model.songs
             updated.append(song("Gamma"))
-            model.songs = updated
+            model.applyCatalogEdit(.load(updated))
         }
         XCTAssertEqual(
             model.analyticsSnapshot?.overview.totalSongs, 2,
@@ -161,9 +155,7 @@ final class ArchiveAnalyticsTests: XCTestCase {
             context: TestToolContext.make(),
             songMetadataStore: store
         )
-        model.mutateCatalog {
-            model.songs = [song("Neon Hook"), song("Ocean Drive")]
-        }
+        model.applyCatalogEdit(.load([song("Neon Hook"), song("Ocean Drive")]))
         model.showAnalytics()
         let baselineReads = store.historyReadCount
         XCTAssertGreaterThanOrEqual(baselineReads, 1)
@@ -179,10 +171,10 @@ final class ArchiveAnalyticsTests: XCTestCase {
             "typing, filtering, and selection must not re-read status history"
         )
 
-        model.mutateCatalog {
+        do {
             var updated = model.songs
             updated.append(song("Third Song"))
-            model.songs = updated
+            model.applyCatalogEdit(.load(updated))
         }
         XCTAssertEqual(store.historyReadCount, baselineReads + 1, "actual catalog updates must refresh")
         XCTAssertEqual(model.analyticsSnapshot?.overview.totalSongs, 3)

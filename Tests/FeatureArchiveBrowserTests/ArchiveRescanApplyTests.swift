@@ -23,8 +23,7 @@ final class ArchiveRescanApplyTests: XCTestCase {
 
     private func makeModel(_ songs: [Song]) -> ArchiveBrowserViewModel {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make(), archiveRootWatcher: NoopArchiveRootWatcher())
-        model.scannedSongs = songs
-        model.songs = songs
+        model.applyCatalogEdit(.load(songs))
         model.recomputeBrowseResults()
         return model
     }

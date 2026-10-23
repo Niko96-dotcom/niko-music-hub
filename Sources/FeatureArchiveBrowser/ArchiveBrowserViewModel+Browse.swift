@@ -21,14 +21,8 @@ extension ArchiveBrowserViewModel {
         applyBrowseChange(shouldRefreshIntelligence: false, updates)
     }
 
-    // Transitional: removed in catalog step 7, when `applyCatalogEdit(_:)` is the only writer.
-    func mutateCatalog(_ updates: () -> Void) {
-        browseRefreshDriver.cancelPendingDebounce()
-        updates()
-        refreshAfterCatalogChange()
-    }
-
-    /// The browse follow-up of a catalog change: recompute the browse results
+    /// The browse follow-up of a catalog change (and of new scan diagnostics,
+    /// whose skipped entries the browse list shows): recompute the browse results
     /// (they reconcile the selection) and refresh intelligence.
     func refreshAfterCatalogChange() {
         applyBrowseChange(shouldRefreshIntelligence: true) {}

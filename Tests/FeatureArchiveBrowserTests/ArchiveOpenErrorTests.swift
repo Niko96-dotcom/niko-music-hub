@@ -34,7 +34,7 @@ final class ArchiveOpenErrorTests: XCTestCase {
             context: TestToolContext.make(settingsStore: store),
             runtime: MusicHubRuntimeEnvironment(environment: [MusicHubRuntimeEnvironment.dryRunOpenKey: "1"])
         )
-        model.songs = [song]
+        model.applyCatalogEdit(.load([song]))
 
         XCTAssertThrowsError(try model.openLatestCPR(for: song))
         XCTAssertEqual(model.openError, ArchiveOpenErrorCopy.missingProject)

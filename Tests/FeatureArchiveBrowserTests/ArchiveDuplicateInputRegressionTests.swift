@@ -39,7 +39,7 @@ final class ArchiveDuplicateInputRegressionTests: XCTestCase {
                 MusicHubRuntimeEnvironment.settingsSuiteKey: "ArchiveDuplicateInputRegressionTests.\(UUID())"
             ])
         )
-        model.songs = [song, song]
+        model.applyCatalogEdit(.load([song, song]))
         model.applyCatalogScanUpdate(applied, roots: [URL(fileURLWithPath: "/tmp")])
 
         XCTAssertEqual(model.songs.count, 1)

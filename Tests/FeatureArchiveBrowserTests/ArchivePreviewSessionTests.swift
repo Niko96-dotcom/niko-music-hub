@@ -10,7 +10,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let fixture = try makeHenryFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = fixture.songs
+        model.applyCatalogEdit(.load(fixture.songs))
         model.filteredSongs = fixture.songs
         let session = ArchivePreviewSession.shared
         defer { session.clear() }
@@ -108,7 +108,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         let session = ArchivePreviewSession.shared
         defer { session.clear() }
-        model.songs = [fixture.song]
+        model.applyCatalogEdit(.load([fixture.song]))
         model.selectSong(fixture.song)
         model.audition(fixture.song)
         session.player.pause()
@@ -117,7 +117,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         refreshed.previewCandidates = [fixture.previews[1]]
         refreshed.mainPreviewCandidateID = fixture.previews[1].id
         refreshed.virtualTitle = "My renamed song"
-        model.songs = [refreshed]
+        model.applyCatalogEdit(.load([refreshed]))
         model.reconcileSelectedSong(requireVisibleInFilteredList: false)
         XCTAssertEqual(session.preview?.id, fixture.previews[1].id)
         XCTAssertEqual(session.songTitle, "My renamed song")
@@ -216,7 +216,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.songs = [fixture.song]
+        model.applyCatalogEdit(.load([fixture.song]))
         model.filteredSongs = [fixture.song]
         let session = ArchivePreviewSession.shared
         defer { session.clear() }
@@ -234,7 +234,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         // A changed default does not discard a valid loaded alternate for this song.
         var changed = fixture.song
         changed.mainPreviewCandidateID = fixture.previews[1].id
-        model.songs = [changed]
+        model.applyCatalogEdit(.load([changed]))
         model.reconcileSelectedSong()
         XCTAssertEqual(session.preview?.id, fixture.previews[0].id)
         ArchivePreviewPlayback.stopAll()

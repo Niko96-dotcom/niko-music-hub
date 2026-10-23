@@ -74,8 +74,7 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
         )
 
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
-        viewModel.scannedSongs = [selected, unrelated]
-        viewModel.songs = [selected, unrelated]
+        viewModel.applyCatalogEdit(.load([selected, unrelated]))
         viewModel.selectedSong = selected
         viewModel.pluginsSectionExpanded = true
 
@@ -141,8 +140,7 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
         )
 
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
-        viewModel.scannedSongs = [selected, unrelated]
-        viewModel.songs = [selected, unrelated]
+        viewModel.applyCatalogEdit(.load([selected, unrelated]))
         viewModel.selectedSong = selected
         viewModel.pluginsSectionExpanded = true
         viewModel.refreshCPRPluginSummary(for: selected)

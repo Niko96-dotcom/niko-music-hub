@@ -39,7 +39,7 @@ final class ArchiveSongSelectionNavigatorTests: XCTestCase {
             fixtureSong("idea-b", title: "Idea B", status: .songstarterBeat),
         ]
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
-        viewModel.songs = songs
+        viewModel.applyCatalogEdit(.load(songs))
         viewModel.filteredSongs = songs
         viewModel.viewMode = .board
         viewModel.selectSongOnBoard(songs[0])
@@ -54,7 +54,7 @@ final class ArchiveSongSelectionNavigatorTests: XCTestCase {
     func testReturnOpensSelectedBoardDetailWithoutStartingPreview() {
         let song = fixtureSong("open-me", title: "Open Me", status: .prod)
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
         viewModel.viewMode = .board
         viewModel.selectSongOnBoard(song)

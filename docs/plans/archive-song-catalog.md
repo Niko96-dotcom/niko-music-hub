@@ -27,7 +27,7 @@ commit with `git log --grep='(catalog step N)'`.
 | 4 Vault reprojection and New Song | done | `git log --grep='(catalog step 4)'` | strict build; `FeatureArchiveBrowserTests` 646 and AppCore `*SourceTests` 93, 0 failures; B2 and B4 tests failed with the old behavior planted, then passed |
 | 5 Metadata edits and collaborator removal | done | `git log --grep='(catalog step 5)'` | strict build; `FeatureArchiveBrowserTests` 650 and AppCore `*SourceTests` 93, 0 failures; B3 and B6 tests failed with the old behavior planted, then passed |
 | 6 Root reset and per-song caches | done | `git log --grep='(catalog step 6)'` | strict build; `FeatureArchiveBrowserTests` 652 and AppCore `*SourceTests` 93, 0 failures; both B5 tests failed with the plugin prune removed, then passed |
-| 7 Tests seed through the writer; the old writers go | not started | | |
+| 7 Tests seed through the writer; the old writers go | done | `git log --grep='(catalog step 7)'` | strict build; `FeatureArchiveBrowserTests` 652 and AppCore `*SourceTests` 93, 0 failures; a planted `songs = []` and `songCatalog = …` in `+Selection.swift` did not compile; `archive-ui.swift` could not be built: its build script and 4 other lines were already stale (revision 8) |
 | 8 Docs, full gates, benchmark, live check | not started | | |
 
 ## Revisions
@@ -59,6 +59,17 @@ Record every deviation from the steps below here, numbered, with its reason.
    no song left (a root change) every summary goes at once, without resolving a path per song. `.clear` runs the
    normal follow-ups, so a root reset now also recomputes the (empty) browse list and refreshes intelligence once; it
    still sets its other browse state by hand, which is outside this plan.
+7. **Step 7: one test seeded a state production cannot reach.** `testBackForwardPreservedAcrossFallbackRestore`
+   emptied the catalog with a raw write while the song detail was open, so the view model never reacted. Through
+   `.load([])` the browse recompute clears the selection first, as a rescan does, which records a history entry. The
+   test now removes the song after going back to the board, so the forward detail entry is still stale and the
+   fallback it checks is unchanged. All other 87 seeds (`applyCatalogEdit(.load(…))` in 20 test files and
+   `script/performance/archive-ui.swift`) kept their expectations.
+8. **Step 7: the UI benchmark harness was already broken.** `script/benchmark_archive_ui.sh` reads
+   `<bin>/<Module>.build/output-file-map.json`, which the current SwiftPM layout (`.build/out/Products/Release`) no
+   longer writes, and `archive-ui.swift` has 4 type errors from older API drift (lines 106, 207, 217, 219). A
+   type-check against the release modules shows no error on the rewritten seed line. Repairing the harness is outside
+   this plan; `script/benchmark_archive_startup.sh` (used in step 8) reads the same files, see step 8.
 
 ## Terms
 

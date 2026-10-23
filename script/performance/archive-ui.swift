@@ -147,8 +147,7 @@ struct ArchiveUIBenchmark {
                 mainPreviewCandidateID: previews.first?.id, aliases: ["Demo \(i)"], collaboratorNames: ["Maria"],
                 workflowStatus: ProjectWorkflowStatus.allCases[i % ProjectWorkflowStatus.allCases.count])
         }
-        model.scannedSongs = songs
-        model.songs = songs
+        model.applyCatalogEdit(.load(songs))
         model.filteredSongs = ArchiveBrowseSortMode.sort(songs, mode: .recentCPR)
         model.needsFirstRunOnboarding = false
         NSApplication.shared.setActivationPolicy(.regular)

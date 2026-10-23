@@ -55,16 +55,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
     /// The songs this browser holds: the scan baseline and the visible list,
-    /// with an id index. `songs` and `scannedSongs` read it.
+    /// with an id index. `applyCatalogEdit(_:)` is its only writer: the setter
+    /// is private to this file, so another writer does not compile.
     private(set) var songCatalog = SongCatalog()
 
     /// The visible list: the scan baseline plus archive-only Vault projections
     /// when they are shown. Views read it.
-    var songs: [Song] {
-        get { songCatalog.visible }
-        // Transitional: removed in catalog step 7.
-        set { storeCatalogForMigration(scanned: songCatalog.scanned, visible: newValue, publishes: true) }
-    }
+    var songs: [Song] { songCatalog.visible }
 
     func liveSong(id: String, fallback: Song) -> Song {
         songCatalog.song(id: id) ?? fallback
@@ -78,22 +75,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// The songs of `incoming` that the catalog does not hold as they are (new or different).
     func changedSongs(in incoming: [Song]) -> [Song] {
         songCatalog.changedSongs(in: incoming)
-    }
-
-    // Transitional: removed in catalog step 7. Keeps what the stored properties
-    // did: a new visible list rebuilds the Vault card cache before the publish
-    // (cards ask for their Vault state while SwiftUI reconciles a selection
-    // change), a `songs` write publishes, a `scannedSongs` write does not.
-    private func storeCatalogForMigration(scanned: [Song], visible: [Song], publishes: Bool) {
-        var next = songCatalog
-        let change = next.replaceAll(scanned: scanned, visible: visible)
-        if change.visibleChanged {
-            rebuildProjectVaultPresentationCache(for: next.visible, notifyWhenChanged: false)
-        }
-        if publishes {
-            objectWillChange.send()
-        }
-        songCatalog = next
     }
 
     /// The ways the catalog changes. `applyCatalogEdit(_:)` applies them.
@@ -400,11 +381,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Songs discovered by the configured active/scan roots. Project Vault archive
     /// generations are projected into `songs` only when the user opts into them, so
     /// toggling that view never loses the clean scan baseline.
-    var scannedSongs: [Song] {
-        get { songCatalog.scanned }
-        // Transitional: removed in catalog step 7.
-        set { storeCatalogForMigration(scanned: newValue, visible: songCatalog.visible, publishes: false) }
-    }
+    var scannedSongs: [Song] { songCatalog.scanned }
     // Updated before filteredSongs publishes, so Board uses the applied query mode.
     var isSearching = false
     var projectVaultRestoreOptionsLoading = false

@@ -403,7 +403,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             context: TestToolContext.make(),
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
 
         viewModel.refreshIntelligenceNow()
         let deadline = Date().addingTimeInterval(1)
@@ -434,9 +434,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
 
-        viewModel.songs = [firstSong]
+        viewModel.applyCatalogEdit(.load([firstSong]))
         viewModel.refreshIntelligenceNow()
-        viewModel.songs = [secondSong]
+        viewModel.applyCatalogEdit(.load([secondSong]))
         viewModel.refreshIntelligenceNow()
 
         let deadline = Date().addingTimeInterval(1)
@@ -645,10 +645,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             }
         )
         viewModel.roots = [root]
-        viewModel.mutateCatalog {
-            viewModel.scannedSongs = [existingSong]
-            viewModel.songs = [existingSong]
-        }
+        viewModel.applyCatalogEdit(.load([existingSong]))
 
         let scanTask = Task { await viewModel.scan() }
         let startDeadline = Date().addingTimeInterval(2)
@@ -1702,8 +1699,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             originalFolderName: "Workflow Song",
             displayTitle: "Workflow Song"
         )
-        viewModel.scannedSongs = [song]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
 
         viewModel.updateWorkflowStatus(for: song, status: .done)
@@ -1792,8 +1788,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             projectVaultRuntime: runtime
         )
-        viewModel.scannedSongs = [song]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
 
         await viewModel.refreshProjectVaultSnapshots()
@@ -1993,8 +1988,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 return ScanResult(songs: [scannedSong])
             }
         )
-        viewModel.scannedSongs = [fixture.song]
-        viewModel.songs = [fixture.song]
+        viewModel.applyCatalogEdit(.load([fixture.song]))
         viewModel.filteredSongs = [fixture.song]
         for _ in 0..<100 where !recoveryGate.isWaiting {
             try await Task.sleep(for: .milliseconds(10))
@@ -2120,8 +2114,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
             ])
         )
-        viewModel.scannedSongs = [fixture.song]
-        viewModel.songs = [fixture.song]
+        viewModel.applyCatalogEdit(.load([fixture.song]))
         viewModel.filteredSongs = [fixture.song]
 
         await viewModel.refreshProjectVaultSnapshots()
@@ -2215,8 +2208,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
             ])
         )
-        viewModel.scannedSongs = [activeSong]
-        viewModel.songs = [activeSong]
+        viewModel.applyCatalogEdit(.load([activeSong]))
         viewModel.filteredSongs = [activeSong]
 
         await viewModel.refreshProjectVaultSnapshots()
@@ -2326,8 +2318,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                         MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
                     ])
                 )
-                viewModel.scannedSongs = [activeSong]
-                viewModel.songs = [activeSong]
+                viewModel.applyCatalogEdit(.load([activeSong]))
                 viewModel.filteredSongs = [activeSong]
 
                 await viewModel.refreshProjectVaultSnapshots()
@@ -2415,8 +2406,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
             ])
         )
-        viewModel.scannedSongs = [fixture.song]
-        viewModel.songs = [fixture.song]
+        viewModel.applyCatalogEdit(.load([fixture.song]))
         viewModel.filteredSongs = [fixture.song]
 
         await viewModel.refreshProjectVaultSnapshots()
@@ -2488,8 +2478,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
             ])
         )
-        viewModel.scannedSongs = []
-        viewModel.songs = []
+        viewModel.applyCatalogEdit(.load([]))
         viewModel.filteredSongs = []
 
         await viewModel.refreshProjectVaultSnapshots()
@@ -2568,8 +2557,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
             ])
         )
-        viewModel.scannedSongs = [fixture.song]
-        viewModel.songs = [fixture.song]
+        viewModel.applyCatalogEdit(.load([fixture.song]))
         viewModel.filteredSongs = [fixture.song]
 
         await viewModel.refreshProjectVaultSnapshots()
@@ -2667,8 +2655,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                     MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
                 ])
             )
-            viewModel.scannedSongs = [fixture.song]
-            viewModel.songs = [fixture.song]
+            viewModel.applyCatalogEdit(.load([fixture.song]))
             viewModel.filteredSongs = [fixture.song]
 
             // Simulate an external sync or restore recreating Active before the
@@ -2780,8 +2767,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
             ])
         )
-        viewModel.scannedSongs = []
-        viewModel.songs = []
+        viewModel.applyCatalogEdit(.load([]))
         viewModel.filteredSongs = []
 
         await viewModel.refreshProjectVaultSnapshots()
@@ -2958,8 +2944,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                     MusicHubRuntimeEnvironment.disableArchiveWatcherKey: "1",
                 ])
             )
-            viewModel.scannedSongs = [fixture.song]
-            viewModel.songs = [fixture.song]
+            viewModel.applyCatalogEdit(.load([fixture.song]))
             viewModel.filteredSongs = [fixture.song]
 
             await viewModel.refreshProjectVaultSnapshots()
@@ -3096,8 +3081,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             scanOverride: nil,
             incrementalRescanHold: { await incrementalGate.waitForRelease() }
         )
-        viewModel.scannedSongs = [fixture.song]
-        viewModel.songs = [fixture.song]
+        viewModel.applyCatalogEdit(.load([fixture.song]))
         viewModel.filteredSongs = [fixture.song]
         await viewModel.refreshProjectVaultSnapshots()
         try await waitUntil("launch scan settled") { !viewModel.isScanning }
@@ -4910,8 +4894,7 @@ private struct ProjectVaultViewModelFixture {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             projectVaultRuntime: runtime
         )
-        viewModel.scannedSongs = [song]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
         return viewModel
     }

@@ -107,7 +107,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(pending.phase, .openingInCubase)
         await model.refreshProjectVaultSnapshots()
         let activeSong = Song(folderPath: pending.destinationURL, originalFolderName: "Old Name ", displayTitle: "Historical title")
-        model.songs = [activeSong]
+        model.applyCatalogEdit(.load([activeSong]))
         let retryPresentation = try XCTUnwrap(model.projectVaultPresentation(for: activeSong))
         XCTAssertEqual(retryPresentation.state, .needsAttention)
         XCTAssertEqual(retryPresentation.retryRestoreID, pending.id)

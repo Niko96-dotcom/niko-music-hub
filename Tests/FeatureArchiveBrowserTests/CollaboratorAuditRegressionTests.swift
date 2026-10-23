@@ -113,8 +113,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: plainFolder, originalFolderName: "Plain Song", displayTitle: "Plain Song",
             appNote: "plain note"
         )
-        viewModel.scannedSongs = [normal, blocked, plain]
-        viewModel.songs = [normal, blocked, plain]
+        viewModel.applyCatalogEdit(.load([normal, blocked, plain]))
         blockSongWithVaultTransfer(viewModel, song: blocked)
         XCTAssertTrue(viewModel.blocksGenericProjectVaultFileActions(for: blocked))
 
@@ -196,8 +195,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: plainFolder, originalFolderName: "Unrelated Song", displayTitle: "Unrelated Song",
             appNote: "untouched"
         )
-        viewModel.scannedSongs = [song, plain]
-        viewModel.songs = [song, plain]
+        viewModel.applyCatalogEdit(.load([song, plain]))
 
         viewModel.requestRemoveCollaborator(jamie)
         viewModel.confirmRemoveCollaborator()
@@ -227,8 +225,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         let song = Song(
             folderPath: folder, originalFolderName: "Persisted Song", displayTitle: "Persisted Song"
         )
-        viewModel.scannedSongs = [song]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.assignCollaborators(to: song, collaboratorIDs: [jamie.id])
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
         XCTAssertEqual(metadataStore.snapshot[song.id]?.collaboratorIDs, [jamie.id])
@@ -262,8 +259,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Assigned Song", displayTitle: "Assigned Song",
             collaboratorIDs: [jamie.id]
         )
-        viewModel.scannedSongs = [song]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
 
         store.failDelete = true
         viewModel.requestRemoveCollaborator(jamie)
@@ -328,8 +324,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Persisted Song", displayTitle: "Persisted Song",
             appNote: "keep me"
         )
-        viewModel.scannedSongs = [song]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.assignCollaborators(to: song, collaboratorIDs: [jamie.id])
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
         XCTAssertEqual(metadataStore.snapshot[song.id]?.collaboratorIDs, [jamie.id])
@@ -384,8 +379,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: plainFolder, originalFolderName: "Plain Song", displayTitle: "Plain Song",
             appNote: "untouched"
         )
-        viewModel.scannedSongs = [songA, songB, plain]
-        viewModel.songs = [songA, songB, plain]
+        viewModel.applyCatalogEdit(.load([songA, songB, plain]))
         viewModel.assignCollaborators(to: songA, collaboratorIDs: [jamie.id])
         let liveB = try XCTUnwrap(viewModel.songs.first(where: { $0.id == songB.id }))
         viewModel.assignCollaborators(to: liveB, collaboratorIDs: [jamie.id])
@@ -434,8 +428,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: liveFolder, originalFolderName: "Live Song", displayTitle: "Live Song",
             appNote: "keep me", collaboratorIDs: [jamie.id]
         )
-        viewModel.scannedSongs = [live]
-        viewModel.songs = [live]
+        viewModel.applyCatalogEdit(.load([live]))
         // Stored rows mirror the live assignment, plus one row for a root
         // that is not loaded whose stored row still references the ID.
         let absentSongID = root.appendingPathComponent("Absent Song", isDirectory: true)
@@ -481,8 +474,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: liveFolder, originalFolderName: "Plain Song", displayTitle: "Plain Song",
             appNote: "untouched"
         )
-        viewModel.scannedSongs = [plain]
-        viewModel.songs = [plain]
+        viewModel.applyCatalogEdit(.load([plain]))
         let absentSongID = root.appendingPathComponent("Absent Song", isDirectory: true)
             .standardizedFileURL.path
         metadataStore.stored = [
@@ -518,8 +510,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: liveFolder, originalFolderName: "Live Song", displayTitle: "Live Song",
             appNote: "keep me", collaboratorIDs: [jamie.id]
         )
-        viewModel.scannedSongs = [live]
-        viewModel.songs = [live]
+        viewModel.applyCatalogEdit(.load([live]))
         // Absent row exists but does not reference the pending ID.
         let absentSongID = root.appendingPathComponent("Absent Song", isDirectory: true)
             .standardizedFileURL.path
@@ -556,8 +547,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Live Song", displayTitle: "Live Song",
             appNote: "keep me", collaboratorIDs: [jamie.id]
         )
-        viewModel.scannedSongs = [live]
-        viewModel.songs = [live]
+        viewModel.applyCatalogEdit(.load([live]))
 
         viewModel.requestRemoveCollaborator(jamie)
         viewModel.confirmRemoveCollaborator()
@@ -588,8 +578,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Live Song", displayTitle: "Live Song",
             appNote: "keep me", collaboratorIDs: [jamie.id]
         )
-        viewModel.scannedSongs = [live]
-        viewModel.songs = [live]
+        viewModel.applyCatalogEdit(.load([live]))
         metadataStore.metadata = [live.id: SongUserMetadata(songID: live.id, collaboratorIDs: [jamie.id])]
         metadataStore.corruptSongIDs = ["unreadable-row"]
 
@@ -624,7 +613,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Jamie Rivera Session",
             displayTitle: "Jamie Rivera Session"
         )
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
@@ -653,7 +642,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Jamie Rivera Session",
             displayTitle: "Jamie Rivera Session"
         )
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
@@ -680,7 +669,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Jamie Rivera Session",
             displayTitle: "Jamie Rivera Session"
         )
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
@@ -691,7 +680,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         viewModel.clearScanResults()
         XCTAssertTrue(viewModel.dismissedCollaboratorSuggestionIDs.isEmpty)
         // A reset stands in for the next scan's fresh catalog.
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
         XCTAssertEqual(viewModel.pendingCollaboratorSuggestions.first?.id, suggestion.id)
@@ -713,7 +702,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         )
         _ = try XCTUnwrap(viewModel.upsertCollaborator(name: "Jamie Rivera"))
         viewModel.roots = [root]
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
@@ -742,7 +731,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Assigned Song", displayTitle: "Assigned Song",
             appNote: "keep me", collaboratorIDs: [jamie.id]
         )
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         let suggestion = CollaboratorSuggestion(
             songID: song.id, songTitle: song.effectiveDisplayTitle,
             suggestedCollaboratorID: jamie.id, suggestedName: jamie.displayName,
@@ -770,7 +759,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         let song = Song(
             folderPath: folder, originalFolderName: "Blocked Song", displayTitle: "Blocked Song"
         )
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         blockSongWithVaultTransfer(viewModel, song: song)
         XCTAssertTrue(viewModel.blocksGenericProjectVaultFileActions(for: song))
         let suggestion = CollaboratorSuggestion(
@@ -800,7 +789,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             folderPath: folder, originalFolderName: "Jamie Rivera Session",
             displayTitle: "Jamie Rivera Session"
         )
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)

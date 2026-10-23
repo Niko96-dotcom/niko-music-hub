@@ -12,11 +12,11 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
     func testCatalogRemovalKeepsBoardFallbackAndItsCommandsAvailable() {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         let song = fixtureSong()
-        viewModel.mutateCatalog { viewModel.songs = [song] }
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.openSongDetail(song)
         XCTAssertFalse(viewModel.showsBoardPage)
 
-        viewModel.mutateCatalog { viewModel.songs = [] }
+        viewModel.applyCatalogEdit(.load([]))
         XCTAssertNil(viewModel.selectedSong)
         XCTAssertEqual(viewModel.viewMode, .boardDetail)
         XCTAssertTrue(viewModel.showsBoardPage)
@@ -33,7 +33,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let history = context.navigationHistory
         let archiveID = ArchiveBrowserViewModel.navigationToolID
         let song = fixtureSong()
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
         viewModel.selectedSong = nil
         viewModel.viewMode = .board
@@ -58,7 +58,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let history = context.navigationHistory
         let archiveID = ArchiveBrowserViewModel.navigationToolID
         let song = fixtureSong()
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
         viewModel.selectedSong = song
         viewModel.viewMode = .list
@@ -77,7 +77,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let history = context.navigationHistory
         let archiveID = ArchiveBrowserViewModel.navigationToolID
         let song = fixtureSong()
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
         viewModel.selectedSong = nil
         viewModel.viewMode = .board
@@ -114,7 +114,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let history = context.navigationHistory
         let archiveID = ArchiveBrowserViewModel.navigationToolID
         let song = fixtureSong()
-        viewModel.songs = [song]
+        viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
         viewModel.selectedSong = nil
         viewModel.viewMode = .board
@@ -124,15 +124,17 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         viewModel.viewMode = .boardDetail
         XCTAssertEqual(history.lastRoute(for: archiveID), "detail:\(song.id)")
 
-        // The song leaves the catalog; the recorded detail entry is now stale.
-        viewModel.songs = []
-        viewModel.filteredSongs = []
-
         let back = history.goBack()
         XCTAssertEqual(back?.route, "board")
         history.restore(back!)
         XCTAssertEqual(viewModel.viewMode, .board)
         XCTAssertEqual(history.lastRoute(for: archiveID), "board")
+        XCTAssertTrue(history.canGoForward)
+
+        // The song leaves the catalog while the board shows; the forward detail
+        // entry is now stale. (Removed while its detail was open, the catalog
+        // edit would clear the selection first, as a rescan does.)
+        viewModel.applyCatalogEdit(.load([]))
         XCTAssertTrue(history.canGoForward)
 
         let entriesBeforeForwardRestore = history.entries.count

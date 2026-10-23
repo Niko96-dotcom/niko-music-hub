@@ -27,7 +27,7 @@ final class OpenLatestCPRTests: XCTestCase {
             context: TestToolContext.make(settingsStore: store),
             runtime: MusicHubRuntimeEnvironment(environment: [MusicHubRuntimeEnvironment.dryRunOpenKey: "1"])
         )
-        model.songs = [song]
+        model.applyCatalogEdit(.load([song]))
         XCTAssertNil(model.projectOpenBlockReason(for: song))
         for version in versions.prefix(2) {
             try model.openProjectVersion(version, for: song)
