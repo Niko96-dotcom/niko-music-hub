@@ -156,7 +156,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
     /// a draft can leave it dirty when the save is refused.
     func commitVirtualTitle(for song: Song, title: String) -> MetadataCommitOutcome {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return applyMetadataMerge(for: song) { metadata, _ in
+        return commitNotes(for: song) { metadata, _ in
             metadata.virtualTitle = trimmed.isEmpty ? nil : trimmed
         }
     }
@@ -167,7 +167,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
 
     func commitAppNote(for song: Song, note: String) -> MetadataCommitOutcome {
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        return applyMetadataMerge(for: song) { metadata, _ in
+        return commitNotes(for: song) { metadata, _ in
             metadata.appNote = trimmed.isEmpty ? nil : trimmed
         }
     }
@@ -181,7 +181,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return applyMetadataMerge(for: song) { metadata, _ in
+        return commitNotes(for: song) { metadata, _ in
             metadata.aliases = aliases
         }
     }
@@ -196,17 +196,50 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         aliasesText: String,
         appNote: String
     ) -> MetadataCommitOutcome {
+        applySongNotes(for: song, virtualTitle: virtualTitle, aliasesText: aliasesText, appNote: appNote, registerUndo: true)
+    }
+
+    private func applySongNotes(
+        for song: Song,
+        virtualTitle: String,
+        aliasesText: String,
+        appNote: String,
+        registerUndo: Bool
+    ) -> MetadataCommitOutcome {
         let trimmedTitle = virtualTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = appNote.trimmingCharacters(in: .whitespacesAndNewlines)
         let aliases = aliasesText
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return applyMetadataMerge(for: song) { metadata, _ in
+        return commitNotes(for: song, registerUndo: registerUndo) { metadata, _ in
             metadata.virtualTitle = trimmedTitle.isEmpty ? nil : trimmedTitle
             metadata.aliases = aliases
             metadata.appNote = trimmedNote.isEmpty ? nil : trimmedNote
         }
+    }
+
+    /// A notes edit and its "Edit Song Notes" Undo (NMH-048), registered here
+    /// for every note commit: only when the edit was not refused and a note
+    /// value changed, with the values the catalog held before the edit. Undo
+    /// restores only these SQLite values; music files are never written.
+    private func commitNotes(
+        for song: Song,
+        registerUndo: Bool = true,
+        mutate: (inout SongUserMetadata, inout Song) -> Void
+    ) -> MetadataCommitOutcome {
+        let before = host.currentSongs()?.first(where: { $0.id == song.id }) ?? song
+        let result = mergeAndCommit(for: song, mutate: mutate)
+        if registerUndo, result.outcome != .refused, let after = result.merged,
+           after.virtualTitle != before.virtualTitle || after.aliases != before.aliases || after.appNote != before.appNote {
+            registerMetadataUndo(
+                songID: song.id,
+                previousVirtualTitle: before.virtualTitle,
+                previousAliases: before.aliases,
+                previousAppNote: before.appNote
+            )
+        }
+        return result.outcome
     }
 
     func flushMetadataDrafts(
@@ -228,7 +261,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         return Array(all.suffix(limit))
     }
 
-    func registerMetadataUndo(
+    private func registerMetadataUndo(
         songID: String,
         previousVirtualTitle: String?,
         previousAliases: [String],
@@ -268,7 +301,8 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
             for: song,
             virtualTitle: previousVirtualTitle ?? "",
             aliasesText: previousAliases.joined(separator: ", "),
-            appNote: previousAppNote ?? ""
+            appNote: previousAppNote ?? "",
+            registerUndo: false
         )
         // A refused commit restored nothing, so there is nothing to redo.
         guard outcome != .refused else { return }
@@ -391,12 +425,22 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,
         mutate: (inout SongUserMetadata, inout Song) -> Void
     ) -> MetadataCommitOutcome {
-        if host.isVaultBlocked(song) { return .refused }
+        mergeAndCommit(for: song, rankingRefresh: rankingRefresh, mutate: mutate).outcome
+    }
+
+    /// The merge and commit behind every metadata edit, with the merged song
+    /// (nil when the edit was refused before a merge).
+    private func mergeAndCommit(
+        for song: Song,
+        rankingRefresh: ArchiveSongMetadataEditor.RankingRefresh = .none,
+        mutate: (inout SongUserMetadata, inout Song) -> Void
+    ) -> (outcome: MetadataCommitOutcome, merged: Song?) {
+        if host.isVaultBlocked(song) { return (.refused, nil) }
         if let blockWarning = catalog.metadataEditBlockWarning(for: song.id) {
             host.reportWarning(blockWarning)
-            return .refused
+            return (.refused, nil)
         }
-        guard let songs = host.currentSongs() else { return .refused }
+        guard let songs = host.currentSongs() else { return (.refused, nil) }
         // `mergedSongAfterEdit` returns nil only when the song is not in the
         // current catalog; the merge itself always yields a song. Nothing can
         // be edited then, so it is a refusal, never "nothing to change".
@@ -406,8 +450,8 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
             collaborators: host.currentCollaborators() ?? [],
             rankingRefresh: rankingRefresh,
             mutate: mutate
-        ) else { return .refused }
-        return commitSongMetadataUpdate(merged)
+        ) else { return (.refused, nil) }
+        return (commitSongMetadataUpdate(merged), merged)
     }
 
     private func commitSongMetadataUpdate(_ updated: Song) -> MetadataCommitOutcome {

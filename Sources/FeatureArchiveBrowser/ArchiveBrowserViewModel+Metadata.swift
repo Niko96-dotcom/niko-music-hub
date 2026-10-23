@@ -82,25 +82,6 @@ extension ArchiveBrowserViewModel {
         metadataEditing.statusHistory(for: song, limit: limit)
     }
 
-    /// NMH-048: metadata commits are undoable as a single "Edit Song Notes"
-    /// step. Only music-adjacent SQLite values are restored; music files are
-    /// never written.
-    func registerMetadataUndo(
-        songID: String,
-        previousVirtualTitle: String?,
-        previousAliases: [String],
-        previousAppNote: String?,
-        actionName: String = "Edit Song Notes"
-    ) {
-        metadataEditing.registerMetadataUndo(
-            songID: songID,
-            previousVirtualTitle: previousVirtualTitle,
-            previousAliases: previousAliases,
-            previousAppNote: previousAppNote,
-            actionName: actionName
-        )
-    }
-
     func applyWorkflowStatus(
         _ status: ProjectWorkflowStatus?,
         for song: Song,

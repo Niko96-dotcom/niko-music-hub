@@ -24,7 +24,7 @@ commit with `git log --grep='(intent step N)'`.
 | 1 Navigation intents | done | `git log --grep='(intent step 1)'` | strict build; `FeatureArchiveBrowserTests` 657 and AppCore `*SourceTests` 93, 0 failures |
 | 2 Guard the page rule | done | `git log --grep='(intent step 2)'` | strict build; `ArchiveViewIntentSourceTests` 2 and every AppCore `*SourceTests` (95), 0 failures; a planted `viewModel.viewMode = .list` failed the guard at `ArchiveBoardView.swift:47`, then was removed |
 | 3 One status gate in the song detail | done | `git log --grep='(intent step 3)'` | strict build; `FeatureArchiveBrowserTests` 658 and AppCore `*SourceTests` 96, 0 failures; the source test failed on the old gate; the Vault test shows card state `archiving`, block off, gate refusing |
-| 4 Notes Undo in the coordinator | not started | | |
+| 4 Notes Undo in the coordinator | done | `git log --grep='(intent step 4)'` | strict build; `FeatureArchiveBrowserTests` 661 and AppCore `*SourceTests` 96, 0 failures; with the commit's Undo switched off, 4 tests failed (2 new, 2 autosave); 4 hand-written `registerMetadataUndo` calls left the tests, no expectation changed |
 | 5 Docs, full gates, live check | not started | | |
 
 ## Revisions
@@ -35,6 +35,11 @@ Record every deviation from the steps below here, numbered, with its reason.
    `synchronizePreviewSelection()`, which writes no page state. Moving it too broke
    `HubDesignContractSourceTests.testArchivePausedTransportSelectionReachesItsSessionOwner`, which pins it to that file,
    so it stays there, as the plan said.
+2. **Step 4: the coordinator compares the merged song, not the catalog after the commit.** The view read
+   `viewModel.songs` again after each commit. The coordinator's test host does not apply replacements to its song
+   list, and reading the catalog back would rely on the host updating it at once. So `applyMetadataMerge` now runs
+   through a private `mergeAndCommit` that also returns the merged song, and `commitNotes` compares it with the song
+   the catalog held before.
 
 ## Terms
 

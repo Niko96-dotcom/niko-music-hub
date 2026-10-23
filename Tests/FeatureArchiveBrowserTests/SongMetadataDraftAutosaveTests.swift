@@ -53,16 +53,10 @@ final class SongMetadataDraftAutosaveTests: XCTestCase {
         undoManager.groupsByEvent = false
         harness.viewModel.bindInjectedUndoManager(undoManager)
 
-        // Simulate two view commits with undo registration.
+        // Two commits, like two edits in the detail; each registers its own Undo.
         undoManager.beginUndoGrouping()
         let initial = try XCTUnwrap(harness.viewModel.songs.first { $0.id == songA.id })
         harness.viewModel.updateAppNote(for: initial, note: "First")
-        harness.viewModel.registerMetadataUndo(
-            songID: songA.id,
-            previousVirtualTitle: initial.virtualTitle,
-            previousAliases: initial.aliases,
-            previousAppNote: initial.appNote
-        )
         undoManager.endUndoGrouping()
         XCTAssertEqual(undoManager.undoActionName, "Edit Song Notes")
 
@@ -70,12 +64,6 @@ final class SongMetadataDraftAutosaveTests: XCTestCase {
         XCTAssertEqual(afterFirst.appNote, "First")
         undoManager.beginUndoGrouping()
         harness.viewModel.updateAppNote(for: afterFirst, note: "Second")
-        harness.viewModel.registerMetadataUndo(
-            songID: songA.id,
-            previousVirtualTitle: afterFirst.virtualTitle,
-            previousAliases: afterFirst.aliases,
-            previousAppNote: afterFirst.appNote
-        )
         undoManager.endUndoGrouping()
         XCTAssertEqual(
             harness.viewModel.songs.first { $0.id == songA.id }?.appNote,
@@ -195,20 +183,13 @@ final class SongMetadataDraftAutosaveTests: XCTestCase {
         undoManager.groupsByEvent = false
         harness.viewModel.bindInjectedUndoManager(undoManager)
 
-        // Second edit with undo registration, mirroring SongDetailView.
+        // Second edit; the flush registers its own Undo.
         undoManager.beginUndoGrouping()
-        let before = try XCTUnwrap(harness.viewModel.songs.first { $0.id == harness.songAID })
         harness.viewModel.flushMetadataDrafts(
             songID: harness.songAID,
             virtualTitle: "T2",
             aliases: "a2, a3",
             appNote: "N2"
-        )
-        harness.viewModel.registerMetadataUndo(
-            songID: harness.songAID,
-            previousVirtualTitle: before.virtualTitle,
-            previousAliases: before.aliases,
-            previousAppNote: before.appNote
         )
         undoManager.endUndoGrouping()
         XCTAssertEqual(harness.store.upsertAllCount, 1, "three-field edit must persist once")

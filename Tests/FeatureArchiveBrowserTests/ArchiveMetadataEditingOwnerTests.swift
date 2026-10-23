@@ -398,6 +398,53 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
         XCTAssertTrue(undo.canRedo)
     }
 
+    // MARK: - Notes Undo registers with the commit
+
+    func testNoteCommitRegistersOneUndoThatRestoresTheOldValue() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Notes Undo Song")
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: OwnerFakeMetadataStore())
+
+        XCTAssertEqual(coordinator.commitVirtualTitle(for: song, title: "New Title"), .saved)
+        XCTAssertEqual(undo.undoActionName, "Edit Song Notes")
+        let changed = try XCTUnwrap(box.replaced.last)
+        XCTAssertEqual(changed.virtualTitle, "New Title")
+        box.songs = [changed]
+
+        undo.undo()
+        XCTAssertEqual(box.replaced.last?.virtualTitle, song.virtualTitle, "Undo restores the title held before")
+        XCTAssertFalse(undo.canUndo, "one edit, one Undo")
+        box.songs = [try XCTUnwrap(box.replaced.last)]
+
+        XCTAssertTrue(undo.canRedo)
+        undo.redo()
+        XCTAssertEqual(box.replaced.last?.virtualTitle, "New Title")
+    }
+
+    func testRefusedOrUnchangedNoteCommitRegistersNoUndo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Notes No Undo Song")
+        let store = OwnerFakeMetadataStore()
+        let (coordinator, _, undo) = makeStatusHarness(song: song, root: root, store: store)
+
+        XCTAssertNotEqual(coordinator.commitAppNote(for: song, note: song.appNote ?? ""), .refused)
+        XCTAssertFalse(undo.canUndo, "nothing changed, nothing to undo")
+
+        store.failUpsertAll = SongUserMetadataCorruptRowError(songIDs: [song.id])
+        XCTAssertEqual(coordinator.commitAppNote(for: song, note: "Refused note"), .refused)
+        XCTAssertFalse(undo.canUndo, "a refused save stored nothing")
+    }
+
+    func testDraftFlushRegistersTheNotesUndo() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Notes Flush Song")
+        let (coordinator, _, undo) = makeStatusHarness(song: song, root: root, store: OwnerFakeMetadataStore())
+
+        coordinator.flushMetadataDrafts(songID: song.id, virtualTitle: "Flushed", aliases: "one, two", appNote: "Note")
+
+        XCTAssertEqual(undo.undoActionName, "Edit Song Notes")
+    }
+
     func testRefusedUndoOfNotesEditRegistersNoRedo() throws {
         let root = try makeTempRoot()
         let song = makeSong(in: root, named: "Notes Undo Refused Song")
@@ -410,12 +457,6 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
             appNote: "New note"
         )
         XCTAssertEqual(outcome, .saved)
-        coordinator.registerMetadataUndo(
-            songID: song.id,
-            previousVirtualTitle: song.virtualTitle,
-            previousAliases: song.aliases,
-            previousAppNote: song.appNote
-        )
         let changed = try XCTUnwrap(box.replaced.last)
         box.songs = [changed]
         store.failUpsertAll = SongUserMetadataCorruptRowError(songIDs: [song.id])
