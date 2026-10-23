@@ -400,21 +400,6 @@ extension ArchiveBrowserViewModel {
         }
         return description.hasSuffix(".") ? description : "\(description)."
     }
-
-    /// Removes a folder from the stored scan list and follows the store at
-    /// once. A failed save changes nothing and shows a footer warning.
-    public func removeRoot(_ url: URL) {
-        let scanList = ArchiveScanList(bookmarks: bookmarkResolver)
-        do {
-            try settingsStore.updateSettings { settings in
-                settings = scanList.removing(url, from: settings)
-            }
-        } catch {
-            recordArchiveSettingsSaveFailure(error, context: "Archive roots save failed")
-            return
-        }
-        followStoredSettings()
-    }
 }
 
 /// Index export, diagnostics export and New Song refuse to write when the write

@@ -48,7 +48,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     // MARK: - Published state
 
-    @Published public var roots: [URL] = [] {
+    @Published var roots: [URL] = [] {
         didSet {
             guard oldValue.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
             invalidateActiveScanForRootChange()

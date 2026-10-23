@@ -64,11 +64,27 @@ final class SettingsLiquidSourceTests: XCTestCase {
             "Settings were not saved",
             "context.fileActions.chooseOutputFolder()",
             "context.fileActions.chooseExecutable",
-            "archiveViewModel.addRoot",
-            "archiveViewModel.removeRoot",
+            "ArchiveScanList().adding(",
+            "ArchiveScanList().removing(",
             "Read-only. Nothing moves or gets deleted unless you confirm a Project Vault archive",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing Settings safety/accessibility source: \(required)")
+        }
+    }
+
+    /// Settings and Set Up save the scan list and the Vault settings; the archive
+    /// follows the store. A file here that reaches into the archive view model
+    /// brings back the follow-up call that a new writer forgets.
+    func testSettingsAndSetUpNeverReachIntoTheArchiveViewModel() throws {
+        let settingsFolder = SourceTestSupport.packageRoot.appendingPathComponent("Sources/NikoMusicHub/Settings")
+        let files = try FileManager.default.contentsOfDirectory(atPath: settingsFolder.path)
+            .filter { $0.hasSuffix(".swift") }
+            .map { "Sources/NikoMusicHub/Settings/\($0)" }
+        XCTAssertGreaterThan(files.count, 5)
+        for file in files + ["Sources/NikoMusicHub/Onboarding/HubSetupView.swift"] {
+            let source = SourceLex.stripped(try SourceTestSupport.read(file))
+            XCTAssertFalse(source.contains("ArchiveBrowserViewModel"), file)
+            XCTAssertFalse(source.contains("import FeatureArchiveBrowser"), file)
         }
     }
 

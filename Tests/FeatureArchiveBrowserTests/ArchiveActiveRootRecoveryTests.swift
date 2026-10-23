@@ -297,7 +297,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         // Active root must stay a single entry.
         viewModel.addRoots([otherDir], bookmarksByURL: [otherDir: Data([0xD1])])
         XCTAssertEqual(try fixture.store.loadSettings().musicRoots.filter { $0.id == activeID }.count, 1)
-        viewModel.removeRoot(otherDir)
+        try viewModel.removeFolderAsSettingsDoes(otherDir)
 
         let persisted = try fixture.store.loadSettings()
         XCTAssertEqual(persisted.musicRoots.filter { $0.id == activeID }.count, 1)

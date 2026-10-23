@@ -478,7 +478,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNotNil(viewModel.scanDiagnostics)
         XCTAssertFalse(viewModel.searchQuery.isEmpty)
 
-        viewModel.removeRoot(CubaseFixtures.archiveRoot)
+        try viewModel.removeFolderAsSettingsDoes(CubaseFixtures.archiveRoot)
 
         XCTAssertTrue(viewModel.roots.isEmpty)
         XCTAssertTrue(viewModel.songs.isEmpty)
@@ -527,7 +527,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.roots.count, 2)
         viewModel.clearScanResults()
 
-        viewModel.removeRoot(firstRoot)
+        try viewModel.removeFolderAsSettingsDoes(firstRoot)
 
         XCTAssertEqual(viewModel.roots.map { Self.rootIdentity($0.path) }, [Self.rootIdentity(secondRoot.path)])
         XCTAssertTrue(viewModel.songs.isEmpty)
@@ -582,7 +582,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
         XCTAssertNotNil(continuation)
 
-        viewModel.removeRoot(root)
+        try viewModel.removeFolderAsSettingsDoes(root)
         continuation?.resume(returning: ScanResult(songs: [staleSong], globalWarnings: [], skippedEntries: []))
         await scanTask.value
 

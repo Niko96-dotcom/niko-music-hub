@@ -96,7 +96,6 @@ struct NikoMusicHubApp: App {
         Settings {
             HubSettingsScene(
                 context: composition.context,
-                archiveViewModel: composition.archiveViewModel,
                 appearanceController: appearanceController,
                 updateController: composition.updateController,
                 router: composition.router,

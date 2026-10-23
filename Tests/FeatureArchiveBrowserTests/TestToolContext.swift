@@ -74,3 +74,13 @@ private struct NoopTestFileActions: FileActions {
     func chooseAudioFile(prompt: String) -> URL? { nil }
     func revealInFinder(_ url: URL) {}
 }
+
+extension ArchiveBrowserViewModel {
+    /// What Settings > Music archive > Remove does: edit the stored scan list.
+    /// The archive answers the save's publish with `followStoredSettings()`;
+    /// tests run that reaction at once instead of waiting a main-queue turn.
+    func removeFolderAsSettingsDoes(_ folder: URL) throws {
+        try settingsStore.updateSettings { $0 = ArchiveScanList().removing(folder, from: $0) }
+        followStoredSettings()
+    }
+}

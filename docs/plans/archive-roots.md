@@ -25,7 +25,7 @@ commit with `git log --grep='(roots step N)'`.
 | 1 One tool context | done | `git log --grep='(roots step 1)'` | strict build; `AppCoreTests` 813 (2 skipped), `FeatureArchiveBrowserTests` 662, converter 97, downloader 206 (2 skipped), stem 93 (Swift Testing), 0 failures; `archive-launch.swift` and `archive-tools.swift` typecheck |
 | 2 One module edits the scan list | done | `git log --grep='(roots step 2)'` | strict build; `ArchiveScanListTests` 13, `FeatureArchiveBrowserTests` 662, AppCore `*SourceTests` 96, 0 failures; changed test expectations in revisions 2 to 5 |
 | 3 The archive follows the store | done | `git log --grep='(roots step 3)'` | strict build; `ArchiveStoredRootsFollowTests` 5, `FeatureArchiveBrowserTests` 667, AppCore `*SourceTests` 96, 0 failures; with the subscription removed all 5 new tests failed; with every publish counted as a root change the pin and own-add tests failed; changed expectations in revisions 7 to 10 |
-| 4 Settings and Set Up use the store | not started | | |
+| 4 Settings and Set Up use the store | done | `git log --grep='(roots step 4)'` | strict build; `FeatureArchiveBrowserTests` 667, AppCore `*SourceTests` 97, `ArchiveScanListTests` + Settings/Set Up source tests 29, 0 failures; a planted `import FeatureArchiveBrowser` in `HubSettingsScene.swift` failed the new guard, then was removed |
 | 5 Docs, full gates, live check | not started | | |
 
 ## Revisions
@@ -78,6 +78,12 @@ Record every deviation from the steps below here, numbered, with its reason.
 11. **Step 3: the reaction runs one main-queue turn after the publish.** `@Published` emits before the observer stores
     the value; `.receive(on: DispatchQueue.main)` lets `appSettings.settings` be current when the archive reacts. The
     reaction reads the store in any case.
+12. **Step 4: `removeRoot` is deleted, not kept for tests.** After Settings moved to the store it had no production
+    caller. The eight test calls use `removeFolderAsSettingsDoes(_:)` (`TestToolContext.swift`), which edits the store
+    as Settings does and runs `followStoredSettings()` at once instead of waiting for the publish.
+13. **Step 4: Settings' own bookmark sentence.** Settings > Add makes the bookmark with
+    `FoundationSecurityScopedBookmarks`; when it cannot, the folder is saved without one and the banner says "Access to
+    “<folder>” could not be saved. You may need to choose the folder again after quit." (requirement 6).
 
 ## Terms
 

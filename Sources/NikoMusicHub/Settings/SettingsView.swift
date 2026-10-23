@@ -2,7 +2,6 @@ import AppCore
 import AppKit
 import AppUpdates
 import Combine
-import FeatureArchiveBrowser
 import NikoMusicCore
 import SwiftUI
 
@@ -240,17 +239,14 @@ struct SettingsView: View {
     let pane: HubSettingsPane
 
     @ObservedObject var session: HubSettingsSession
-    @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
     @ObservedObject var router: QuickAccessRouter
 
     init(
         session: HubSettingsSession,
-        archiveViewModel: ArchiveBrowserViewModel,
         router: QuickAccessRouter,
         pane: HubSettingsPane
     ) {
         self.session = session
-        self.archiveViewModel = archiveViewModel
         self.router = router
         self.pane = pane
     }
@@ -308,7 +304,7 @@ struct SettingsView: View {
             }
         case .archive:
             SettingsArchivePane(
-                roots: archiveViewModel.roots,
+                roots: ArchiveScanList.scannedRoots(in: session.settings),
                 scanExclusions: session.scanExclusionBinding,
                 onAddRoot: addArchiveRoot,
                 onRemoveRoot: removeArchiveRoot
@@ -372,13 +368,19 @@ struct SettingsView: View {
         session.context.fileActions.revealInFinder(session.settings.outputFolder.url)
     }
 
+    /// Settings saves the scan list; the archive follows the store. A failed
+    /// save, or folder access that could not be saved, shows in the banner.
     private func addArchiveRoot() {
         guard let folder = session.context.fileActions.chooseDirectory(prompt: "Add Folder") else { return }
-        archiveViewModel.addRoot(folder)
+        let bookmark = try? FoundationSecurityScopedBookmarks().makeBookmark(for: folder.standardizedFileURL)
+        let saved = session.persistSettings { $0 = ArchiveScanList().adding(folder, bookmark: bookmark, to: $0) }
+        if saved, bookmark == nil {
+            session.saveError = "Access to “\(folder.lastPathComponent)” could not be saved. You may need to choose the folder again after quit."
+        }
     }
 
-    private func removeArchiveRoot(_ root: URL) {
-        archiveViewModel.removeRoot(root)
+    private func removeArchiveRoot(_ root: StoredMusicRoot) {
+        _ = session.persistSettings { $0 = ArchiveScanList().removing(root.fallbackURL, from: $0) }
     }
 
     private func setHelperToolPath(_ tool: SettingsHelperTool, to url: URL?) {
@@ -490,12 +492,14 @@ private struct SettingsGeneralSection: View {
 
 // MARK: - Archive pane
 
-/// Music archive pane: scan roots (read-only), board compaction, scan exclusions.
+/// Music archive pane: the stored scan list, board compaction, scan exclusions.
 private struct SettingsArchivePane: View {
-    let roots: [URL]
+    /// `ArchiveScanList.scannedRoots`: Scan-only folders, plus the Vault Active
+    /// folder while Vault is on (changed in the Project Vault pane, so no Remove).
+    let roots: [StoredMusicRoot]
     @Binding var scanExclusions: String
     let onAddRoot: () -> Void
-    let onRemoveRoot: (URL) -> Void
+    let onRemoveRoot: (StoredMusicRoot) -> Void
     /// Board preference (read by ArchiveBoardView via the same key).
     @AppStorage("hub.archive.compactEmptyStages") private var compactEmptyStages = false
 
@@ -546,7 +550,7 @@ private struct SettingsArchivePane: View {
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            ForEach(Array(roots.enumerated()), id: \.element) { index, root in
+            ForEach(Array(roots.enumerated()), id: \.element.id) { index, root in
                 if index > 0 {
                     SettingsRowDivider()
                 }
@@ -565,18 +569,24 @@ private struct SettingsArchivePane: View {
         }
     }
 
-    private func archiveRootRow(_ root: URL) -> some View {
-        SettingsRow(
-            root.lastPathComponent.isEmpty ? "Folder" : root.lastPathComponent,
-            description: root.path
-        ) {
-            HubIconButton(
-                systemImage: "trash",
-                accessibilityLabel: "Remove from scan list",
-                help: "Remove \(root.lastPathComponent) from scan list",
-                role: .destructive
-            ) {
-                onRemoveRoot(root)
+    @ViewBuilder
+    private func archiveRootRow(_ root: StoredMusicRoot) -> some View {
+        let folder = root.fallbackURL
+        let name = folder.lastPathComponent.isEmpty ? "Folder" : folder.lastPathComponent
+        if root.role == .scanOnly {
+            SettingsRow(name, description: folder.path) {
+                HubIconButton(
+                    systemImage: "trash",
+                    accessibilityLabel: "Remove from scan list",
+                    help: "Remove \(folder.lastPathComponent) from scan list",
+                    role: .destructive
+                ) {
+                    onRemoveRoot(root)
+                }
+            }
+        } else {
+            SettingsRow(name, description: "Project Vault Active Projects") {
+                EmptyView()
             }
         }
     }

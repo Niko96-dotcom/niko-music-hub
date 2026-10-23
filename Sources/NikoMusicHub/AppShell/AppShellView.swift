@@ -151,7 +151,7 @@ struct AppShellView: View {
         )) {
             HubSetupView(
                 model: helperSetup,
-                archiveViewModel: archiveViewModel,
+                appSettings: context.appSettings,
                 chooseArchiveFolder: chooseSetupArchiveFolder,
                 onClose: { shellSession.dismissSetup() }
             )

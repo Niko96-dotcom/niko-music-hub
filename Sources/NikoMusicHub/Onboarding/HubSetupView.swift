@@ -1,12 +1,13 @@
 import AppCore
-import FeatureArchiveBrowser
+import NikoMusicCore
 import SwiftUI
 
 /// One-click helper-tool Set Up sheet. The model outlives the sheet so closing
 /// never cancels an install.
 struct HubSetupView: View {
     @ObservedObject var model: HelperToolSetupModel
-    @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
+    /// The scan list as stored; Choose Folder asks the archive, which saves it.
+    @ObservedObject var appSettings: AppSettingsObserver
     let chooseArchiveFolder: () -> Void
     let onClose: () -> Void
 
@@ -74,11 +75,15 @@ struct HubSetupView: View {
         .accessibilityIdentifier("hub_setup_sheet")
     }
 
+    private var scannedRoots: [StoredMusicRoot] {
+        ArchiveScanList.scannedRoots(in: appSettings.settings)
+    }
+
     private var archiveDetail: String {
-        if archiveViewModel.roots.isEmpty {
+        guard let first = scannedRoots.first else {
             return "Your Cubase or Ableton projects folder · optional"
         }
-        return archiveViewModel.roots[0].lastPathComponent
+        return first.fallbackURL.lastPathComponent
     }
 
     private func setupRow(icon: String, title: String, detail: String, trailing: AnyView) -> some View {
@@ -169,7 +174,7 @@ struct HubSetupView: View {
 
     @ViewBuilder
     private var archiveTrailing: some View {
-        if archiveViewModel.roots.isEmpty {
+        if scannedRoots.isEmpty {
             HubLabeledButton(
                 icon: "folder.badge.plus",
                 label: "Choose Folder",

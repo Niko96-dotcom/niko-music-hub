@@ -279,7 +279,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         // Remove the recovered first root; healthy stays, second unresolved stays persisted.
         let recoveredURL = viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) })
         let recovered = try XCTUnwrap(recoveredURL)
-        viewModel.removeRoot(recovered)
+        try viewModel.removeFolderAsSettingsDoes(recovered)
 
         XCTAssertFalse(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) }))
         XCTAssertTrue(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: healthyDir) }))
@@ -435,7 +435,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
 
         // Removing the recovered root keeps the remaining warning truthful.
         let recoveredURL = try XCTUnwrap(viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) }))
-        viewModel.removeRoot(recoveredURL)
+        try viewModel.removeFolderAsSettingsDoes(recoveredURL)
         XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive root access could not be restored: Second.")
 
@@ -446,7 +446,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         XCTAssertNil(viewModel.persistenceWarningMessage)
         viewModel.recordPersistenceWarning("Archive settings could not be saved: disk full.")
         let healthyURL = try XCTUnwrap(viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: healthyDir) }))
-        viewModel.removeRoot(healthyURL)
+        try viewModel.removeFolderAsSettingsDoes(healthyURL)
         XCTAssertNil(viewModel.archiveAccessFailure)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive settings could not be saved: disk full.", "removal must not clear an unrelated warning")
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive settings could not be saved") == true)
@@ -555,7 +555,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         XCTAssertFalse(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: vaultDir) }))
 
         let target = try XCTUnwrap(viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: otherDir) }))
-        viewModel.removeRoot(target)
+        try viewModel.removeFolderAsSettingsDoes(target)
 
         let persisted = try fixture.store.loadSettings()
         let preserved = persisted.musicRoots.first(where: { $0.id == vaultID })

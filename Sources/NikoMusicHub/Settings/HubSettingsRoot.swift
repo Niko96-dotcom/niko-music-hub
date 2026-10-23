@@ -1,12 +1,10 @@
 import AppCore
 import AppUpdates
-import FeatureArchiveBrowser
 import SwiftUI
 
 /// Paneled Settings window (⌘, / App menu). Shared session so pane switches
 /// do not fork immediate-apply state.
 struct HubSettingsRoot: View {
-    @ObservedObject var archiveViewModel: ArchiveBrowserViewModel
     @ObservedObject var router: QuickAccessRouter
 
     @StateObject private var session: HubSettingsSession
@@ -14,13 +12,11 @@ struct HubSettingsRoot: View {
 
     init(
         context: ToolContext,
-        archiveViewModel: ArchiveBrowserViewModel,
         appearanceController: AppAppearanceController,
         updateController: AppUpdateController,
         router: QuickAccessRouter,
         shellSession: HubShellSession
     ) {
-        self.archiveViewModel = archiveViewModel
         self.router = router
         _session = StateObject(
             wrappedValue: HubSettingsSession(
@@ -37,7 +33,6 @@ struct HubSettingsRoot: View {
             ForEach(HubSettingsPaneLayout.order) { pane in
                 SettingsView(
                     session: session,
-                    archiveViewModel: archiveViewModel,
                     router: router,
                     pane: pane
                 )
