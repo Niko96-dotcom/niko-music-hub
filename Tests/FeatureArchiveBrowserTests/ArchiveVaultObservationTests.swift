@@ -328,6 +328,26 @@ final class ArchiveVaultObservationTests: XCTestCase {
         XCTAssertEqual(observation.archivedCount, 0, "full refresh with the same list updates the count")
     }
 
+    // MARK: - Status gate
+
+    /// During an archive transfer the song's folder is the transfer source, which
+    /// the file-action block does not cover. Only `canMutateWorkflowStatus`
+    /// refuses a status change then, so every status menu must use it.
+    func testArchiveTransferInProgressRefusesStatusChangesThatTheFileBlockAllows() async throws {
+        let harness = try makeHarness()
+        defer { harness.cleanup() }
+        let runtime = ObservationTestRuntime()
+        let song = makeSong(in: harness.active, named: "Transfer Gate Song")
+        runtime.setServed([makeTransferSnapshot(song: song, recordID: ProjectID(), state: .copyingToArchiveStaging)])
+        let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [song])
+        try await waitUntil { runtime.snapshotsCalls >= 1 && runtime.dueCalls >= 1 }
+        _ = await viewModel.refreshProjectVaultSnapshots()
+
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: song)?.state, .archiving)
+        XCTAssertFalse(viewModel.blocksGenericProjectVaultFileActions(for: song), "the shorter rule would allow it")
+        XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: song))
+    }
+
     // MARK: - Catalog edits are projected
 
     /// A cached index that arrives after the Vault snapshots goes through the

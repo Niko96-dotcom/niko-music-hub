@@ -191,7 +191,9 @@ struct SongDetailView: View {
                 ArchiveWorkflowStatusMenu(status: liveSong.workflowStatus, compact: false) {
                     viewModel.applyWorkflowStatus($0, for: liveSong)
                 }
-                .disabled(viewModel.blocksGenericProjectVaultFileActions(for: liveSong))
+                // The board's and the metadata coordinator's gate: during an archive
+                // transfer the file-action block alone would still offer a change.
+                .disabled(!viewModel.canMutateWorkflowStatus(for: liveSong))
 
                 overflowMenu
             }

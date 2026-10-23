@@ -36,7 +36,36 @@ final class ArchiveViewIntentSourceTests: XCTestCase {
         XCTAssertEqual(hits("// viewModel.viewMode = .board"), 0)
     }
 
+    /// The song detail's status menu offers a change only when the board and the
+    /// metadata coordinator would accept it: `canMutateWorkflowStatus`, not the
+    /// shorter file-action block (which stays off during an archive transfer).
+    func testSongDetailStatusMenuUsesTheStatusGate() throws {
+        let source = SourceLex.stripped(try SourceTestSupport.read("Sources/FeatureArchiveBrowser/SongDetailView.swift"))
+        let menu = try XCTUnwrap(source.range(of: "ArchiveWorkflowStatusMenu("), "the detail has a status menu")
+        let disabled = try XCTUnwrap(source.range(of: ".disabled(", range: menu.upperBound..<source.endIndex))
+        let argument = Self.parenthesized(source, from: disabled.upperBound)
+        XCTAssertTrue(argument.contains("canMutateWorkflowStatus"), "status menu gate: \(argument)")
+        XCTAssertFalse(argument.contains("blocksGenericProjectVaultFileActions"), "status menu gate: \(argument)")
+    }
+
     // MARK: - Detectors
+
+    /// The text up to the parenthesis that closes the one opened just before `start`.
+    private static func parenthesized(_ source: String, from start: String.Index) -> String {
+        var depth = 1
+        var index = start
+        while index < source.endIndex {
+            switch source[index] {
+            case "(": depth += 1
+            case ")":
+                depth -= 1
+                if depth == 0 { return String(source[start..<index]) }
+            default: break
+            }
+            index = source.index(after: index)
+        }
+        return String(source[start...])
+    }
 
     private static let pageWrite = try! NSRegularExpression(pattern: #"\b(?:viewMode|listShowsDetail)\s*=(?!=)"#)
 
