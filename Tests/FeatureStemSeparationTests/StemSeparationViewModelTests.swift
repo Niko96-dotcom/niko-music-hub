@@ -13,7 +13,6 @@ struct StemSeparationViewModelTests {
         youtubeWorkflow: YouTubeStemSeparationWorkflow? = nil
     ) -> StemSeparationViewModel {
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: outputInboxStore,
@@ -98,7 +97,6 @@ struct StemSeparationViewModelTests {
             jobRunner: jobRunner
         )
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -239,7 +237,6 @@ struct StemSeparationViewModelTests {
             jobRunner: runner
         )
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -365,7 +362,6 @@ struct StemSeparationViewModelTests {
         let inbox = FakeOutputInboxStore()
         let jobRunner = JobRunner()
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -413,7 +409,6 @@ struct StemSeparationViewModelTests {
             jobRunner: runner
         )
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -460,7 +455,6 @@ struct StemSeparationViewModelTests {
         let inbox = FakeOutputInboxStore()
         let jobRunner = JobRunner()
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -523,7 +517,6 @@ struct StemSeparationViewModelTests {
         let inbox = FakeOutputInboxStore()
         let jobRunner = JobRunner()
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -565,7 +558,6 @@ struct StemSeparationViewModelTests {
             jobRunner: runner
         )
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -597,7 +589,6 @@ struct StemSeparationViewModelTests {
         let inbox = FakeOutputInboxStore()
         let jobRunner = JobRunner()
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -644,7 +635,6 @@ struct StemSeparationViewModelTests {
         let inbox = FakeOutputInboxStore()
         let jobRunner = JobRunner()
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -692,7 +682,6 @@ struct StemSeparationViewModelTests {
         let blob = Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8)
         defaults.set(blob, forKey: "nikoMusicHub.settings")
         let context = ToolContext(
-            registeredToolCount: 7,
             settingsStore: UserDefaultsSettingsStore(userDefaults: defaults),
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: FakeOutputInboxStore(),

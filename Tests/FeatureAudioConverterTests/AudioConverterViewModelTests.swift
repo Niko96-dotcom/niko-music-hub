@@ -1111,7 +1111,6 @@ final class AudioConverterViewModelTests: XCTestCase {
             settings: AppSettings(outputFolder: StoredFolderLocation(url: outputFolder))
         )
         let context = ToolContext(
-            registeredToolCount: 1,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: outputInboxStore,

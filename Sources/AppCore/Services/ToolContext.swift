@@ -13,7 +13,6 @@ public struct PersistenceIssue: Identifiable, Equatable, Sendable {
 }
 
 public struct ToolContext: Sendable {
-    public let registeredToolCount: Int
     public let settingsStore: any SettingsStore
     public let preferences: any PreferenceStore
     public let outputInboxStore: any OutputInboxStore
@@ -21,7 +20,6 @@ public struct ToolContext: Sendable {
     public let fileActions: any FileActions
     public let launchAtLogin: any LaunchAtLoginControlling
     public let diagnostics: any Diagnostics
-    public let persistenceIssues: [PersistenceIssue]
     public let jobStatusCenter: ShellJobStatusCenter
     public let navigationHistory: HubNavigationHistory
     /// Observable mirror of the persisted settings (see `AppSettingsObserver`).
@@ -37,7 +35,6 @@ public struct ToolContext: Sendable {
     public let settingsRepair: SettingsRepairModel
 
     public init(
-        registeredToolCount: Int,
         settingsStore: any SettingsStore,
         preferences: any PreferenceStore,
         outputInboxStore: any OutputInboxStore,
@@ -45,7 +42,6 @@ public struct ToolContext: Sendable {
         fileActions: any FileActions,
         launchAtLogin: any LaunchAtLoginControlling = NoopLaunchAtLoginController(),
         diagnostics: any Diagnostics,
-        persistenceIssues: [PersistenceIssue] = [],
         jobStatusCenter: ShellJobStatusCenter? = nil,
         navigationHistory: HubNavigationHistory = HubNavigationHistory(),
         appSettings: AppSettingsObserver? = nil,
@@ -53,7 +49,6 @@ public struct ToolContext: Sendable {
         recoveryService: ProjectVaultRecoveryService? = nil,
         settingsRepair: SettingsRepairModel? = nil
     ) {
-        self.registeredToolCount = registeredToolCount
         self.settingsStore = settingsStore
         self.preferences = preferences
         self.outputInboxStore = outputInboxStore
@@ -61,7 +56,6 @@ public struct ToolContext: Sendable {
         self.fileActions = fileActions
         self.launchAtLogin = launchAtLogin
         self.diagnostics = diagnostics
-        self.persistenceIssues = persistenceIssues
         self.jobStatusCenter = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
         self.navigationHistory = navigationHistory
         self.appSettings = appSettings ?? AppSettingsObserver(store: settingsStore)

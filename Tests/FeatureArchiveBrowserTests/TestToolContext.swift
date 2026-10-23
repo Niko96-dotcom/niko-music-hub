@@ -18,7 +18,6 @@ enum TestToolContext {
         diagnostics: CapturingDiagnostics = CapturingDiagnostics()
     ) -> ToolContext {
         ToolContext(
-            registeredToolCount: 1,
             settingsStore: settingsStore,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: JSONOutputInboxStore(

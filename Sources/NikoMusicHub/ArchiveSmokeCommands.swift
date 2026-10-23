@@ -47,7 +47,6 @@ enum ArchiveSmokeCommands {
     ) throws {
         let smokeDefaults = makeSmokeUserDefaults(runtime: runtime)
         let context = ToolContext(
-            registeredToolCount: 1,
             settingsStore: UserDefaultsSettingsStore(userDefaults: smokeDefaults),
             preferences: UserDefaultsPreferenceStore(userDefaults: smokeDefaults),
             outputInboxStore: JSONOutputInboxStore(

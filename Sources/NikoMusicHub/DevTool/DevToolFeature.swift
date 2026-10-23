@@ -76,10 +76,6 @@ struct DevToolDetailView: View {
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 }
 
-                Text("Registered tools: \(context.registeredToolCount)")
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-
                 Text(outputFolderStatus)
                     .font(HubDesignSystem.Typography.bodySmall())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)

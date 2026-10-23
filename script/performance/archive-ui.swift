@@ -102,7 +102,7 @@ struct ArchiveUIBenchmark {
                 $0.outputFolder = StoredFolderLocation(url: root.appendingPathComponent("Output"))
             }
         }
-        let context = ToolContext(registeredToolCount: 1,
+        let context = ToolContext(
             settingsStore: settingsStore,
             outputInboxStore: JSONOutputInboxStore(storageURL: root.appendingPathComponent("inbox.json")),
             jobRunner: JobRunner(), fileActions: NoFileActions(), diagnostics: SilentDiagnostics())

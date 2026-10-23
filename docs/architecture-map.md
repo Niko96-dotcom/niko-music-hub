@@ -70,8 +70,8 @@ Hops in call order. Ownership detail is in [architecture.md](architecture.md).
 1. `NikoMusicHubApp.init` applies `-ui-tool`, then calls `AppComposition.make()`.
 2. `make()` opens one `SQLiteArchiveDatabase` and five stores on it. A store that fails becomes a
    `PersistenceIssue` banner, not a crash.
-3. It builds `ToolContext` #1, then `ArchiveBrowserViewModel`, then `HubShellSession`, the feature list,
-   the `ToolRegistry` and `ToolContext` #2 (the same services plus registry failures).
+3. It builds the one `ToolContext`, then `ArchiveBrowserViewModel`, then `HubShellSession`, the feature
+   list and the `ToolRegistry`. Store and registry failures go to `AppShellView` as `persistenceIssues`.
 4. `shellSession.restoreSelectedToolID(registry:)` picks the launch tool before any scene exists.
 5. `AppShellView` mounts the selected pane through `ToolPaneCache`.
 
@@ -232,9 +232,10 @@ These rules are documented and, where named, enforced. The full table is in
    before the registry and passes it to `AppShellView` and the Settings scene (`HubSettingsScene` →
    `SettingsView`, which adds and removes music roots through it). The shell imports
    `FeatureArchiveBrowser` for `ArchivePersistentPlayerView`.
-2. **That order forces a second `ToolContext`** and a hand-counted `registeredToolCount` that an `assert`
-   compares with the feature list (`AppComposition.swift`). `ToolContext.init` also creates a new job
-   center, settings observer and router when a caller leaves them out.
+2. **`ToolContext.init` creates a new job center, settings observer, router and repair model** when a
+   caller leaves them out. The two production callers are correct: `AppComposition` passes them all, and
+   `ArchiveSmokeCommands` runs alone. (The second context and the hand-counted tool number went on
+   2026-10-23.)
 3. **Two ways to run work.** Downloader and Stem Separation use `JobRunner`; the converter, recorder,
    helper installs, archive scan and Vault queue run their own tasks and register as extra sources.
    ADR 019 documents the registry, not which way a new tool should choose.

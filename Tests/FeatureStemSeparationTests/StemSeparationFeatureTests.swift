@@ -20,7 +20,6 @@ struct StemSeparationFeatureTests {
     func makeView_reusesSessionViewModelAcrossCalls() {
         let feature = StemSeparationFeature()
         let context = ToolContext(
-            registeredToolCount: 1,
             settingsStore: FeatureTestSettingsStore(),
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: FeatureTestOutputInboxStore(),

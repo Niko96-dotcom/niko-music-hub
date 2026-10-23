@@ -58,7 +58,6 @@ struct ToolScreensBenchmark {
         try settingsStore.updateSettings { $0.outputFolder = StoredFolderLocation(url: work.appendingPathComponent("Output")) }
         let router = QuickAccessRouter()
         let context = ToolContext(
-            registeredToolCount: 6,
             settingsStore: settingsStore,
             preferences: UserDefaultsPreferenceStore(userDefaults: defaults),
             outputInboxStore: JSONOutputInboxStore(storageURL: work.appendingPathComponent("inbox.json")),

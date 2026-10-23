@@ -180,7 +180,6 @@ final class AudioConverterCancelTests: XCTestCase {
 
     private func makeContext(outputFolder: URL, inbox: RecordingInboxStore) -> ToolContext {
         ToolContext(
-            registeredToolCount: 1,
             settingsStore: InMemorySettingsStore(
                 settings: AppSettings(outputFolder: StoredFolderLocation(url: outputFolder))
             ),

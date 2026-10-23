@@ -22,6 +22,9 @@ struct AppComposition {
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
     let archiveViewModel: ArchiveBrowserViewModel
+    /// Stores that failed to open and a failed tool registry; the shell's
+    /// warning banner is their only reader.
+    let persistenceIssues: [PersistenceIssue]
     /// Quit reads the job center, where the Vault queue registers too (ADR-019).
     let termination: HubTerminationCoordinator
     /// AppKit saves the main window frame into the standard defaults domain, so
@@ -63,20 +66,6 @@ struct AppComposition {
                 ? "Updates are disabled in isolated test runs."
                 : nil
         )
-        let showsDevTool = runtime.showsDevTool
-        // Must equal the final `features.count` below. The base list always registers 7
-        // tools; `showsDevTool` appends DevToolFeature, and DEBUG builds additionally append
-        // DesignSystemPreviewFeature. `registeredToolCount` is consumed before `features` is
-        // built (ToolContext -> archiveViewModel -> features), so it is computed here with the
-        // SAME conditions rather than read off the array. Keep this in sync with the appends.
-        let baseRegisteredToolCount = 7
-        var registeredToolCount = baseRegisteredToolCount
-        if showsDevTool {
-            registeredToolCount += 1  // DevToolFeature
-            #if DEBUG
-            registeredToolCount += 1  // DesignSystemPreviewFeature
-            #endif
-        }
         var persistenceIssues: [PersistenceIssue] = []
         let archiveDatabaseURL = AppPaths.archiveIndexStoreURL(runtime: runtime)
         let archiveDatabase: SQLiteArchiveDatabase? = Self.makeSQLiteStore(
@@ -164,7 +153,6 @@ struct AppComposition {
             )
         }()
         let context = ToolContext(
-            registeredToolCount: registeredToolCount,
             settingsStore: settingsStore,
             preferences: preferences,
             outputInboxStore: outputInboxStore,
@@ -172,7 +160,6 @@ struct AppComposition {
             fileActions: fileActions,
             launchAtLogin: launchAtLogin,
             diagnostics: diagnostics,
-            persistenceIssues: persistenceIssues,
             jobStatusCenter: jobStatusCenter,
             navigationHistory: navigationHistory,
             appSettings: appSettings,
@@ -250,19 +237,12 @@ struct AppComposition {
             StemSeparationFeature(),
             SettingsFeature()
         ]
-        if showsDevTool {
+        if runtime.showsDevTool {
             features.append(DevToolFeature())
             #if DEBUG
             features.append(DesignSystemPreviewFeature())
             #endif
         }
-        // registeredToolCount is computed above from the same showsDevTool/DEBUG conditions;
-        // assert it matches the real registry so the two can never silently drift (IN-03).
-        assert(
-            registeredToolCount == features.count,
-            "registeredToolCount (\(registeredToolCount)) != features.count (\(features.count)) — "
-                + "update baseRegisteredToolCount / the append conditions to match the features array."
-        )
         let registry: ToolRegistry
         do {
             registry = try ToolRegistry(features: features)
@@ -280,34 +260,17 @@ struct AppComposition {
         // Resolve the launch tool here, before SwiftUI builds any scene: the
         // shell then only reads `selectedToolID`, never mutates it during init.
         shellSession.restoreSelectedToolID(registry: registry)
-        let finalContext = ToolContext(
-            registeredToolCount: registeredToolCount,
-            settingsStore: settingsStore,
-            preferences: preferences,
-            outputInboxStore: outputInboxStore,
-            jobRunner: jobRunner,
-            fileActions: fileActions,
-            launchAtLogin: launchAtLogin,
-            diagnostics: diagnostics,
-            persistenceIssues: persistenceIssues,
-            jobStatusCenter: jobStatusCenter,
-            navigationHistory: navigationHistory,
-            appSettings: appSettings,
-            router: quickAccessRouter,
-            recoveryService: recoveryService,
-            settingsRepair: settingsRepair
-        )
-
         return AppComposition(
             registry: registry,
             userDefaults: userDefaults,
-            context: finalContext,
+            context: context,
             router: quickAccessRouter,
             shellSession: shellSession,
             helperSetup: helperSetup,
             appearanceController: appearanceController,
             updateController: updateController,
             archiveViewModel: archiveViewModel,
+            persistenceIssues: persistenceIssues,
             termination: HubTerminationCoordinator(jobStatusCenter: jobStatusCenter),
             persistsWindowFrame: !runtime.usesIsolatedSettingsSuite
         )

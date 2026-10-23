@@ -696,7 +696,6 @@ final class DownloaderViewModelTests: XCTestCase {
         let store = MutableFolderSettingsStore(outputFolder: originalDir)
         let useCase = FakeDownloaderUseCase(job: job, delay: .milliseconds(30))
         let context = ToolContext(
-            registeredToolCount: 1,
             settingsStore: store,
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: inbox,
@@ -1270,7 +1269,6 @@ final class DownloaderViewModelTests: XCTestCase {
     ) -> DownloaderViewModel {
         let center = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
         let context = ToolContext(
-            registeredToolCount: 1,
             settingsStore: settingsStore ?? FixtureSettingsStore(settings: settings ?? AppSettings(
                 outputFolder: StoredFolderLocation(url: outputFolder),
                 helperTools: HelperToolSettings(ytDlp: URL(fileURLWithPath: "/fixture/yt-dlp"))

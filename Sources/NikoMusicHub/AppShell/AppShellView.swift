@@ -14,6 +14,8 @@ struct AppShellView: View {
     @ObservedObject var shellSession: HubShellSession
     @ObservedObject var helperSetup: HelperToolSetupModel
     let archiveViewModel: ArchiveBrowserViewModel
+    /// Launch failures from the composition (stores, tool registry).
+    let persistenceIssues: [PersistenceIssue]
     let persistsWindowFrame: Bool
     @ObservedObject private var history: HubNavigationHistory
     /// Unreadable-settings state; drives the Repair Settings notice in the top strip.
@@ -34,6 +36,7 @@ struct AppShellView: View {
         shellSession: HubShellSession,
         helperSetup: HelperToolSetupModel,
         archiveViewModel: ArchiveBrowserViewModel,
+        persistenceIssues: [PersistenceIssue],
         persistsWindowFrame: Bool
     ) {
         self.registry = registry
@@ -42,6 +45,7 @@ struct AppShellView: View {
         self.shellSession = shellSession
         self.helperSetup = helperSetup
         self.archiveViewModel = archiveViewModel
+        self.persistenceIssues = persistenceIssues
         self.persistsWindowFrame = persistsWindowFrame
         self.history = context.navigationHistory
         self.settingsRepair = context.settingsRepair
@@ -208,11 +212,11 @@ struct AppShellView: View {
     }
 
     private var bannerState: HubDesignSystem.ControlState {
-        context.persistenceIssues.isEmpty && !settingsRepair.needsRepair ? .normal : .warning
+        persistenceIssues.isEmpty && !settingsRepair.needsRepair ? .normal : .warning
     }
 
     private var showsPersistenceBanner: Bool {
-        !context.persistenceIssues.isEmpty || SettingsRepairNotice.isVisible(settingsRepair)
+        !persistenceIssues.isEmpty || SettingsRepairNotice.isVisible(settingsRepair)
     }
 
     /// Full-height hairline that separates flush columns (the reference split-view seam).
@@ -234,12 +238,12 @@ struct AppShellView: View {
         if showsPersistenceBanner {
             VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
                 SettingsRepairNotice(model: settingsRepair)
-                if !context.persistenceIssues.isEmpty {
+                if !persistenceIssues.isEmpty {
                     Label("Some saved data couldn’t be loaded", systemImage: "externaldrive.badge.exclamationmark")
                         .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
                         .foregroundStyle(HubDesignSystem.Colors.warning)
                 }
-                ForEach(context.persistenceIssues) { issue in
+                ForEach(persistenceIssues) { issue in
                     Text("\(issue.title): \(issue.message)")
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)

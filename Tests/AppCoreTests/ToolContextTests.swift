@@ -6,22 +6,22 @@ final class ToolContextTests: XCTestCase {
         let context = ToolContext.testFixture()
         let settings = try context.settingsStore.loadSettings()
 
-        XCTAssertEqual(context.registeredToolCount, 2)
         XCTAssertEqual(settings.outputFolder.url.lastPathComponent, "Inbox")
         XCTAssertTrue(try context.outputInboxStore.listItems().isEmpty)
         XCTAssertTrue(context.jobRunner.listJobs().isEmpty)
-        XCTAssertTrue(context.persistenceIssues.isEmpty)
     }
 
-    func testContextRetainsPersistenceIssues() {
-        let issue = PersistenceIssue(
-            id: "archive-index",
-            title: "Archive cache unavailable",
-            message: "sqlite open failed"
-        )
-        let context = ToolContext.testFixture(persistenceIssues: [issue])
+    /// The archive view model needs a context before the feature list and the
+    /// registry exist. Launch warnings, which a registry failure adds to, go to
+    /// their only reader, the shell, so one context serves the whole launch.
+    func testCompositionBuildsOneContextAndHandsLaunchWarningsToTheShell() throws {
+        let composition = SourceLex.stripped(try SourceTestSupport.read("Sources/NikoMusicHub/AppComposition.swift"))
+        XCTAssertEqual(composition.components(separatedBy: "ToolContext(").count - 1, 1)
+        XCTAssertTrue(composition.contains("persistenceIssues: persistenceIssues"))
 
-        XCTAssertEqual(context.persistenceIssues, [issue])
+        let shell = SourceLex.stripped(try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift"))
+        XCTAssertTrue(shell.contains("persistenceIssues: [PersistenceIssue]"))
+        XCTAssertFalse(shell.contains("context.persistenceIssues"))
     }
 
     func testAppShellUsesInjectedPreferencesInsteadOfAppStorage() throws {
@@ -81,16 +81,14 @@ final class ToolContextTests: XCTestCase {
 }
 
 private extension ToolContext {
-    static func testFixture(persistenceIssues: [PersistenceIssue] = []) -> ToolContext {
+    static func testFixture() -> ToolContext {
         ToolContext(
-            registeredToolCount: 2,
             settingsStore: FixtureSettingsStore(),
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: FixtureOutputInboxStore(),
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),
-            diagnostics: FixtureDiagnostics(),
-            persistenceIssues: persistenceIssues
+            diagnostics: FixtureDiagnostics()
         )
     }
 }

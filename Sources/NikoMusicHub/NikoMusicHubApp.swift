@@ -66,6 +66,7 @@ struct NikoMusicHubApp: App {
                 shellSession: shellSession,
                 helperSetup: composition.helperSetup,
                 archiveViewModel: composition.archiveViewModel,
+                persistenceIssues: composition.persistenceIssues,
                 persistsWindowFrame: composition.persistsWindowFrame
             )
             .preferredColorScheme(appearanceController.preferredColorScheme)

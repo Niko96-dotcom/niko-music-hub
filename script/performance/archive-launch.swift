@@ -173,7 +173,6 @@ struct ArchiveLaunchBenchmark {
             $0.outputFolder = StoredFolderLocation(url: work.appendingPathComponent("Output"))
         }
         let context = ToolContext(
-            registeredToolCount: 1,
             settingsStore: settingsStore,
             preferences: UserDefaultsPreferenceStore(userDefaults: defaults),
             outputInboxStore: JSONOutputInboxStore(storageURL: work.appendingPathComponent("inbox.json")),

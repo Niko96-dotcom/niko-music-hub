@@ -167,7 +167,6 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
         healthChecker: YtDlpHealthChecker
     ) -> DownloaderViewModel {
         let context = ToolContext(
-            registeredToolCount: 1,
             settingsStore: settingsStore,
             preferences: FixtureIntegrationPreferenceStore(),
             outputInboxStore: outputInboxStore,

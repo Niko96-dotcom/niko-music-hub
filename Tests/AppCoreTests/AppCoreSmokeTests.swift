@@ -32,9 +32,8 @@ private struct SmokeFeature: ToolFeature {
 }
 
 extension ToolContext {
-    static func smokeTest(registeredToolCount: Int = 1) -> ToolContext {
+    static func smokeTest() -> ToolContext {
         ToolContext(
-            registeredToolCount: registeredToolCount,
             settingsStore: SmokeSettingsStore(),
             preferences: InMemoryPreferenceStore(),
             outputInboxStore: SmokeOutputInboxStore(),
