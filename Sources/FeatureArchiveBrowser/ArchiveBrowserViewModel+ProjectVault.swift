@@ -43,43 +43,6 @@ extension ArchiveBrowserViewModel {
         if hadPendingRestore { await scanInBackground() }
     }
 
-    /// Applies a Project Vault setup change to the already-mounted Archive Browser.
-    /// Settings owns persistence; this method deliberately reloads the effective scan roots,
-    /// restarts observation, and refreshes vault recovery/snapshots without requiring a relaunch.
-    public func applyProjectVaultSettingsChange() {
-        guard !runtime.usesFixtureRoot else {
-            refreshProjectVaultPresentationContext()
-            applyCatalogEdit(.reproject)
-            Task {
-                await recoverProjectVaultAndRefresh()
-            }
-            return
-        }
-
-        let previousRoots = roots.standardizedArchivePaths
-        loadRootsFromSettings()
-        refreshProjectVaultPresentationContext()
-        let rootsChanged = previousRoots != roots.standardizedArchivePaths
-
-        if rootsChanged {
-            clearRootBoundArchiveState(
-                statusMessage: roots.isEmpty
-                    ? "Project Vault settings updated. Add an Active Projects root to scan."
-                    : "Project Vault settings updated. Scanning Active Projects…"
-            )
-            restartArchiveRootWatching()
-            if !roots.isEmpty {
-                Task { await scanInBackground() }
-            }
-        } else {
-            applyCatalogEdit(.reproject)
-        }
-
-        Task {
-            await recoverProjectVaultAndRefresh()
-        }
-    }
-
     /// Archived visibility toggle rebuilds the catalog from the retained
     /// snapshot list without another scan or round trip. Showing refreshes
     /// snapshots for liveness; hiding never scans.

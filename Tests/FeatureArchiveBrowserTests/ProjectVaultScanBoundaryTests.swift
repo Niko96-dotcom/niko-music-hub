@@ -52,9 +52,9 @@ final class ProjectVaultScanBoundaryTests: XCTestCase {
         settings.musicRoots = [updatedActiveRoot, updatedArchiveRoot]
         settings.vault.activeRootID = updatedActiveRoot.id
         settings.vault.archiveRootID = updatedArchiveRoot.id
+        // Settings saves; nothing calls the archive. It follows the store's publish.
         try store.saveSettings(settings)
 
-        model.applyProjectVaultSettingsChange()
         for _ in 0..<200 where !model.songs.contains(where: { $0.originalFolderName == "Fresh Project" }) {
             try await Task.sleep(for: .milliseconds(10))
         }

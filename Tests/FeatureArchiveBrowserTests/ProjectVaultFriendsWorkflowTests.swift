@@ -397,6 +397,9 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let foldersAuthorization = try await runtime.captureArchiveAuthorization(
             for: song, trigger: .manual, removingActiveCopy: true, catalogProjectID: nil)
         model.archiveInProjectVault(song, authorization: foldersAuthorization)
+        // This pins the queue's own folder check; stop following stored
+        // settings so the archive's root reload does not run first.
+        model.storedSettingsCancellable = nil
         try fixture.settingsStore.updateSettings { $0.vault.archiveRootID = UUID() }
         try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
         try VaultManifestBuilder().verify(fixture.sourceManifest, at: fixture.project)

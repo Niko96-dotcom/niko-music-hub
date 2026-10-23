@@ -389,12 +389,9 @@ struct SettingsView: View {
         }
     }
 
+    /// The archive follows the stored Vault settings itself.
     private func saveProjectVaultSettings(_ update: @escaping @Sendable (inout AppSettings) -> Void) -> Bool {
-        let saved = session.persistSettings(update)
-        if saved {
-            archiveViewModel.applyProjectVaultSettingsChange()
-        }
-        return saved
+        session.persistSettings(update)
     }
 
     private func openLoginSetting() {

@@ -306,6 +306,10 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
         // not a production root-guard defect.
         try await waitUntil { runtime.archiveCalls.map(\.songID).contains(first.id) }
 
+        // This pins the queue's own folder check. The archive follows the
+        // store one main-queue turn after a save and then resets its root-bound
+        // state; stop following so only the queue sees the change.
+        viewModel.storedSettingsCancellable = nil
         let replacementActiveID = UUID()
         let replacementActive = harness.root.appendingPathComponent("Active Replacement", isDirectory: true)
         try FileManager.default.createDirectory(at: replacementActive, withIntermediateDirectories: true)

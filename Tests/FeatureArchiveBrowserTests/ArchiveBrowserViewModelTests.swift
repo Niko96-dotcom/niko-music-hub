@@ -532,7 +532,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.roots.map { Self.rootIdentity($0.path) }, [Self.rootIdentity(secondRoot.path)])
         XCTAssertTrue(viewModel.songs.isEmpty)
         XCTAssertTrue(viewModel.filteredSongs.isEmpty)
-        XCTAssertEqual(viewModel.statusMessage, "Archive roots changed. Scan to refresh.")
+        // The remaining folder is scanned at once (it used to wait for Scan).
+        XCTAssertEqual(viewModel.statusMessage, "Scanning archive...")
         XCTAssertEqual(
             try settingsStore.loadSettings().archiveRoots.map { Self.rootIdentity($0.path) },
             [Self.rootIdentity(secondRoot.path)],
@@ -554,17 +555,25 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             originalFolderName: "Stale Song",
             displayTitle: "Stale Song"
         )
+        let settingsStore = UserDefaultsSettingsStore(
+            userDefaults: try XCTUnwrap(UserDefaults(suiteName: "FeatureArchiveBrowserTests.\(UUID())")),
+            key: "settings"
+        )
+        try settingsStore.updateSettings {
+            $0.musicRoots = [StoredMusicRoot(role: .scanOnly, url: root)]
+            $0.archiveOnboardingCompleted = true
+        }
+        // No watcher: init starts no scan, so the test's own scan is the only one.
         let viewModel = ArchiveBrowserViewModel(
-            context: TestToolContext.make(),
+            context: TestToolContext.make(settingsStore: settingsStore),
             archiveIndexStore: indexStore,
-            archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in
                 try await withCheckedThrowingContinuation { pending in
                     continuation = pending
                 }
             }
         )
-        viewModel.roots = [root]
+        XCTAssertEqual(viewModel.roots.count, 1)
 
         let scanTask = Task { await viewModel.scan() }
         let deadline = Date().addingTimeInterval(2)
@@ -1693,15 +1702,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         userDefaults.removePersistentDomain(forName: suiteName)
         defer { userDefaults.removePersistentDomain(forName: suiteName) }
         let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
-        let viewModel = ArchiveBrowserViewModel(
-            context: TestToolContext.make(settingsStore: store),
-            archiveRootWatcher: NoopArchiveRootWatcher(),
-            projectVaultRuntime: runtime
-        )
-        let folder = FileManager.default.temporaryDirectory
-            .appendingPathComponent("workflow-done-\(UUID().uuidString)", isDirectory: true)
         // Done reaches the Vault only once both Vault folders are chosen. Set
-        // after init so no root scan races the hand-placed song below.
+        // before init: the archive follows stored settings, so a later write
+        // would reload the roots. Without a watcher, init starts no root scan
+        // that could race the hand-placed song below.
         let activeRoot = StoredMusicRoot(role: .active, url: FileManager.default.temporaryDirectory)
         let archiveRoot = StoredMusicRoot(
             role: .archive,
@@ -1711,7 +1715,12 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             settings.musicRoots = [activeRoot, archiveRoot]
             settings.vault = VaultSettings(isEnabled: true, activeRootID: activeRoot.id, archiveRootID: archiveRoot.id)
         }
-        viewModel.refreshProjectVaultPresentationContext()
+        let viewModel = ArchiveBrowserViewModel(
+            context: TestToolContext.make(settingsStore: store),
+            projectVaultRuntime: runtime
+        )
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("workflow-done-\(UUID().uuidString)", isDirectory: true)
         let song = Song(
             folderPath: folder,
             originalFolderName: "Workflow Song",

@@ -24,7 +24,7 @@ commit with `git log --grep='(roots step N)'`.
 | 0 Baseline | done | — | full gates passed on `9db2010` (its commit message), no code commits since; no re-run |
 | 1 One tool context | done | `git log --grep='(roots step 1)'` | strict build; `AppCoreTests` 813 (2 skipped), `FeatureArchiveBrowserTests` 662, converter 97, downloader 206 (2 skipped), stem 93 (Swift Testing), 0 failures; `archive-launch.swift` and `archive-tools.swift` typecheck |
 | 2 One module edits the scan list | done | `git log --grep='(roots step 2)'` | strict build; `ArchiveScanListTests` 13, `FeatureArchiveBrowserTests` 662, AppCore `*SourceTests` 96, 0 failures; changed test expectations in revisions 2 to 5 |
-| 3 The archive follows the store | not started | | |
+| 3 The archive follows the store | done | `git log --grep='(roots step 3)'` | strict build; `ArchiveStoredRootsFollowTests` 5, `FeatureArchiveBrowserTests` 667, AppCore `*SourceTests` 96, 0 failures; with the subscription removed all 5 new tests failed; with every publish counted as a root change the pin and own-add tests failed; changed expectations in revisions 7 to 10 |
 | 4 Settings and Set Up use the store | not started | | |
 | 5 Docs, full gates, live check | not started | | |
 
@@ -56,7 +56,28 @@ Record every deviation from the steps below here, numbered, with its reason.
    drop the call (retry writes nothing; remove saves itself).
 6. **Step 2: every add saves and scans.** Adding a folder that is already listed refreshes its bookmark and scans
    (before: nothing). Adding a folder whose only record is disabled adds an enabled record and keeps the disabled one
-   (before: the disabled record blocked the add, so nothing was stored).
+   (before: the disabled record blocked the add, so nothing was stored). Since step 3 an add that changes no stored
+   value (the same folder, the same bookmark) loads and scans nothing, as before.
+7. **Step 3: two queue tests stop following.** `testRootChangeCancelsStaleQueuedOperationWithoutPerformingIt` and
+   `testQueuedArchiveCancelsWhenConfiguredFoldersChange` write new Vault folders to the store to pin the queue's own
+   folder check ("Queued request cancelled because the Project Vault folders changed."). The archive now follows that
+   write and resets its root-bound state, which clears queued work and its messages, as a Settings save did before
+   through `applyProjectVaultSettingsChange`. The tests set `storedSettingsCancellable = nil` first, so they keep
+   pinning the queue check alone. The production outcome of a Vault folder change from Settings is unchanged.
+8. **Step 3: tests that set settings after init set them before.** `testMarkingDoneArchivesTheUpdatedWorkflowSnapshot`
+   wrote the Vault folders after init to avoid a scan race; the archive now follows that write and reloads, so the
+   test stores them before init and has no watcher (no launch scan). `testStaleScanResultIsIgnoredAfterRootRemoval`
+   stores its root instead of seeding `roots`, so the removal edits the store.
+9. **Step 3: the presentation cache test runs the reaction.** `ProjectVaultPresentationCacheTests` uses a counting
+   store that publishes no changes, so it calls `followStoredSettings()` where it called
+   `applyProjectVaultSettingsChange()`.
+10. **Step 3: requirement 4 in the tests.** `testRemoveOneRootClearsCatalogAndPersistsRemainingRoot` expects
+    "Scanning archive..." after a removal (was "Archive roots changed. Scan to refresh."). A settings repair now keeps
+    the catalog and shows "Scanning archive..." when it adds roots (was a reset and "Scanning your archive…"); a repair
+    that removes roots resets as before.
+11. **Step 3: the reaction runs one main-queue turn after the publish.** `@Published` emits before the observer stores
+    the value; `.receive(on: DispatchQueue.main)` lets `appSettings.settings` be current when the archive reacts. The
+    reaction reads the store in any case.
 
 ## Terms
 

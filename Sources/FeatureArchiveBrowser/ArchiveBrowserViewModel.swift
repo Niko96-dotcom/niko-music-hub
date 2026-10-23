@@ -443,6 +443,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var cachedSearchIndex = MusicSearchIndex()
     /// Keeps security-scoped access alive for bookmarked roots while the model lives.
     var securityScopedRootAccesses: [SecurityScopedRootAccess] = []
+    /// The stored roots and Vault settings the archive last loaded; nil while
+    /// settings are unreadable. `followStoredSettings()` compares against it.
+    var followedSettings: ArchiveFollowedSettings?
+    var storedSettingsCancellable: AnyCancellable?
     public var requestConverterHandoff: ((URL) -> Void)?
 
     // MARK: - Computed
@@ -565,6 +569,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         wireVaultObservation()
         wireMetadataEditing()
         loadRootsFromSettings()
+        followStoredSettingsChanges()
         attachNavigationHistory(context.navigationHistory)
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)
         loadCollaborators()
@@ -578,6 +583,19 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             setStatusMessage("Scanning archive...")
             Task { await scanInBackground() }
         }
+    }
+
+    /// Every settings save publishes through `appSettings` on the main queue,
+    /// after the store holds it; the archive follows each one, whoever wrote it.
+    /// `@Published` emits before the observer stores the value, so the reaction
+    /// waits one main-queue turn: by then `appSettings.settings` is current too.
+    private func followStoredSettingsChanges() {
+        storedSettingsCancellable = appSettings.$settings
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.followStoredSettings() }
+            }
     }
 
     /// Wire the single observation owner: forward its publishes into this

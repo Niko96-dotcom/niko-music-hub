@@ -32,11 +32,18 @@ extension ArchiveBrowserViewModel {
         if let fixtureRoot = runtime.fixtureRootURL {
             roots = [fixtureRoot]
             archiveAccessFailure = nil
+            // The hook pins the roots; the stored Vault binding is still followed.
+            do {
+                followedSettings = ArchiveFollowedSettings(try settingsStore.loadSettings())
+            } catch {
+                followedSettings = nil
+            }
             return
         }
         archiveAccessFailure = nil
         do {
             let settings = try settingsStore.loadSettings()
+            followedSettings = ArchiveFollowedSettings(settings)
             let resolver = bookmarkResolver
             securityScopedRootAccesses.removeAll()
             let loadedRoots = ArchiveScanList.scannedRoots(in: settings)
@@ -62,6 +69,7 @@ extension ArchiveBrowserViewModel {
                 }
             roots = ArchiveRootDisplayPolicy.storedRoots(from: loadedRoots)
         } catch {
+            followedSettings = nil
             diagnostics.log(.error, "Archive settings load failed: \(error)")
             // Settings that no longer decode: the settings-repair notice explains
             // the empty archive and offers the fix, so nothing is added here.
@@ -74,29 +82,84 @@ extension ArchiveBrowserViewModel {
     }
 
     /// Settings were unreadable at launch (fail-closed load) and the user just
-    /// repaired them: drop the stale settings warning, reload the real archive
-    /// roots, and rescan when they differ from what is showing.
+    /// repaired them: drop the stale settings warning and follow the repaired
+    /// roots. The repair handler calls this at once; the publish comes later.
     public func applyRepairedSettings() {
         resolveFooterWarning(.settings)
         // Vault status read while settings were unreadable failed too; re-read
         // it now so its warning clears without a relaunch.
         Task { await refreshProjectVaultSnapshots() }
-        guard !runtime.usesFixtureRoot else {
-            refreshProjectVaultPresentationContext()
-            applyCatalogEdit(.reproject)
+        followStoredSettings()
+    }
+
+    /// The archive's one answer to a change of stored roots or Vault settings,
+    /// from any writer: Settings, Set Up, this board, a repair. It reads the
+    /// store, not a published value, so a late publish never rolls it back, and
+    /// a publish of what it already follows does nothing.
+    func followStoredSettings() {
+        let settings: AppSettings
+        do {
+            settings = try settingsStore.loadSettings()
+        } catch {
+            // Unreadable settings: the repair notice explains; keep what shows.
             return
         }
-        let previousRoots = roots.standardizedArchivePaths
+        let next = ArchiveFollowedSettings(settings)
+        if let previous = followedSettings, !next.rootsDiffer(from: previous) {
+            followedSettings = next
+            if next.vault != previous.vault {
+                // A Keep Local pin or another Vault choice: the cards change, the roots do not.
+                refreshProjectVaultPresentationContext()
+            }
+            return
+        }
+        // Nothing followed yet (settings were unreadable): load the roots, no Vault follow-up.
+        let bindingChanged = followedSettings.map { next.vaultBindingDiffers(from: $0) } ?? false
+        reloadStoredRoots(vaultBindingChanged: bindingChanged)
+    }
+
+    /// Loads the changed scan list. Added folders keep the catalog and scan; a
+    /// removal or a new Vault binding clears the root-bound state and scans
+    /// what is left. A footer warning that is not about root access survives.
+    private func reloadStoredRoots(vaultBindingChanged: Bool) {
+        let previousRoots = Set(roots.standardizedArchivePaths)
+        let stashedWarning = footer.warning
         loadRootsFromSettings()
-        refreshProjectVaultPresentationContext()
-        guard previousRoots != roots.standardizedArchivePaths else {
-            applyCatalogEdit(.reproject)
-            return
+        if archiveAccessFailure == nil {
+            resolveFooterWarning(.rootAccess)
         }
-        clearRootBoundArchiveState(statusMessage: roots.isEmpty ? nil : "Scanning your archive…")
-        restartArchiveRootWatching()
-        if !roots.isEmpty {
+        refreshProjectVaultPresentationContext()
+        let loadedRoots = Set(roots.standardizedArchivePaths)
+        if loadedRoots == previousRoots {
+            applyCatalogEdit(.reproject)
+        } else if !vaultBindingChanged, previousRoots.isSubset(of: loadedRoots) {
+            restartArchiveRootWatching()
+            setStatusMessage("Scanning archive...")
             Task { await scanInBackground() }
+        } else {
+            let failure = archiveAccessFailure
+            clearRootBoundArchiveState(statusMessage: rootChangeStatus(vaultBindingChanged: vaultBindingChanged))
+            if let failure {
+                recordPersistenceWarning(.rootAccess(rootName: failure.displayName))
+            } else if let stashedWarning, stashedWarning.kind != .rootAccess {
+                recordPersistenceWarning(stashedWarning)
+            }
+            restartArchiveRootWatching()
+            if !roots.isEmpty {
+                Task { await scanInBackground() }
+            }
+        }
+        if vaultBindingChanged {
+            Task { await recoverProjectVaultAndRefresh() }
+        }
+    }
+
+    private func rootChangeStatus(vaultBindingChanged: Bool) -> String? {
+        switch (vaultBindingChanged, roots.isEmpty) {
+        case (true, true): "Project Vault settings updated. Add an Active Projects root to scan."
+        case (true, false): "Project Vault settings updated. Scanning Active Projects…"
+        case (false, true): nil
+        case (false, false): "Scanning archive..."
         }
     }
 
@@ -238,8 +301,8 @@ extension ArchiveBrowserViewModel {
         addRoots([url])
     }
 
-    /// Adds folders to the stored scan list, then loads the roots again and
-    /// scans. A failed save changes nothing and shows a footer warning.
+    /// Adds folders to the stored scan list and follows the store at once. A
+    /// failed save changes nothing and shows a footer warning.
     func addRoots(_ urls: [URL], bookmarksByURL: [URL: Data] = [:]) {
         guard !urls.isEmpty else { return }
         let additions = urls.map { url in
@@ -256,13 +319,7 @@ extension ArchiveBrowserViewModel {
             recordArchiveSettingsSaveFailure(error, context: "Archive roots save failed")
             return
         }
-        loadRootsFromSettings()
-        if archiveAccessFailure == nil {
-            resolveFooterWarning(.rootAccess)
-        }
-        restartArchiveRootWatching()
-        setStatusMessage("Scanning archive...")
-        Task { await scanInBackground() }
+        followStoredSettings()
     }
 
     private func bookmarkData(for url: URL, provided: [URL: Data]) -> Data? {
@@ -344,8 +401,8 @@ extension ArchiveBrowserViewModel {
         return description.hasSuffix(".") ? description : "\(description)."
     }
 
-    /// Removes a folder from the stored scan list, then loads the roots again.
-    /// A failed save changes nothing and shows a footer warning.
+    /// Removes a folder from the stored scan list and follows the store at
+    /// once. A failed save changes nothing and shows a footer warning.
     public func removeRoot(_ url: URL) {
         let scanList = ArchiveScanList(bookmarks: bookmarkResolver)
         do {
@@ -356,27 +413,7 @@ extension ArchiveBrowserViewModel {
             recordArchiveSettingsSaveFailure(error, context: "Archive roots save failed")
             return
         }
-        let before = roots
-        let stashedWarning = footer.warning
-        loadRootsFromSettings()
-        if archiveAccessFailure == nil {
-            resolveFooterWarning(.rootAccess)
-        }
-        guard before.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
-        let failure = archiveAccessFailure
-        clearRootBoundArchiveState(
-            statusMessage: roots.isEmpty ? nil : "Archive roots changed. Scan to refresh."
-        )
-        // `clearRootBoundArchiveState` clears the footer warning; restore the
-        // remaining unresolved presentation so removing one root never drops it.
-        if let failure {
-            recordPersistenceWarning(.rootAccess(rootName: failure.displayName))
-        } else if let stashed = stashedWarning, stashed.kind != .rootAccess {
-            // Only the root-access warning is stale now; an unrelated warning
-            // cleared above must be restored so removal never hides it.
-            recordPersistenceWarning(stashed)
-        }
-        restartArchiveRootWatching()
+        followStoredSettings()
     }
 }
 
@@ -390,5 +427,29 @@ enum ArchiveWriteGuardError: LocalizedError, Equatable {
         case .settingsUnreadable:
             return "Settings couldn't be read, so nothing was written. Repair them in Settings, then try again."
         }
+    }
+}
+
+/// What the archive follows in stored settings: the roots it loads and the
+/// Vault settings its cards show.
+struct ArchiveFollowedSettings: Equatable {
+    let musicRoots: [StoredMusicRoot]
+    let vault: VaultSettings
+
+    init(_ settings: AppSettings) {
+        musicRoots = settings.musicRoots
+        vault = settings.vault
+    }
+
+    /// The stored roots or the Vault binding changed, so the loaded roots may change.
+    func rootsDiffer(from other: Self) -> Bool {
+        musicRoots != other.musicRoots || vaultBindingDiffers(from: other)
+    }
+
+    /// The Vault switch or the roots it is bound to changed.
+    func vaultBindingDiffers(from other: Self) -> Bool {
+        vault.isEnabled != other.vault.isEnabled
+            || vault.activeRootID != other.vault.activeRootID
+            || vault.archiveRootID != other.vault.archiveRootID
     }
 }

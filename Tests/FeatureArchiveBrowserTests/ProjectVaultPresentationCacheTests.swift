@@ -100,7 +100,8 @@ final class ProjectVaultPresentationCacheTests: XCTestCase {
 
         settings.vault.isEnabled = false
         try store.saveSettings(settings)
-        viewModel.applyProjectVaultSettingsChange()
+        // This counting store publishes no changes; run the reaction a publish runs.
+        viewModel.followStoredSettings()
         XCTAssertNil(viewModel.projectVaultPresentation(for: song))
         XCTAssertNil(viewModel.projectVaultPresentationContext)
 
