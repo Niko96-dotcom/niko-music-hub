@@ -383,9 +383,11 @@ Return and Esc on a tool page have one owner each (2026-10-24, finding #10 of th
 - Esc: the visible page's enabled cancel key, otherwise the shell's Edit ▸ Cancel ([Tool
   self-description](#tool-self-description)). AppKit gives a window's key buttons the key before the menu. The WAV
   Converter's cancel key is its soft stop; Edit ▸ Cancel chosen from the menu, ⌘. and the jobs strip stop the file
-  in flight now. The stop request is not published to the view, so the key (and the visible button) stays enabled
-  until the file ends, and a second Esc only repeats the request. The Downloader and Stem Separation declare no
-  cancel key: the shell's Esc cancels their jobs. The Audio Recorder's cancel key stops the take.
+  in flight now. The stop request publishes, so the visible button greys and the cancel key unbinds. A second Esc
+  does not stop the file: in the live check of 2026-10-24 a plain Esc did not fire Edit ▸ Cancel, while the menu and
+  ⌘. did ([architecture-map.md](architecture-map.md#where-the-code-differs-from-the-intent-observed), gap 10). The
+  Downloader and Stem Separation declare no cancel key: the shell's Esc is meant to cancel their jobs. The Audio
+  Recorder's cancel key stops the take.
 - The BPM Tapper's tap pad and the recorder's record button answer their keys only while their page is visible; the
   tap pad gives up keyboard focus when its page is hidden and takes it back when it is shown.
 - The Archive Browser is no `HubInspectorPage`, so it follows the same rule itself: its key handlers (Esc, Return,

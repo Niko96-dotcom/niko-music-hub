@@ -419,6 +419,45 @@ final class AudioConverterViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canRequestStopAfterCurrent)
     }
 
+    /// The page reads `canRequestStopAfterCurrent` only when the view model publishes:
+    /// without it the button stayed enabled and Esc stayed the soft stop until the file ended.
+    func testStopAfterCurrentRequestPublishesSoThePageDisablesItsStop() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeFile(named: "First.wav", in: directory)
+        let second = try makeFile(named: "Second.wav", in: directory)
+        let gate = ConversionBlockGate()
+        let converter = RecordingViewModelConverter { request in
+            if request.sourceURL == first {
+                await gate.signalEntered()
+                await gate.waitForRelease()
+            }
+            return makeResult(for: request)
+        }
+        let viewModel = makeViewModel(outputFolder: directory, converter: converter)
+        viewModel.addFileURLs([first, second])
+
+        let conversionTask = Task { await viewModel.convertQueuedRows() }
+        await gate.waitForEntered()
+        XCTAssertTrue(viewModel.canRequestStopAfterCurrent)
+
+        var changeCount = 0
+        let subscription = viewModel.objectWillChange.sink { changeCount += 1 }
+        viewModel.requestStopAfterCurrent()
+        XCTAssertEqual(changeCount, 1, "The request must publish so the button and Esc key update")
+        XCTAssertFalse(viewModel.canRequestStopAfterCurrent)
+        viewModel.requestStopAfterCurrent()
+        XCTAssertEqual(changeCount, 1, "A repeated request changes nothing")
+        subscription.cancel()
+
+        await gate.release()
+        _ = await conversionTask.value
+
+        XCTAssertEqual(viewModel.rows.map(\.state), [.verified, .skipped])
+        XCTAssertEqual(converter.requests.map(\.sourceURL), [first])
+    }
+
     func testReAddingSkippedFilesRequeuesTheirRowsInPlace() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

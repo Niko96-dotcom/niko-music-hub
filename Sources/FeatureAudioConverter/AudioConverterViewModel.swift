@@ -307,8 +307,12 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
     }
 
     /// The pane's "Stop After This File": the file in flight finishes, the rest are skipped.
+    /// The controller's flag is not observed, so the view is told here: the button greys
+    /// and the page's Esc key unbinds.
     public func requestStopAfterCurrent() {
-        stopController?.requestStopAfterCurrent()
+        guard canRequestStopAfterCurrent, let stopController else { return }
+        objectWillChange.send()
+        stopController.requestStopAfterCurrent()
     }
 
     /// The shell jobs-row "Cancel": stops the file in flight now (its temp output is

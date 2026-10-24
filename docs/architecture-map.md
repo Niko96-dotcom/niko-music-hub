@@ -276,6 +276,11 @@ These rules are documented and, where named, enforced. The full table is in
 9. Closed on 2026-10-24: every transfer state and restore phase change goes through its table, and each engine's
    `checkAndSave` (plus the restore reconcile) is the only writer; an unlisted edge throws before anything is saved
    ([architecture.md § Vault state changes](architecture.md#vault-state-changes)).
+10. **A plain Esc on a tool page does not reach the shell's Edit ▸ Cancel.** Observed live on 2026-10-24 on the
+    WAV Converter with a file in flight and the page's cancel key unbound: Esc left the file running, while the
+    same Edit ▸ Cancel chosen from the menu, and ⌘. from the keyboard, stopped it at once. The Downloader and
+    Stem Separation rely on the same Esc item (`HubCancelCommands`) and were not checked. No earlier live check
+    proved this path ([architecture.md § Tool page keys](architecture.md#tool-page-keys)).
 
 Documents that disagree with the code:
 
