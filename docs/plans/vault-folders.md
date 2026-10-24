@@ -23,7 +23,7 @@ commit with `git log --grep='(vault folders step N)'`.
 | 0 Baseline | done | — | full gates passed on `14412e3`; `33bc9af` changed docs only; no re-run |
 | 1 One module for the folder names | done | `git log --grep='(vault folders step 1)'` | strict build; `NikoMusicCoreTests` 841 (5 new, 1 skipped), AppCore Vault and `*SourceTests` 278, archive Vault suites 79, 0 failures |
 | 2 Every other site uses it | done | `git log --grep='(vault folders step 2)'` | strict build; `NikoMusicCoreTests` 841 (1 skipped), AppCore Vault and `*SourceTests` 280, archive Vault suites 79, 0 failures; a planted `".niko-staging"` in `LocalVaultRestoreEngine.swift` failed `VaultFoldersSourceTests`, then was removed |
-| 3 One place builds the engines | not started | | |
+| 3 One place builds the engines | done | `git log --grep='(vault folders step 3)'` | strict build; `NikoMusicCoreTests` 841 (1 skipped), AppCore Vault and `*SourceTests` 282, archive Vault suites 79, 0 failures; with the clock left out of the factory both new clock tests failed |
 | 4 The restore engine refuses every reserved Active folder | not started | | |
 | 5 Docs, full gates, live check | not started | | |
 
@@ -35,6 +35,11 @@ Record every deviation from the steps below here, numbered, with its reason.
    (`LocalVaultRestoreEngine.swift:235`) built its staging URL without `isDirectory: true`; it now uses
    `VaultFolders.staging(in:projectID:operationID:)` like the other entry point. The folder on disk is the same; a new
    record's `stagingURL` string ends in `/`, and every check compares paths, not URL strings. Old records still load.
+2. **Step 3: default admissions instead of optionals.** The fail-closed defaults became named statics on the engine
+   (`LocalVaultTransferEngine.refusesWrites`, `refusesRemovals`), used by the engine's initializer and as the factory's
+   defaults. A call that leaves an admission out gets the same refusal as before.
+3. **Step 3: the factory sits in `LiveProjectVaultRuntime.swift`,** beside `configuration()`, not in a new extension
+   file: it is the runtime's construction rule, not a separate responsibility.
 
 ## Terms
 

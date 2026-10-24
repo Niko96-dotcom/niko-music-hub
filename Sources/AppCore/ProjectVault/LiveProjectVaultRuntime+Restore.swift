@@ -38,16 +38,9 @@ extension LiveProjectVaultRuntime {
         if try transferStore.verifiedArchiveGeneration(projectID: snapshot.record.id) == nil {
             return try await restoreLinkedArchive(snapshot: snapshot, configuration: configuration, settings: settings, selectedProjectRelativePath: selectedProjectRelativePath, destinationRelativePath: destinationRelativePath)
         }
-        let engine = LocalVaultRestoreEngine(
-            activeRoot: configuration.active.url,
-            archiveRoot: configuration.archive.url,
-            activeRootID: configuration.active.id,
-            resolver: transferStore,
-            store: transferStore,
-            projectionStore: transferStore,
+        let engine = makeRestoreEngine(
+            configuration,
             provider: archiveProvider(root: configuration.archive.url),
-            catalog: catalogStore,
-            projectOpener: projectOpener,
             writeAdmission: makeWriteAdmission(settings: settings),
             linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
@@ -80,16 +73,9 @@ extension LiveProjectVaultRuntime {
         let configuration = try configuration()
         let settings = try settingsStore.loadSettings()
         guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
-        let engine = LocalVaultRestoreEngine(
-            activeRoot: configuration.active.url,
-            archiveRoot: configuration.archive.url,
-            activeRootID: configuration.active.id,
-            resolver: transferStore,
-            store: transferStore,
-            projectionStore: transferStore,
+        let engine = makeRestoreEngine(
+            configuration,
             provider: archiveProvider(root: configuration.archive.url),
-            catalog: catalogStore,
-            projectOpener: projectOpener,
             writeAdmission: makeWriteAdmission(settings: settings),
             linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
@@ -364,11 +350,12 @@ extension LiveProjectVaultRuntime {
         let manifest = try VaultManifestBuilder().build(at: archiveURL)
         try inventory.verifyMetadata(download, against: inventory.materializationManifest(at: archiveURL))
         try validate(entry.record.id, location, archiveURL)
-        let engine = LocalVaultRestoreEngine(activeRoot: configuration.active.url,
-            archiveRoot: configuration.archive.url, activeRootID: configuration.active.id,
-            resolver: transferStore, store: transferStore, projectionStore: transferStore,
-            provider: provider, catalog: catalogStore, projectOpener: projectOpener,
-            writeAdmission: admission, linkedArchiveValidation: validate)
+        let engine = makeRestoreEngine(
+            configuration,
+            provider: provider,
+            writeAdmission: admission,
+            linkedArchiveValidation: validate
+        )
         let relativePath = earlyRelativePath
         preparingLinkedRestores.removeValue(forKey: entry.record.id)
         do {

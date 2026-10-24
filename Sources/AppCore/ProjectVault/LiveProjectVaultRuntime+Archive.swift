@@ -304,13 +304,9 @@ extension LiveProjectVaultRuntime {
         } else {
             removalAdmission = makeCopyOnlyRemovalAdmission()
         }
-        let engine = try LocalVaultTransferEngine(
-            activeRoot: configuration.active.url,
-            archiveRoot: configuration.archive.url,
-            store: transferStore,
+        let engine = try makeTransferEngine(
+            configuration,
             provider: context.provider,
-            now: now,
-            recoveryPolicy: recoveryPolicy,
             writeAdmission: writeAdmission,
             removalAdmission: removalAdmission
         )
@@ -445,15 +441,7 @@ extension LiveProjectVaultRuntime {
             }
             throw error
         }
-        let engine = try LocalVaultTransferEngine(
-            activeRoot: configuration.active.url,
-            archiveRoot: configuration.archive.url,
-            store: transferStore,
-            provider: context.provider,
-            now: now,
-            recoveryPolicy: recoveryPolicy,
-            removalAdmission: removalAdmission
-        )
+        let engine = try makeTransferEngine(configuration, provider: context.provider, removalAdmission: removalAdmission)
         let completed = try await engine.removeActiveCopy(after: transfer)
         try settingsStore.updateSettings { $0.vault.lastSuccessfulVerificationAt = now() }
         return try snapshot(entry: entry, transfer: completed, configuration: configuration)

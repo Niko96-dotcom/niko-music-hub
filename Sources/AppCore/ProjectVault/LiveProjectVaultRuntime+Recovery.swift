@@ -22,9 +22,9 @@ extension LiveProjectVaultRuntime {
         let activity = activityProbe
         let store = settingsStore
         let provider = archiveProvider(root: configuration.archive.url)
-        let recovery = try LocalVaultTransferEngine(
-            activeRoot: configuration.active.url, archiveRoot: configuration.archive.url,
-            store: transferStore, provider: provider,
+        let recovery = try makeTransferEngine(
+            configuration,
+            provider: provider,
             writeAdmission: makeWriteAdmission(settings: settings),
             removalAdmission: { record in
                 let current = try store.loadSettings()
@@ -39,11 +39,9 @@ extension LiveProjectVaultRuntime {
             }
         )
         let verified = try await recovery.recoverInterruptedRemoval(id: transfer.id)
-        let restore = LocalVaultRestoreEngine(
-            activeRoot: configuration.active.url, archiveRoot: configuration.archive.url,
-            activeRootID: configuration.active.id, resolver: transferStore,
-            store: transferStore, projectionStore: transferStore, provider: provider,
-            catalog: catalogStore, projectOpener: projectOpener,
+        let restore = makeRestoreEngine(
+            configuration,
+            provider: provider,
             writeAdmission: makeWriteAdmission(settings: settings),
             linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )
@@ -74,13 +72,9 @@ extension LiveProjectVaultRuntime {
               VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else {
             throw ProjectVaultRuntimeError.unavailable
         }
-        let engine = try LocalVaultTransferEngine(
-            activeRoot: configuration.active.url,
-            archiveRoot: configuration.archive.url,
-            store: transferStore,
+        let engine = try makeTransferEngine(
+            configuration,
             provider: archiveProvider(root: configuration.archive.url),
-            now: now,
-            recoveryPolicy: recoveryPolicy,
             writeAdmission: makeWriteAdmission(settings: settings)
         )
         guard let retried = await engine.retryRecoverableTransfer(id: failed.id) else {
@@ -147,25 +141,14 @@ extension LiveProjectVaultRuntime {
               !settings.vault.automationEmergencyStop else { return }
         let provider = archiveProvider(root: configuration.archive.url)
         var transferReport: VaultJournalReadReport<VaultTransferRecord>?
-        if let transferEngine = try? LocalVaultTransferEngine(
-            activeRoot: configuration.active.url,
-            archiveRoot: configuration.archive.url,
-            store: transferStore,
+        if let transferEngine = try? makeTransferEngine(
+            configuration,
             provider: provider,
-            now: now,
-            recoveryPolicy: recoveryPolicy,
             writeAdmission: makeWriteAdmission(settings: settings)
         ) { transferReport = await transferEngine.recoverAtLaunchReport() }
-        let restoreEngine = LocalVaultRestoreEngine(
-            activeRoot: configuration.active.url,
-            archiveRoot: configuration.archive.url,
-            activeRootID: configuration.active.id,
-            resolver: transferStore,
-            store: transferStore,
-            projectionStore: transferStore,
+        let restoreEngine = makeRestoreEngine(
+            configuration,
             provider: provider,
-            catalog: catalogStore,
-            projectOpener: projectOpener,
             writeAdmission: makeWriteAdmission(settings: settings),
             linkedArchiveValidation: linkedArchiveValidation(configuration: configuration)
         )

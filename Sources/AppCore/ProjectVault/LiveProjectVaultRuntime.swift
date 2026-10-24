@@ -69,6 +69,53 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         self.recoveryPolicy = recoveryPolicy
     }
 
+    // MARK: - Engines
+
+    /// Every transfer engine the runtime uses: the configured roots, the transfer
+    /// journal, this runtime's clock and recovery policy. Only the provider and
+    /// the admissions differ per operation; an admission left out refuses.
+    func makeTransferEngine(
+        _ configuration: Configuration,
+        provider: any ArchiveStorageProvider,
+        writeAdmission: @escaping LocalVaultTransferEngine.WriteAdmission = LocalVaultTransferEngine.refusesWrites,
+        removalAdmission: @escaping LocalVaultTransferEngine.RemovalAdmission = LocalVaultTransferEngine.refusesRemovals
+    ) throws -> LocalVaultTransferEngine {
+        try LocalVaultTransferEngine(
+            activeRoot: configuration.active.url,
+            archiveRoot: configuration.archive.url,
+            store: transferStore,
+            provider: provider,
+            now: now,
+            recoveryPolicy: recoveryPolicy,
+            writeAdmission: writeAdmission,
+            removalAdmission: removalAdmission
+        )
+    }
+
+    /// Every restore engine the runtime uses: the configured roots, the journal,
+    /// the catalog, the project opener and this runtime's clock.
+    func makeRestoreEngine(
+        _ configuration: Configuration,
+        provider: any ArchiveStorageProvider,
+        writeAdmission: @escaping LocalVaultTransferEngine.WriteAdmission,
+        linkedArchiveValidation: @escaping LocalVaultRestoreEngine.LinkedArchiveValidation
+    ) -> LocalVaultRestoreEngine {
+        LocalVaultRestoreEngine(
+            activeRoot: configuration.active.url,
+            archiveRoot: configuration.archive.url,
+            activeRootID: configuration.active.id,
+            resolver: transferStore,
+            store: transferStore,
+            projectionStore: transferStore,
+            provider: provider,
+            catalog: catalogStore,
+            projectOpener: projectOpener,
+            now: now,
+            writeAdmission: writeAdmission,
+            linkedArchiveValidation: linkedArchiveValidation
+        )
+    }
+
     // MARK: - Helpers
 
     func configuration() throws -> Configuration {

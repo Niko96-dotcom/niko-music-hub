@@ -92,6 +92,47 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: preserved.appendingPathComponent(projectFile.relativePath)), Data("surviving partial contents".utf8))
     }
 
+    /// Every engine the runtime builds gets its clock: the recovery transfer
+    /// engine (which stamps the transfer) and the restore engine (which stamps
+    /// the restore). Both used the wall clock before the engine factory.
+    func testRecoveringAnInterruptedRemovalUsesTheRuntimesClock() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let fixed = Date(timeIntervalSince1970: 1_000)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener(), now: { fixed })
+        let snapshot = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        var record = try XCTUnwrap(snapshot.transfer)
+        record.state = .recoveryRequired
+        record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+        try fixture.transferStore().save(record)
+
+        let restored = try await runtime.recoverInterruptedArchive(snapshot: snapshot)
+
+        XCTAssertEqual(restored.createdAt, fixed)
+        XCTAssertEqual(restored.completedAt, fixed)
+        XCTAssertEqual(try fixture.transferStore().record(id: record.id)?.updatedAt, fixed)
+    }
+
+    func testAnOrdinaryRestoreUsesTheRuntimesClock() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
+        let fixed = Date(timeIntervalSince1970: 1_000)
+        let runtime = try fixture.runtime(now: { fixed })
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song, trigger: .workflowDone, removingActiveCopy: true, catalogProjectID: nil
+        )
+        let archived = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: authorization)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.project.path))
+
+        let restore = try await runtime.restoreAndOpen(snapshot: archived)
+
+        XCTAssertEqual(restore.createdAt, fixed)
+        XCTAssertEqual(restore.completedAt, fixed)
+    }
+
     func testRecoverInterruptedArchivePrePinsKeepLocalAndRefusesRearchive() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }

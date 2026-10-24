@@ -133,6 +133,15 @@ public actor LocalVaultTransferEngine {
     public typealias RemovalAdmission = @Sendable (VaultTransferRecord) async throws -> Void
     public typealias VolumeIdentifier = @Sendable (URL) throws -> UInt64
 
+    /// The defaults when a caller grants no admission: every write, every
+    /// removal is refused (fail closed).
+    public static let refusesWrites: WriteAdmission = { _, _ in
+        throw LocalVaultTransferError.writeAdmissionRequired
+    }
+    public static let refusesRemovals: RemovalAdmission = { _ in
+        throw LocalVaultTransferError.removalAdmissionRequired
+    }
+
     private let activeRoot: URL
     private let archiveRoot: URL
     private let store: any VaultTransferStoring
@@ -155,12 +164,8 @@ public actor LocalVaultTransferEngine {
         faultInjector: FaultInjector? = nil,
         now: @escaping @Sendable () -> Date = Date.init,
         recoveryPolicy: VaultTransferRecoveryPolicy = .production,
-        writeAdmission: @escaping WriteAdmission = { _, _ in
-            throw LocalVaultTransferError.writeAdmissionRequired
-        },
-        removalAdmission: @escaping RemovalAdmission = { _ in
-            throw LocalVaultTransferError.removalAdmissionRequired
-        },
+        writeAdmission: @escaping WriteAdmission = refusesWrites,
+        removalAdmission: @escaping RemovalAdmission = refusesRemovals,
         volumeIdentifier: VolumeIdentifier? = nil,
         manifestBuilder: VaultManifestBuilder? = nil
     ) throws {
