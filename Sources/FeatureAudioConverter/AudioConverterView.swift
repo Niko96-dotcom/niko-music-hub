@@ -56,21 +56,11 @@ public struct AudioConverterView: View {
     }
 
     private var convertingProgressRow: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Group {
-                if viewModel.overallProgress > 0 {
-                    ProgressView(value: viewModel.overallProgress)
-                } else {
-                    ProgressView()
-                }
-            }
-            .progressViewStyle(.linear)
-            .frame(maxWidth: 320)
-            .tint(HubDesignSystem.Colors.indicator)
-            Text(viewModel.statusText)
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-        }
+        HubJobProgressRow(
+            fraction: viewModel.overallProgress > 0 ? viewModel.overallProgress : nil,
+            status: viewModel.statusText
+        )
+        .frame(maxWidth: 320)
     }
 
     private var showsFFmpegNotice: Bool {

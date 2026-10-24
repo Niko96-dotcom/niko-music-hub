@@ -283,42 +283,15 @@ public struct DownloaderView: View {
         }
     }
 
+    /// `downloadStartedAt` is set in the same turn as `.downloading`, so the meter
+    /// line (percent and elapsed time) shows for the whole download.
     private var progressSection: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            Group {
-                if viewModel.showsDeterminateProgress {
-                    ProgressView(value: viewModel.progress)
-                } else {
-                    ProgressView()
-                }
-            }
-            .progressViewStyle(.linear)
-            .tint(HubDesignSystem.Colors.indicator)
-
-            HStack {
-                if viewModel.showsDeterminateProgress {
-                    Text("\(Int(viewModel.progress * 100))% complete")
-                }
-                Spacer()
-                TimelineView(.periodic(from: viewModel.downloadStartedAt ?? .now, by: 1)) { context in
-                    Text(viewModel.elapsedCaption(at: context.date))
-                }
-            }
-            .font(HubDesignSystem.Typography.bodySmall())
-            .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-
-            if let postProcessingStatus = viewModel.postProcessingStatus {
-                Text(postProcessingStatus)
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if viewModel.slowHintVisible {
-                Text(DownloadStallMonitor.slowHintMessage)
-                    .font(HubDesignSystem.Typography.bodySmall())
-                    .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
+        HubJobProgressRow(
+            fraction: viewModel.showsDeterminateProgress ? viewModel.progress : nil,
+            status: viewModel.postProcessingStatus
+                ?? (viewModel.slowHintVisible ? DownloadStallMonitor.slowHintMessage : nil),
+            startedAt: viewModel.downloadStartedAt
+        )
     }
 
     private var downloadActions: some View {

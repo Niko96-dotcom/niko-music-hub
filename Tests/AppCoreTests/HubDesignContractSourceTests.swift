@@ -84,6 +84,27 @@ final class HubDesignContractSourceTests: XCTestCase {
         }
     }
 
+    // §4 — a running job's progress is one `HubJobProgressRow` on every tool page.
+    // Three hand-built copies drifted (505b02a, a05db32, 62fbe8f each edited three
+    // or four of them). The converter's per-file bar is a queue row, not the job.
+    func testToolPagesShowJobProgressThroughTheSharedRow() throws {
+        let allowedRowBars = ["Sources/FeatureAudioConverter/AudioConverterView.swift": 1]
+        for page in toolPages {
+            let source = try readStripped(page)
+            let bars = source.components(separatedBy: "ProgressView(").count - 1
+            XCTAssertEqual(
+                bars,
+                allowedRowBars[page, default: 0],
+                "\(page): show a running job with HubJobProgressRow, not a hand-built ProgressView"
+            )
+        }
+        for page in ["Sources/FeatureAudioConverter/AudioConverterView.swift",
+                     "Sources/FeatureDownloader/DownloaderView.swift",
+                     "Sources/FeatureStemSeparation/StemSeparationView.swift"] {
+            expectMatch(try readStripped(page), pattern: "HubJobProgressRow\\s*\\(", "\(page): uses HubJobProgressRow")
+        }
+    }
+
     // §4 — transient notices may not push the fixed primary object down.
     // Nesting (not textual order): `live` must be inside a ScrollView body.
     func testLiveNoticesAreInsideScrollingContent() throws {

@@ -51,16 +51,6 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         progress > 0
     }
 
-    public func elapsedCaption(at now: Date = Date()) -> String {
-        Self.formatElapsed(since: downloadStartedAt, now: now)
-    }
-
-    static func formatElapsed(since start: Date?, now: Date) -> String {
-        let interval = start.map { max(0, now.timeIntervalSince($0)) } ?? 0
-        let totalSeconds = Int(interval)
-        return String(format: "Elapsed %d:%02d", totalSeconds / 60, totalSeconds % 60)
-    }
-
     let context: ToolContext
     private let useCase: any DownloaderUseCaseRunning
     private let debounceDuration: Duration

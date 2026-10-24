@@ -64,20 +64,10 @@ public struct StemSeparationView: View {
     }
 
     private var progressRow: some View {
-        VStack(alignment: .leading, spacing: HubDesignSystem.Spacing.inlineGap) {
-            Group {
-                if viewModel.progress > 0 {
-                    ProgressView(value: viewModel.progress)
-                } else {
-                    ProgressView()
-                }
-            }
-            .progressViewStyle(.linear)
-            .tint(HubDesignSystem.Colors.indicator)
-            Text(viewModel.statusMessage)
-                .font(HubDesignSystem.Typography.bodySmall())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-        }
+        HubJobProgressRow(
+            fraction: viewModel.progress > 0 ? viewModel.progress : nil,
+            status: viewModel.statusMessage
+        )
     }
 
     /// Intake card: the drop zone on top, the YouTube route below the divider.

@@ -421,13 +421,6 @@ final class DownloaderViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.progress, 0)
         XCTAssertFalse(viewModel.showsDeterminateProgress)
-        XCTAssertEqual(
-            DownloaderViewModel.formatElapsed(
-                since: Date(timeIntervalSince1970: 0),
-                now: Date(timeIntervalSince1970: 12)
-            ),
-            "Elapsed 0:12"
-        )
 
         viewModel.urlText = "https://example.com/audio"
         viewModel.downloadState = .readyToDownload

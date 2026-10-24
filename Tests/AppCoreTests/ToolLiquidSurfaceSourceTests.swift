@@ -67,7 +67,8 @@ final class ToolLiquidSurfaceSourceTests: XCTestCase {
             "viewModel.startDownload()",
             "viewModel.retryAfterFailure()",
             "Download as",
-            "ProgressView(value: viewModel.progress)",
+            "HubJobProgressRow(",
+            "fraction: viewModel.showsDeterminateProgress ? viewModel.progress : nil",
         ].forEach { required in
             XCTAssertTrue(source.contains(required), "Missing downloader Liquid source: \(required)")
         }
