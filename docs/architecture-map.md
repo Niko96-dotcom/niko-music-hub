@@ -117,15 +117,16 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
    a failed Done at most 3 times, copy-only.
 3. `LiveProjectVaultRuntime` (actor, AppCore) takes the mutation lease (in-actor token plus a cross-process
    `flock`), re-checks the token against the live source, reconciles project identity (`+Catalog.swift`),
-   builds the write and removal admissions (`+Admission.swift`) and creates a `LocalVaultTransferEngine`.
+   builds the write and removal admissions (`+Admission.swift`) and creates a `LocalVaultTransferEngine`
+   through `makeTransferEngine`, which passes the runtime's stores, clock and recovery policy.
 4. `LocalVaultTransferEngine` (actor, Core) stages a copy, verifies its `VaultManifest`, waits for
    durability (`ArchiveStorageProvider.waitUntilDurable`: `LocalVaultDurabilityBarrier` for a local folder,
    File Provider sync for a cloud folder), promotes the generation, and removes the active copy only with a
    removal token and fresh evidence. Each phase is saved in `SQLiteVaultTransferStore`, the authoritative
    journal.
 5. Restore: `ProjectVaultRestoreSheet` → `restoreAndOpen` in the runtime (pins Keep Local first) →
-   `LocalVaultRestoreEngine` (materialize, verify, copy, promote, save the location, open through
-   `SafeVaultProjectOpener`).
+   `LocalVaultRestoreEngine` from `makeRestoreEngine` (materialize, verify, copy, promote, save the
+   location, open through `SafeVaultProjectOpener`).
 6. Recover: the view model calls `recoverAtLaunch()` at launch and after settings changes;
    `ArchiveVaultObservation.scheduleRecovery` repeats it with a 30 s backoff. Launch recovery never
    deletes. Settings exports and imports a metadata recovery bundle (`ProjectVaultRecoveryService`).
@@ -135,7 +136,8 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
 
 `NikoMusicCore/Vault` does every file operation and takes each policy decision as an injected admission
 closure. `AppCore/ProjectVault` turns settings, Keep Local, Emergency Stop, capacity and the bound token
-into those closures; it imports neither SwiftUI nor AppKit.
+into those closures; it imports neither SwiftUI nor AppKit. Every folder path inside the two Vault roots
+comes from `VaultFolders` (Core); see [architecture.md § Vault folders](architecture.md#vault-folders).
 
 ### Quit with running work
 
@@ -266,9 +268,7 @@ These rules are documented and, where named, enforced. The full table is in
    has no production caller.
 9. **The Vault state machine is not the only writer of states.** `LocalVaultTransferEngine` sets
    `.archiveVerified` and `.recoveryRequired` directly and rewinds states in launch recovery;
-   `LocalVaultRestoreEngine.advance` writes restore phases without a transition check. Vault folder names
-   (`.niko-staging`, `generations/…`, `.niko-recovery`) are repeated in the engines, the runtime and the
-   archive UI.
+   `LocalVaultRestoreEngine.advance` writes restore phases without a transition check.
 
 Documents that disagree with the code:
 

@@ -351,6 +351,32 @@ decision.
 - The Review Keep Local sheet's "N projects are currently pinned" counts stored keys, not projects; old keys cannot be
   grouped per project (ADR 021, Open).
 
+## Vault folders
+
+[`VaultFolders`](../Sources/NikoMusicCore/Vault/VaultFolders.swift) (NikoMusicCore) is the one owner of the folders the
+app keeps inside the two Project Vault roots. They are an on-disk format: Vaults made by earlier versions must stay
+readable, so the names, the nesting and the lowercased UUIDs never change (`VaultFoldersTests` pins the exact paths).
+
+| Root | Folder | Holds |
+| --- | --- | --- |
+| Archive | `generations/<project>/generation-<transfer>` | verified copies |
+| Archive | `.niko-staging/<project>/<transfer>` | an archive in progress |
+| Active | `.niko-staging/<project>/<restore>` | a restore in progress |
+| Active | `.niko-recovery/<transfer>/<attempt>/<folder>` | Active copies that recovery set aside |
+
+- Reserved names, one rule per root: in the Archive root, `generations` and `.niko-staging` (any case) are never an
+  ordinary archive folder; in the Active root, a path through any `.niko-` folder is never a restore destination. The
+  restore sheet, the restore engine and the runtime's pinned destination apply the same Active rule
+  (`isInReservedActiveFolder` resolves symlinks first).
+- `VaultFolders` says where the folders are and which names are reserved. The staging, generation and destination
+  checks stay with their callers (the engines, the runtime, the presentation), each with its own containment and
+  symlink rules.
+- `VaultFoldersSourceTests` fails when another source file spells a folder name. `VaultArchiveLayout` is a different
+  concern: how file names are stored inside one generation.
+- The runtime builds engines only through `LiveProjectVaultRuntime.makeTransferEngine` and `makeRestoreEngine`, so every
+  engine gets the runtime's stores, clock and (for transfers) recovery policy. A transfer engine built without
+  admissions refuses writes and removals.
+
 ## Tool output destination
 
 A tool run writes only into a [`ToolOutputDestination`](../Sources/AppCore/Settings/ToolOutputDestination.swift): the
