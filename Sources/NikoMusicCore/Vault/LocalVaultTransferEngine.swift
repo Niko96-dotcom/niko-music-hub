@@ -192,14 +192,8 @@ public actor LocalVaultTransferEngine {
             throw LocalVaultTransferError.sourceOutsideActiveRoot
         }
         let transferID = UUID()
-        let staging = archiveRoot
-            .appendingPathComponent(".niko-staging", isDirectory: true)
-            .appendingPathComponent(projectID.description, isDirectory: true)
-            .appendingPathComponent(transferID.uuidString.lowercased(), isDirectory: true)
-        let generation = archiveRoot
-            .appendingPathComponent("generations", isDirectory: true)
-            .appendingPathComponent(projectID.description, isDirectory: true)
-            .appendingPathComponent("generation-\(transferID.uuidString.lowercased())", isDirectory: true)
+        let staging = VaultFolders.staging(in: archiveRoot, projectID: projectID, operationID: transferID)
+        let generation = VaultFolders.generation(in: archiveRoot, projectID: projectID, transferID: transferID)
         var record = VaultTransferRecord(
             id: transferID,
             projectID: projectID,
@@ -484,9 +478,7 @@ public actor LocalVaultTransferEngine {
         }
         try validatePaths(record)
         let destination = record.destinationURL
-        let expectedGeneration = archiveRoot.appendingPathComponent("generations", isDirectory: true)
-            .appendingPathComponent(record.projectID.description, isDirectory: true)
-            .appendingPathComponent("generation-\(record.id.uuidString.lowercased())", isDirectory: true)
+        let expectedGeneration = VaultFolders.generation(in: archiveRoot, projectID: record.projectID, transferID: record.id)
         guard destination.standardizedFileURL.resolvingSymlinksInPath() == expectedGeneration.standardizedFileURL.resolvingSymlinksInPath() else {
             throw LocalVaultTransferError.unsafeDestinationPath
         }
@@ -502,10 +494,11 @@ public actor LocalVaultTransferEngine {
         try manifestBuilder.verifyArchive(manifest, at: destination)
         if fileManager.fileExists(atPath: record.sourceURL.path) {
             let binding = try SourceRootFileSystemBinding(opening: record.sourceURL)
-            let preserved = activeRoot.appendingPathComponent(".niko-recovery", isDirectory: true)
-                .appendingPathComponent(record.id.uuidString.lowercased(), isDirectory: true)
-                .appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
-                .appendingPathComponent(record.sourceURL.lastPathComponent, isDirectory: true)
+            let preserved = VaultFolders.preservedActiveCopy(
+                in: activeRoot,
+                transferID: record.id,
+                folderName: record.sourceURL.lastPathComponent
+            )
             record.preservedActiveCopies = (record.preservedActiveCopies ?? []) + [preserved]
             // Persist the preservation destination before moving anything. A crash
             // on either side of the move leaves both paths available for review.
@@ -940,7 +933,7 @@ public actor LocalVaultTransferEngine {
                 throw LocalVaultTransferError.writeTargetVolumeMismatch
             }
             if fileManager.value.fileExists(atPath: stagingURL.path) {
-                guard Self.contains(archiveRoot.appendingPathComponent(".niko-staging", isDirectory: true), stagingURL) else {
+                guard Self.contains(VaultFolders.staging(in: archiveRoot), stagingURL) else {
                     throw LocalVaultTransferError.unsafeStagingPath
                 }
                 try fileManager.value.removeItem(at: stagingURL)
@@ -1103,8 +1096,8 @@ public actor LocalVaultTransferEngine {
         activeRoot: URL,
         archiveRoot: URL
     ) throws {
-        let stagingRoot = archiveRoot.appendingPathComponent(".niko-staging", isDirectory: true)
-        let generationsRoot = archiveRoot.appendingPathComponent("generations", isDirectory: true)
+        let stagingRoot = VaultFolders.staging(in: archiveRoot)
+        let generationsRoot = VaultFolders.generations(in: archiveRoot)
         let safety = PathSafety()
         guard safety.isResolvedContainedWithoutNestedSymlinks(stagingRoot, in: archiveRoot),
               stagingRoot != archiveRoot else {
@@ -1385,13 +1378,7 @@ public actor LocalVaultTransferEngine {
     }
 
     private func hasPersistedGenerationPath(_ record: VaultTransferRecord) -> Bool {
-        let expectedDestination = archiveRoot
-            .appendingPathComponent("generations", isDirectory: true)
-            .appendingPathComponent(record.projectID.description, isDirectory: true)
-            .appendingPathComponent(
-                "generation-\(record.id.uuidString.lowercased())",
-                isDirectory: true
-            )
+        let expectedDestination = VaultFolders.generation(in: archiveRoot, projectID: record.projectID, transferID: record.id)
         guard record.destinationURL.isFileURL,
               expectedDestination.isFileURL,
               Self.normalizedAuthority(of: record.destinationURL)
@@ -1405,7 +1392,7 @@ public actor LocalVaultTransferEngine {
         let destination = record.destinationURL.standardizedFileURL.pathComponents
         return destination.count == projectRoot.count + 1
             && Array(destination.prefix(projectRoot.count)) == projectRoot
-            && destination.last == "generation-\(record.id.uuidString.lowercased())"
+            && destination.last == VaultFolders.generationFolderName(transferID: record.id)
     }
 
     private struct URLAuthority: Equatable {

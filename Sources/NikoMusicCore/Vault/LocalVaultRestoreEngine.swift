@@ -187,10 +187,7 @@ public actor LocalVaultRestoreEngine {
         try validateSelection(selectedProjectRelativePath, manifest: manifest)
         guard !fileManager.fileExists(atPath: destination.path) else { throw LocalVaultRestoreError.occupiedDestination }
         let id = UUID()
-        let staging = activeRoot
-            .appendingPathComponent(".niko-staging", isDirectory: true)
-            .appendingPathComponent(projectID.description, isDirectory: true)
-            .appendingPathComponent(id.uuidString.lowercased(), isDirectory: true)
+        let staging = VaultFolders.staging(in: activeRoot, projectID: projectID, operationID: id)
         var record = VaultRestoreRecord(
             id: id,
             projectID: projectID,
@@ -232,8 +229,7 @@ public actor LocalVaultRestoreEngine {
         let id = UUID()
         let record = VaultRestoreRecord(
             id: id, projectID: projectID, archiveGenerationURL: archiveURL,
-            stagingURL: activeRoot.appendingPathComponent(".niko-staging")
-                .appendingPathComponent(projectID.description).appendingPathComponent(id.uuidString.lowercased()),
+            stagingURL: VaultFolders.staging(in: activeRoot, projectID: projectID, operationID: id),
             destinationURL: destination, manifest: manifest, selectedProjectRelativePath: selectedProjectRelativePath, linkedArchiveLocation: location,
             requiresArchiveMaterialization: true, createdAt: now()
         )
@@ -681,7 +677,7 @@ public actor LocalVaultRestoreEngine {
     }
 
     private static func validate(_ record: VaultRestoreRecord, activeRoot: URL) throws {
-        let stagingRoot = activeRoot.appendingPathComponent(".niko-staging", isDirectory: true)
+        let stagingRoot = VaultFolders.staging(in: activeRoot)
         let safety = PathSafety()
         guard safety.isResolvedContainedWithoutNestedSymlinks(stagingRoot, in: activeRoot),
               stagingRoot != activeRoot else {
@@ -719,7 +715,7 @@ public actor LocalVaultRestoreEngine {
             }
             return
         }
-        let generationsRoot = archiveRoot.appendingPathComponent("generations", isDirectory: true)
+        let generationsRoot = VaultFolders.generations(in: archiveRoot)
         let safety = PathSafety(fileManager: fileManager)
         guard safety.isResolvedContainedWithoutNestedSymlinks(generationsRoot, in: archiveRoot),
               safety.isResolvedContainedWithoutNestedSymlinks(generationURL, in: generationsRoot),
@@ -744,7 +740,7 @@ public actor LocalVaultRestoreEngine {
         }
         let destination = activeRoot.appendingPathComponent(relativePath, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath()
         guard Self.contains(activeRoot, destination), destination != activeRoot,
-              !Self.contains(activeRoot.appendingPathComponent(".niko-staging", isDirectory: true), destination) else {
+              !Self.contains(VaultFolders.staging(in: activeRoot), destination) else {
             throw LocalVaultRestoreError.invalidDestination
         }
         return destination

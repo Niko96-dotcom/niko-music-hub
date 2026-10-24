@@ -22,7 +22,7 @@ public struct ProjectArchiveLocationResolver: Sendable {
         let parts = path.split(separator: "/", omittingEmptySubsequences: false)
         return !path.isEmpty && !path.hasPrefix("/") && !path.contains("\0")
             && parts.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
-            && !["generations", ".niko-staging"].contains(parts[0].lowercased())
+            && !VaultFolders.isReservedInArchiveRoot(String(parts[0]))
     }
 }
 
