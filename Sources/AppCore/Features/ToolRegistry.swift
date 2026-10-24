@@ -42,10 +42,10 @@ public struct ToolRegistry: Sendable {
         metadata.first?.id
     }
 
-    /// Default sidebar selection when the shell opens.
+    /// Default sidebar selection when the shell opens: the first tool in sidebar
+    /// order that can be the main pane (the Library tool when there is one).
     public var preferredDefaultFeatureID: ToolFeatureID? {
-        feature(for: .archiveBrowser)?.metadata.id
-            ?? feature(for: .wavConverter)?.metadata.id
+        ToolSection.sidebarOrder(metadata).first { $0.section != .settings }?.id
             ?? firstFeatureID
     }
 
@@ -63,7 +63,7 @@ public struct ToolRegistry: Sendable {
     }
 
     /// Launch selection: `-ui-tool` / `NIKO_MUSIC_HUB_UI_TOOL` wins, then a stored id if registered.
-    /// Never restores `settings` as the main pane.
+    /// Never restores the Settings tool (`ToolSection.settings`) as the main pane.
     public func resolvedLaunchToolID(
         storedRaw: String?,
         environment: [String: String] = ProcessInfo.processInfo.environment
@@ -81,9 +81,9 @@ public struct ToolRegistry: Sendable {
     }
 
     private func contentToolID(_ id: ToolFeatureID) -> ToolFeatureID? {
-        if id == ToolFeatureID("settings") {
+        guard let metadata = feature(for: id)?.metadata, metadata.section != .settings else {
             return preferredDefaultFeatureID
         }
-        return feature(for: id)?.metadata.id ?? preferredDefaultFeatureID
+        return metadata.id
     }
 }

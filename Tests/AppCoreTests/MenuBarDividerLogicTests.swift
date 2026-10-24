@@ -63,7 +63,7 @@ private struct StubToolFeature: ToolFeature {
             displayName: id,
             shortLabel: id,
             systemImage: "gearshape",
-            capabilities: []
+            section: .declared(by: ToolFeatureID(id))
         )
     }
     @MainActor

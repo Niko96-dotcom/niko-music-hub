@@ -26,22 +26,20 @@ struct ToolSidebarView: View {
             appMark
 
             sidebarCaption("Library", first: true)
-            ForEach(registry.metadata.filter { $0.id == .archiveBrowser }, id: \.id) { metadata in
+            ForEach(registry.metadata.filter { $0.section == .library }, id: \.id) { metadata in
                 toolRow(metadata)
             }
 
             sidebarCaption("Production")
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(registry.metadata.filter {
-                    $0.id != .archiveBrowser && $0.id.rawValue != "settings"
-                }, id: \.id) { metadata in
+                ForEach(registry.metadata.filter { $0.section == .production }, id: \.id) { metadata in
                     toolRow(metadata)
                 }
             }
 
             Spacer(minLength: 8)
 
-            ForEach(registry.metadata.filter { $0.id.rawValue == "settings" }, id: \.id) { metadata in
+            ForEach(registry.metadata.filter { $0.section == .settings }, id: \.id) { metadata in
                 toolRow(metadata)
             }
 

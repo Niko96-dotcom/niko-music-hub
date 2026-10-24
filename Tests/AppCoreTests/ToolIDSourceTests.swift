@@ -27,6 +27,20 @@ final class ToolIDSourceTests: XCTestCase {
         )
     }
 
+    /// Settings is known by its section (`ToolSection.settings`), not by its ID: the
+    /// ID is spelled only where the Settings tool declares it.
+    func testSettingsToolIDIsSpelledOnlyInItsFeature() throws {
+        let owner = "Sources/NikoMusicHub/Settings/SettingsFeature.swift"
+        var failures: [String] = []
+        for file in try Self.swiftFiles() where file != owner {
+            if SourceLex.strippedCommentsOnly(try SourceTestSupport.read(file)).contains("\"settings\"") {
+                failures.append(file)
+            }
+        }
+        XCTAssertEqual(failures, [], "Check `metadata.section == .settings` instead of the Settings ID")
+        XCTAssertTrue(try SourceTestSupport.read(owner).contains("section: .settings"))
+    }
+
     /// The IDs are stored and typed (`-ui-tool`, the shell's selection, inbox items).
     func testBuiltInToolIDsKeepTheirStoredStrings() {
         XCTAssertEqual(

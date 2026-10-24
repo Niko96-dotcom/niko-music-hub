@@ -297,7 +297,8 @@ private struct StubRestoreFeature: ToolFeature {
             id: id,
             displayName: id.rawValue,
             shortLabel: id.rawValue,
-            systemImage: "hammer"
+            systemImage: "hammer",
+            section: .declared(by: id)
         )
     }
 

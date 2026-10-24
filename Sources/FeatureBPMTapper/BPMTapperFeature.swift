@@ -6,8 +6,7 @@ public struct BPMTapperFeature: ToolFeature {
         id: .bpmTapper,
         displayName: "BPM Tapper",
         shortLabel: "BPM Tapper",
-        systemImage: "metronome",
-        capabilities: []
+        systemImage: "metronome"
     )
 
     /// Owns the tap session so leaving the tab does not wipe an in-progress tempo run.

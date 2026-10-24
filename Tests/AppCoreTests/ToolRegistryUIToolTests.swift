@@ -96,7 +96,8 @@ private struct StubLaunchFeature: ToolFeature {
             id: id,
             displayName: id.rawValue,
             shortLabel: id.rawValue,
-            systemImage: "hammer"
+            systemImage: "hammer",
+            section: .declared(by: id)
         )
     }
 

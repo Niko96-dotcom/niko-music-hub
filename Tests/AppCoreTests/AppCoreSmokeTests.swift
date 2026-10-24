@@ -21,7 +21,8 @@ private struct SmokeFeature: ToolFeature {
             id: id,
             displayName: shortLabel,
             shortLabel: shortLabel,
-            systemImage: "wrench.and.screwdriver"
+            systemImage: "wrench.and.screwdriver",
+            section: .declared(by: id)
         )
     }
 

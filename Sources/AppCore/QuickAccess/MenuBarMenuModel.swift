@@ -46,7 +46,7 @@ public enum MenuBarMenuModel {
             command: .openApp
         )
         let tools = HubToolsShortcutMap.menuMetadata(from: registry.metadata)
-            .filter { $0.id != HubToolsShortcutMap.settingsToolID }
+            .filter { $0.section != .settings }
             .map { metadata in
                 QuickAccessEntry(
                     id: metadata.id.rawValue,

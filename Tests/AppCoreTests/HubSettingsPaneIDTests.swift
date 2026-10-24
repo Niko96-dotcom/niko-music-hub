@@ -76,7 +76,7 @@ final class HubSettingsPaneIDTests: XCTestCase {
         XCTAssertTrue(app.contains("HubSettingsScene("))
 
         let shell = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
-        XCTAssertTrue(shell.contains("if toolID == Self.settingsToolID"))
+        XCTAssertTrue(shell.contains("if registry.feature(for: toolID)?.metadata.section == .settings {"))
         XCTAssertTrue(shell.contains("openSettings()"))
         XCTAssertTrue(shell.contains("router.openSettingsPane"))
         XCTAssertFalse(shell.contains("hubOpenSettingsHelpers"))

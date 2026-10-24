@@ -8,5 +8,6 @@ final class ArchiveBrowserFeatureTests: XCTestCase {
             viewModel: ArchiveBrowserViewModel(context: TestToolContext.make())
         )
         XCTAssertEqual(feature.metadata.id, "archive-browser")
+        XCTAssertEqual(feature.metadata.section, .library)
     }
 }

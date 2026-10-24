@@ -5,7 +5,6 @@ import SwiftUI
 
 struct AppShellView: View {
     private static let activeToolMinWidth: CGFloat = 540
-    private static let settingsToolID = ToolFeatureID("settings")
 
     let registry: ToolRegistry
     let context: ToolContext
@@ -290,7 +289,7 @@ struct AppShellView: View {
     }
 
     private func selectTool(_ toolID: ToolFeatureID) {
-        if toolID == Self.settingsToolID {
+        if registry.feature(for: toolID)?.metadata.section == .settings {
             shellSession.persistSelectedToolID(toolID)
             openSettings()
             return

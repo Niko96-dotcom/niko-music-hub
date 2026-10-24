@@ -6,8 +6,7 @@ public struct AudioRecorderFeature: ToolFeature {
         id: .audioRecorder,
         displayName: "Audio Recorder",
         shortLabel: "Recorder",
-        systemImage: "waveform.circle",
-        capabilities: [.producesFiles, .runsJobs]
+        systemImage: "waveform.circle"
     )
 
     /// Owns the recorder session so CoreAudio setup is not rebuilt on every tab visit.

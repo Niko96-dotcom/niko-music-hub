@@ -17,15 +17,21 @@ public struct ToolFeatureID: Hashable, Codable, Sendable, ExpressibleByStringLit
     }
 }
 
-public struct ToolCapability: OptionSet, Sendable, Codable, Hashable {
-    public let rawValue: Int
+/// Where a tool sits in the sidebar. The Tools menu, the Dock menu, ⌘1…⌘9 and the
+/// sidebar's arrow keys follow the same order (`sidebarOrder`).
+public enum ToolSection: CaseIterable, Sendable, Codable, Hashable {
+    /// Under "Library", first.
+    case library
+    /// Under "Production", in registration order.
+    case production
+    /// The bottom row. Selecting it opens the Settings window, so it is never the
+    /// main pane or the launch tool and has no ⌘ digit.
+    case settings
 
-    public init(rawValue: Int) {
-        self.rawValue = rawValue
+    /// Sidebar order: each section in turn, tools in registration order.
+    public static func sidebarOrder(_ metadata: [ToolMetadata]) -> [ToolMetadata] {
+        allCases.flatMap { section in metadata.filter { $0.section == section } }
     }
-
-    public static let producesFiles = ToolCapability(rawValue: 1 << 0)
-    public static let runsJobs = ToolCapability(rawValue: 1 << 1)
 }
 
 public struct ToolMetadata: Hashable, Codable, Sendable {
@@ -33,20 +39,20 @@ public struct ToolMetadata: Hashable, Codable, Sendable {
     public let displayName: String
     public let shortLabel: String
     public let systemImage: String
-    public let capabilities: ToolCapability
+    public let section: ToolSection
 
     public init(
         id: ToolFeatureID,
         displayName: String,
         shortLabel: String,
         systemImage: String,
-        capabilities: ToolCapability = []
+        section: ToolSection = .production
     ) {
         self.id = id
         self.displayName = displayName
         self.shortLabel = shortLabel
         self.systemImage = systemImage
-        self.capabilities = capabilities
+        self.section = section
     }
 }
 

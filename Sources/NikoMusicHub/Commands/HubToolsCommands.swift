@@ -23,7 +23,7 @@ struct HubToolsCommands: Commands {
 
     @ViewBuilder
     private func toolMenuItem(_ metadata: ToolMetadata) -> some View {
-        if metadata.id == HubToolsShortcutMap.settingsToolID {
+        if metadata.section == .settings {
             Divider()
             Button(metadata.displayName) {
                 openSettings()

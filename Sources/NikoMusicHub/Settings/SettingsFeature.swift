@@ -7,7 +7,7 @@ struct SettingsFeature: ToolFeature {
         displayName: "Settings",
         shortLabel: "Settings",
         systemImage: "gearshape",
-        capabilities: []
+        section: .settings
     )
 
     @MainActor

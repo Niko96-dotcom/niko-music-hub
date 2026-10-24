@@ -7,8 +7,7 @@ public struct StemSeparationFeature: ToolFeature {
         id: .stemSeparation,
         displayName: "Stem Separation",
         shortLabel: "Stems",
-        systemImage: "slider.horizontal.below.rectangle",
-        capabilities: [.producesFiles, .runsJobs]
+        systemImage: "slider.horizontal.below.rectangle"
     )
 
     /// Owns the tool session so tab switches reuse backends/workflows instead of rebuilding them.

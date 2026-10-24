@@ -12,12 +12,11 @@ public enum ToolSidebarSelection {
         isSelected ? .isSelected : []
     }
 
-    /// The tools that arrow keys cycle through, in the order the sidebar renders them:
-    /// Archive Browser first, then the other tools. Settings is left out, because
-    /// selecting it opens the Settings window and does not change the selection.
+    /// The tools that arrow keys cycle through, in the order the sidebar renders them
+    /// (`ToolSection.sidebarOrder`). Settings is left out, because selecting it opens
+    /// the Settings window and does not change the selection.
     public static func arrowKeyOrder(_ metadata: [ToolMetadata]) -> [ToolMetadata] {
-        metadata.filter { $0.id == .archiveBrowser }
-            + metadata.filter { $0.id != .archiveBrowser && $0.id.rawValue != "settings" }
+        ToolSection.sidebarOrder(metadata).filter { $0.section != .settings }
     }
 
     /// Cycles the given tools in order.

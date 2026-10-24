@@ -6,8 +6,7 @@ struct DevToolFeature: ToolFeature {
         id: "dev-tool",
         displayName: "Developer Tool",
         shortLabel: "Dev Tool",
-        systemImage: "wrench.and.screwdriver",
-        capabilities: []
+        systemImage: "wrench.and.screwdriver"
     )
 
     @MainActor

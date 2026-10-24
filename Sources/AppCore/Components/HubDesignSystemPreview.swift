@@ -14,8 +14,7 @@ public struct DesignSystemPreviewFeature: ToolFeature {
         id: "design-system-preview",
         displayName: "Design System Preview",
         shortLabel: "Design System",
-        systemImage: "swatchpalette",
-        capabilities: []
+        systemImage: "swatchpalette"
     )
 
     public init() {}

@@ -65,7 +65,7 @@ final class HubToolsShortcutMapTests: XCTestCase {
         XCTAssertTrue(commands.contains("openWindow(id: \"main\")"))
         XCTAssertTrue(commands.contains("openSettings()"))
         XCTAssertTrue(commands.contains("metadata.displayName"))
-        XCTAssertTrue(commands.contains("HubToolsShortcutMap.settingsToolID"))
+        XCTAssertTrue(commands.contains("if metadata.section == .settings {"))
 
         let app = try SourceTestSupport.read("Sources/NikoMusicHub/NikoMusicHubApp.swift")
         XCTAssertTrue(app.contains("HubToolsCommands("))
@@ -96,7 +96,8 @@ private struct StubToolFeature: ToolFeature {
             id: id,
             displayName: displayName,
             shortLabel: displayName,
-            systemImage: "hammer"
+            systemImage: "hammer",
+            section: .declared(by: id)
         )
     }
 

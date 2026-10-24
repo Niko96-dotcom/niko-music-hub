@@ -106,7 +106,7 @@ private struct TestQuickAccessFeature: ToolFeature {
             displayName: displayName,
             shortLabel: displayName,
             systemImage: systemImage,
-            capabilities: []
+            section: .declared(by: id)
         )
     }
 

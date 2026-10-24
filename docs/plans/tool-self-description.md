@@ -23,7 +23,7 @@ Resume from the first step that is not done. Each step is one commit. Find a ste
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates passed on `c51e10f` (2,900 passed, 0 failed, 8 skipped; Swift Testing 86 passed) |
 | 1 One definition per tool ID | done | `git log --grep='(tool self-description step 1)'` | strict build; AppCore and feature suites 2,033 passed, 0 failed, 7 skipped; Swift Testing 86 passed; a planted `"downloader"` in `OutputHandoff.swift` failed `ToolIDSourceTests`, then the file was restored |
-| 2 Sidebar sections replace `ToolCapability` | not started | | |
+| 2 Sidebar sections replace `ToolCapability` | done | `git log --grep='(tool self-description step 2)'` | strict build; AppCore and feature suites 2,036 passed (3 new), 0 failed, 7 skipped; Swift Testing 86 passed; with `sidebarOrder` returning the registration order, both `ToolSectionTests` cases failed, then the file was restored |
 | 3 Jobs describe their keys, verb and help | not started | | |
 | 4 Docs, full gates, live check | not started | | |
 
@@ -31,7 +31,10 @@ Resume from the first step that is not done. Each step is one commit. Find a ste
 
 Record every deviation from the steps below here, numbered, with its reason.
 
-(none yet)
+1. **Step 2: a stricter Settings guard.** `ToolIDSourceTests` checks that the literal `"settings"` appears in
+   `Sources/` only in `SettingsFeature.swift`, not only that `ToolFeatureID("settings")` is gone. The test stubs that
+   stand in for the archive or Settings take their section from one helper (`ToolSection.declared(by:)` in
+   `Tests/AppCoreTests/ToolStubSupport.swift`).
 
 ## Terms
 

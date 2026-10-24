@@ -123,7 +123,8 @@ private struct StubSidebarFeature: ToolFeature {
             id: id,
             displayName: displayName,
             shortLabel: displayName,
-            systemImage: "hammer"
+            systemImage: "hammer",
+            section: .declared(by: id)
         )
     }
 

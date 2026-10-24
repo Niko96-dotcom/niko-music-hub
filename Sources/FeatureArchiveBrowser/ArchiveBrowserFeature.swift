@@ -6,7 +6,8 @@ public struct ArchiveBrowserFeature: ToolFeature {
         id: .archiveBrowser,
         displayName: "Archive Browser",
         shortLabel: "Archive",
-        systemImage: "music.note.list"
+        systemImage: "music.note.list",
+        section: .library
     )
 
     private let viewModel: ArchiveBrowserViewModel

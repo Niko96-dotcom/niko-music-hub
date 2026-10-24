@@ -6,8 +6,7 @@ public struct DownloaderFeature: ToolFeature {
         id: .downloader,
         displayName: "Downloader",
         shortLabel: "Downloader",
-        systemImage: "arrow.down.circle",
-        capabilities: [.producesFiles, .runsJobs]
+        systemImage: "arrow.down.circle"
     )
 
     /// Owns the tool session so tab switches reuse the downloader stack.

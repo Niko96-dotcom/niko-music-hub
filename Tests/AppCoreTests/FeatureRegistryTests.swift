@@ -26,13 +26,13 @@ final class FeatureRegistryTests: XCTestCase {
         XCTAssertEqual(found?.metadata.id, second.metadata.id)
     }
 
-    func testExposesCapabilityFlags() throws {
+    func testExposesSidebarSection() throws {
         let registry = try ToolRegistry(features: [
-            TestFeature(id: "files", shortLabel: "Files", capabilities: [.producesFiles, .runsJobs])
+            TestFeature(id: "library", shortLabel: "Library", section: .library),
+            TestFeature(id: "tool", shortLabel: "Tool")
         ])
 
-        XCTAssertTrue(registry.metadata[0].capabilities.contains(.producesFiles))
-        XCTAssertTrue(registry.metadata[0].capabilities.contains(.runsJobs))
+        XCTAssertEqual(registry.metadata.map(\.section), [.library, .production])
     }
 
     func testRejectsDuplicateFeatureIDs() {
@@ -54,6 +54,7 @@ final class FeatureRegistryTests: XCTestCase {
             TestFeature(id: "wav-converter", shortLabel: "WAV")
         ])
         XCTAssertEqual(registry.metadata.first?.id, "archive-browser")
+        XCTAssertEqual(registry.metadata.first?.section, .library)
     }
 
     func testAddingSecondFeatureDoesNotRequireExistingFeatureChanges() throws {
@@ -73,14 +74,14 @@ private struct TestFeature: ToolFeature {
     init(
         id: ToolFeatureID,
         shortLabel: String,
-        capabilities: ToolCapability = []
+        section: ToolSection = .production
     ) {
         metadata = ToolMetadata(
             id: id,
             displayName: shortLabel,
             shortLabel: shortLabel,
             systemImage: "hammer",
-            capabilities: capabilities
+            section: section
         )
     }
 
