@@ -35,6 +35,8 @@ public struct ToolContext: Sendable {
     public let settingsRepair: SettingsRepairModel
     /// What each helper (yt-dlp, FFmpeg, demucs-mlx) can do now, and its locator.
     public let helperHealth: HelperToolHealth
+    /// Whether a take is capturing system audio: the Audio Recorder sets it, archive preview playback pauses on it.
+    public let audioCaptureActivity: AudioCaptureActivity
 
     public init(
         settingsStore: any SettingsStore,
@@ -50,7 +52,8 @@ public struct ToolContext: Sendable {
         router: QuickAccessRouter? = nil,
         recoveryService: ProjectVaultRecoveryService? = nil,
         settingsRepair: SettingsRepairModel? = nil,
-        helperHealth: HelperToolHealth? = nil
+        helperHealth: HelperToolHealth? = nil,
+        audioCaptureActivity: AudioCaptureActivity? = nil
     ) {
         self.settingsStore = settingsStore
         self.preferences = preferences
@@ -69,5 +72,6 @@ public struct ToolContext: Sendable {
             probe: HelperToolProbe(locator: HelperToolLocator(runtime: .current)),
             appSettings: self.appSettings
         )
+        self.audioCaptureActivity = audioCaptureActivity ?? AudioCaptureActivity()
     }
 }

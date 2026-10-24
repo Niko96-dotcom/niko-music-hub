@@ -11,6 +11,19 @@ final class ToolContextTests: XCTestCase {
         XCTAssertTrue(context.jobRunner.listJobs().isEmpty)
     }
 
+    /// The recording signal has no process-wide fallback: the composition passes the
+    /// app's one signal, and every other context gets its own.
+    @MainActor
+    func testContextsBuiltWithoutARecordingSignalNeverShareOne() {
+        let first = ToolContext.testFixture()
+        let second = ToolContext.testFixture()
+        XCTAssertFalse(first.audioCaptureActivity === second.audioCaptureActivity)
+
+        first.audioCaptureActivity.setActive(true, owner: UUID())
+        XCTAssertTrue(first.audioCaptureActivity.isActive)
+        XCTAssertFalse(second.audioCaptureActivity.isActive)
+    }
+
     /// The archive view model needs a context before the feature list and the
     /// registry exist. Launch warnings, which a registry failure adds to, go to
     /// their only reader, the shell, so one context serves the whole launch.

@@ -9,7 +9,8 @@ public final class AudioCaptureActivity: ObservableObject {
     @Published public private(set) var isActive = false
     private var owners: Set<UUID> = []
 
-    public init() {}
+    /// Nonisolated so `ToolContext` (a plain `Sendable` value) can default it.
+    nonisolated public init() {}
 
     public func setActive(_ active: Bool, owner: UUID) {
         if active { owners.insert(owner) } else { owners.remove(owner) }

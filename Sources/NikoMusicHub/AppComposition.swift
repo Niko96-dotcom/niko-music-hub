@@ -147,6 +147,8 @@ struct AppComposition {
             probe: HelperToolProbe(locator: HelperToolLocator(runtime: runtime)),
             appSettings: appSettings
         )
+        // One recording signal: the Audio Recorder sets it, archive preview playback pauses on it.
+        let audioCaptureActivity = AudioCaptureActivity()
         let context = ToolContext(
             settingsStore: settingsStore,
             preferences: preferences,
@@ -161,7 +163,8 @@ struct AppComposition {
             router: quickAccessRouter,
             recoveryService: recoveryService,
             settingsRepair: settingsRepair,
-            helperHealth: helperHealth
+            helperHealth: helperHealth,
+            audioCaptureActivity: audioCaptureActivity
         )
         let archiveRootWatcher: any ArchiveRootWatching =
             runtime.disableArchiveWatcher
