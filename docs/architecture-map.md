@@ -164,7 +164,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Vault queue, retries, capacity | `ProjectVaultOperationCoordinator` | memory; the journal is authoritative |
 | Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
-| Preview playback | `ArchivePreviewSession.shared`, `ArchivePlaybackCoordinator.shared` (singletons) | memory |
+| Preview playback | `ArchivePreviewSession`, held by `ArchiveBrowserViewModel.previewSession`; views get it by initializer ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
 | Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter` | memory |
 | Output Inbox | `JSONOutputInboxStore` | `output-inbox.json` |
 | A tool page's list of its own outputs | `ToolRecentOutputs` (AppCore), held by the tool's view model | derived from `output-inbox.json` |
@@ -248,9 +248,9 @@ These rules are documented and, where named, enforced. The full table is in
    2026-10-22: every run admits through one `ToolOutputDestination`. The handoff differences are mostly
    intended ([architecture.md § Tool output destination](architecture.md#tool-output-destination)). The
    Downloader's inbox write depends on the view model observing the job.
-5. **Some dependencies are global, not injected:** `ArchivePreviewSession.shared`,
-   `ArchivePlaybackCoordinator.shared`, `AudioCaptureActivity.shared` and `LiveProcessGroupRegistry.shared`.
-   (Helper consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23.)
+5. **Some dependencies are global, not injected:** `AudioCaptureActivity.shared` (the recorder and archive
+   playback share it) and `LiveProcessGroupRegistry.shared`. (Helper consumers share one `HelperToolLocator`
+   through `HelperToolHealth` since 2026-10-23; preview playback belongs to the archive view model since 2026-10-24.)
 6. **`ArchiveBrowserViewModel` is one type in 22 files** (the main file plus 21 `+*.swift` extensions,
    4,615 lines; the footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog`
    on 2026-10-23). Four owners were extracted (scan orchestrator, catalog, metadata editing, Vault queue and
@@ -286,7 +286,8 @@ Documents that disagree with the code:
 2. Which layer owns the inbox handoff for a new tool, and should a new tool use `JobRunner` or an extra
    source? (Admission is settled: one `ToolOutputDestination` per run.)
 3. What triggers moving the Project Vault runtime out of `AppCore`?
-4. Should preview playback be injected instead of reached through singletons?
+4. Settled on 2026-10-24: preview playback is injected. The archive view model owns the one session and views get
+   it by initializer; the coordinator is gone ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)).
 5. Is background Vault archiving (inactivity, low space) still planned? If yes, it needs wiring; if no,
    the Settings switch text and vault-durability.md need to change (gap 8).
 6. Should every transfer and restore state change go through `ProjectVaultStateMachine` (gap 9)?

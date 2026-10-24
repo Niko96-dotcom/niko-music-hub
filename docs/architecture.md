@@ -118,6 +118,7 @@ Archive domain and safety. No SwiftUI/AppKit.
 - [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): loaded roots (it follows the stored scan list, see [Archive scan list](#archive-scan-list)), browse, selection, scan host, and integration with metadata/Vault owners.
 - Vault operation extensions: `+ProjectVaultQueue.swift`, `+ProjectVaultArchive.swift`, `+ProjectVault.swift`, `+ProjectVaultActions.swift`, `+ProjectVaultRestore.swift`, `+ProjectVaultRecovery.swift`, `+Metadata.swift` (Done revoke), `+Scan.swift` (root-bound clears).
 - Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift), [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) (song-metadata mutation ordering), [`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) (Vault observation/presentation).
+- Playback: [`ArchivePreviewSession`](../Sources/FeatureArchiveBrowser/ArchivePreviewSession.swift), held by the view model (see [Archive preview playback](#archive-preview-playback)).
 - Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
 - A board lane is an `NSTableView` (`ArchiveBoardNativeSongList`) with reusable rows; each row hosts the unchanged
   SwiftUI `ArchiveBoardSongCard`. AppKit owns the document height, so a fling to the end always realizes the last card.
@@ -237,6 +238,26 @@ reports a `SongCatalogChange`: the changed songs with their old values and the r
 - An owner object like `ArchiveVaultObservation` was considered and not chosen: the follow-ups are view-model state,
   so each edit would cross two objects and a callback, and the card cache must still be built before the publish.
   Revisit that only if the projection gets a second user.
+
+## Archive preview playback
+
+[`ArchivePreviewSession`](../Sources/FeatureArchiveBrowser/ArchivePreviewSession.swift) owns the archive's playback:
+the loaded song and preview, the paused-transport rule (a pause re-arms the selected song), the recording pause and
+the headphone-unplug pause. Its `ArchivePreviewPlayer` is the only AVFoundation player in the archive, so one preview
+plays at a time by construction; no coordinator sits between players.
+
+- `ArchiveBrowserViewModel.previewSession` holds it. The view model creates it with its other owners; production
+  builds one view model, so the app has one session for its lifetime. Every write of `selectedSong` reaches it
+  (`synchronizePreviewSelection()`, also for restored routes and catalog reconciliation), and the lifecycle resets (a
+  root change; the loaded song hidden or gone from the catalog) call `clear()`.
+- Views get it by initializer, never by a global: `ArchiveBrowserView` and `SongDetailView` from the view model,
+  `SongCardView`, `ArchiveBoardCardView` and `ArchivePreviewRowView` as a parameter, and the shell builds
+  `ArchivePersistentPlayerView(viewModel:onOpenSong:)` from the view model it already holds.
+- `ArchivePreviewSessionTests` checks the wiring through the view model: a selection write and a restored route arm
+  its session, the bar's Open action returns to that view model, and two view models never share a session. The
+  transport rules themselves are in
+  [design-contract.md § Archive selection and persistent preview player](design-contract.md#archive-selection-and-persistent-preview-player).
+- The recording signal is still the process-wide `AudioCaptureActivity.shared`, shared with the recorder (map gap 5).
 
 ## Archive scan list
 
