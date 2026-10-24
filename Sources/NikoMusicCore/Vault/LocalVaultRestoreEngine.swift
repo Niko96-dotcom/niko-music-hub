@@ -9,6 +9,18 @@ public enum VaultRestoreFaultPoint: String, CaseIterable, Sendable {
     case openingInCubase
 }
 
+/// The windows between a side effect and the save that records it, which the
+/// phase fault points above do not reach. A test throws
+/// `VaultTransferInterruption` at one of them to stand for process death.
+public enum VaultRestoreCrashWindow: String, CaseIterable, Sendable {
+    /// The staging folder is renamed to the Active destination; `persistingActiveLocation` is not saved yet.
+    case renamedBeforePhaseSave
+    /// The catalog holds the Active location; the restore has not saved that yet.
+    case catalogWrittenBeforeSave
+    /// The project is open; `completedAt` is not saved yet.
+    case openedBeforeCompletionSave
+}
+
 public enum LocalVaultRestoreError: LocalizedError, Equatable, Sendable {
     case archiveGenerationNotFound
     case archiveGenerationNotVerified
@@ -113,6 +125,7 @@ public struct SafeVaultProjectOpener: VaultProjectOpening, @unchecked Sendable {
 
 public actor LocalVaultRestoreEngine {
     public typealias FaultInjector = @Sendable (VaultRestoreFaultPoint, VaultRestoreRecord) throws -> Void
+    public typealias CrashInjector = @Sendable (VaultRestoreCrashWindow, VaultRestoreRecord) throws -> Void
 
     public typealias LinkedArchiveValidation = @Sendable (ProjectID, ProjectLocation, URL) throws -> Void
     private let linkedArchiveValidation: LinkedArchiveValidation
@@ -129,6 +142,7 @@ public actor LocalVaultRestoreEngine {
     private let fileManager: FileManager
     private let manifestBuilder: VaultManifestBuilder
     private let faultInjector: FaultInjector?
+    private let crashInjector: CrashInjector?
     private let now: @Sendable () -> Date
     private let writeAdmission: LocalVaultTransferEngine.WriteAdmission
     private let volumeIdentifier: LocalVaultTransferEngine.VolumeIdentifier
@@ -145,6 +159,7 @@ public actor LocalVaultRestoreEngine {
         projectOpener: any VaultProjectOpening,
         fileManager: FileManager = .default,
         faultInjector: FaultInjector? = nil,
+        crashInjector: CrashInjector? = nil,
         now: @escaping @Sendable () -> Date = Date.init,
         writeAdmission: @escaping LocalVaultTransferEngine.WriteAdmission = { _, _ in
             throw LocalVaultTransferError.writeAdmissionRequired
@@ -168,6 +183,7 @@ public actor LocalVaultRestoreEngine {
         self.fileManager = fileManager
         self.manifestBuilder = manifestBuilder ?? VaultManifestBuilder(fileManager: fileManager)
         self.faultInjector = faultInjector
+        self.crashInjector = crashInjector
         self.now = now
         self.writeAdmission = writeAdmission
         self.volumeIdentifier = volumeIdentifier ?? LocalVaultTransferEngine.foundationVolumeIdentifier
@@ -463,6 +479,7 @@ public actor LocalVaultRestoreEngine {
                 case .promotingActiveCopy:
                     try inject(.promotingActiveCopy, record)
                     try promote(record)
+                    try crash(.renamedBeforePhaseSave, record)
                     try advance(&record, to: .persistingActiveLocation)
                 case .persistingActiveLocation:
                     try inject(.persistingActiveLocation, record)
@@ -473,6 +490,7 @@ public actor LocalVaultRestoreEngine {
                             projectID: record.projectID,
                             location: ProjectLocation(rootID: activeRootID, relativePath: relative, kind: .active, availability: .local, lastSeenAt: now())
                         )
+                        try crash(.catalogWrittenBeforeSave, record)
                         record.catalogLocationPersisted = true
                         try persist(&record)
                     }
@@ -481,6 +499,7 @@ public actor LocalVaultRestoreEngine {
                     try inject(.openingInCubase, record)
                     try revalidatePromotedActiveDestination(&record)
                     _ = try projectOpener.openProject(at: record.destinationURL, allowedRoot: activeRoot, selectedRelativePath: record.selectedProjectRelativePath)
+                    try crash(.openedBeforeCompletionSave, record)
                     record.completedAt = now()
                     record.error = nil
                     try persist(&record)
@@ -844,6 +863,10 @@ public actor LocalVaultRestoreEngine {
 
     private func inject(_ point: VaultRestoreFaultPoint, _ record: VaultRestoreRecord) throws {
         try faultInjector?(point, record)
+    }
+
+    private func crash(_ window: VaultRestoreCrashWindow, _ record: VaultRestoreRecord) throws {
+        try crashInjector?(window, record)
     }
 
     private static func contains(_ root: URL, _ candidate: URL) -> Bool {

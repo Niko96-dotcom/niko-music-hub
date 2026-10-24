@@ -97,6 +97,55 @@ final class VaultArchiveLayoutTests: XCTestCase {
         try VaultManifestBuilder().verify(try XCTUnwrap(failed.manifest), at: fixture.source)
     }
 
+    /// Crash windows around the move that sets the old staging aside: engine A
+    /// stops there, a fresh engine launches twice (the spent budget leaves the
+    /// failure alone), and the explicit retry finishes without losing a copy.
+    func testCrashBeforeThePortableRetryMoveKeepsTheOldStagingInPlace() async throws {
+        let fixture = try PortableArchiveFixture()
+        defer { fixture.remove() }
+        let failed = try fixture.legacyFailure()
+        let stagingBefore = try VaultManifestBuilder().build(at: failed.stagingURL)
+
+        let crashed = try await fixture.crash(at: .portableRetryBeforeMove, retrying: failed)
+
+        XCTAssertEqual(crashed.state, .failedRecoverable)
+        let recordedPath = try XCTUnwrap(crashed.preservedArchiveCopies?.first)
+        XCTAssertEqual(crashed.preservedArchiveCopies?.count, 1, "the retained path is saved before the move")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recordedPath.path))
+        try VaultManifestBuilder().verify(stagingBefore, at: failed.stagingURL)
+        try await fixture.assertLaunchTwiceLeavesTheFailure(crashed)
+
+        let retriedValue = await (try fixture.engine()).retryRecoverableTransfer(id: failed.id)
+        let retried = try XCTUnwrap(retriedValue)
+        XCTAssertEqual(retried.state, .archiveVerified)
+        XCTAssertEqual(retried.preservedArchiveCopies?.count, 2, "the retry records a fresh path")
+        XCTAssertEqual(retried.preservedArchiveCopies?.first, recordedPath)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recordedPath.path))
+        try VaultManifestBuilder().verify(stagingBefore, at: XCTUnwrap(retried.preservedArchiveCopies?.last))
+    }
+
+    func testCrashAfterThePortableRetryMoveResumesWithTheRetainedCopy() async throws {
+        let fixture = try PortableArchiveFixture()
+        defer { fixture.remove() }
+        let failed = try fixture.legacyFailure()
+        let stagingBefore = try VaultManifestBuilder().build(at: failed.stagingURL)
+
+        let crashed = try await fixture.crash(at: .portableRetryAfterMove, retrying: failed)
+
+        XCTAssertEqual(crashed.state, .failedRecoverable)
+        let retained = try XCTUnwrap(crashed.preservedArchiveCopies?.first)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: failed.stagingURL.path))
+        try VaultManifestBuilder().verify(stagingBefore, at: retained)
+        try await fixture.assertLaunchTwiceLeavesTheFailure(crashed)
+
+        let retriedValue = await (try fixture.engine()).retryRecoverableTransfer(id: failed.id)
+        let retried = try XCTUnwrap(retriedValue)
+        XCTAssertEqual(retried.state, .archiveVerified)
+        XCTAssertEqual(retried.preservedArchiveCopies, [retained], "nothing was left to set aside")
+        try VaultManifestBuilder().verify(stagingBefore, at: retained)
+        try VaultManifestBuilder().verify(try XCTUnwrap(failed.manifest), at: fixture.source)
+    }
+
     func testSourceChangeDuringUpgradeAdmissionStopsBeforeNewCopy() async throws {
         let fixture = try PortableArchiveFixture()
         defer { fixture.remove() }
@@ -183,10 +232,36 @@ private struct PortableArchiveFixture {
 
     func remove() { try? FileManager.default.removeItem(at: root) }
 
-    func engine(fault: LocalVaultTransferEngine.FaultInjector? = nil) throws -> LocalVaultTransferEngine {
+    func engine(
+        fault: LocalVaultTransferEngine.FaultInjector? = nil,
+        crash: LocalVaultTransferEngine.CrashInjector? = nil
+    ) throws -> LocalVaultTransferEngine {
         try LocalVaultTransferEngine(activeRoot: active, archiveRoot: archive, store: store,
-            provider: PortableTestProvider(root: archive), faultInjector: fault,
+            provider: PortableTestProvider(root: archive), faultInjector: fault, crashInjector: crash,
             writeAdmission: { _, operation in try await operation() }, removalAdmission: { _ in })
+    }
+
+    /// An explicit retry of `failed` that stops at `window`; returns the
+    /// record as the journal held it there.
+    func crash(at window: VaultTransferCrashWindow, retrying failed: VaultTransferRecord) async throws -> VaultTransferRecord {
+        let store = self.store
+        let capture = PortableCrashCapture()
+        let engine = try self.engine(crash: { observed, record in
+            guard observed == window else { return }
+            capture.record = try store.record(id: record.id)
+            throw VaultTransferInterruption()
+        })
+        _ = await engine.retryRecoverableTransfer(id: failed.id)
+        return try XCTUnwrap(capture.record, "the retry never reached \(window)")
+    }
+
+    func assertLaunchTwiceLeavesTheFailure(_ crashed: VaultTransferRecord) async throws {
+        let relaunch = try engine()
+        for launch in 1...2 {
+            let results = await relaunch.recoverAtLaunch()
+            XCTAssertEqual(results.map(\.state), [.failedRecoverable], "launch \(launch)")
+            XCTAssertEqual(try store.record(id: crashed.id), crashed, "launch \(launch) changed the failure")
+        }
     }
 
     func restore() async throws -> VaultRestoreRecord {
@@ -211,6 +286,16 @@ private struct PortableArchiveFixture {
         record.error = VaultTransferError(origin: .verifyingArchiveStaging, reason: .integrityMismatch, message: "provider rewrote a name")
         try store.save(record)
         return record
+    }
+}
+
+private final class PortableCrashCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: VaultTransferRecord?
+
+    var record: VaultTransferRecord? {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
     }
 }
 

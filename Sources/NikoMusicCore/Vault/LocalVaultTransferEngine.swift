@@ -9,6 +9,34 @@ public enum VaultTransferFaultPoint: String, CaseIterable, Sendable {
     case promotingArchiveGeneration
 }
 
+/// The windows between a side effect and the save that records it, which the
+/// phase fault points above do not reach. A test throws
+/// `VaultTransferInterruption` at one of them to stand for process death.
+public enum VaultTransferCrashWindow: String, CaseIterable, Sendable {
+    /// The staging copy is complete; its manifest is not saved yet.
+    case copiedBeforeManifestSave
+    /// The staging folder is renamed to the generation; its durability is not saved yet.
+    case renamedBeforeDurabilitySave
+    /// The generation's durability is saved; `archiveVerified` is not saved yet.
+    case durabilitySavedBeforeVerifiedSave
+    /// Removal re-proved the generation and saved it; `removingActiveCopy` is not saved yet.
+    case reproofSavedBeforeRemovalSave
+    /// `removingActiveCopy` is saved; `removeItem` has not started.
+    case removalBeforeRemoveItem
+    /// `removeItem` finished; `evictingProviderCache` is not saved yet.
+    case removalAfterRemoveItem
+    /// Eviction finished; the archived state is not saved yet.
+    case evictedBeforeSave
+    /// Interrupted-removal recovery saved the preservation path; the Active folder is not moved yet.
+    case recoveryBeforePreservingMove
+    /// Interrupted-removal recovery verified the archive; `archiveVerified` is not saved yet.
+    case recoveryBeforeVerifiedSave
+    /// A portable retry saved the retained-copy path; the old staging is not moved yet.
+    case portableRetryBeforeMove
+    /// A portable retry moved the old staging aside; the retry state is not saved yet.
+    case portableRetryAfterMove
+}
+
 /// Throw this from a fault injector to model process termination. The engine
 /// deliberately leaves the already-persisted phase untouched for launch recovery.
 public struct VaultTransferInterruption: Error, Equatable, Sendable {
@@ -128,6 +156,7 @@ public enum VaultWriteAdmissionError: Error, LocalizedError, Equatable, Sendable
 
 public actor LocalVaultTransferEngine {
     public typealias FaultInjector = @Sendable (VaultTransferFaultPoint, VaultTransferRecord) throws -> Void
+    public typealias CrashInjector = @Sendable (VaultTransferCrashWindow, VaultTransferRecord) throws -> Void
     public typealias WriteOperation = @Sendable () async throws -> Void
     public typealias WriteAdmission = @Sendable (VaultWriteAdmissionRequest, WriteOperation) async throws -> Void
     public typealias RemovalAdmission = @Sendable (VaultTransferRecord) async throws -> Void
@@ -149,6 +178,7 @@ public actor LocalVaultTransferEngine {
     private let fileManager: FileManager
     private let manifestBuilder: VaultManifestBuilder
     private let faultInjector: FaultInjector?
+    private let crashInjector: CrashInjector?
     private let now: @Sendable () -> Date
     private let recoveryPolicy: VaultTransferRecoveryPolicy
     private let writeAdmission: WriteAdmission
@@ -162,6 +192,7 @@ public actor LocalVaultTransferEngine {
         provider: (any ArchiveStorageProvider)? = nil,
         fileManager: FileManager = .default,
         faultInjector: FaultInjector? = nil,
+        crashInjector: CrashInjector? = nil,
         now: @escaping @Sendable () -> Date = Date.init,
         recoveryPolicy: VaultTransferRecoveryPolicy = .production,
         writeAdmission: @escaping WriteAdmission = refusesWrites,
@@ -183,6 +214,7 @@ public actor LocalVaultTransferEngine {
         self.fileManager = fileManager
         self.manifestBuilder = manifestBuilder ?? VaultManifestBuilder(fileManager: fileManager)
         self.faultInjector = faultInjector
+        self.crashInjector = crashInjector
         self.now = now
         self.recoveryPolicy = recoveryPolicy
         self.writeAdmission = writeAdmission
@@ -410,6 +442,8 @@ public actor LocalVaultTransferEngine {
         let recopy: Bool
         do {
             recopy = try await preparePortableArchiveRetry(&record)
+        } catch is VaultTransferInterruption {
+            return (try? store.record(id: record.id)) ?? record
         } catch {
             record.error = VaultTransferError(origin: origin, reason: failureReason(for: error), message: error.localizedDescription)
             try? persist(&record)
@@ -454,6 +488,7 @@ public actor LocalVaultTransferEngine {
             let activeRoot = self.activeRoot
             let archiveRoot = self.archiveRoot
             let manager = VaultSendableFileManager(fileManager)
+            let crashInjector = self.crashInjector
             try await writeAdmission(VaultWriteAdmissionRequest(
                 target: .archive, sourceURL: record.sourceURL,
                 targetRootURL: archiveRoot, minimumProjectedBytes: manifest.totalBytes
@@ -463,7 +498,9 @@ public actor LocalVaultTransferEngine {
                       !manager.value.fileExists(atPath: retained.path) else {
                     throw LocalVaultTransferError.unsafeStagingPath
                 }
+                try crashInjector?(.portableRetryBeforeMove, transfer)
                 try manager.value.moveItem(at: transfer.stagingURL, to: retained)
+                try crashInjector?(.portableRetryAfterMove, transfer)
             }
         }
         record.durability = nil
@@ -526,6 +563,7 @@ public actor LocalVaultTransferEngine {
             throw LocalVaultTransferError.occupiedDestination
         }
         try manifestBuilder.verifyArchive(manifest, at: destination)
+        try crash(.recoveryBeforeVerifiedSave, record)
         record.state = .archiveVerified
         record.error = nil
         record.nextRetryAt = nil
@@ -550,6 +588,7 @@ public actor LocalVaultTransferEngine {
               try Self.sourceFileSystemIdentity(at: record.sourceURL) == expectedIdentity else {
             throw LocalVaultTransferError.sourceMutated
         }
+        try crash(.recoveryBeforePreservingMove, record)
         try fileManager.moveItem(at: record.sourceURL, to: preserved)
     }
 
@@ -655,6 +694,7 @@ public actor LocalVaultTransferEngine {
         } catch {
             throw error
         }
+        try crash(.reproofSavedBeforeRemovalSave, terminal)
         var record = terminal
         record.state = try ProjectVaultStateMachine().applying(
             .beginRemovingActiveCopy(VaultRemovalEvidence(
@@ -718,6 +758,7 @@ public actor LocalVaultTransferEngine {
                 case .promotingArchiveGeneration:
                     try inject(.promotingArchiveGeneration, record)
                     try await promote(&record)
+                    try crash(.renamedBeforeDurabilitySave, record)
                     // The provider barrier before promotion covers the staged
                     // bytes. The final rename is another provider-visible
                     // mutation, so it must also become durable before this
@@ -734,6 +775,7 @@ public actor LocalVaultTransferEngine {
                     try manifestBuilder.verifyArchive(manifest, at: record.destinationURL)
                     record.durability = finalDurability
                     try persist(&record)
+                    try crash(.durabilitySavedBeforeVerifiedSave, record)
                     record.state = .archiveVerified
                     record.error = nil
                     record.nextRetryAt = nil
@@ -786,12 +828,15 @@ public actor LocalVaultTransferEngine {
                     // recoveryRequired at launch and never reach this branch.
                     try Task.checkCancellation()
                     activeRemovalStarted = true
+                    try crash(.removalBeforeRemoveItem, record)
                     if fileManager.fileExists(atPath: record.sourceURL.path) {
                         try fileManager.removeItem(at: record.sourceURL)
                     }
+                    try crash(.removalAfterRemoveItem, record)
                     try advance(&record, to: .evictingProviderCache)
                 case .evictingProviderCache:
                     let result = try await provider.evictIfSupported(record.destinationURL)
+                    try crash(.evictedBeforeSave, record)
                     record.error = nil
                     record.nextRetryAt = nil
                     try advance(&record, to: result == .evicted ? .archivedOnlineOnly : .archivedLocal)
@@ -966,6 +1011,7 @@ public actor LocalVaultTransferEngine {
         record.manifest = manifest
         record.totalBytes = manifest.totalBytes
         record.completedBytes = manifest.totalBytes
+        try crash(.copiedBeforeManifestSave, record)
         try persist(&record)
     }
 
@@ -1180,6 +1226,10 @@ public actor LocalVaultTransferEngine {
 
     private func inject(_ point: VaultTransferFaultPoint, _ record: VaultTransferRecord) throws {
         try faultInjector?(point, record)
+    }
+
+    private func crash(_ window: VaultTransferCrashWindow, _ record: VaultTransferRecord) throws {
+        try crashInjector?(window, record)
     }
 
     private func failureReason(for error: Error) -> VaultFailureReason {
