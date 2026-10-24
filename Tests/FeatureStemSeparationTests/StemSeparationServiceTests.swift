@@ -150,6 +150,65 @@ struct StemSeparationServiceTests {
         #expect(runner.job(id: job.id)?.state == .failed)
     }
 
+    @Test
+    func startJob_canceledBackend_leavesNoRunFolder() async throws {
+        let backend = MockStemSeparationBackend()
+        backend.requestedResult = .canceled
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, runner, inbox) = makeService(backend: backend)
+        let request = StemSeparationRequest(inputURL: makeInputFile(), destination: .noProtectedRoots(at: root), preset: .fast4)
+
+        let job = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: job)
+
+        #expect(runner.job(id: job.id)?.state == .canceled)
+        let runFolder = try #require(backend.requests.first?.outputFolderURL)
+        #expect(!FileManager.default.fileExists(atPath: runFolder.path))
+        #expect(try FileManager.default.contentsOfDirectory(atPath: runFolder.deletingLastPathComponent().path).isEmpty)
+        #expect(inbox.items.isEmpty)
+    }
+
+    @Test
+    func startJob_failedBackendThatLeftOnlyEmptySubfolders_leavesNoRunFolder() async throws {
+        let backend = MockStemSeparationBackend()
+        backend.foldersToCreate = ["htdemucs/input"]
+        backend.requestedResult = .failed(message: "mock failure")
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, runner, _) = makeService(backend: backend)
+        let request = StemSeparationRequest(inputURL: makeInputFile(), destination: .noProtectedRoots(at: root), preset: .fast4)
+
+        let job = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: job)
+
+        #expect(runner.job(id: job.id)?.state == .failed)
+        let runFolder = try #require(backend.requests.first?.outputFolderURL)
+        #expect(!FileManager.default.fileExists(atPath: runFolder.path))
+    }
+
+    @Test
+    func startJob_canceledBackendAfterWritingAStem_keepsRunFolderAndStem() async throws {
+        let backend = MockStemSeparationBackend()
+        backend.foldersToCreate = ["htdemucs/input"]
+        backend.filesToWrite = [(.vocals, "vocals.wav")]
+        backend.requestedResult = .canceled
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, runner, _) = makeService(backend: backend)
+        let request = StemSeparationRequest(inputURL: makeInputFile(), destination: .noProtectedRoots(at: root), preset: .fast4)
+
+        let job = service.startJob(request: request)
+        try await waitUntilFinished(runner: runner, job: job)
+
+        #expect(runner.job(id: job.id)?.state == .canceled)
+        let runFolder = try #require(backend.requests.first?.outputFolderURL)
+        #expect(FileManager.default.fileExists(atPath: runFolder.appendingPathComponent("vocals.wav").path))
+    }
+
     @Test(arguments: [StemSeparationPreset.fast4, .experimental6])
     func startJob_publishesCompleteSetToRealInboxInOneWrite(preset: StemSeparationPreset) async throws {
         let backend = MockStemSeparationBackend()
@@ -469,9 +528,15 @@ struct StemSeparationServiceTests {
 
         #expect(cancellationReachedProcessRunner)
         #expect(runner.job(id: job.id)?.state == .canceled)
+        // Esc and the page's Cancel both reach `cancelJob`, which marks the job canceled at once;
+        // the run folder goes once the job's operation has returned.
+        for _ in 0..<500 where runner.hasUnfinishedWork {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(!runner.hasUnfinishedWork)
         if let outputDirectory = processRunner.outputDirectory {
-            let contents = try fileManager.contentsOfDirectory(atPath: outputDirectory.path)
-            #expect(contents.isEmpty)
+            #expect(!fileManager.fileExists(atPath: outputDirectory.path))
+            #expect(try fileManager.contentsOfDirectory(atPath: outputDirectory.deletingLastPathComponent().path).isEmpty)
         } else {
             Issue.record("The process runner did not receive the demucs output directory.")
         }

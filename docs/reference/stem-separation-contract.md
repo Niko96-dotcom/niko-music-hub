@@ -92,6 +92,8 @@ Only stems verified by the scanner are published as `OutputInboxItem` values.
 
 `StemSeparationService.startJob(request:)` enqueues a `Job` via `JobRunning`. The job body calls the backend and then scans/ingests results. UI observes the job through `JobRunning.job(id:)`.
 
+Each run makes a new folder, `Stems/<title> - <preset> - <timestamp> - <uuid>/`, before the backend starts. When the run ends canceled or failed, the service removes that folder and its empty subfolders with `rmdir`, which refuses any folder that holds a file. A stem the backend already wrote keeps its folder.
+
 ## Adding a second backend
 
 1. Create a new type conforming to `StemSeparationBackend`.

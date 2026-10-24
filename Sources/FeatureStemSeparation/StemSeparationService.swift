@@ -67,33 +67,39 @@ public struct StemSeparationService: Sendable {
     ) async throws {
         progress.log("Creating output folder...")
         try Task.checkCancellation()
-        try createDirectory(at: backendRequest.outputFolderURL)
+        try createRunFolder(at: backendRequest.outputFolderURL)
 
-        progress.log("Starting \(preset.displayName) separation...")
-        let backend = self.backend
-        let result = await withTaskCancellationHandler(operation: {
-            await backend.separate(request: backendRequest) { fraction, message in
-                progress.update(progress: fraction, message: message)
+        do {
+            progress.log("Starting \(preset.displayName) separation...")
+            let backend = self.backend
+            let result = await withTaskCancellationHandler(operation: {
+                await backend.separate(request: backendRequest) { fraction, message in
+                    progress.update(progress: fraction, message: message)
+                }
+            }, onCancel: {
+                backend.cancel()
+            })
+            try Task.checkCancellation()
+
+            switch result {
+            case .canceled:
+                progress.log("Canceled.")
+                throw CancellationError()
+            case let .failed(message, reason):
+                progress.log("Failed: \(message)")
+                throw StemSeparationServiceError(message, reason: reason)
+            case .success(let outputFolderURL, _):
+                try await handleSuccess(
+                    outputFolderURL: outputFolderURL,
+                    preset: preset,
+                    title: title,
+                    progress: progress
+                )
             }
-        }, onCancel: {
-            backend.cancel()
-        })
-        try Task.checkCancellation()
-
-        switch result {
-        case .canceled:
-            progress.log("Canceled.")
-            throw CancellationError()
-        case let .failed(message, reason):
-            progress.log("Failed: \(message)")
-            throw StemSeparationServiceError(message, reason: reason)
-        case .success(let outputFolderURL, _):
-            try await handleSuccess(
-                outputFolderURL: outputFolderURL,
-                preset: preset,
-                title: title,
-                progress: progress
-            )
+        } catch {
+            // A canceled or failed run that wrote nothing leaves no folder behind.
+            removeRunFolderIfItHoldsNoFiles(backendRequest.outputFolderURL)
+            throw error
         }
     }
 
@@ -162,12 +168,24 @@ public struct StemSeparationService: Sendable {
         try outputInboxStore.addItems(items)
     }
 
-    private func createDirectory(at url: URL) throws {
-        try FileManager.default.createDirectory(
-            at: url,
-            withIntermediateDirectories: true,
-            attributes: nil
-        )
+    private func createRunFolder(at url: URL) throws {
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        // Not intermediate: a folder that already exists fails the run, so the cleanup
+        // below only ever removes a folder this run made.
+        try fileManager.createDirectory(at: url, withIntermediateDirectories: false)
+    }
+
+    /// `rmdir` removes only an empty folder and refuses one that holds anything, so a
+    /// written stem (or any other file) keeps its folder and every folder above it.
+    /// Subfolders go first, deepest first, for helpers that nest their output.
+    private func removeRunFolderIfItHoldsNoFiles(_ url: URL) {
+        let entries = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? []
+        for entry in entries.reversed() {
+            rmdir(entry.path)
+        }
+        rmdir(url.path)
     }
 
     /// UTF-8 bytes kept from the title. APFS allows 255 bytes per name, and the job

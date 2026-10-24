@@ -9,6 +9,8 @@ final class MockStemSeparationBackend: StemSeparationBackend, @unchecked Sendabl
 
     var requestedResult: StemSeparationResult = .failed(message: "not configured")
     var filesToWrite: [(StemRole, String)] = []
+    /// Empty subfolders made before any file, like a helper that nests its output.
+    var foldersToCreate: [String] = []
 
     var requests: [StemSeparationBackendRequest] { lock.withLock { recordedRequests } }
     var isCanceled: Bool { lock.withLock { canceled } }
@@ -22,6 +24,13 @@ final class MockStemSeparationBackend: StemSeparationBackend, @unchecked Sendabl
         onProgress: @escaping @Sendable (Double, String?) -> Void
     ) async -> StemSeparationResult {
         lock.withLock { recordedRequests.append(request) }
+
+        for folder in foldersToCreate {
+            try? FileManager.default.createDirectory(
+                at: request.outputFolderURL.appendingPathComponent(folder, isDirectory: true),
+                withIntermediateDirectories: true
+            )
+        }
 
         for (index, file) in filesToWrite.enumerated() {
             if Task.isCancelled || isCanceled {

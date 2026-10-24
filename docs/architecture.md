@@ -528,7 +528,8 @@ snapshot, so a settings change during a run cannot move the rest of the run.
 - Audio Recorder and Downloader load the destination in the view model when a run starts. The WAV Converter builds it
   from the snapshot its run already holds (`BatchAudioConversionUseCase`). Stem Separation loads it in the view model
   and passes it in `StemSeparationRequest` / `YouTubeStemSeparationRequest`; the service and the YouTube workflow
-  admit the run folder and the download folder with it.
+  admit the run folder and the download folder with it. A canceled or failed separation removes its run folder when
+  the folder holds no file (`rmdir`, empty subfolders first), so a cancel leaves no empty folder under `Stems/`.
 - Only three files build a `ToolOutputGuard` themselves: `ToolOutputDestination`, the Settings output picker (it checks
   a candidate folder before saving it) and the recovery bundle export (a folder the person chose).
   `OutputGuardSourceTests` lists them with their reasons and fails on any other.
