@@ -23,7 +23,7 @@ Resume from the first step that is not done. Each step is one commit. Find a ste
 | 0 Baseline | done | — | full gates passed on `c51e10f`: 2,900 passed, 0 failed, 8 skipped; Swift Testing 86 passed; no re-run |
 | 1 Remove the playback coordinator | done | `git log --grep='(preview injection step 1)'` | strict build; preview suites 65 (1 new), 0 failures; with `clear()` not stopping the player the new reset test failed 5 assertions |
 | 2 The view model and the views reach the session through the view model | done | `git log --grep='(preview injection step 2)'` | strict build; `FeatureArchiveBrowserTests` 667 (1 new), AppCore `*SourceTests` 99, 0 failures; plants (a) no `didSet` call and (b) session not told failed both the old regexes and the new test; (c) a dead Open action passed the old regexes and failed the new test |
-| 3 Each view model creates its own session | not started | | |
+| 3 Each view model creates its own session | done | `git log --grep='(preview injection step 3)'` | strict build; `FeatureArchiveBrowserTests` 668 (1 new), `AppCoreTests` 857 (2 skipped), 0 failures; with the `.shared` alias back in the view model the new independence test failed 5 assertions; no `.shared`, coordinator or `ArchivePreviewPlayback` left in `Sources/` or `Tests/` |
 | 4 Docs, full gates, live check | not started | | |
 
 ## Revisions

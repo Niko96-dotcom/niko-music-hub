@@ -12,8 +12,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load(fixture.songs))
         model.filteredSongs = fixture.songs
-        let session = ArchivePreviewSession.shared
-        defer { session.clear() }
+        let session = model.previewSession
         let first = fixture.songs[0]
         let second = fixture.songs[1]
         model.selectSongOnBoard(second)
@@ -42,7 +41,6 @@ final class ArchivePreviewSessionTests: XCTestCase {
     func testSelectionWritesArmTheViewModelsSessionAndItsOpenActionReturns() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         let session = model.previewSession
-        defer { session.clear() }
         let songs = ["One", "Two"].map { name in
             let folder = URL(fileURLWithPath: "/fixture/\(name)", isDirectory: true)
             let preview = PreviewCandidate(filePath: folder.appendingPathComponent("\(name).wav"), fileName: "\(name).wav",
@@ -65,12 +63,27 @@ final class ArchivePreviewSessionTests: XCTestCase {
         XCTAssertEqual(model.viewMode, .boardDetail)
     }
 
+    func testEachViewModelPlaysThroughItsOwnSession() throws {
+        let fixture = try makeHenryFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let first = ArchiveBrowserViewModel(context: TestToolContext.make())
+        let second = ArchiveBrowserViewModel(context: TestToolContext.make())
+        XCTAssertFalse(first.previewSession === second.previewSession)
+        first.selectedSong = fixture.songs[0]
+        first.audition(fixture.songs[1])
+        XCTAssertEqual(first.previewSession.songID, fixture.songs[1].id)
+        XCTAssertTrue(first.previewSession.isPlaying)
+        XCTAssertNil(second.previewSession.songID, "Another view model's selection and audition stay out")
+        XCTAssertNil(second.previewSession.preview)
+        XCTAssertNil(second.previewSession.player.activeURL)
+        XCTAssertFalse(second.previewSession.isPlaying)
+    }
+
     func testPlayingTrackSurvivesBrowsingAndPauseThenArmsSelection() async throws {
         let fixture = try makeHenryFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        let session = ArchivePreviewSession.shared
-        defer { session.clear() }
+        let session = model.previewSession
         model.audition(fixture.songs[1])
         model.selectSongOnBoard(fixture.songs[0])
         XCTAssertEqual(session.songID, fixture.songs[1].id)
@@ -91,8 +104,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let fixture = try makeHenryFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        let session = ArchivePreviewSession.shared
-        defer { session.clear() }
+        let session = model.previewSession
         let first = fixture.songs[0]
         let second = fixture.songs[1]
         model.audition(second)
@@ -116,8 +128,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let fixture = try makeHenryFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        let session = ArchivePreviewSession.shared
-        defer { session.clear() }
+        let session = model.previewSession
         model.audition(fixture.songs[1])
         session.player.pause()
         var noPreview = fixture.songs[0]
@@ -135,8 +146,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        let session = ArchivePreviewSession.shared
-        defer { session.clear() }
+        let session = model.previewSession
         model.applyCatalogEdit(.load([fixture.song]))
         model.selectSong(fixture.song)
         model.audition(fixture.song)
@@ -247,8 +257,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load([fixture.song]))
         model.filteredSongs = [fixture.song]
-        let session = ArchivePreviewSession.shared
-        defer { session.clear() }
+        let session = model.previewSession
         model.selectSongOnBoard(fixture.song)
         model.audition(fixture.song)
         session.player.pause()

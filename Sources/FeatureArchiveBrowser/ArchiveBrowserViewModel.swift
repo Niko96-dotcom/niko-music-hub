@@ -28,7 +28,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let mixdownAnalysis = ArchiveMixdownAnalysisCoordinator()
     /// The archive's playback owner. Every write of `selectedSong` reaches it, and every
     /// view that shows playback gets it from here.
-    let previewSession = ArchivePreviewSession.shared
+    let previewSession = ArchivePreviewSession()
     let cprPlugins = ArchiveCPRPluginCoordinator()
     let opener: MusicItemOpener
     let pathSafety = PathSafety()

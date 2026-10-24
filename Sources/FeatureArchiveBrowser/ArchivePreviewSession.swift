@@ -6,7 +6,6 @@ import Foundation
 /// App-lifetime playback. Active audio survives browsing; the paused transport follows selection.
 @MainActor
 final class ArchivePreviewSession: ObservableObject {
-    static let shared = ArchivePreviewSession()
     let player: ArchivePreviewPlayer
     @Published private(set) var songID: String? {
         didSet {
