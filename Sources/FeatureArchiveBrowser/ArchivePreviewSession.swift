@@ -41,9 +41,6 @@ final class ArchivePreviewSession: ObservableObject {
                 Task { @MainActor [weak self] in self?.followSelectionIfIdle() }
             }
         }.store(in: &observations)
-        ArchivePlaybackCoordinator.shared.$stopGeneration.dropFirst().sink { [weak self] _ in
-            self?.clear()
-        }.store(in: &observations)
         capture.$isActive.sink { [weak self] active in
             self?.captureActive = active
             if active { self?.player.pause() }

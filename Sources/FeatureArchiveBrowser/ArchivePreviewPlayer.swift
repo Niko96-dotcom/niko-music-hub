@@ -207,7 +207,6 @@ final class ArchivePreviewPlayer: ObservableObject {
         if playbackIntentActive || isPlaying(url) {
             playbackIntentActive = false
             player.pause()
-            ArchivePlaybackCoordinator.shared.endPlayback(for: url)
             return
         }
 
@@ -215,7 +214,6 @@ final class ArchivePreviewPlayer: ObservableObject {
             seek(to: 0, url: url)
         }
         playbackIntentActive = true
-        ArchivePlaybackCoordinator.shared.beginPlayback(for: url)
 
         // Play immediately — do not synchronously stat the file or seek from an
         // unvalidated cache entry. The warmup validates its revision off-main and
@@ -257,14 +255,12 @@ final class ArchivePreviewPlayer: ObservableObject {
         hookSeekPending = false
         playbackIntentActive = autoplay
         isLoading = true
-        if autoplay { ArchivePlaybackCoordinator.shared.beginPlayback(for: url) }
         resolvePendingStart()
     }
 
     func pause() {
         playbackIntentActive = false
         player?.pause()
-        if let activeURL { ArchivePlaybackCoordinator.shared.endPlayback(for: activeURL) }
     }
 
     func setVolume(_ value: Double) {
@@ -313,7 +309,6 @@ final class ArchivePreviewPlayer: ObservableObject {
         playbackIntentActive = false
         guard isPlaying(url) else { return }
         player?.pause()
-        ArchivePlaybackCoordinator.shared.endPlayback(for: url)
     }
 
     func stopIfPlaying(url: URL?) {
@@ -321,11 +316,10 @@ final class ArchivePreviewPlayer: ObservableObject {
         stop()
     }
 
-    /// Releases a prepared or playing player when the coordinator broadcasts a global stop.
+    /// Releases a prepared or playing player before the session binds another URL.
     ///
-    /// List rows bind their URL without allocating AVFoundation state. Those bindings are
-    /// intentionally retained: resetting every idle row in response to another row's
-    /// playback would create a broad SwiftUI publication fan-out.
+    /// A bound URL without AVFoundation state is intentionally retained: resetting it would
+    /// publish to every view that observes the player while nothing is audible.
     func forceStop() {
         guard hasPlaybackResources else { return }
         stop()
@@ -464,9 +458,8 @@ final class ArchivePreviewPlayer: ObservableObject {
         player?.pause()
         player = nil
         playerItem = nil
-        if let activeURL {
-            ArchivePlaybackCoordinator.shared.endPlayback(for: activeURL)
-            self.activeURL = nil
+        if activeURL != nil {
+            activeURL = nil
         }
         if currentTime != 0 {
             currentTime = 0

@@ -241,6 +241,26 @@ final class ArchivePreviewSessionTests: XCTestCase {
         XCTAssertNil(session.preview, "A lifecycle reset clears paused audio too")
     }
 
+    func testLifecycleResetStopsPlayingPreviewAndClearsTransport() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let session = ArchivePreviewSession(capture: AudioCaptureActivity())
+        session.audition(song: fixture.song, openSong: {})
+        try await ready(session.player)
+        XCTAssertTrue(session.isPlaying, "Precondition: the fixture preview is playing")
+        session.clear()
+        XCTAssertFalse(session.isPlaying)
+        XCTAssertFalse(session.player.playbackIntentActive)
+        XCTAssertNil(session.preview)
+        XCTAssertNil(session.songID)
+        XCTAssertEqual(session.songTitle, "")
+        XCTAssertNil(session.player.activeURL)
+        XCTAssertEqual(session.player.currentTime, 0)
+        XCTAssertEqual(session.player.duration, 0)
+        session.toggle()
+        XCTAssertFalse(session.isPlaying, "A cleared transport has nothing to resume")
+    }
+
     func testCapturePausesPendingPlaybackBlocksAuditionAndDoesNotResume() async throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
