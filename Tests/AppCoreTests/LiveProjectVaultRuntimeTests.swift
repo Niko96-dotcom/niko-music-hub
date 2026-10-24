@@ -4501,10 +4501,78 @@ extension LiveProjectVaultRuntimeTests {
             _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
             XCTFail("disabled rollout must refuse Done")
         } catch {
-            XCTAssertEqual(error as? ProjectVaultRuntimeError, .automaticArchivingDisabled)
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .disabled)
         }
         XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testEmergencyStopRefusesDoneCopyWithItsOwnMessage() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false, emergencyStop: true)
+        do {
+            _ = try await fixture.runtime().archive(song: fixture.song, trigger: .workflowDone)
+            XCTFail("Emergency Stop must refuse Done")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .emergencyStop)
+        }
+        XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
+    func testRefusedDoneRemovalCaptureNamesTheSettingThatRefused() async throws {
+        for blocker in ["keepCopy", "backup"] {
+            let fixture = try Fixture()
+            defer { fixture.cleanup() }
+            try fixture.saveSettings(stage: .privateBeta, backupConfirmed: blocker != "backup")
+            if blocker == "backup" {
+                try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
+            }
+            do {
+                _ = try await fixture.runtime().captureArchiveAuthorization(
+                    for: fixture.song,
+                    trigger: .workflowDone,
+                    removingActiveCopy: true,
+                    catalogProjectID: nil
+                )
+                XCTFail("\(blocker) must refuse a Done removal capture")
+            } catch {
+                let expected: ProjectVaultRuntimeError = blocker == "backup" ? .independentBackupRequired : .removalNotChosen
+                XCTAssertEqual(error as? ProjectVaultRuntimeError, expected, blocker)
+            }
+            XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty, blocker)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path), blocker)
+        }
+    }
+
+    func testKeepCopyChosenAfterDoneCaptureKeepsActiveAndSaysWhy() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.freeSpace) }
+        let runtime = try fixture.runtime()
+        let authorization = try await runtime.captureArchiveAuthorization(
+            for: fixture.song,
+            trigger: .workflowDone,
+            removingActiveCopy: true,
+            catalogProjectID: nil
+        )
+        XCTAssertTrue(authorization.permitsRemoval)
+        try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
+
+        do {
+            _ = try await runtime.archive(song: fixture.song, trigger: .workflowDone, authorization: authorization)
+            XCTFail("a keep-copy choice made after the capture must keep the Active copy")
+        } catch {
+            XCTAssertEqual(
+                error as? ProjectVaultRuntimeError,
+                .archiveFailed(try XCTUnwrap(ProjectVaultRuntimeError.removalNotChosen.errorDescription))
+            )
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+        XCTAssertEqual(try fixture.transferStore().allTransferRecords().first?.state, .archiveVerified)
     }
 
     func testDoneRemovalViaFreeSpaceIntentWithoutLegacyFriends() async throws {

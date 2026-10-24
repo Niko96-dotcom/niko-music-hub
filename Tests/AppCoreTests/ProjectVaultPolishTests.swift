@@ -160,6 +160,57 @@ final class ProjectVaultPolishTests: XCTestCase {
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings))
     }
 
+    func testUserInitiatedRefusalNamesTheGateThatFailed() {
+        let allowed = VaultSettings(
+            isEnabled: true, activeRootID: UUID(), archiveRootID: UUID(),
+            rolloutStage: .privateBeta, spaceIntent: .freeSpace, independentBackupConfirmed: true
+        )
+        XCTAssertNil(ProjectVaultRolloutPolicy.userInitiatedRefusal(allowed, removing: true))
+        let blockers: [(name: String, apply: (inout VaultSettings) -> Void, copy: ProjectVaultRuntimeError?, removal: ProjectVaultRuntimeError)] = [
+            ("emergency stop", { $0.automationEmergencyStop = true }, .emergencyStop, .emergencyStop),
+            ("Vault off", { $0.isEnabled = false }, .disabled, .disabled),
+            ("disabled rollout", { $0.rolloutStage = .disabled }, .disabled, .disabled),
+            ("no Active folder", { $0.activeRootID = nil }, .unavailable, .unavailable),
+            ("no Archive folder", { $0.archiveRootID = nil }, .unavailable, .unavailable),
+            ("Keep Local review", { $0.keepLocalReviewRequired = true }, nil, .keepLocalReviewRequired),
+            ("keep copy", { $0.spaceIntent = .keepCopy }, nil, .removalNotChosen),
+            ("no backup", { $0.independentBackupConfirmed = false }, nil, .independentBackupRequired)
+        ]
+        for blocker in blockers {
+            var settings = allowed
+            blocker.apply(&settings)
+            XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: false), blocker.copy, blocker.name)
+            XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true), blocker.removal, blocker.name)
+            XCTAssertEqual(ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings), blocker.copy == nil, blocker.name)
+            XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings), blocker.name)
+        }
+    }
+
+    func testUserInitiatedRefusalReportsTheFirstGateInOrder() {
+        var settings = VaultSettings(
+            isEnabled: false, activeRootID: nil, archiveRootID: nil,
+            rolloutStage: .disabled, spaceIntent: .keepCopy, automationEmergencyStop: true,
+            independentBackupConfirmed: false, keepLocalReviewRequired: true
+        )
+        XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true), .emergencyStop)
+        settings.automationEmergencyStop = false
+        XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true), .disabled)
+        settings.isEnabled = true
+        XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true), .disabled)
+        settings.rolloutStage = .privateBeta
+        XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true), .unavailable)
+        settings.activeRootID = UUID()
+        settings.archiveRootID = UUID()
+        XCTAssertNil(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: false))
+        XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true), .keepLocalReviewRequired)
+        settings.keepLocalReviewRequired = false
+        XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true), .removalNotChosen)
+        settings.spaceIntent = .freeSpace
+        XCTAssertEqual(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true), .independentBackupRequired)
+        settings.independentBackupConfirmed = true
+        XCTAssertNil(ProjectVaultRolloutPolicy.userInitiatedRefusal(settings, removing: true))
+    }
+
     func testDiagnosticsReportsSpaceIntent() {
         var settings = AppSettings()
         settings.vault.spaceIntent = .freeSpace

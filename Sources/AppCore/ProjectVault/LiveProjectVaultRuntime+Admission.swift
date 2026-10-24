@@ -365,8 +365,8 @@ extension LiveProjectVaultRuntime {
                     // free-space intent plus the backup acknowledgement),
                     // not the background scheduler opt-in. Live settings may
                     // only restrict.
-                    guard ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(liveSettings.vault) else {
-                        throw ProjectVaultRuntimeError.automaticArchivingDisabled
+                    if let refusal = ProjectVaultRolloutPolicy.userInitiatedRefusal(liveSettings.vault, removing: true) {
+                        throw refusal
                     }
                 }
                 let project = KeepLocalPins.Project(

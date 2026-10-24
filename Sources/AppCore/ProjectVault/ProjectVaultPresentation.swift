@@ -446,17 +446,30 @@ public enum ProjectVaultRolloutPolicy {
             && settings.archiveRootID != nil
     }
 
+    /// The first reason the stored settings refuse a user-initiated archive
+    /// (manual Archive Now, user-confirmed Done), or nil when they allow it.
+    /// The disabled rollout still refuses, so upgrades never gain new file
+    /// operations from the migration itself. With `removing`, the removal
+    /// gates follow: a pending Keep Local review, an explicit free-space
+    /// intent and the backup acknowledgement. Keep Local is per song and
+    /// enforced at capture/execution. The two `permits…` gates below are this
+    /// function's nil, so a refusal always names the gate that failed.
+    public static func userInitiatedRefusal(_ settings: VaultSettings, removing: Bool) -> ProjectVaultRuntimeError? {
+        if settings.automationEmergencyStop { return .emergencyStop }
+        if !settings.isEnabled || settings.rolloutStage == .disabled { return .disabled }
+        if settings.activeRootID == nil || settings.archiveRootID == nil { return .unavailable }
+        guard removing else { return nil }
+        if settings.keepLocalReviewRequired { return .keepLocalReviewRequired }
+        if !expressesFreeSpaceIntent(settings) { return .removalNotChosen }
+        if !settings.independentBackupConfirmed { return .independentBackupRequired }
+        return nil
+    }
+
     /// User-initiated archiving (manual Archive Now, user-confirmed Done).
     /// Decoupled from the background scheduler opt-in: a Done confirmation
-    /// copies even when `automaticArchiving` is off. The disabled rollout
-    /// still blocks, so upgrades never gain new file operations from the
-    /// migration itself.
+    /// copies even when `automaticArchiving` is off.
     public static func permitsUserInitiatedArchiving(_ settings: VaultSettings) -> Bool {
-        settings.isEnabled
-            && !settings.automationEmergencyStop
-            && settings.rolloutStage != .disabled
-            && settings.activeRootID != nil
-            && settings.archiveRootID != nil
+        userInitiatedRefusal(settings, removing: false) == nil
     }
 
     /// Whether the stored settings express a free-space desire. The persisted
@@ -482,18 +495,13 @@ public enum ProjectVaultRolloutPolicy {
             && settings.independentBackupConfirmed
     }
 
-    /// Done/manual removal gate used by the owned runtime admission. Composes
-    /// the user-initiated archiving base — so a disabled rollout cannot
-    /// bypass the capture gate — plus an explicit free-space intent and the
-    /// backup acknowledgement, but not the background scheduler opt-in.
-    /// Keep Local is per-song and enforced at capture/execution. A pending
-    /// Keep Local review denies removal even with Emergency Stop cleared;
-    /// only Review Keep Local in Settings clears it. Copy-only offers are
-    /// unaffected.
+    /// Done/manual removal gate used by the owned runtime admission: the
+    /// user-initiated archiving base — so a disabled rollout cannot bypass the
+    /// capture gate — plus the removal gates of `userInitiatedRefusal`, but
+    /// not the background scheduler opt-in. A pending Keep Local review
+    /// denies removal even with Emergency Stop cleared; only Review Keep Local
+    /// in Settings clears it. Copy-only offers are unaffected.
     public static func permitsUserInitiatedRemoval(_ settings: VaultSettings) -> Bool {
-        !settings.keepLocalReviewRequired
-            && permitsUserInitiatedArchiving(settings)
-            && expressesFreeSpaceIntent(settings)
-            && settings.independentBackupConfirmed
+        userInitiatedRefusal(settings, removing: true) == nil
     }
 }

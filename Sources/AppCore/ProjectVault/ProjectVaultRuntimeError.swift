@@ -6,7 +6,8 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
     case unavailable
     case rootUnavailable(MusicRootRole)
     case disabled
-    case automaticArchivingDisabled
+    /// "After archiving" keeps the Active copy, so a removal was refused.
+    case removalNotChosen
     case independentBackupRequired
     case emergencyStop
     case keepLocal
@@ -35,7 +36,7 @@ public enum ProjectVaultRuntimeError: Error, LocalizedError, Equatable {
         case .unavailable: "Choose both Project Vault folders in Settings first."
         case .rootUnavailable(let role): "The \(role == .active ? "Active Projects" : "Archive / Vault") folder is unavailable. Reconnect its drive or choose the folder again in Project Vault settings, then retry."
         case .disabled: "Project Vault is turned off."
-        case .automaticArchivingDisabled: "Automatic archiving is turned off."
+        case .removalNotChosen: "After archiving is set to keep the Active copy, so it was not removed."
         case .independentBackupRequired: "To remove the Active folder, first confirm in Project Vault settings that your Archive has its own backup. Or use Create Backup Copy to keep the project on this Mac."
         case .emergencyStop: "Project Vault Emergency Stop is on."
         case .keepLocal: "Turn off Keep Local before archiving this project."

@@ -130,8 +130,8 @@ extension LiveProjectVaultRuntime {
                 // the background scheduler opt-in. A copy-only capture stays
                 // copy-only; only an explicit removal capture may proceed.
                 try validateAutomaticArchivingEligibility(settings: settings, song: song)
-                guard ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault) else {
-                    throw ProjectVaultRuntimeError.automaticArchivingDisabled
+                if let refusal = ProjectVaultRolloutPolicy.userInitiatedRefusal(settings.vault, removing: true) {
+                    throw refusal
                 }
             }
             let project = KeepLocalPins.Project(
@@ -394,9 +394,8 @@ extension LiveProjectVaultRuntime {
     /// `VaultAutomationPolicy` and `permitsAutomaticArchiving`). The disabled
     /// state is preserved: a stored disabled rollout still refuses Done.
     private func validateAutomaticArchivingEligibility(settings: AppSettings, song: Song) throws {
-        guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
-        guard ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings.vault) else {
-            throw ProjectVaultRuntimeError.automaticArchivingDisabled
+        if let refusal = ProjectVaultRolloutPolicy.userInitiatedRefusal(settings.vault, removing: false) {
+            throw refusal
         }
         let project = KeepLocalPins.Project(songIDs: [song.id], folders: [song.folderPath])
         guard !settings.vault.keepLocalPins.contains(project) else {
