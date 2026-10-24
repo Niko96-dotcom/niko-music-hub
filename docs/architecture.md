@@ -148,7 +148,7 @@ Archive domain and safety. No SwiftUI/AppKit.
 - Vault transfers: `SQLiteVaultTransferStore` over `SQLiteArchiveDatabase` (transfer journal is authoritative for phases/recovery).
 - Vault catalog: `SQLiteProjectCatalogStore` (project records, locations, identity reviews).
 - Runtime composition: `LiveProjectVaultRuntime` is built with the settings, transfer and catalog stores and a project opener; storage providers and activity/capacity probes use their production defaults. It is injected into the archive view model as `ProjectVaultOperating`.
-- App composition builds one `HubNavigationHistory`, one settings store suite, job center, diagnostics, and file actions, and one `ToolContext` over them, before the archive view model (whose feature value the registry needs). Launch warnings (a store that failed to open, a failed registry) go to `AppShellView` as `persistenceIssues`, their only reader.
+- App composition builds one `HubNavigationHistory`, one settings store suite, job center, diagnostics, file actions and recording signal, and one `ToolContext` over them, before the archive view model (whose feature value the registry needs). Launch warnings (a store that failed to open, a failed registry) go to `AppShellView` as `persistenceIssues`, their only reader.
 
 ## Project Vault operation ownership
 
@@ -258,7 +258,13 @@ plays at a time by construction; no coordinator sits between players.
   its session, the bar's Open action returns to that view model, and two view models never share a session. The
   transport rules themselves are in
   [design-contract.md § Archive selection and persistent preview player](design-contract.md#archive-selection-and-persistent-preview-player).
-- The recording signal is still the process-wide `AudioCaptureActivity.shared`, shared with the recorder (map gap 5).
+- The session pauses on the app's recording signal, `ToolContext.audioCaptureActivity`. `AppComposition.make()` builds
+  the one [`AudioCaptureActivity`](../Sources/AppCore/AudioCaptureActivity.swift); the archive view model hands it to
+  its session, and `AudioRecorderFeature.makeViewModel(context:capturePort:)` hands it to the recorder view model, which
+  holds it from the start of a take until its file is finalized. The session only observes it
+  (`ArchivePreviewOutputOnlySourceTests` keeps `setActive(` out of the archive's sources). `AudioCaptureActivityWiringTests`
+  runs both sides' own wiring on one context with a fake capture port: a take pauses the playing preview and blocks
+  Play; after it, the preview stays paused and Play works again.
 
 ## Archive scan list
 
