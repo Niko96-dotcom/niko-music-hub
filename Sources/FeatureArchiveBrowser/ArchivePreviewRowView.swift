@@ -6,12 +6,12 @@ import SwiftUI
 struct ArchivePreviewRowView: View {
     let song: Song
     let candidate: PreviewCandidate
+    @ObservedObject var session: ArchivePreviewSession
     var folderLabel: String? = nil
     let isMain: Bool
     let onPlay: () -> Void
     let onSetMain: () -> Void
     let onIgnore: () -> Void
-    @ObservedObject private var session = ArchivePreviewSession.shared
     @State private var audioDescription: String?
 
     private var accessibleName: String {

@@ -5,7 +5,7 @@ import SwiftUI
 struct SongDetailView: View {
     let song: Song
     @ObservedObject var viewModel: ArchiveBrowserViewModel
-    @ObservedObject private var previewSession = ArchivePreviewSession.shared
+    @ObservedObject private var previewSession: ArchivePreviewSession
     @State private var workspaceTab: SongWorkspaceTab = .versions
     @State private var storageExpanded = false
 
@@ -17,6 +17,12 @@ struct SongDetailView: View {
     @State private var syncedAliases = ""
     @State private var previewCandidatePage = 0
     @State private var previewFilter = ""
+
+    init(song: Song, viewModel: ArchiveBrowserViewModel) {
+        self.song = song
+        self.viewModel = viewModel
+        self._previewSession = ObservedObject(wrappedValue: viewModel.previewSession)
+    }
 
     /// Prefer the live catalog snapshot so scan/metadata updates refresh the detail pane.
     private var liveSong: Song {
@@ -611,7 +617,7 @@ struct SongDetailView: View {
                 LazyVStack(alignment: .leading, spacing: HubDesignSystem.Spacing.controlGap) {
                     ForEach(page.elements, id: \.id) { candidate in
                         ArchivePreviewRowView(
-                            song: liveSong, candidate: candidate,
+                            song: liveSong, candidate: candidate, session: previewSession,
                             folderLabel: folderLabels[candidate.id],
                             isMain: candidate.id == liveSong.mainPreviewCandidateID,
                             onPlay: { viewModel.audition(liveSong, candidate: candidate) },

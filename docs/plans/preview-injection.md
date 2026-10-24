@@ -22,7 +22,7 @@ Resume from the first step that is not done. Each step is one commit. Find a ste
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates passed on `c51e10f`: 2,900 passed, 0 failed, 8 skipped; Swift Testing 86 passed; no re-run |
 | 1 Remove the playback coordinator | done | `git log --grep='(preview injection step 1)'` | strict build; preview suites 65 (1 new), 0 failures; with `clear()` not stopping the player the new reset test failed 5 assertions |
-| 2 The view model and the views reach the session through the view model | not started | | |
+| 2 The view model and the views reach the session through the view model | done | `git log --grep='(preview injection step 2)'` | strict build; `FeatureArchiveBrowserTests` 667 (1 new), AppCore `*SourceTests` 99, 0 failures; plants (a) no `didSet` call and (b) session not told failed both the old regexes and the new test; (c) a dead Open action passed the old regexes and failed the new test |
 | 3 Each view model creates its own session | not started | | |
 | 4 Docs, full gates, live check | not started | | |
 
@@ -30,7 +30,11 @@ Resume from the first step that is not done. Each step is one commit. Find a ste
 
 Record every deviation from the steps below here, numbered, with its reason.
 
-(none yet)
+1. **Step 2: `ArchivePreviewPlayback` goes in step 2, not step 3.** Once the view model's two resets call
+   `previewSession.clear()`, the enum has no caller left; the one test that called it now resets through
+   `clearSelection(stopPlayback: true)`, the view model's own path.
+2. **Step 2: the remaining source test is renamed** `testArchiveCardPlayTargetsItsOwnSong`; it keeps only the card
+   regex, and its comment names the interface test that took over the selection wiring.
 
 ## Terms
 

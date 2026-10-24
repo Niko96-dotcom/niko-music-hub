@@ -86,7 +86,7 @@ struct AppShellView: View {
 
                     VStack(spacing: 0) {
                         activeToolView
-                        ArchivePersistentPlayerView {
+                        ArchivePersistentPlayerView(viewModel: archiveViewModel) {
                             selectTool(ToolFeatureID("archive-browser"))
                         }
                     }

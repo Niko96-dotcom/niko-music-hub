@@ -6,6 +6,7 @@ import SwiftUI
 struct SongCardView: View {
     let song: Song
     let isSelected: Bool
+    @ObservedObject var session: ArchivePreviewSession
     var matchSummary: String?
     var onSelect: (() -> Void)?
     var onOpenDetail: (() -> Void)?
@@ -20,7 +21,6 @@ struct SongCardView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
-    @ObservedObject private var session = ArchivePreviewSession.shared
 
     private var hasScanWarning: Bool {
         !song.displayScanWarnings().isEmpty

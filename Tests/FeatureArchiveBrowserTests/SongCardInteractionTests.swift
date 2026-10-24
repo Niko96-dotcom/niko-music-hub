@@ -1,3 +1,4 @@
+import AppCore
 import AppKit
 import NikoMusicCore
 import SwiftUI
@@ -10,7 +11,8 @@ final class SongCardInteractionTests: XCTestCase {
         var selections = 0
         let song = Song(folderPath: URL(fileURLWithPath: "/fixture/song"),
                         originalFolderName: "Fixture song", displayTitle: "Fixture song")
-        try withRow(song: song, onSelect: { selections += 1 }) { window in
+        try withRow(song: song, session: ArchivePreviewSession(capture: AudioCaptureActivity()),
+                    onSelect: { selections += 1 }) { window in
             // In window coordinates, both points are outside the text and buttons:
             // lower-left row padding, then the empty space beside the transport.
             for point in [CGPoint(x: 3, y: 3), CGPoint(x: 240, y: 18)] {
@@ -29,15 +31,15 @@ final class SongCardInteractionTests: XCTestCase {
                                          modifiedAt: .distantPast, detectedRole: .mainMix)
         let song = Song(folderPath: url.deletingLastPathComponent(), originalFolderName: "Fixture song",
                         displayTitle: "Fixture song", previewCandidates: [candidate], mainPreviewCandidateID: candidate.id)
-        defer { ArchivePreviewPlayback.stopAll() }
-        try withRow(song: song, onSelect: { selections += 1 }) { window in
+        let session = ArchivePreviewSession(capture: AudioCaptureActivity())
+        try withRow(song: song, session: session, onSelect: { selections += 1 }) { window in
             // The glyph sits at the centre; all four padded corners must also activate it.
             let midY = window.contentView!.bounds.midY
             for point in [CGPoint(x: 269, y: midY - 19), CGPoint(x: 307, y: midY - 19),
                           CGPoint(x: 269, y: midY + 19), CGPoint(x: 307, y: midY + 19)] {
-                ArchivePreviewPlayback.stopAll()
+                session.clear() // Each click must audition, not toggle the row loaded by the last one.
                 try click(point, in: window)
-                XCTAssertEqual(ArchivePreviewSession.shared.preview?.filePath, url, "Padded play target at \(point) must load its preview")
+                XCTAssertEqual(session.preview?.filePath, url, "Padded play target at \(point) must load its preview")
                 XCTAssertEqual(selections, 0, "Playing a row preview must not also select the song")
             }
         }
@@ -51,8 +53,9 @@ final class SongCardInteractionTests: XCTestCase {
                                          folderRole: .mixdown, modifiedAt: .distantPast, detectedRole: .mainMix)
         let song = Song(folderPath: URL(fileURLWithPath: "/fixture/board"), originalFolderName: "Board song",
                         displayTitle: "Board song", previewCandidates: [candidate], mainPreviewCandidateID: candidate.id)
-        ArchivePreviewPlayback.stopAll()
-        let card = ArchiveBoardCardView(song: song, isSelected: false, vaultPresentation: nil,
+        let card = ArchiveBoardCardView(song: song, isSelected: false,
+                                       session: ArchivePreviewSession(capture: AudioCaptureActivity()),
+                                       vaultPresentation: nil,
                                        onSelect: { selections += 1 }, onOpenDetail: { opens += 1 },
                                        onProjectVaultPrimaryAction: nil, onPlay: { plays += 1 })
         try withView(card.frame(width: 220)) { window in
@@ -72,10 +75,10 @@ final class SongCardInteractionTests: XCTestCase {
         }
     }
 
-    private func withRow(song: Song, onSelect: @escaping () -> Void,
+    private func withRow(song: Song, session: ArchivePreviewSession, onSelect: @escaping () -> Void,
                          perform: (NSWindow) throws -> Void) rethrows {
         try withView(SongCardView(
-            song: song, isSelected: false, onSelect: onSelect,
+            song: song, isSelected: false, session: session, onSelect: onSelect,
             onWorkflowStatusChange: { _ in }
         ).frame(width: 320), perform: perform)
     }

@@ -52,7 +52,7 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(viewModel.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
         XCTAssertTrue(viewModel.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
         XCTAssertTrue(viewModel.contains("reconcileSelectedSong"), "Browse/scan must reconcile selection")
-        XCTAssertTrue(viewModel.contains("ArchivePreviewPlayback.stopAll"), "Explicit lifecycle reset must stop playback")
+        XCTAssertTrue(viewModel.contains("previewSession.clear()"), "Explicit lifecycle reset must stop playback")
         XCTAssertTrue(viewModel.contains("scheduleDebouncedIndexPersist"), "Metadata edits must debounce index writes")
         XCTAssertTrue(viewModel.contains("mixdownAnalysisCacheKey"), "BPM/key must key off preview id")
 

@@ -74,6 +74,7 @@ struct ArchiveBoardSongCard: View, Equatable {
         ArchiveBoardCardView(
             song: song,
             isSelected: isSelected,
+            session: viewModel.previewSession,
             vaultPresentation: vaultPresentation,
             vaultActivityMessage: vaultActivityMessage,
             onSelect: { viewModel.selectSongOnBoard(song) },

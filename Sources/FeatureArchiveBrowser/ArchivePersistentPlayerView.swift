@@ -1,13 +1,18 @@
 import AppCore
 import SwiftUI
 
-/// The shell mounts this once, outside the cached tool panes.
+/// The shell mounts this once, outside the cached tool panes. It shows the archive
+/// view model's preview session.
 public struct ArchivePersistentPlayerView: View {
-    @ObservedObject private var session = ArchivePreviewSession.shared
-    @ObservedObject private var player = ArchivePreviewSession.shared.player
+    @ObservedObject private var session: ArchivePreviewSession
+    @ObservedObject private var player: ArchivePreviewPlayer
     let onOpenSong: () -> Void
 
-    public init(onOpenSong: @escaping () -> Void) { self.onOpenSong = onOpenSong }
+    public init(viewModel: ArchiveBrowserViewModel, onOpenSong: @escaping () -> Void) {
+        _session = ObservedObject(wrappedValue: viewModel.previewSession)
+        _player = ObservedObject(wrappedValue: viewModel.previewSession.player)
+        self.onOpenSong = onOpenSong
+    }
 
     public var body: some View {
         if let preview = session.preview {

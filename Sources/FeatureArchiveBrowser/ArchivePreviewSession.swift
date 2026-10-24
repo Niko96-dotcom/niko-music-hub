@@ -135,7 +135,7 @@ final class ArchivePreviewSession: ObservableObject {
 extension ArchiveBrowserViewModel {
     func synchronizePreviewSelection() {
         let songID = selectedSong?.id
-        ArchivePreviewSession.shared.followSelection(selectedSong) { [weak self] in
+        previewSession.followSelection(selectedSong) { [weak self] in
             guard let self, let song = self.songs.first(where: { $0.id == songID }) else { return }
             self.openSongDetail(song)
         }

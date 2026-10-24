@@ -36,6 +36,35 @@ final class ArchivePreviewSessionTests: XCTestCase {
         XCTAssertTrue(session.isPlaying)
     }
 
+    /// Selection intents, restored routes and catalog reconciliation all write `selectedSong`;
+    /// each write arms the view model's own session, and the session's Open action returns
+    /// to that view model. Binding a URL reads no file, so the songs need no audio.
+    func testSelectionWritesArmTheViewModelsSessionAndItsOpenActionReturns() {
+        let model = ArchiveBrowserViewModel(context: TestToolContext.make())
+        let session = model.previewSession
+        defer { session.clear() }
+        let songs = ["One", "Two"].map { name in
+            let folder = URL(fileURLWithPath: "/fixture/\(name)", isDirectory: true)
+            let preview = PreviewCandidate(filePath: folder.appendingPathComponent("\(name).wav"), fileName: "\(name).wav",
+                                           folderRole: .mixdown, modifiedAt: .distantPast, detectedRole: .mainMix)
+            return Song(folderPath: folder, originalFolderName: name, displayTitle: "Song \(name)",
+                        previewCandidates: [preview], mainPreviewCandidateID: preview.id)
+        }
+        model.applyCatalogEdit(.load(songs))
+
+        model.selectedSong = songs[0]
+        assertArmed(session, with: songs[0])
+        model.restoreNavigationRoute("detail:" + songs[1].id) // Back/Forward
+        assertArmed(session, with: songs[1])
+
+        model.showBoard()
+        model.clearSelection(stopPlayback: false)
+        XCTAssertEqual(session.songID, songs[1].id, "Deselecting keeps the loaded track")
+        session.openSong() // The bar's title button.
+        XCTAssertEqual(model.selectedSong?.id, songs[1].id)
+        XCTAssertEqual(model.viewMode, .boardDetail)
+    }
+
     func testPlayingTrackSurvivesBrowsingAndPauseThenArmsSelection() async throws {
         let fixture = try makeHenryFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
@@ -237,7 +266,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         model.applyCatalogEdit(.load([changed]))
         model.reconcileSelectedSong()
         XCTAssertEqual(session.preview?.id, fixture.previews[0].id)
-        ArchivePreviewPlayback.stopAll()
+        model.clearSelection(stopPlayback: true)
         XCTAssertNil(session.preview, "A lifecycle reset clears paused audio too")
     }
 
@@ -302,6 +331,15 @@ final class ArchivePreviewSessionTests: XCTestCase {
         try await ready(session.player)
         XCTAssertNil(session.player.playbackError)
         XCTAssertEqual(session.preview?.id, fixture.previews[0].id)
+    }
+
+    private func assertArmed(_ session: ArchivePreviewSession, with song: Song,
+                             file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(session.songID, song.id, file: file, line: line)
+        XCTAssertEqual(session.songTitle, song.effectiveDisplayTitle, file: file, line: line)
+        XCTAssertEqual(session.preview?.id, song.mainPreviewCandidateID, file: file, line: line)
+        XCTAssertEqual(session.player.activeURL, song.mainPreviewURL, file: file, line: line)
+        XCTAssertFalse(session.isPlaying, "Selection never starts audio", file: file, line: line)
     }
 
     private func ready(_ player: ArchivePreviewPlayer) async throws {

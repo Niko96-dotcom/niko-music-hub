@@ -105,7 +105,7 @@ extension ArchiveBrowserViewModel {
     func reconcileSelectedSong(requireVisibleInFilteredList: Bool = true) {
         guard let current = selectedSong else { return }
         guard let fresh = songs.first(where: { $0.id == current.id }) else {
-            clearSelection(stopPlayback: ArchivePreviewSession.shared.songID == current.id)
+            clearSelection(stopPlayback: previewSession.songID == current.id)
             return
         }
         if requireVisibleInFilteredList, !filteredSongs.contains(where: { $0.id == fresh.id }) {
@@ -119,7 +119,7 @@ extension ArchiveBrowserViewModel {
 
     func clearSelection(stopPlayback: Bool) {
         if stopPlayback {
-            ArchivePreviewPlayback.stopAll()
+            previewSession.clear()
         }
         selectedSong = nil
         listShowsDetail = false
@@ -132,7 +132,7 @@ extension ArchiveBrowserViewModel {
 
 extension ArchiveBrowserViewModel {
     func audition(_ song: Song, candidate: PreviewCandidate? = nil) {
-        ArchivePreviewSession.shared.audition(song: song, candidate: candidate) { [weak self] in
+        previewSession.audition(song: song, candidate: candidate) { [weak self] in
             guard let self, let current = self.songs.first(where: { $0.id == song.id }) else { return }
             self.selectSong(current)
             self.viewMode = .boardDetail

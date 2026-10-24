@@ -47,7 +47,7 @@ extension ArchiveBrowserViewModel {
         cprPlugins.cancel()
         clearFooterWarning()
         scanOrchestrator.clearPendingPaths()
-        ArchivePreviewPlayback.stopAll()
+        previewSession.clear()
         ArchivePreviewPlayer.clearMetadataCaches()
         isSearching = false
         filteredSongs = []

@@ -320,6 +320,7 @@ struct ArchiveSidebarView: View {
                         SongCardView(
                             song: song,
                             isSelected: viewModel.selectedSong?.id == song.id,
+                            session: viewModel.previewSession,
                             matchSummary: viewModel.searchMatchSummaries[song.id],
                             onSelect: {
                                 ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()

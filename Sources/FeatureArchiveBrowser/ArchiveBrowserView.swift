@@ -5,8 +5,8 @@ import SwiftUI
 
 struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
-    @ObservedObject private var previewSession = ArchivePreviewSession.shared
-    @ObservedObject private var previewPlayer = ArchivePreviewSession.shared.player
+    @ObservedObject private var previewSession: ArchivePreviewSession
+    @ObservedObject private var previewPlayer: ArchivePreviewPlayer
     /// False while another tool is shown; the shell keeps this pane mounted.
     @Environment(\.hubToolIsActive) private var isActiveTool
     @State private var showNewSongSheet = false
@@ -19,8 +19,8 @@ struct ArchiveBrowserView: View {
 
     init(context _: ToolContext, viewModel: ArchiveBrowserViewModel) {
         self.viewModel = viewModel
-        self._previewSession = ObservedObject(wrappedValue: ArchivePreviewSession.shared)
-        self._previewPlayer = ObservedObject(wrappedValue: ArchivePreviewSession.shared.player)
+        self._previewSession = ObservedObject(wrappedValue: viewModel.previewSession)
+        self._previewPlayer = ObservedObject(wrappedValue: viewModel.previewSession.player)
         _boardProjectionCache = StateObject(
             wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
         )
@@ -606,7 +606,7 @@ struct ArchiveBrowserView: View {
 
     @discardableResult
     private func performPlayPausePreview() -> Bool {
-        let session = ArchivePreviewSession.shared
+        let session = previewSession
         switch ArchiveSpacePreviewAction.resolve(
             selectedSongID: viewModel.selectedSong?.id,
             loadedSongID: session.songID,

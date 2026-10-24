@@ -203,6 +203,7 @@ struct ArchiveBoardCardView: View {
 
     let song: Song
     let isSelected: Bool
+    @ObservedObject var session: ArchivePreviewSession
     let vaultPresentation: ProjectVaultCardPresentation?
     var vaultActivityMessage: String? = nil
     let onSelect: () -> Void
@@ -215,7 +216,6 @@ struct ArchiveBoardCardView: View {
     var onWorkflowStatusChange: ((ProjectWorkflowStatus?) -> Void)? = nil
     var scrollActivity: ArchiveBoardScrollActivity? = nil
 
-    @ObservedObject private var session = ArchivePreviewSession.shared
     @State private var isHovered = false
 
     private var allowsWorkflowMutation: Bool {

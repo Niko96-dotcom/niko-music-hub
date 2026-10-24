@@ -221,7 +221,7 @@ extension ArchiveBrowserViewModel {
             metadata.isIgnored = hidden
         }
         if hidden, selectedSong?.id == song.id {
-            clearSelection(stopPlayback: ArchivePreviewSession.shared.songID == song.id)
+            clearSelection(stopPlayback: previewSession.songID == song.id)
         }
     }
 

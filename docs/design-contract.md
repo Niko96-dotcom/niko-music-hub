@@ -214,8 +214,9 @@ ChatGPT/Codex sidebar. Sidebar rows and inspector cells use the same treatment.
   card's own song through `ArchivePreviewSession`.
 - For the same selected song, valid explicit alternates and paused positions survive
   metadata edits. Rescans refresh the title and replace removed or changed previews.
-  Playback state belongs to `ArchivePreviewSession`; selection changes, including
-  navigation restoration and catalog reconciliation, reach it from the view model.
+  Playback state belongs to the archive view model's `ArchivePreviewSession`; selection
+  changes, including navigation restoration and catalog reconciliation, reach it from the
+  view model, and every view that shows playback gets it from the view model.
 
 ## 4c. Accent: warm indicator, neutral everything else
 
