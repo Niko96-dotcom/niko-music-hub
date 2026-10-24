@@ -90,6 +90,7 @@ final class VaultEdgeRecordingStore: VaultTransferStoring, VaultRestoreStoring, 
     private let lock = NSLock()
     private var storedTransferEdges: [VaultTransferEdge] = []
     private var storedRestoreEdges: [VaultRestoreEdge] = []
+    private var failingSaveState: VaultTransferState?
 
     init(databaseURL: URL) throws {
         base = try SQLiteVaultTransferStore(databaseURL: databaseURL)
@@ -98,7 +99,18 @@ final class VaultEdgeRecordingStore: VaultTransferStoring, VaultRestoreStoring, 
     var transferEdges: [VaultTransferEdge] { lock.withLock { storedTransferEdges } }
     var restoreEdges: [VaultRestoreEdge] { lock.withLock { storedRestoreEdges } }
 
+    /// The next save of a transfer in `state` throws, as a full disk would.
+    func failNextSave(of state: VaultTransferState) {
+        lock.withLock { failingSaveState = state }
+    }
+
     func save(_ record: VaultTransferRecord) throws {
+        let fails = lock.withLock {
+            guard failingSaveState == record.state else { return false }
+            failingSaveState = nil
+            return true
+        }
+        if fails { throw SQLiteArchiveDatabase.StoreError.step("injected save failure") }
         let previous = try base.record(id: record.id)
         try base.save(record)
         if let previous, previous.state != record.state {

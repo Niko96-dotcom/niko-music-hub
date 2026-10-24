@@ -7,6 +7,8 @@ import XCTest
 /// pins today's journal state, Active folder, generation and the file
 /// operations the relaunch replays. The engines save through
 /// `VaultEdgeRecordingStore`, so every edge they make must be an observed one.
+/// Two more tests show that an edge the state table does not list throws
+/// before anything is saved.
 final class VaultCrashWindowTests: XCTestCase {
     // MARK: - Archive
 
@@ -302,6 +304,65 @@ final class VaultCrashWindowTests: XCTestCase {
         XCTAssertEqual(relaunch.firstOperations, ["move \(failed.destinationURL.lastPathComponent)"])
         relaunch.assertSecondLaunchChangesNothing()
         try fixture.assertOnlyGeneration(of: failed)
+        fixture.assertEdgesWereObserved()
+    }
+
+    // MARK: - Unlisted edges fail closed
+
+    /// No transfer record ever held a restore-half state. A row in one fails
+    /// at the phase switch, and the error path's edge into `failedRecoverable`
+    /// is unlisted: the engine throws before it saves or touches a file, and
+    /// the row stays as it was at every launch.
+    func testAnUnlistedEdgeThrowsBeforeItSavesOrTouchesAFile() async throws {
+        let fixture = try TransferCrashFixture()
+        defer { fixture.remove() }
+        var foreign = try fixture.failedRecord(origin: .copyingToArchiveStaging, retryCount: 0, createdAt: Date())
+        foreign.state = .materializingArchive
+        foreign.error = nil
+        try fixture.store.base.save(foreign)
+        let saved = try XCTUnwrap(fixture.store.record(id: foreign.id))
+        let staging = try fixture.snapshot(foreign.stagingURL)
+        let original = try fixture.snapshot(fixture.source)
+
+        let relaunch = try await fixture.launchTwice()
+
+        XCTAssertEqual(relaunch.first, [saved])
+        XCTAssertEqual(relaunch.firstOperations, [])
+        relaunch.assertSecondLaunchChangesNothing()
+        XCTAssertEqual(try fixture.store.record(id: foreign.id), saved)
+        XCTAssertEqual(fixture.store.transferEdges, [])
+        XCTAssertEqual(try fixture.snapshot(foreign.stagingURL), staging)
+        XCTAssertEqual(try fixture.snapshot(fixture.source), original)
+    }
+
+    /// The save of `archiveVerified` fails. Its error path would save
+    /// `archiveVerified → failedRecoverable`, an edge only a failed save
+    /// reaches and the table does not list: the engine throws instead, the
+    /// journal keeps the promotion phase, and launch finishes it without
+    /// copying again.
+    func testAFailedVerifiedSaveKeepsThePromotionPhaseForLaunch() async throws {
+        let fixture = try TransferCrashFixture()
+        defer { fixture.remove() }
+        let original = try fixture.snapshot(fixture.source)
+        fixture.store.failNextSave(of: .archiveVerified)
+
+        do {
+            _ = try await fixture.engine().archive(projectID: ProjectID(), sourceURL: fixture.source)
+            XCTFail("the failed save must stop the archive")
+        } catch let error as VaultTransitionError {
+            XCTAssertEqual(error, .illegal(from: .archiveVerified, to: .failedRecoverable))
+        }
+
+        let pending = try XCTUnwrap(fixture.store.recoverableRecords().first)
+        XCTAssertEqual(pending.state, .promotingArchiveGeneration)
+        XCTAssertEqual(pending.durability, .verifiedLocal)
+        XCTAssertNil(pending.error)
+        let relaunch = try await fixture.launchTwice()
+        XCTAssertEqual(relaunch.first.map(\.state), [.archiveVerified])
+        XCTAssertEqual(relaunch.firstOperations, [], "the promoted generation is verified, not copied again")
+        relaunch.assertSecondLaunchChangesNothing()
+        XCTAssertEqual(try fixture.snapshot(fixture.source), original)
+        try fixture.assertOnlyGeneration(of: pending)
         fixture.assertEdgesWereObserved()
     }
 

@@ -246,7 +246,7 @@ public actor LocalVaultTransferEngine {
         case .existing:
             throw LocalVaultTransferError.transferAlreadyOwned
         }
-        try advance(&record, to: .archiveEligible)
+        try checkAndSave(&record, to: .archiveEligible)
         return try await execute(record)
     }
 
@@ -311,12 +311,11 @@ public actor LocalVaultTransferEngine {
                 guard let current = try? store.record(id: record.id),
                       current.state == record.state,
                       current.supersededBy == nil else { continue }
-                record.state = .superseded
                 record.supersededBy = survivor.id
                 record.error = nil
                 record.nextRetryAt = nil
                 do {
-                    try persist(&record)
+                    try checkAndSave(&record, to: .superseded)
                     retiredIDs.insert(record.id)
                 } catch {
                     continue
@@ -359,7 +358,6 @@ public actor LocalVaultTransferEngine {
                        destructiveOrigin == .removingActiveCopy || destructiveOrigin == .evictingProviderCache {
                         let persistedLegacyFailure = record
                         var migrated = record
-                        migrated.state = .recoveryRequired
                         migrated.error = VaultTransferError(
                             origin: destructiveOrigin,
                             reason: record.error?.reason ?? .unknown,
@@ -367,7 +365,7 @@ public actor LocalVaultTransferEngine {
                         )
                         migrated.nextRetryAt = nil
                         do {
-                            try persist(&migrated)
+                            try checkAndSave(&migrated, to: .recoveryRequired)
                             results.append(migrated)
                         } catch {
                             results.append(persistedLegacyFailure)
@@ -381,7 +379,6 @@ public actor LocalVaultTransferEngine {
             if record.state == .removingActiveCopy || record.state == .evictingProviderCache {
                 let persistedDestructivePhase = record
                 let origin = record.state
-                record.state = .recoveryRequired
                 record.error = VaultTransferError(
                     origin: origin,
                     reason: .unknown,
@@ -391,7 +388,7 @@ public actor LocalVaultTransferEngine {
                 )
                 record.nextRetryAt = nil
                 do {
-                    try persist(&record)
+                    try checkAndSave(&record, to: .recoveryRequired)
                     results.append(record)
                 } catch {
                     results.append(persistedDestructivePhase)
@@ -413,11 +410,10 @@ public actor LocalVaultTransferEngine {
             }
             if record.state == .failedRecoverable, let origin = record.error?.origin {
                 let persistedFailure = record
-                record.state = origin
                 record.error = nil
                 record.nextRetryAt = nil
                 do {
-                    try persist(&record)
+                    try checkAndSave(&record, to: origin)
                 } catch {
                     results.append(persistedFailure)
                     continue
@@ -450,10 +446,9 @@ public actor LocalVaultTransferEngine {
             return record
         }
         do {
-            record.state = recopy ? .copyingToArchiveStaging : origin
             record.error = nil
             record.nextRetryAt = nil
-            try persist(&record)
+            try checkAndSave(&record, to: recopy ? .copyingToArchiveStaging : origin)
             return try await execute(record)
         } catch is VaultTransferInterruption {
             return (try? store.record(id: record.id)) ?? record
@@ -564,10 +559,9 @@ public actor LocalVaultTransferEngine {
         }
         try manifestBuilder.verifyArchive(manifest, at: destination)
         try crash(.recoveryBeforeVerifiedSave, record)
-        record.state = .archiveVerified
         record.error = nil
         record.nextRetryAt = nil
-        try persist(&record)
+        try checkAndSave(&record, to: .archiveVerified)
         return record
     }
 
@@ -682,11 +676,10 @@ public actor LocalVaultTransferEngine {
         // A restored project can reuse an earlier archived generation. Fresh
         // barrier plus manifest verification above re-establishes its removal
         // evidence; the old persisted durability value is discarded.
-        terminal.state = .archiveVerified
         terminal.durability = freshDurability
         terminal.error = nil
         terminal.nextRetryAt = nil
-        try persist(&terminal)
+        try checkAndSave(&terminal, to: .archiveVerified)
         do {
             try store.proveRecoveryPersistence()
         } catch is CancellationError {
@@ -696,15 +689,11 @@ public actor LocalVaultTransferEngine {
         }
         try crash(.reproofSavedBeforeRemovalSave, terminal)
         var record = terminal
-        record.state = try ProjectVaultStateMachine().applying(
-            .beginRemovingActiveCopy(VaultRemovalEvidence(
-                manifestVerified: true,
-                archiveDurability: freshDurability,
-                metadataPersisted: true
-            )),
-            to: record.state
-        )
-        try persist(&record)
+        try checkAndSave(&record, .beginRemovingActiveCopy(VaultRemovalEvidence(
+            manifestVerified: true,
+            archiveDurability: freshDurability,
+            metadataPersisted: true
+        )))
         return try await execute(record)
     }
 
@@ -717,9 +706,9 @@ public actor LocalVaultTransferEngine {
                 try Task.checkCancellation()
                 switch record.state {
                 case .activeLocal:
-                    try advance(&record, to: .archiveEligible)
+                    try checkAndSave(&record, to: .archiveEligible)
                 case .archiveEligible:
-                    try advance(&record, to: .preparingArchive)
+                    try checkAndSave(&record, to: .preparingArchive)
                 case .preparingArchive:
                     try inject(.preparingArchive, record)
                     try validatePaths(record)
@@ -740,21 +729,21 @@ public actor LocalVaultTransferEngine {
                         )
                         try await provider.prepareForWrite(at: archiveRoot)
                     }
-                    try advance(&record, to: .copyingToArchiveStaging)
+                    try checkAndSave(&record, to: .copyingToArchiveStaging)
                 case .copyingToArchiveStaging:
                     try inject(.copyingToArchiveStaging, record)
                     try await copyToStaging(&record)
-                    try advance(&record, to: .verifyingArchiveStaging)
+                    try checkAndSave(&record, to: .verifyingArchiveStaging)
                 case .verifyingArchiveStaging:
                     try inject(.verifyingArchiveStaging, record)
                     guard let manifest = record.manifest else { throw LocalVaultTransferError.missingManifest }
                     try manifestBuilder.verifyArchive(manifest, at: record.stagingURL)
-                    try advance(&record, to: .awaitingProviderDurability)
+                    try checkAndSave(&record, to: .awaitingProviderDurability)
                 case .awaitingProviderDurability:
                     try inject(.awaitingProviderDurability, record)
                     record.durability = try await provider.waitUntilDurable(record.stagingURL)
                     try persist(&record)
-                    try advance(&record, to: .promotingArchiveGeneration)
+                    try checkAndSave(&record, to: .promotingArchiveGeneration)
                 case .promotingArchiveGeneration:
                     try inject(.promotingArchiveGeneration, record)
                     try await promote(&record)
@@ -776,10 +765,9 @@ public actor LocalVaultTransferEngine {
                     record.durability = finalDurability
                     try persist(&record)
                     try crash(.durabilitySavedBeforeVerifiedSave, record)
-                    record.state = .archiveVerified
                     record.error = nil
                     record.nextRetryAt = nil
-                    try persist(&record)
+                    try checkAndSave(&record, to: .archiveVerified)
                     return record
                 case .archiveVerified:
                     return record
@@ -833,13 +821,13 @@ public actor LocalVaultTransferEngine {
                         try fileManager.removeItem(at: record.sourceURL)
                     }
                     try crash(.removalAfterRemoveItem, record)
-                    try advance(&record, to: .evictingProviderCache)
+                    try checkAndSave(&record, to: .evictingProviderCache)
                 case .evictingProviderCache:
                     let result = try await provider.evictIfSupported(record.destinationURL)
                     try crash(.evictedBeforeSave, record)
                     record.error = nil
                     record.nextRetryAt = nil
-                    try advance(&record, to: result == .evicted ? .archivedOnlineOnly : .archivedLocal)
+                    try checkAndSave(&record, to: result == .evicted ? .archivedOnlineOnly : .archivedLocal)
                     return record
                 case .archivedLocal, .archivedOnlineOnly:
                     return record
@@ -875,9 +863,8 @@ public actor LocalVaultTransferEngine {
                     reason: .unknown,
                     message: "Stopped before removing the Active folder. It was kept."
                 )
-                record.state = .archiveVerified
                 record.nextRetryAt = nil
-                try persist(&record)
+                try checkAndSave(&record, to: .archiveVerified)
                 throw CancellationError()
             }
             if origin == .removingActiveCopy && !activeRemovalStarted {
@@ -892,9 +879,8 @@ public actor LocalVaultTransferEngine {
                     reason: .unknown,
                     message: "Stopped before removing the Active folder. It was kept."
                 )
-                record.state = .archiveVerified
                 record.nextRetryAt = nil
-                try persist(&record)
+                try checkAndSave(&record, to: .archiveVerified)
                 throw CancellationError()
             }
             let destructiveOrigin = origin == .removingActiveCopy || origin == .evictingProviderCache
@@ -906,9 +892,8 @@ public actor LocalVaultTransferEngine {
                     ? "Stopped while removing the Active folder, so part of it may be gone. Whatever is left was kept for review."
                     : "Stopped while clearing the cloud app’s offline copy. The Active folder had already been removed from this Mac. The verified Vault copy is kept for review."
                 record.error = VaultTransferError(origin: origin, reason: .unknown, message: message)
-                record.state = .recoveryRequired
                 record.nextRetryAt = nil
-                try persist(&record)
+                try checkAndSave(&record, to: .recoveryRequired)
                 throw CancellationError()
             }
             record.error = VaultTransferError(
@@ -916,24 +901,24 @@ public actor LocalVaultTransferEngine {
                 reason: .unknown,
                 message: "Transfer stopped. Files already copied stay in the archive. The Active Projects folder is not deleted."
             )
-            record.state = .failedRecoverable
             record.retryCount = recoveryPolicy.maximumAutomaticAttempts
             record.nextRetryAt = nil
-            try persist(&record)
+            try checkAndSave(&record, to: .failedRecoverable)
             throw CancellationError()
         } catch {
             let origin = record.state
             let reason = failureReason(for: error)
             record.error = VaultTransferError(origin: origin, reason: reason, message: (error as? LocalizedError)?.errorDescription ?? String(describing: error))
             let destructiveOrigin = origin == .removingActiveCopy || origin == .evictingProviderCache
+            let failureState: VaultTransferState
             if removalAdmissionDenied || (origin == .removingActiveCopy && !activeRemovalStarted) {
                 // No destructive call ran (for example the final source check
                 // saw a new save), so the Active copy was kept. Never route this
                 // to interrupted-removal recovery, which would replace newer
                 // Active work with the older Vault copy.
-                record.state = .archiveVerified
+                failureState = .archiveVerified
             } else {
-                record.state = reason == .occupiedDestination || destructiveOrigin
+                failureState = reason == .occupiedDestination || destructiveOrigin
                     ? .recoveryRequired
                     : .failedRecoverable
             }
@@ -942,10 +927,10 @@ public actor LocalVaultTransferEngine {
             // Once the persisted ceiling is reached, only the explicit user path
             // can request another attempt.
             record.retryCount += 1
-            record.nextRetryAt = record.state == .failedRecoverable
+            record.nextRetryAt = failureState == .failedRecoverable
                 ? recoveryPolicy.nextRetryDate(afterFailedAttempt: record.retryCount, at: now())
                 : nil
-            try persist(&record)
+            try checkAndSave(&record, to: failureState)
             throw error
         }
     }
@@ -1214,9 +1199,17 @@ public actor LocalVaultTransferEngine {
         }
     }
 
-    private func advance(_ record: inout VaultTransferRecord, to state: VaultTransferState) throws {
-        record.state = try ProjectVaultStateMachine().applying(.advance(to: state), to: record.state)
+    /// The only writer of a transfer's `state`. The state machine checks the
+    /// change first, so an edge its table does not list throws before anything
+    /// is saved; then the record is saved with its new state, before the side
+    /// effect the state describes.
+    private func checkAndSave(_ record: inout VaultTransferRecord, _ transition: VaultTransition) throws {
+        record.state = try ProjectVaultStateMachine().applying(transition, to: record.state)
         try persist(&record)
+    }
+
+    private func checkAndSave(_ record: inout VaultTransferRecord, to state: VaultTransferState) throws {
+        try checkAndSave(&record, .advance(to: state))
     }
 
     private func persist(_ record: inout VaultTransferRecord) throws {
