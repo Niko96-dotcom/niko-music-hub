@@ -164,6 +164,14 @@ public actor LiveProjectVaultRuntime: ProjectVaultOperating {
         }
     }
 
+    /// The transfer the song detail shows and Recover acts on: a removal that
+    /// waits for review holds the project's other transfers, so it comes before
+    /// them even when one of them was saved later; otherwise the newest.
+    /// `transfers` are one project's non-superseded records, newest first.
+    static func currentTransfer(among transfers: [VaultTransferRecord]) -> VaultTransferRecord? {
+        transfers.first(where: LocalVaultTransferEngine.awaitsRemovalReview) ?? transfers.first
+    }
+
     func latestTransfer(sourceURL: URL) throws -> VaultTransferRecord? {
         let canonicalSource = sourceURL.standardizedFileURL.resolvingSymlinksInPath().path
         return try transferStore.allTransferRecords().first {

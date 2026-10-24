@@ -263,6 +263,8 @@ public actor LocalVaultTransferEngine {
     /// column, so such a row could belong to any project: while one exists,
     /// readable rows only get the journal-only normalization of interrupted
     /// destructive phases, and every copy, retry and survivor retirement waits.
+    /// A project whose interrupted removal waits for review keeps its other
+    /// incomplete records as saved (`projectsAwaitingRemovalReview(in:)`).
     public func recoverAtLaunchReport() async -> VaultJournalReadReport<VaultTransferRecord>? {
         guard let journal = try? store.allTransferRecordsReport(),
               var records = try? store.recoverableRecordsReport().records else { return nil }
@@ -278,6 +280,9 @@ public actor LocalVaultTransferEngine {
             results.append((try? handInterruptedRemovalToReview(record, origin: origin)) ?? record)
         }
         records.removeAll { Self.interruptedRemovalOrigin(of: $0) != nil }
+        // Read from the journal as launch found it, so a removal whose review
+        // save threw above holds its project as well.
+        let heldProjects = Self.projectsAwaitingRemovalReview(in: allRecords)
         let verifiedSurvivors = Dictionary(grouping: allRecords.filter {
             VaultTransferOwnershipPolicy.isVerifiedTerminal($0.state)
         }, by: \.projectID).compactMapValues { records in
@@ -341,6 +346,12 @@ public actor LocalVaultTransferEngine {
         // replay several full-project copies and hashes for the same source.
         let newestRecords = VaultTransferRecoveryPolicy.candidates(from: records)
         for var record in newestRecords {
+            // Only the newest record of a project gets here, so this keeps every
+            // other incomplete record of a held project as saved.
+            guard !heldProjects.contains(record.projectID) else {
+                results.append(record)
+                continue
+            }
             if needsLegacyMetadataMigration(record) {
                 guard !holdsByteWork else {
                     results.append(record)
@@ -400,6 +411,28 @@ public actor LocalVaultTransferEngine {
         return phase == .removingActiveCopy || phase == .evictingProviderCache ? phase : nil
     }
 
+    /// An interrupted removal that waits for the person: a record with an
+    /// interrupted-removal origin (launch hands it to review, or keeps it as
+    /// saved when that save throws), or one already in `recoveryRequired` from a
+    /// removal phase. It may have left the Active folder incomplete, so it holds
+    /// its project until the person recovers it: launch and the recovery timer
+    /// resume, retry and migrate no other transfer of the project, newer or
+    /// older, and the person's Retry is refused, since each would put bytes of
+    /// that folder into the generation a restore uses. Survivor retirement still
+    /// runs; it touches no file. The song detail shows this record first, so its
+    /// Recover stays reachable, and Recover retires the transfers it held
+    /// (`supersedeHeldTransfers(behind:)`).
+    public static func awaitsRemovalReview(_ record: VaultTransferRecord) -> Bool {
+        guard record.state == .recoveryRequired else { return interruptedRemovalOrigin(of: record) != nil }
+        let origin = record.error?.origin
+        return origin == .removingActiveCopy || origin == .evictingProviderCache
+    }
+
+    /// The projects `awaitsRemovalReview(_:)` holds. Pass readable rows only.
+    public static func projectsAwaitingRemovalReview(in records: [VaultTransferRecord]) -> Set<ProjectID> {
+        Set(records.filter(awaitsRemovalReview).map(\.projectID))
+    }
+
     /// Saves an interrupted removal as `recoveryRequired`, the state
     /// `recoverInterruptedRemoval` accepts, independent of the attempt ceiling.
     /// Keeps the generation evidence and touches no file. Returns the saved
@@ -427,13 +460,17 @@ public actor LocalVaultTransferEngine {
 
     /// Explicit user-authorized retry path for records that reached the automatic
     /// attempt ceiling. This performs one attempt without weakening write admission
-    /// or deleting the persisted staging copy on failure.
+    /// or deleting the persisted staging copy on failure. Refused (nil) while the
+    /// project's interrupted removal waits for review, or when the journal
+    /// cannot be read to tell.
     @discardableResult
     public func retryRecoverableTransfer(id: UUID) async -> VaultTransferRecord? {
         guard var record = try? store.record(id: id),
               record.state == .failedRecoverable,
               let origin = record.error?.origin,
-              VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else { return nil }
+              VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin),
+              let journal = try? store.allTransferRecordsReport(),
+              !Self.projectsAwaitingRemovalReview(in: journal.records).contains(record.projectID) else { return nil }
         let recopy: Bool
         do {
             recopy = try await preparePortableArchiveRetry(&record)
@@ -558,10 +595,31 @@ public actor LocalVaultTransferEngine {
         }
         try manifestBuilder.verifyArchive(manifest, at: destination)
         try crash(.recoveryBeforeVerifiedSave, record)
+        // Before the save that ends the hold, so no held transfer can resume.
+        try supersedeHeldTransfers(behind: record)
         record.error = nil
         record.nextRetryAt = nil
         try checkAndSave(&record, to: .archiveVerified)
         return record
+    }
+
+    /// Every other readable incomplete transfer of the project that launch would
+    /// resume or retry goes to `superseded` by `recovered`. A copy phase would
+    /// read an Active folder the removal may have left incomplete, and a later
+    /// phase would promote staging copied from it, so none of them may become
+    /// the generation a restore uses. Nothing is deleted; the next Backup or Done
+    /// copies the restored folder. Another removal that waits for review keeps
+    /// its own review.
+    private func supersedeHeldTransfers(behind recovered: VaultTransferRecord) throws {
+        let held = try store.recoverableRecordsReport().records.filter {
+            $0.projectID == recovered.projectID && !Self.awaitsRemovalReview($0)
+        }
+        for var record in held {
+            record.supersededBy = recovered.id
+            record.error = nil
+            record.nextRetryAt = nil
+            try checkAndSave(&record, to: .superseded)
+        }
     }
 
     private func preserveActiveForRecovery(

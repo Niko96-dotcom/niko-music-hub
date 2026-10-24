@@ -529,6 +529,102 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: record.stagingURL.path))
     }
 
+    /// Launch recovery holds every other transfer of a project whose
+    /// interrupted removal waits for review, so that transfer sets no deadline:
+    /// the timer would only wake to change nothing.
+    func testRecoveryDeadlineSkipsAProjectWhoseInterruptedRemovalAwaitsReview() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false, emergencyStop: false)
+        let store = try fixture.transferStore()
+        let held = try fixture.failedDurabilityRecord()
+        try store.save(held)
+        var removal = try fixture.failedDurabilityRecord()
+        removal = VaultTransferRecord(
+            projectID: held.projectID,
+            sourceURL: removal.sourceURL,
+            stagingURL: removal.stagingURL,
+            destinationURL: removal.destinationURL,
+            state: .removingActiveCopy,
+            createdAt: Date(timeIntervalSince1970: 50)
+        )
+        removal.updatedAt = Date(timeIntervalSince1970: 60)
+        try store.save(removal)
+        let runtime = try fixture.runtime()
+
+        var next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertNil(next, "an interrupted removal holds its project")
+        await runtime.recoverAtLaunch()
+        XCTAssertEqual(try store.record(id: removal.id)?.state, .recoveryRequired)
+        XCTAssertEqual(try store.record(id: held.id), held)
+        next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertNil(next, "a removal under review holds its project")
+        await runtime.recoverAtLaunch()
+        XCTAssertEqual(try store.record(id: held.id), held)
+
+        var otherSong = try fixture.failedDurabilityRecord()
+        otherSong.nextRetryAt = Date().addingTimeInterval(600)
+        try store.save(otherSong)
+        next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertEqual(next, otherSong.nextRetryAt, "another song keeps its deadline")
+    }
+
+    /// A transfer saved after its project's removal review (a journal from an
+    /// earlier build, or an edited one) does not hide that review: the snapshot
+    /// shows the removal, so Recover stays reachable. Retry of the held transfer
+    /// is unavailable, and Recover retires it with its staging kept, so no
+    /// deadline or recovery run picks it up again.
+    func testRemovalUnderReviewStaysCurrentAndItsRecoverRetiresTheHeldTransfer() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
+        let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
+        let archived = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
+        let store = try fixture.transferStore()
+        var removal = try XCTUnwrap(archived.transfer)
+        removal.state = .recoveryRequired
+        removal.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+        try store.save(removal)
+        let template = try fixture.failedDurabilityRecord()
+        var held = VaultTransferRecord(
+            projectID: removal.projectID,
+            sourceURL: template.sourceURL,
+            stagingURL: template.stagingURL,
+            destinationURL: template.destinationURL,
+            state: .failedRecoverable,
+            createdAt: removal.createdAt.addingTimeInterval(10)
+        )
+        held.updatedAt = removal.updatedAt.addingTimeInterval(60)
+        held.manifestID = template.manifestID
+        held.manifest = template.manifest
+        held.retryCount = 5
+        held.error = template.error
+        try store.save(held)
+
+        let snapshots = try await runtime.snapshots()
+        let snapshot = try XCTUnwrap(snapshots.first { $0.record.id == removal.projectID })
+        XCTAssertEqual(snapshot.transfer?.id, removal.id, "the review stays current")
+        do {
+            _ = try await runtime.retry(snapshot: ProjectVaultRuntimeSnapshot(record: snapshot.record, transfer: held))
+            XCTFail("a held transfer must not retry")
+        } catch {
+            XCTAssertEqual(error as? ProjectVaultRuntimeError, .unavailable)
+        }
+        XCTAssertEqual(try store.record(id: held.id), held)
+
+        _ = try await runtime.recoverInterruptedArchive(snapshot: snapshot)
+
+        XCTAssertEqual(try store.record(id: removal.id)?.state, .archiveVerified)
+        let retired = try XCTUnwrap(store.record(id: held.id))
+        XCTAssertEqual(retired.state, .superseded)
+        XCTAssertEqual(retired.supersededBy, removal.id)
+        try VaultManifestBuilder().verify(XCTUnwrap(template.manifest), at: held.stagingURL)
+        let next = try await runtime.nextAutomaticRecoveryDate()
+        XCTAssertNil(next)
+        await runtime.recoverAtLaunch()
+        XCTAssertEqual(try store.record(id: held.id), retired)
+    }
+
     func testMutationFileLeaseReportsAccessFailuresWithoutClaimingContention() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("vault-lock-errors-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }

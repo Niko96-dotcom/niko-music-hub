@@ -120,8 +120,9 @@ public struct ProjectVaultStateMachine: Sendable {
     /// a journal save already failed; the record then keeps its last saved state.
     private static let allowedDestinations: [VaultTransferState: Set<VaultTransferState>] = [
         // Archive chain. Each archive phase can also stop (`failedRecoverable`,
-        // after a cancel or an error) and be retired at launch when a newer
-        // verified generation of its project exists (`superseded`).
+        // after a cancel or an error) and be retired (`superseded`): at launch
+        // when a newer verified generation of its project exists, or by the
+        // person's recovery of an interrupted removal that held it.
         .activeLocal: [.archiveEligible, .failedRecoverable, .superseded],
         .archiveEligible: [.preparingArchive, .failedRecoverable, .superseded],
         .preparingArchive: [.copyingToArchiveStaging, .failedRecoverable, .superseded],
@@ -144,7 +145,8 @@ public struct ProjectVaultStateMachine: Sendable {
         .archivedLocal: [.archiveVerified],
         // Retry, at launch or by the person: back to the failed phase, or to a
         // fresh copy (portable retry). A legacy failure in a removal phase needs
-        // review; a newer verified generation retires any other failure.
+        // review; a newer verified generation, or the recovery of a removal that
+        // held it, retires any other failure.
         .failedRecoverable: [
             .activeLocal, .archiveEligible, .preparingArchive, .copyingToArchiveStaging,
             .verifyingArchiveStaging, .awaitingProviderDurability, .promotingArchiveGeneration,

@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 @testable import NikoMusicCore
 
@@ -494,6 +495,244 @@ final class VaultCrashWindowTests: XCTestCase {
         }
     }
 
+    // MARK: - Other transfers wait for the removal's review
+
+    /// An interrupted removal may have left the Active folder incomplete. Until
+    /// the person recovers it, launch resumes, retries and migrates no other
+    /// transfer of the project: each would put bytes of that folder into the
+    /// generation a restore uses.
+    func testLaunchHoldsANewerRetryableTransferWhileTheProjectsRemovalAwaitsReview() async throws {
+        for (phase, legacyFailure) in Self.interruptedRemovals {
+            let label = legacyFailure ? "legacy failure in \(phase)" : "\(phase)"
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.stoppedRemoval(in: phase, legacyFailure: legacyFailure)
+            let newer = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 1,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+            )
+            let held = try fixture.saved(newer)
+
+            let relaunch = try await fixture.launchTwice()
+
+            XCTAssertEqual(try fixture.store.record(id: removal.id)?.state, .recoveryRequired, label)
+            try fixture.assertHeld(held, in: relaunch.first, label)
+            XCTAssertEqual(relaunch.firstOperations, [], label)
+            relaunch.assertSecondLaunchChangesNothing()
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
+    /// A transfer stopped in a copy phase is not resumed either, and one saved
+    /// before `.DS_Store` exclusion is not migrated (migration rewrites its
+    /// staging copy).
+    func testLaunchDoesNotResumeANewerUnfinishedTransferWhileTheProjectsRemovalAwaitsReview() async throws {
+        let unfinished: [(state: VaultTransferState, legacyMetadata: Bool)] = [
+            (.copyingToArchiveStaging, false),
+            (.awaitingProviderDurability, true),
+        ]
+        for (state, legacyMetadata) in unfinished {
+            let label = legacyMetadata ? "\(state) with legacy Finder metadata" : "\(state)"
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy)
+            var newer = try fixture.unfinishedRecord(
+                in: state, projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+            )
+            if legacyMetadata { try fixture.addLegacyFinderMetadata(to: &newer) }
+            let held = try fixture.saved(newer)
+
+            let relaunch = try await fixture.launchTwice()
+
+            XCTAssertEqual(try fixture.store.record(id: removal.id)?.state, .recoveryRequired, label)
+            try fixture.assertHeld(held, in: relaunch.first, label)
+            XCTAssertEqual(relaunch.firstOperations, [], label)
+            relaunch.assertSecondLaunchChangesNothing()
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
+    /// A removal the person has not recovered since an earlier launch holds its
+    /// project the same way, and this launch saves nothing.
+    func testLaunchHoldsARetryableTransferBehindARemovalReviewedAtAnEarlierLaunch() async throws {
+        for origin in [VaultTransferState.removingActiveCopy, .evictingProviderCache] {
+            let label = "\(origin)"
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.interruptedRemoval(origin: origin)
+            let newer = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 1,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+            )
+            let held = try fixture.saved(newer)
+            let setupEdges = fixture.store.transferEdges.count
+
+            let relaunch = try await fixture.launchTwice()
+
+            XCTAssertEqual(try fixture.store.record(id: removal.id), removal, label)
+            try fixture.assertHeld(held, in: relaunch.first, label)
+            XCTAssertEqual(relaunch.firstOperations, [], label)
+            XCTAssertEqual(fixture.store.transferEdges.count, setupEdges, "launch saved nothing (\(label))")
+            relaunch.assertSecondLaunchChangesNothing()
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
+    /// A hand-off whose save throws leaves the removal in its removal phase; the
+    /// project waits all the same, and still waits once the next launch hands
+    /// the removal to review.
+    func testLaunchHoldsTheProjectWhenItsRemovalsReviewSaveFails() async throws {
+        let fixture = try TransferCrashFixture()
+        defer { fixture.remove() }
+        let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy)
+        let newer = try fixture.failedRecord(
+            origin: .awaitingProviderDurability, retryCount: 1,
+            projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+        )
+        let held = try fixture.saved(newer)
+        let savedRemoval = try fixture.store.record(id: removal.id)
+        fixture.store.failNextSave(of: .recoveryRequired)
+        let engine = try fixture.engine()
+        fixture.files.reset()
+
+        let failedSaveLaunch = await engine.recoverAtLaunch()
+
+        XCTAssertEqual(try fixture.store.record(id: removal.id), savedRemoval)
+        try fixture.assertHeld(held, in: failedSaveLaunch, "the launch whose save failed")
+        XCTAssertEqual(fixture.files.operations, [])
+
+        let nextLaunch = await engine.recoverAtLaunch()
+
+        XCTAssertEqual(try fixture.store.record(id: removal.id)?.state, .recoveryRequired)
+        try fixture.assertHeld(held, in: nextLaunch, "the next launch")
+        XCTAssertEqual(fixture.files.operations, [])
+        fixture.assertEdgesWereObserved()
+    }
+
+    /// When the removal is the project's newest record, an older incomplete
+    /// record is the one launch would retry. It copies the same Active folder,
+    /// so it waits too.
+    func testLaunchHoldsAnOlderRetryableTransferOfTheProject() async throws {
+        let fixture = try TransferCrashFixture()
+        defer { fixture.remove() }
+        let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy)
+        let older = try fixture.failedRecord(
+            origin: .awaitingProviderDurability, retryCount: 1,
+            projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(-20)
+        )
+        let held = try fixture.saved(older)
+
+        let relaunch = try await fixture.launchTwice()
+
+        XCTAssertEqual(try fixture.store.record(id: removal.id)?.state, .recoveryRequired)
+        try fixture.assertHeld(held, in: relaunch.first, "older record")
+        XCTAssertEqual(relaunch.firstOperations, [])
+        relaunch.assertSecondLaunchChangesNothing()
+        fixture.assertEdgesWereObserved()
+    }
+
+    /// The hold is per project: another song's retryable transfer in the same
+    /// journal is retried as usual.
+    func testLaunchRetriesAnotherProjectsTransferBesideAHeldProject() async throws {
+        let fixture = try TransferCrashFixture()
+        defer { fixture.remove() }
+        let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy)
+        let newer = try fixture.failedRecord(
+            origin: .awaitingProviderDurability, retryCount: 1,
+            projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+        )
+        let held = try fixture.saved(newer)
+        let other = try fixture.failedRecord(
+            origin: .awaitingProviderDurability, retryCount: 1,
+            source: fixture.otherSongSource(), createdAt: removal.createdAt.addingTimeInterval(30)
+        )
+
+        let relaunch = try await fixture.launchTwice()
+
+        try fixture.assertHeld(held, in: relaunch.first, "held project")
+        XCTAssertEqual(try fixture.store.record(id: other.id)?.state, .archiveVerified)
+        XCTAssertEqual(relaunch.firstOperations, ["move \(other.destinationURL.lastPathComponent)"])
+        relaunch.assertSecondLaunchChangesNothing()
+        try fixture.assertOnlyGeneration(of: other)
+        fixture.assertEdgesWereObserved()
+    }
+
+    /// Recover ends the hold by retiring what it held: each other incomplete
+    /// transfer of the project goes to `superseded` by the recovered removal,
+    /// before that is saved `archiveVerified`, with its staging kept. A late
+    /// phase would otherwise promote staging copied from an incomplete folder,
+    /// and a restore would use it. Another project keeps its transfer, and the
+    /// next launch resumes nothing.
+    func testRecoverRetiresTheTransfersItsRemovalHeld() async throws {
+        let fixture = try TransferCrashFixture()
+        defer { fixture.remove() }
+        let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy)
+        let newerFailure = try fixture.failedRecord(
+            origin: .awaitingProviderDurability, retryCount: 1,
+            projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+        )
+        let newerUnfinished = try fixture.unfinishedRecord(
+            in: .awaitingProviderDurability, projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(30)
+        )
+        let otherProject = try fixture.failedRecord(
+            origin: .awaitingProviderDurability, retryCount: 5,
+            source: fixture.otherSongSource(), createdAt: removal.createdAt.addingTimeInterval(40)
+        )
+        let held = [try fixture.saved(newerFailure), try fixture.saved(newerUnfinished)]
+        let savedOther = try fixture.store.record(id: otherProject.id)
+        let engine = try fixture.engine()
+        _ = await engine.recoverAtLaunch()
+        for saved in held { XCTAssertEqual(try fixture.store.record(id: saved.record.id), saved.record, "held before Recover") }
+
+        let recovered = try await engine.recoverInterruptedRemoval(id: removal.id)
+
+        XCTAssertEqual(recovered.state, .archiveVerified)
+        for saved in held {
+            let retired = try XCTUnwrap(fixture.store.record(id: saved.record.id))
+            XCTAssertEqual(retired.state, .superseded)
+            XCTAssertEqual(retired.supersededBy, removal.id)
+            XCTAssertEqual(try fixture.snapshot(saved.record.stagingURL), saved.staging, "nothing deleted")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: saved.record.destinationURL.path))
+        }
+        XCTAssertEqual(try fixture.store.record(id: otherProject.id), savedOther)
+        let journalAfterRecover = try fixture.store.allTransferRecords()
+        fixture.files.reset()
+
+        _ = await engine.recoverAtLaunch()
+
+        XCTAssertEqual(fixture.files.operations, [], "the next launch resumes nothing")
+        XCTAssertEqual(try fixture.store.allTransferRecords(), journalAfterRecover)
+        fixture.assertEdgesWereObserved()
+    }
+
+    /// The person's Retry of a held transfer is refused, before and after
+    /// launch hands the removal to review; the runtime reports `unavailable`.
+    func testRetryIsRefusedWhileTheProjectsRemovalAwaitsReview() async throws {
+        for handedToReview in [false, true] {
+            let label = handedToReview ? "removal under review" : "removal not yet handed to review"
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy)
+            let newer = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 5,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+            )
+            let engine = try fixture.engine()
+            if handedToReview { _ = await engine.recoverAtLaunch() }
+            let held = try fixture.saved(newer)
+            fixture.files.reset()
+
+            let retried = await engine.retryRecoverableTransfer(id: newer.id)
+
+            XCTAssertNil(retried, label)
+            XCTAssertEqual(try fixture.store.record(id: newer.id), held.record, label)
+            XCTAssertEqual(try fixture.snapshot(newer.stagingURL), held.staging, label)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: newer.destinationURL.path), label)
+            XCTAssertEqual(fixture.files.operations, [], label)
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
     func testRelaunchAfterTheLegacyDestructiveFailureNormalizationChangesNothing() async throws {
         let fixture = try TransferCrashFixture()
         defer { fixture.remove() }
@@ -699,6 +938,11 @@ private struct TransferRelaunch {
     }
 }
 
+private struct SavedTransfer {
+    let record: VaultTransferRecord
+    let staging: [String: Data]
+}
+
 private final class TransferCrashFixture {
     let root: URL
     let active: URL
@@ -799,12 +1043,12 @@ private final class TransferCrashFixture {
         try await engine().archive(projectID: ProjectID(), sourceURL: source)
     }
 
-    /// A verified archive whose removal stopped; saved past the recorder,
-    /// since the test sets it up.
-    func interruptedRemoval() async throws -> VaultTransferRecord {
+    /// A verified archive whose removal stopped in `origin`, already handed to
+    /// review; saved past the recorder, since the test sets it up.
+    func interruptedRemoval(origin: VaultTransferState = .removingActiveCopy) async throws -> VaultTransferRecord {
         var record = try await verifiedArchive()
         record.state = .recoveryRequired
-        record.error = VaultTransferError(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
+        record.error = VaultTransferError(origin: origin, reason: .unknown, message: "Interrupted")
         try store.base.save(record)
         return record
     }
@@ -820,13 +1064,16 @@ private final class TransferCrashFixture {
         return record
     }
 
-    /// A failed transfer with a complete staging copy, saved past the recorder.
+    /// A failed transfer with a complete staging copy of `source` (the
+    /// fixture's song by default), saved past the recorder.
     func failedRecord(
         origin: VaultTransferState,
         retryCount: Int,
         projectID: ProjectID = ProjectID(),
+        source: URL? = nil,
         createdAt: Date
     ) throws -> VaultTransferRecord {
+        let source = source ?? self.source
         let transferID = UUID()
         let staging = VaultFolders.staging(in: archive, projectID: projectID, operationID: transferID)
         try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -850,6 +1097,68 @@ private final class TransferCrashFixture {
         record.error = VaultTransferError(origin: origin, reason: .unknown, message: "stopped")
         try store.base.save(record)
         return record
+    }
+
+    /// A transfer stopped in `state` after its staging copy and manifest were
+    /// saved, saved past the recorder.
+    func unfinishedRecord(in state: VaultTransferState, projectID: ProjectID, createdAt: Date) throws -> VaultTransferRecord {
+        var record = try failedRecord(origin: state, retryCount: 0, projectID: projectID, createdAt: createdAt)
+        record.state = state
+        record.error = nil
+        try store.base.save(record)
+        return record
+    }
+
+    /// Adds a Finder metadata file to `record`'s staging copy and manifest, as a
+    /// transfer saved before `.DS_Store` exclusion holds them; saved past the
+    /// recorder. Launch migrates such a record before it resumes it.
+    func addLegacyFinderMetadata(to record: inout VaultTransferRecord) throws {
+        let file = record.stagingURL.appendingPathComponent(".DS_Store")
+        let data = Data("finder metadata".utf8)
+        try data.write(to: file)
+        let manifest = try XCTUnwrap(record.manifest)
+        let legacy = VaultManifest(
+            entries: manifest.entries + [.init(
+                relativePath: ".DS_Store",
+                type: .regularFile,
+                byteCount: Int64(data.count),
+                modifiedAt: try file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast,
+                sha256: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            )],
+            rootAllocatedByteCount: manifest.rootAllocatedByteCount,
+            rootExtendedAttributeBytes: manifest.rootExtendedAttributeBytes
+        )
+        record.manifestID = legacy.id
+        record.manifest = legacy
+        try store.base.save(record)
+    }
+
+    /// A second song's Active folder.
+    func otherSongSource() throws -> URL {
+        let folder = active.appendingPathComponent("Other Song", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("other-project".utf8).write(to: folder.appendingPathComponent("Other Song.cpr"))
+        return folder
+    }
+
+    /// `record` as the journal holds it, with its staging bytes.
+    func saved(_ record: VaultTransferRecord) throws -> SavedTransfer {
+        SavedTransfer(record: try XCTUnwrap(store.record(id: record.id)), staging: try snapshot(record.stagingURL))
+    }
+
+    /// Launch returned the record as saved and left its journal row and staging
+    /// bytes as they were; it has no generation.
+    func assertHeld(
+        _ saved: SavedTransfer, in results: [VaultTransferRecord], _ label: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) throws {
+        XCTAssertEqual(try store.record(id: saved.record.id), saved.record, "journal row (\(label))", file: file, line: line)
+        XCTAssertEqual(try snapshot(saved.record.stagingURL), saved.staging, "staging bytes (\(label))", file: file, line: line)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: saved.record.destinationURL.path),
+            "generation (\(label))", file: file, line: line
+        )
+        XCTAssertTrue(results.contains(saved.record), "returned as saved (\(label))", file: file, line: line)
     }
 
     /// A newer verified generation for the same project, saved past the recorder.

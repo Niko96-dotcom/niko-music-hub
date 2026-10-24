@@ -375,7 +375,14 @@ not listed as gaps.
    that project is marked `superseded`. A record in a removal phase, or a
    legacy failure saved in one, is never marked `superseded`: the first pass
    of the same launch has already saved it `recoveryRequired` for the person's
-   review, whether or not the survivor checks pass. Missing, corrupt, unproven (`nil`),
+   review, whether or not the survivor checks pass. Retirement still runs for
+   a project whose interrupted removal waits for review, but neither launch,
+   the recovery timer nor the person's Retry resumes, retries or migrates
+   another transfer of that project (`awaitsRemovalReview(_:)`), since each
+   would copy or promote bytes of an Active folder the removal may have left
+   incomplete. The person's Recover then marks those transfers `superseded`
+   by the recovered removal, staging kept, before it saves the removal
+   `archiveVerified`. Missing, corrupt, unproven (`nil`),
    fresh-barrier-throw, binding-mismatch, or journal-throw all leave older
    records recoverable with staging preserved. No `COPY` is replayed (gated
    by zero write-admission assertions on the retirement path) and no

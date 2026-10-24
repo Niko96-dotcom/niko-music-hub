@@ -65,8 +65,10 @@ enum VaultObservedEdges {
         .init(.failedRecoverable, .copyingToArchiveStaging),
         .init(.failedRecoverable, .verifyingArchiveStaging),
         .init(.failedRecoverable, .awaitingProviderDurability),
-        // Explicit recovery of an interrupted removal.
+        // Explicit recovery of an interrupted removal, and its retirement of
+        // the transfers that removal held (observed 2026-10-24).
         .init(.recoveryRequired, .archiveVerified),
+        .init(.awaitingProviderDurability, .superseded),
     ]
 
     static let restore: Set<VaultRestoreEdge> = [

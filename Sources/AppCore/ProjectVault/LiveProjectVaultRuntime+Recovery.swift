@@ -8,8 +8,11 @@ extension LiveProjectVaultRuntime {
         let configuration = try configuration()
         let settings = try settingsStore.loadSettings()
         guard !settings.vault.automationEmergencyStop else { throw ProjectVaultRuntimeError.emergencyStop }
+        let projectTransfers = try transferStore.allTransferRecords().filter {
+            $0.projectID == snapshot.record.id && $0.state != .superseded
+        }
         guard let requested = snapshot.transfer,
-              let transfer = try latestTransfer(projectID: snapshot.record.id),
+              let transfer = Self.currentTransfer(among: projectTransfers),
               transfer.id == requested.id, transfer.state == .recoveryRequired else {
             throw ProjectVaultRuntimeError.unavailable
         }
@@ -99,11 +102,16 @@ extension LiveProjectVaultRuntime {
 
     /// The persisted backoff is also used by the mounted browser to wake recovery.
     /// Keep eligibility here so UI timers cannot bypass the engine's retry budget.
+    /// A held project sets no deadline: recovery would keep its transfers as saved.
     public func nextAutomaticRecoveryDate() async throws -> Date? {
         _ = try configuration()
         guard !(try settingsStore.loadSettings()).vault.automationEmergencyStop else { return nil }
+        let heldProjects = LocalVaultTransferEngine.projectsAwaitingRemovalReview(
+            in: try transferStore.allTransferRecordsReport().records
+        )
         let candidates = VaultTransferRecoveryPolicy.candidates(from: try transferStore.recoverableRecords())
         return candidates.compactMap { record -> Date? in
+            guard !heldProjects.contains(record.projectID) else { return nil }
             if record.isWaitingForProviderUpload { return record.nextRetryAt }
             guard record.state == .failedRecoverable,
                   record.retryCount < recoveryPolicy.maximumAutomaticAttempts,

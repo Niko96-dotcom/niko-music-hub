@@ -480,8 +480,9 @@ saved in `vault_restores`) each change only through one table.
 - The tables list every edge a path reaches through one event (a thrown error, a cancel, a launch or retry decision),
   each with the path that makes it: the archive chain and its stops, the removal rewinds (refused or stopped before
   `removeItem`: back to `archiveVerified`) and reviews (`recoveryRequired`), the launch normalizations, survivor
-  retirement, the retries and the person's recovery of an interrupted removal; for restores the chain, the rewind to
-  `materializingArchive` and the reconcile's retirement of a losing duplicate.
+  retirement, the retries and the person's recovery of an interrupted removal (with its retirement of the transfers
+  that removal held); for restores the chain, the rewind to `materializingArchive` and the reconcile's retirement of a
+  losing duplicate.
 - An unlisted edge throws `VaultTransitionError` before anything is saved or any file is touched, and the record keeps
   its last saved state for launch recovery. That covers the restore-half cases of `VaultTransferState`, which no
   transfer record ever held, and the edges a path reaches only after a journal save already failed. In the reconcile,
@@ -494,6 +495,17 @@ saved in `vault_restores`) each change only through one table.
   that generation's checks, or on an unreadable journal row. If the save throws, the record keeps its journal state
   until the next launch, and nothing else in that launch touches it. The table has no edge from a removal phase to
   `superseded`; any other older incomplete transfer still retires.
+- While a project's interrupted removal waits for review, its other transfers wait too. Such a removal may have left
+  the Active folder incomplete, and resuming, retrying or migrating another incomplete transfer of the project, newer
+  or older, would put bytes of that folder into the generation a restore uses. `awaitsRemovalReview(_:)` names such a
+  removal from the readable journal rows: a record the first pass hands to review (or keeps as saved when that save
+  throws), or one already in `recoveryRequired` with a removal origin. Launch returns the project's other incomplete
+  records as saved and touches no file; survivor retirement still runs. `nextAutomaticRecoveryDate()` uses the same
+  rule, so a held record sets no deadline for the recovery timer, and the person's Retry of a held record is refused
+  (`unavailable`). The song detail shows the removal first (`LiveProjectVaultRuntime.currentTransfer(among:)`), also
+  when a held record was saved after it, so Recover stays reachable. Recover (`recoverInterruptedRemoval`) marks every
+  held record `superseded` by the removal before it saves the removal `archiveVerified`: nothing is deleted, no held
+  copy can promote staging taken from an incomplete folder, and the next Backup or Done copies the restored folder.
 - Write-ahead order: each writer saves the new state before the side effect it describes. The phase fault points
   (`VaultTransferFaultPoint`, `VaultRestoreFaultPoint`) and the crash windows (`VaultTransferCrashWindow`,
   `VaultRestoreCrashWindow`: between a side effect and the save that records it) let a test stop an engine as if the

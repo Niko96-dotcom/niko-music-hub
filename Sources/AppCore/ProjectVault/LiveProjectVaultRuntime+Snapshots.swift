@@ -20,10 +20,11 @@ extension LiveProjectVaultRuntime {
         let generationResolver = ProjectVaultGenerationReviewResolver(
             archiveRootURL: configuration.archive.url
         )
+        let transfersByProject = Dictionary(
+            grouping: transfers.filter { $0.state != .superseded }, by: \.projectID
+        )
         return entries.map { entry in
-            let transfer = transfers.first {
-                $0.projectID == entry.record.id && $0.state != .superseded
-            }
+            let transfer = Self.currentTransfer(among: transfersByProject[entry.record.id] ?? [])
             let persistedRestore = restores
                 .filter { $0.projectID == entry.record.id }
                 .max { $0.updatedAt < $1.updatedAt }
