@@ -739,8 +739,10 @@ public actor LocalVaultRestoreEngine {
             throw LocalVaultRestoreError.invalidDestination
         }
         let destination = activeRoot.appendingPathComponent(relativePath, isDirectory: true).standardizedFileURL.resolvingSymlinksInPath()
+        // As strict as the restore sheet: never inside `.niko-staging`,
+        // `.niko-recovery` or any other app folder.
         guard Self.contains(activeRoot, destination), destination != activeRoot,
-              !Self.contains(VaultFolders.staging(in: activeRoot), destination) else {
+              !VaultFolders.isInReservedActiveFolder(destination, activeRoot: activeRoot) else {
             throw LocalVaultRestoreError.invalidDestination
         }
         return destination

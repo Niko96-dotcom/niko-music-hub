@@ -29,6 +29,34 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.active.appendingPathComponent("Restored").path))
     }
 
+    /// The engine is as strict as the restore sheet: no restore lands in an app
+    /// folder of Active Projects. Before, it refused only `.niko-staging`.
+    func testRestoreRefusesEveryReservedActiveFolder() async throws {
+        let fixture = try VaultRestoreFixture()
+        defer { fixture.remove() }
+        let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
+        try store.save(fixture.archiveRecord)
+        let events = VaultRestoreEventLog()
+        let engine = LocalVaultRestoreEngine(activeRoot: fixture.active, archiveRoot: fixture.archive,
+            activeRootID: fixture.activeRootID, resolver: store, store: store, projectionStore: store,
+            provider: LocalFolderArchiveStorage(root: fixture.archive), catalog: VaultRestoreCatalogSpy(events: events),
+            projectOpener: SafeVaultProjectOpener(workspace: VaultRestoreWorkspaceSpy(events: events)),
+            writeAdmission: allowRestoreWrites)
+
+        for destination in [".niko-recovery/Song", ".niko-staging/Song", "Songs/.niko-old/Song"] {
+            do {
+                _ = try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: destination)
+                XCTFail("restore into \(destination) must be refused")
+            } catch {
+                XCTAssertEqual(error as? LocalVaultRestoreError, .invalidDestination, destination)
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.active.appendingPathComponent(destination).path))
+        }
+
+        let restored = try await engine.restoreAndOpen(projectID: fixture.projectID, destinationRelativePath: "Restored")
+        XCTAssertNotNil(restored.completedAt, "an ordinary folder still restores")
+    }
+
     func testDropboxPlaceholderFailureRetriesSameJournalAndVerifiesDownloadedBytes() async throws {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }

@@ -73,4 +73,14 @@ public enum VaultFolders {
     public static func isReservedInActiveRoot(_ component: String) -> Bool {
         component.hasPrefix(reservedActivePrefix)
     }
+
+    /// Whether `url`, after symlinks resolve, lies in a reserved folder of
+    /// `activeRoot` (any `.niko-` folder on the way down). A URL outside the
+    /// root is not judged here; callers check containment themselves.
+    public static func isInReservedActiveFolder(_ url: URL, activeRoot: URL) -> Bool {
+        let root = activeRoot.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        let path = url.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        guard path.count > root.count, Array(path.prefix(root.count)) == root else { return false }
+        return path.dropFirst(root.count).contains(where: isReservedInActiveRoot)
+    }
 }

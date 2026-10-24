@@ -72,4 +72,21 @@ final class VaultFoldersTests: XCTestCase {
             XCTAssertFalse(VaultFolders.isReservedInActiveRoot(name), name)
         }
     }
+
+    func testReservedActiveFoldersAreFoundBelowTheRoot() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("VaultFoldersTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        for reserved in [".niko-staging/p/r", ".niko-recovery/t/a/Song", "Songs/.niko-old/Song"] {
+            XCTAssertTrue(VaultFolders.isInReservedActiveFolder(root.appendingPathComponent(reserved), activeRoot: root), reserved)
+        }
+        for ordinary in ["Song", "Songs/Song", "niko-staging/Song"] {
+            XCTAssertFalse(VaultFolders.isInReservedActiveFolder(root.appendingPathComponent(ordinary), activeRoot: root), ordinary)
+        }
+        XCTAssertFalse(
+            VaultFolders.isInReservedActiveFolder(URL(fileURLWithPath: "/elsewhere/.niko-staging/x"), activeRoot: root),
+            "outside the root is the caller's containment check"
+        )
+    }
 }

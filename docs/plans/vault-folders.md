@@ -24,7 +24,7 @@ commit with `git log --grep='(vault folders step N)'`.
 | 1 One module for the folder names | done | `git log --grep='(vault folders step 1)'` | strict build; `NikoMusicCoreTests` 841 (5 new, 1 skipped), AppCore Vault and `*SourceTests` 278, archive Vault suites 79, 0 failures |
 | 2 Every other site uses it | done | `git log --grep='(vault folders step 2)'` | strict build; `NikoMusicCoreTests` 841 (1 skipped), AppCore Vault and `*SourceTests` 280, archive Vault suites 79, 0 failures; a planted `".niko-staging"` in `LocalVaultRestoreEngine.swift` failed `VaultFoldersSourceTests`, then was removed |
 | 3 One place builds the engines | done | `git log --grep='(vault folders step 3)'` | strict build; `NikoMusicCoreTests` 841 (1 skipped), AppCore Vault and `*SourceTests` 282, archive Vault suites 79, 0 failures; with the clock left out of the factory both new clock tests failed |
-| 4 The restore engine refuses every reserved Active folder | not started | | |
+| 4 The restore engine refuses every reserved Active folder | done | `git log --grep='(vault folders step 4)'` | strict build; `NikoMusicCoreTests` 843 (2 new, 1 skipped), AppCore Vault and `*SourceTests` 282, archive Vault suites 79, 0 failures; with the old staging-only rule, the engine restored into `.niko-recovery/Song` and the new test failed |
 | 5 Docs, full gates, live check | not started | | |
 
 ## Revisions
@@ -40,6 +40,9 @@ Record every deviation from the steps below here, numbered, with its reason.
    defaults. A call that leaves an admission out gets the same refusal as before.
 3. **Step 3: the factory sits in `LiveProjectVaultRuntime.swift`,** beside `configuration()`, not in a new extension
    file: it is the runtime's construction rule, not a separate responsibility.
+4. **Step 4: one helper for both checks.** `VaultFolders.isInReservedActiveFolder(_:activeRoot:)` judges the resolved
+   path below the root; the restore engine's `destinationURL` and the runtime's `safeContainedRestoreDestination` both
+   call it, so a symlink into an app folder is refused too.
 
 ## Terms
 

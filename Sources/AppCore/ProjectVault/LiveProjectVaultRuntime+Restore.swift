@@ -151,11 +151,7 @@ extension LiveProjectVaultRuntime {
               Array(candidateComponents.prefix(rootComponents.count)) == rootComponents else {
             return nil
         }
-        let staging = VaultFolders.staging(in: resolvedRoot)
-            .standardizedFileURL.resolvingSymlinksInPath()
-        let stagingComponents = staging.pathComponents
-        if candidateComponents.count >= stagingComponents.count,
-           Array(candidateComponents.prefix(stagingComponents.count)) == stagingComponents {
+        if VaultFolders.isInReservedActiveFolder(candidate, activeRoot: resolvedRoot) {
             return nil
         }
         return candidate
