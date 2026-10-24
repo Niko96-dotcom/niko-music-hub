@@ -401,7 +401,7 @@ struct SettingsView: View {
     }
 
     private func openWAVConverter() {
-        router.execute(.openTool(ToolFeatureID("wav-converter")))
+        router.execute(.openTool(.wavConverter))
         openWindow(id: "main")
         NSApp.activate()
     }

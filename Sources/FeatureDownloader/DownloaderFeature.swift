@@ -3,7 +3,7 @@ import SwiftUI
 
 public struct DownloaderFeature: ToolFeature {
     public let metadata = ToolMetadata(
-        id: "downloader",
+        id: .downloader,
         displayName: "Downloader",
         shortLabel: "Downloader",
         systemImage: "arrow.down.circle",

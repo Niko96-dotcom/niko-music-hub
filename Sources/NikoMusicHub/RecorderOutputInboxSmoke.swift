@@ -44,7 +44,7 @@ enum RecorderOutputInboxSmoke {
         guard dragReady else {
             throw RecorderSmokeError("recorded WAV is not drag-ready")
         }
-        guard item.sourceToolID.rawValue == "audio-recorder" else {
+        guard item.sourceToolID == .audioRecorder else {
             throw RecorderSmokeError("unexpected source tool \(item.sourceToolID.rawValue)")
         }
 

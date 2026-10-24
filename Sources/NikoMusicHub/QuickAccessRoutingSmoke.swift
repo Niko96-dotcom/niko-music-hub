@@ -18,8 +18,8 @@ enum QuickAccessRoutingSmoke {
         let router = QuickAccessRouter()
 
         // Assert openTool routing
-        router.execute(.openTool("wav-converter"))
-        guard router.requestedToolID?.rawValue == "wav-converter" else {
+        router.execute(.openTool(.wavConverter))
+        guard router.requestedToolID == .wavConverter else {
             throw QuickAccessRoutingSmokeError(
                 "expected requestedToolID=wav-converter, got \(String(describing: router.requestedToolID))"
             )

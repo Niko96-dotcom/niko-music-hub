@@ -3,7 +3,7 @@ import SwiftUI
 
 public struct AudioConverterFeature: ToolFeature {
     public let metadata = ToolMetadata(
-        id: "wav-converter",
+        id: .wavConverter,
         displayName: "WAV Converter",
         shortLabel: "WAV Converter",
         systemImage: "waveform",

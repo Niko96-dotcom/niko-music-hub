@@ -743,7 +743,7 @@ public struct AudioConverterRow: Identifiable, Equatable, Sendable {
 
         let item = OutputInboxItem(
             fileURL: outputURL,
-            sourceToolID: "wav-converter",
+            sourceToolID: .wavConverter,
             status: .available
         )
         return OutputHandoff.dragFileURL(for: item, fileManager: fileManager)

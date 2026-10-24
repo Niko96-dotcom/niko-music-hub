@@ -3,8 +3,6 @@ import Foundation
 import NikoMusicCore
 
 public struct StemSeparationService: Sendable {
-    public static let toolID: ToolFeatureID = "stem-separation"
-
     private let backend: any StemSeparationBackend
     private let outputInboxStore: any OutputInboxStore
     private let jobRunner: any JobRunning
@@ -22,7 +20,7 @@ public struct StemSeparationService: Sendable {
     @discardableResult
     public func startJob(request: StemSeparationRequest) -> Job {
         let title = request.title ?? defaultTitle(for: request.inputURL)
-        return jobRunner.enqueue(title: title, sourceToolID: Self.toolID) { progress in
+        return jobRunner.enqueue(title: title, sourceToolID: .stemSeparation) { progress in
             try await self.separate(request: request, progress: progress)
         }
     }
@@ -145,7 +143,7 @@ public struct StemSeparationService: Sendable {
         let items = stems.map { stem in
             OutputInboxItem(
                 fileURL: stem.fileURL,
-                sourceToolID: Self.toolID,
+                sourceToolID: .stemSeparation,
                 status: .available,
                 metadata: [
                     "role": stem.role.rawValue,

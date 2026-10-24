@@ -25,40 +25,40 @@ public extension QuickAccessEntry {
     /// The resolver filters this list against the live ToolRegistry before use.
     static let allowlist: [QuickAccessEntry] = [
         QuickAccessEntry(
-            id: "archive-browser",
+            id: ToolFeatureID.archiveBrowser.rawValue,
             label: "Archive Browser",
             systemImage: "music.note.list",
-            command: .openTool("archive-browser")
+            command: .openTool(.archiveBrowser)
         ),
         QuickAccessEntry(
-            id: "audio-recorder",
+            id: ToolFeatureID.audioRecorder.rawValue,
             label: "Audio Recorder",
             systemImage: "waveform.circle",
-            command: .openTool("audio-recorder")
+            command: .openTool(.audioRecorder)
         ),
         QuickAccessEntry(
-            id: "wav-converter",
+            id: ToolFeatureID.wavConverter.rawValue,
             label: "WAV Converter",
             systemImage: "arrow.triangle.2.circlepath",
-            command: .openTool("wav-converter")
+            command: .openTool(.wavConverter)
         ),
         QuickAccessEntry(
-            id: "bpm-tapper",
+            id: ToolFeatureID.bpmTapper.rawValue,
             label: "BPM Tapper",
             systemImage: "metronome",
-            command: .openTool("bpm-tapper")
+            command: .openTool(.bpmTapper)
         ),
         QuickAccessEntry(
-            id: "downloader",
+            id: ToolFeatureID.downloader.rawValue,
             label: "Downloader",
             systemImage: "arrow.down.circle",
-            command: .openTool("downloader")
+            command: .openTool(.downloader)
         ),
         QuickAccessEntry(
-            id: "stem-separation",
+            id: ToolFeatureID.stemSeparation.rawValue,
             label: "Stem Separation",
             systemImage: "waveform.path",
-            command: .openTool("stem-separation")
+            command: .openTool(.stemSeparation)
         ),
         QuickAccessEntry(
             id: "output-inbox",

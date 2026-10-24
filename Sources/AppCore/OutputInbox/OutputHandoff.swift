@@ -1,7 +1,6 @@
 import Foundation
 
 public enum OutputHandoff {
-    private static let downloaderToolID = "downloader"
     private static let downloaderRevealExtensions: Set<String> = ["mp3", "m4a", "mp4", "wav", "webm"]
     private static let downloaderDragExtensions: Set<String> = ["mp3", "m4a", "mp4", "wav"]
 
@@ -38,7 +37,7 @@ public enum OutputHandoff {
         guard fileExists(at: item.fileURL, fileManager: fileManager) else { return nil }
 
         let ext = item.fileURL.pathExtension.lowercased()
-        if item.sourceToolID.rawValue == downloaderToolID {
+        if item.sourceToolID == .downloader {
             guard downloaderDragExtensions.contains(ext) else { return nil }
             return item.fileURL
         }
@@ -62,7 +61,7 @@ public enum OutputHandoff {
         guard fileExists(at: item.fileURL, fileManager: fileManager) else { return nil }
 
         let ext = item.fileURL.pathExtension.lowercased()
-        if item.sourceToolID.rawValue == downloaderToolID {
+        if item.sourceToolID == .downloader {
             guard downloaderRevealExtensions.contains(ext) else { return nil }
             return item.fileURL
         }

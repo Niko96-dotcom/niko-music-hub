@@ -327,7 +327,7 @@ struct ProjectVaultSettingsView: View {
     private func openKeepLocalArchiveBrowser() {
         keepLocalBrowserVisited = true
         showKeepLocalReview = false
-        context.router.execute(.openTool(ToolFeatureID("archive-browser")))
+        context.router.execute(.openTool(.archiveBrowser))
         openWindow(id: HubMainWindowIdentity.sceneID)
         NSApp.activate()
     }

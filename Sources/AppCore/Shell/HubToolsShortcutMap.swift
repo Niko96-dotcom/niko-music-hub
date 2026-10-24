@@ -8,7 +8,7 @@ import SwiftUI
 /// Archive Browser is ⌘1 when present; the next eight production tools take
 /// ⌘2…⌘9; further production tools have no digit shortcut.
 public enum HubToolsShortcutMap {
-    public static let archiveToolID = ToolFeatureID("archive-browser")
+    public static let archiveToolID = ToolFeatureID.archiveBrowser
     public static let settingsToolID = ToolFeatureID("settings")
 
     /// Same grouping as `ToolSidebarView`: Archive, production, Settings last.

@@ -6,8 +6,6 @@ import NikoMusicCore
 /// Shell back/forward integration: the archive reports its page as an
 /// opaque route and can put itself back on one.
 extension ArchiveBrowserViewModel {
-    static let navigationToolID = ToolFeatureID("archive-browser")
-
     /// A disappearing selection leaves the existing detail route on its board
     /// fallback. Visibility and board-only commands must agree on that page.
     var showsBoardPage: Bool {
@@ -30,16 +28,16 @@ extension ArchiveBrowserViewModel {
     }
 
     func attachNavigationHistory(_ history: HubNavigationHistory) {
-        history.registerRestorer(for: Self.navigationToolID) { [weak self] route in
+        history.registerRestorer(for: .archiveBrowser) { [weak self] route in
             self?.restoreNavigationRoute(route)
         }
-        history.noteRoute(toolID: Self.navigationToolID, route: navigationRoute)
+        history.noteRoute(toolID: .archiveBrowser, route: navigationRoute)
         // @Published emits on willSet, so build the route from the emitted values
         // (not `self`) and stay synchronous so restore-time suppression applies.
         navigationCancellable = Publishers.CombineLatest($viewMode, $selectedSong.map { $0?.id })
             .dropFirst()
             .sink { viewMode, songID in
-                history.record(toolID: Self.navigationToolID, route: Self.navigationRoute(viewMode: viewMode, songID: songID))
+                history.record(toolID: .archiveBrowser, route: Self.navigationRoute(viewMode: viewMode, songID: songID))
             }
     }
 

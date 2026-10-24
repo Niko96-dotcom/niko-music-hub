@@ -44,8 +44,8 @@ public struct ToolRegistry: Sendable {
 
     /// Default sidebar selection when the shell opens.
     public var preferredDefaultFeatureID: ToolFeatureID? {
-        feature(for: "archive-browser")?.metadata.id
-            ?? feature(for: "wav-converter")?.metadata.id
+        feature(for: .archiveBrowser)?.metadata.id
+            ?? feature(for: .wavConverter)?.metadata.id
             ?? firstFeatureID
     }
 

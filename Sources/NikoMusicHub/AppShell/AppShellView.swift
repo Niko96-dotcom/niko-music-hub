@@ -87,7 +87,7 @@ struct AppShellView: View {
                     VStack(spacing: 0) {
                         activeToolView
                         ArchivePersistentPlayerView(viewModel: archiveViewModel) {
-                            selectTool(ToolFeatureID("archive-browser"))
+                            selectTool(.archiveBrowser)
                         }
                     }
                         .padding(.top, columnTopInset)
@@ -168,11 +168,11 @@ struct AppShellView: View {
         }
         .onChange(of: router.prefilledConverterURLs) { _, urls in
             guard !urls.isEmpty else { return }
-            selectTool(ToolFeatureID("wav-converter"))
+            selectTool(.wavConverter)
         }
         .onChange(of: router.archiveSearchFocusRequest) { _, request in
             guard shellSession.claimArchiveSearchFocusRequest(request) else { return }
-            selectTool(ToolFeatureID("archive-browser"))
+            selectTool(.archiveBrowser)
             // Defer until the cached Archive pane is visible and can accept focus.
             DispatchQueue.main.async {
                 router.consumeArchiveSearchFocusRequest()

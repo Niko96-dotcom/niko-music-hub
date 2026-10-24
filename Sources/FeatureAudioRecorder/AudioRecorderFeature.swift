@@ -3,7 +3,7 @@ import SwiftUI
 
 public struct AudioRecorderFeature: ToolFeature {
     public let metadata = ToolMetadata(
-        id: "audio-recorder",
+        id: .audioRecorder,
         displayName: "Audio Recorder",
         shortLabel: "Recorder",
         systemImage: "waveform.circle",

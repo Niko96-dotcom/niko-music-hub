@@ -16,8 +16,8 @@ public enum ToolSidebarSelection {
     /// Archive Browser first, then the other tools. Settings is left out, because
     /// selecting it opens the Settings window and does not change the selection.
     public static func arrowKeyOrder(_ metadata: [ToolMetadata]) -> [ToolMetadata] {
-        metadata.filter { $0.id.rawValue == "archive-browser" }
-            + metadata.filter { $0.id.rawValue != "archive-browser" && $0.id.rawValue != "settings" }
+        metadata.filter { $0.id == .archiveBrowser }
+            + metadata.filter { $0.id != .archiveBrowser && $0.id.rawValue != "settings" }
     }
 
     /// Cycles the given tools in order.

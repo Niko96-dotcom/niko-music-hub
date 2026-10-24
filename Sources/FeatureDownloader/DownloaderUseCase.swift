@@ -167,7 +167,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
 
         let job = jobRunner.enqueue(
             title: Self.jobTitlePrefix + simulateTitle,
-            sourceToolID: ToolFeatureID("downloader")
+            sourceToolID: .downloader
         ) { progress in
             let result = try await capturedUseCase.downloadResultWithRetry(
                 url: capturedURL,

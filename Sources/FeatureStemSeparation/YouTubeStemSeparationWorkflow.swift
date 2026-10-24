@@ -71,7 +71,7 @@ public struct YouTubeStemSeparationWorkflow: Sendable {
 
     @discardableResult
     public func startJob(request: YouTubeStemSeparationRequest) -> Job {
-        jobRunner.enqueue(title: title(for: request.sourceURL), sourceToolID: StemSeparationService.toolID) { progress in
+        jobRunner.enqueue(title: title(for: request.sourceURL), sourceToolID: .stemSeparation) { progress in
             try await run(request: request, progress: progress)
         }
     }

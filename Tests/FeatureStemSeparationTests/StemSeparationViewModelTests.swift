@@ -269,7 +269,7 @@ struct StemSeparationViewModelTests {
 
         let activity = InAppJobActivity(jobs: center.jobs)
         #expect(
-            InAppJobCancelRouting.escapeTarget(selectedToolID: StemSeparationService.toolID, activity)
+            InAppJobCancelRouting.escapeTarget(selectedToolID: ToolFeatureID.stemSeparation, activity)
                 == .stemSeparation
         )
         let routed = activity.jobs(for: .stemSeparation)
@@ -296,7 +296,7 @@ struct StemSeparationViewModelTests {
         let inbox = FakeOutputInboxStore()
         let stemItem = OutputInboxItem(
             fileURL: URL(fileURLWithPath: "/out/vocals.wav"),
-            sourceToolID: StemSeparationService.toolID,
+            sourceToolID: ToolFeatureID.stemSeparation,
             status: .available,
             metadata: ["role": "vocals"]
         )
@@ -337,12 +337,12 @@ struct StemSeparationViewModelTests {
         let inbox = FakeOutputInboxStore()
         let older = OutputInboxItem(
             fileURL: URL(fileURLWithPath: "/out/older.wav"),
-            sourceToolID: StemSeparationService.toolID,
+            sourceToolID: ToolFeatureID.stemSeparation,
             status: .available
         )
         let newer = OutputInboxItem(
             fileURL: URL(fileURLWithPath: "/out/newer.wav"),
-            sourceToolID: StemSeparationService.toolID,
+            sourceToolID: ToolFeatureID.stemSeparation,
             status: .available
         )
         try inbox.addItem(older)

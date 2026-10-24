@@ -68,7 +68,7 @@ public final class QuickAccessRouter: ObservableObject {
             revealOutputInbox = true
         case .focusArchiveSearch:
             commandsLogger.info("Menu command: focus archive search")
-            requestTool(ToolFeatureID("archive-browser"))
+            requestTool(.archiveBrowser)
             archiveSearchFocusRequest &+= 1
         }
     }
@@ -91,7 +91,7 @@ public final class QuickAccessRouter: ObservableObject {
 
     public func openConverter(with urls: [URL]) {
         prefilledConverterURLs = urls
-        requestTool(ToolFeatureID("wav-converter"))
+        requestTool(.wavConverter)
     }
 
     public func consumePrefilledConverterURLs() -> [URL] {

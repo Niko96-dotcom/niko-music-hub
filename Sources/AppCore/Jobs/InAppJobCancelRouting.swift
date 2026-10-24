@@ -13,12 +13,12 @@ public enum InAppJobCancelTarget: Equatable, Sendable {
 
 /// Which cancellable activities the shell job list currently holds.
 public struct InAppJobActivity: Equatable, Sendable {
-    public static let downloaderToolID = ToolFeatureID("downloader")
+    public static let downloaderToolID = ToolFeatureID.downloader
     /// Covers file separations and the YouTube-to-stems workflow; both run as one
     /// `JobRunner` job under the stem tool.
-    public static let stemSeparationToolID = ToolFeatureID("stem-separation")
-    public static let converterToolID = ToolFeatureID("wav-converter")
-    public static let archiveBrowserToolID = ToolFeatureID("archive-browser")
+    public static let stemSeparationToolID = ToolFeatureID.stemSeparation
+    public static let converterToolID = ToolFeatureID.wavConverter
+    public static let archiveBrowserToolID = ToolFeatureID.archiveBrowser
 
     public let jobs: [ShellJobStatus]
 

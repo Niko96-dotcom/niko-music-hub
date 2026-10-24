@@ -126,17 +126,18 @@ final class HandoffSurfacingSourceTests: XCTestCase {
         )
     }
 
-    func testStemSeparationServiceToolIDEqualsExpected() throws {
-        let path = "Sources/FeatureStemSeparation/StemSeparationService.swift"
-        let source = try SourceTestSupport.read(path)
-        XCTAssertTrue(
-            source.contains(#"toolID: ToolFeatureID = "stem-separation""#),
-            "ROUT-06: StemSeparationService.toolID must be declared with value 'stem-separation'"
-        )
-        XCTAssertFalse(
-            source.contains("stem-downloader"),
-            "ROUT-06: StemSeparationService must not declare a separate stem-downloader ToolFeatureID"
-        )
+    func testStemSeparationToolIDEqualsExpected() throws {
+        XCTAssertEqual(ToolFeatureID.stemSeparation.rawValue, "stem-separation")
+        for path in [
+            "Sources/AppCore/Features/BuiltInToolIDs.swift",
+            "Sources/FeatureStemSeparation/StemSeparationService.swift",
+            "Sources/FeatureStemSeparation/StemSeparationFeature.swift",
+        ] {
+            XCTAssertFalse(
+                try SourceTestSupport.read(path).contains("stem-downloader"),
+                "ROUT-06: \(path) must not declare a separate stem-downloader ToolFeatureID"
+            )
+        }
     }
 
     func testYouTubeStemWorkflowSourceHasNoToolFeatureConformance() throws {

@@ -3,7 +3,7 @@ import SwiftUI
 
 public struct ArchiveBrowserFeature: ToolFeature {
     public let metadata = ToolMetadata(
-        id: "archive-browser",
+        id: .archiveBrowser,
         displayName: "Archive Browser",
         shortLabel: "Archive",
         systemImage: "music.note.list"

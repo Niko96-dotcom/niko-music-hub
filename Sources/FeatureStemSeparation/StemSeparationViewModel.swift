@@ -49,7 +49,7 @@ public final class StemSeparationViewModel: ObservableObject, @unchecked Sendabl
         self.context = context
         self.service = service
         self.youtubeWorkflow = youtubeWorkflow
-        self.recentOutputs = ToolRecentOutputs(store: context.outputInboxStore, toolID: StemSeparationService.toolID)
+        self.recentOutputs = ToolRecentOutputs(store: context.outputInboxStore, toolID: .stemSeparation)
         loadSettings()
     }
 

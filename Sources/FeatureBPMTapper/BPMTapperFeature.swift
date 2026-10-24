@@ -3,7 +3,7 @@ import SwiftUI
 
 public struct BPMTapperFeature: ToolFeature {
     public let metadata = ToolMetadata(
-        id: "bpm-tapper",
+        id: .bpmTapper,
         displayName: "BPM Tapper",
         shortLabel: "BPM Tapper",
         systemImage: "metronome",

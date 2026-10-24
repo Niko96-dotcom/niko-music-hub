@@ -62,12 +62,12 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
     }
 
     public static func activityVerb(for sourceToolID: ToolFeatureID) -> String {
-        switch sourceToolID.rawValue {
-        case "downloader":
+        switch sourceToolID {
+        case .downloader:
             return "Downloading"
-        case "stem-separation":
+        case .stemSeparation:
             return "Separating"
-        case "wav-converter":
+        case .wavConverter:
             return "Converting"
         default:
             return "Running"
@@ -76,10 +76,10 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
 }
 
 public enum ShellJobExtraSourceID: Sendable {
-    public static let converter = "wav-converter"
+    public static let converter = "wav-conversion"
     public static let archiveScan = "archive-scan"
     public static let vaultTransfer = "vault-transfer"
-    public static let audioRecorder = "audio-recorder"
+    public static let audioRecorder = "recorder-take"
     public static let helperInstall = "helper-install"
     public static let downloadStart = "download-start"
 }

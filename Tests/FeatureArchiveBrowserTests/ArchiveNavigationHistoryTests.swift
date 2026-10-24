@@ -31,7 +31,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let context = TestToolContext.make()
         let viewModel = ArchiveBrowserViewModel(context: context)
         let history = context.navigationHistory
-        let archiveID = ArchiveBrowserViewModel.navigationToolID
+        let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
@@ -56,7 +56,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let context = TestToolContext.make()
         let viewModel = ArchiveBrowserViewModel(context: context)
         let history = context.navigationHistory
-        let archiveID = ArchiveBrowserViewModel.navigationToolID
+        let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
@@ -75,7 +75,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let context = TestToolContext.make()
         let viewModel = ArchiveBrowserViewModel(context: context)
         let history = context.navigationHistory
-        let archiveID = ArchiveBrowserViewModel.navigationToolID
+        let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
@@ -112,7 +112,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let context = TestToolContext.make()
         let viewModel = ArchiveBrowserViewModel(context: context)
         let history = context.navigationHistory
-        let archiveID = ArchiveBrowserViewModel.navigationToolID
+        let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
         viewModel.filteredSongs = [song]
@@ -160,13 +160,13 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
         viewModel.openSongDetail(song)
-        XCTAssertEqual(context.navigationHistory.lastRoute(for: ArchiveBrowserViewModel.navigationToolID), "detail:\(song.id)")
+        XCTAssertEqual(context.navigationHistory.lastRoute(for: ToolFeatureID.archiveBrowser), "detail:\(song.id)")
 
         viewModel.showBoard()
 
         XCTAssertEqual(viewModel.viewMode, .board)
         XCTAssertEqual(viewModel.selectedSong, song)
-        XCTAssertEqual(context.navigationHistory.lastRoute(for: ArchiveBrowserViewModel.navigationToolID), "board")
+        XCTAssertEqual(context.navigationHistory.lastRoute(for: ToolFeatureID.archiveBrowser), "board")
     }
 
     func testShowBoardFromAnalyticsRecordsTheBoardAndOnTheBoardAddsNoEntry() {
@@ -175,11 +175,11 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let history = context.navigationHistory
         viewModel.applyCatalogEdit(.load([fixtureSong()]))
         viewModel.showAnalytics()
-        XCTAssertEqual(history.lastRoute(for: ArchiveBrowserViewModel.navigationToolID), "analytics")
+        XCTAssertEqual(history.lastRoute(for: ToolFeatureID.archiveBrowser), "analytics")
 
         viewModel.showBoard()
         XCTAssertEqual(viewModel.viewMode, .board)
-        XCTAssertEqual(history.lastRoute(for: ArchiveBrowserViewModel.navigationToolID), "board")
+        XCTAssertEqual(history.lastRoute(for: ToolFeatureID.archiveBrowser), "board")
 
         let entries = history.entries.count
         viewModel.showBoard()

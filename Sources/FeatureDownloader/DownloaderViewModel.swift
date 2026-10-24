@@ -31,8 +31,6 @@ public enum DownloadState: Equatable {
 
 @MainActor
 public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
-    public static let toolID = ToolFeatureID("downloader")
-
     @Published public var urlText: String = ""
     @Published public var formatSelection: DownloadFormatSelection
     @Published public var playlistMode: DownloadPlaylistMode = .single
@@ -294,7 +292,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
                 id: ShellJobExtraSourceID.downloadStart,
                 title: DownloaderUseCase.fallbackJobTitle(for: sourceURL),
                 activityVerb: "Downloading",
-                sourceToolID: Self.toolID,
+                sourceToolID: .downloader,
                 blocksQuit: true,
                 listed: false
             ),
@@ -491,7 +489,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
         for outputURL in verified {
             let item = OutputInboxItem(
                 fileURL: outputURL,
-                sourceToolID: Self.toolID,
+                sourceToolID: .downloader,
                 status: .available,
                 metadata: ["dlSourceURL": sourceURL.absoluteString]
             )

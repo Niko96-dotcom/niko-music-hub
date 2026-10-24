@@ -235,7 +235,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         for second in 1...6 {
             try inbox.addItem(OutputInboxItem(
                 fileURL: URL(fileURLWithPath: "/tmp/recorder-recent/take-\(second).wav"),
-                sourceToolID: AudioRecorderViewModel.toolID,
+                sourceToolID: ToolFeatureID.audioRecorder,
                 createdAt: Date(timeIntervalSince1970: TimeInterval(second)),
                 status: .available
             ))

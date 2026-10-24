@@ -50,8 +50,6 @@ private func messageIndicatesCapturePermissionFailure(_ message: String) -> Bool
 
 @MainActor
 public final class AudioRecorderViewModel: ObservableObject {
-    public static let toolID = ToolFeatureID("audio-recorder")
-
     @Published public private(set) var recordingState: RecordingDisplayState = .idle {
         didSet {
             let active = Self.isActive(recordingState)
@@ -149,7 +147,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.now = now
         self.destinationProvider = destinationProvider
         self.outputInboxStore = outputInboxStore
-        self.recentOutputs = ToolRecentOutputs(store: outputInboxStore, toolID: Self.toolID, limit: 5)
+        self.recentOutputs = ToolRecentOutputs(store: outputInboxStore, toolID: .audioRecorder, limit: 5)
         self.jobStatusCenter = jobStatusCenter
         self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
         refreshProposedFilename()
@@ -415,7 +413,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         let item = OutputInboxItem(
             id: UUID(),
             fileURL: result.outputURL,
-            sourceToolID: Self.toolID,
+            sourceToolID: .audioRecorder,
             createdAt: Date(),
             status: .available,
             metadata: [

@@ -145,7 +145,7 @@ public struct BatchAudioConversionUseCase: @unchecked Sendable {
     ) throws {
         let item = OutputInboxItem(
             fileURL: result.outputURL,
-            sourceToolID: "wav-converter",
+            sourceToolID: .wavConverter,
             status: .available,
             metadata: [
                 "sourceFile": file.sourceURL.path,
