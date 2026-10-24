@@ -21,7 +21,7 @@ public enum ProjectVaultRecoveryBundle {
     public static let manifestFileName = "recovery-manifest.json"
     public static let recoveredSettingsFileName = "app-settings.recovered.json"
 
-    static let scopeNote = "METADATA backup only. Vault file content must be backed up separately; not a replacement-Mac proof. Re-point paths and re-grant sandbox bookmarks on restore. Contains no deletion authorization. Recovered settings disable automation (isEnabled=false, automaticArchiving=false, automationEmergencyStop=true)."
+    static let scopeNote = "METADATA backup only. Vault file content must be backed up separately; not a replacement-Mac proof. Re-point paths and re-grant sandbox bookmarks on restore. Contains no deletion authorization. Recovered settings disable automation (isEnabled=false, automationEmergencyStop=true)."
 
     public struct RecoveryImportResult: Equatable, Sendable {
         public let databaseURL: URL
@@ -387,7 +387,6 @@ public enum ProjectVaultRecoveryBundle {
 
         var recovered = decodedSettings
         recovered.vault.isEnabled = false
-        recovered.vault.automaticArchiving = false
         recovered.vault.automationEmergencyStop = true
         let recoveredEncoder = JSONEncoder()
         recoveredEncoder.outputFormatting = [.sortedKeys, .prettyPrinted]

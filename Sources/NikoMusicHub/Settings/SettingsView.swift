@@ -314,9 +314,7 @@ struct SettingsView: View {
                 context: session.context,
                 settings: $session.settings,
                 settingsAvailable: session.settingsLoadError == nil,
-                loginItemEnabled: session.launchAtLogin,
-                onSave: saveProjectVaultSettings,
-                onOpenLoginSetting: openLoginSetting
+                onSave: saveProjectVaultSettings
             )
         case .helpers:
             SettingsHelpersPane(
@@ -396,10 +394,6 @@ struct SettingsView: View {
         session.persistSettings(update)
     }
 
-    private func openLoginSetting() {
-        router.requestSettingsPane(.general)
-    }
-
     private func openWAVConverter() {
         router.execute(.openTool(.wavConverter))
         openWindow(id: "main")
@@ -439,10 +433,7 @@ private struct SettingsGeneralSection: View {
                 .disabled(!settingsAvailable)
             }
             SettingsRowDivider()
-            SettingsRow(
-                "Open at login",
-                description: "Lets Project Vault archive while you’re away"
-            ) {
+            SettingsRow("Open at login") {
                 Toggle("Open at login", isOn: $launchAtLogin)
                     .toggleStyle(.switch)
                     .tint(HubDesignSystem.Palette.indicator)

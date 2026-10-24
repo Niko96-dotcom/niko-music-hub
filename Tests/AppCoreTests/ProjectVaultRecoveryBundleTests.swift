@@ -39,7 +39,6 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
                 isEnabled: true,
                 activeRootID: active.id,
                 archiveRootID: archive.id,
-                automaticArchiving: true,
                 automationEmergencyStop: false,
                 keepLocalProjectIDs: ["keep-1"]
             )
@@ -55,7 +54,6 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
         XCTAssertEqual(result.bundleVersion, ProjectVaultRecoveryBundle.bundleVersion)
         // Automation forced off and paused; only the three stable switches change.
         XCTAssertFalse(result.settings.vault.isEnabled)
-        XCTAssertFalse(result.settings.vault.automaticArchiving)
         XCTAssertTrue(result.settings.vault.automationEmergencyStop)
         // Identity, roots, metadata, and Keep Local preserved.
         XCTAssertEqual(result.settings.vault.activeRootID, active.id)
@@ -92,22 +90,65 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
                 isEnabled: true,
                 activeRootID: active.id,
                 archiveRootID: archive.id,
-                automaticArchiving: true,
                 automationEmergencyStop: false
             )
         )
-        settings.vault.inactivityDays = 14
+        settings.vault.keepPreviousGenerationDays = 14
         let bundleURL = root.appendingPathComponent("bundle", isDirectory: true)
         try ProjectVaultRecoveryBundle.exportBundle(database: database, settings: settings, to: bundleURL)
         let result = try ProjectVaultRecoveryBundle.importBundle(
             from: bundleURL, to: root.appendingPathComponent("recovered", isDirectory: true)
         )
         XCTAssertFalse(result.settings.vault.isEnabled)
-        XCTAssertFalse(result.settings.vault.automaticArchiving)
         XCTAssertTrue(result.settings.vault.automationEmergencyStop)
         // Non-automation intent preserved.
-        XCTAssertEqual(result.settings.vault.inactivityDays, 14)
+        XCTAssertEqual(result.settings.vault.keepPreviousGenerationDays, 14)
         XCTAssertEqual(result.settings.vault.activeRootID, active.id)
+    }
+
+    func testBundleWithTheRemovedArchivingSwitchImportsAndRecoversWithoutIt() throws {
+        let root = temporaryRoot()
+        defer { removeTemporaryRoot(root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let database = try SQLiteArchiveDatabase(databaseURL: root.appendingPathComponent("source.sqlite"))
+        _ = try SQLiteArchiveIndexStore(database: database)
+        var settings = fixtureSettings(root: root)
+        settings.vault.keepPreviousGenerationDays = 21
+        let bundleURL = root.appendingPathComponent("bundle", isDirectory: true)
+        try ProjectVaultRecoveryBundle.exportBundle(database: database, settings: settings, to: bundleURL)
+        let removedKeys = ["automaticArchiving", "inactivityDays", "minimumFreeSpaceGiB", "launchAtLogin"]
+        let settingsURL = bundleURL.appendingPathComponent("app-settings.json")
+        func vaultObject(_ url: URL) throws -> [String: Any] {
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+            return try XCTUnwrap(object["vault"] as? [String: Any])
+        }
+        // A new bundle holds none of the removed keys, so 1.8.1 reads its
+        // defaults for them (the switch off).
+        for key in removedKeys {
+            XCTAssertNil(try vaultObject(settingsURL)[key], key)
+        }
+        // A bundle written by 1.8.1 holds them.
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: settingsURL)) as? [String: Any])
+        var vault = try XCTUnwrap(object["vault"] as? [String: Any])
+        vault["automaticArchiving"] = true
+        vault["inactivityDays"] = 45
+        vault["minimumFreeSpaceGiB"] = 200
+        vault["launchAtLogin"] = false
+        object["vault"] = vault
+        try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]).write(to: settingsURL, options: [.atomic])
+        try rewriteManifestChecksums(bundleURL: bundleURL)
+
+        let result = try ProjectVaultRecoveryBundle.importBundle(
+            from: bundleURL, to: root.appendingPathComponent("recovered", isDirectory: true)
+        )
+        XCTAssertFalse(result.settings.vault.isEnabled)
+        XCTAssertTrue(result.settings.vault.automationEmergencyStop)
+        XCTAssertEqual(result.settings.vault.keepPreviousGenerationDays, 21)
+        XCTAssertEqual(result.settings.vault.activeRootID, settings.vault.activeRootID)
+        XCTAssertEqual(result.settings.vault.keepLocalPins.storedKeys, ["keep-1"])
+        for key in removedKeys {
+            XCTAssertNil(try vaultObject(result.settingsURL)[key], key)
+        }
     }
 
     func testChecksumCorruptionRejectedAndOriginalsUntouched() throws {
@@ -400,7 +441,6 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
                 isEnabled: true,
                 activeRootID: active.id,
                 archiveRootID: archive.id,
-                automaticArchiving: true,
                 automationEmergencyStop: false,
                 keepLocalProjectIDs: ["keep-1"]
             )

@@ -14,8 +14,7 @@ struct ProjectVaultPresentationContext: Equatable {
     /// space": exactly the Done/manual removal gate
     /// (`permitsUserInitiatedRemoval` — user-initiated archiving base with a
     /// non-disabled rollout and both roots, plus an explicit free-space intent
-    /// and the independent-backup acknowledgement, but not the background
-    /// scheduler opt-in). A copy-only preference, Keep Local (per song,
+    /// and the independent-backup acknowledgement). A copy-only preference, Keep Local (per song,
     /// checked at the card), or a pause never presents free-space as already
     /// authorized; the offer itself still routes through a fresh confirmation
     /// that rechecks every gate at execution.

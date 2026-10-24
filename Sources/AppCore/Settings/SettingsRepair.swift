@@ -174,7 +174,6 @@ enum SettingsSalvage {
     static func pausedVault(_ vault: VaultSettings) -> VaultSettings {
         var vault = vault
         vault.automationEmergencyStop = true
-        vault.automaticArchiving = false
         vault.setSpaceIntent(.keepCopy)
         vault.keepLocalReviewRequired = true
         return vault
@@ -188,16 +187,17 @@ enum SettingsSalvage {
     /// |-------------------------------|---------------------------------------------|
     /// | isEnabled                     | false (vault off)                           |
     /// | activeRootID / archiveRootID  | nil (no transfers without a root)           |
-    /// | automaticArchiving            | false                                       |
     /// | rolloutStage                  | disabled                                    |
     /// | spaceIntent                   | keepCopy, legacy rollout stepped back       |
     /// | automationEmergencyStop       | true (stop engaged)                         |
     /// | independentBackupConfirmed    | false                                       |
     /// | keepLocalProjectIDs           | readable pins kept + removal paused         |
     /// | keepLocalReviewRequired       | true when pins/blob unreadable, else kept   |
-    /// | inactivity / free-space / retention days, launchAtLogin, dates |
-    /// |                               | defaults; inert because automatic archiving |
-    /// |                               | is always off after any vault reset          |
+    /// | reserve / retention days      | defaults                                    |
+    /// | verification / drill dates    | nil (never)                                 |
+    ///
+    /// Keys of the removed background-archiving switch (`automaticArchiving`,
+    /// `inactivityDays`, `minimumFreeSpaceGiB`, `launchAtLogin`) are ignored.
     static func salvageVault(
         _ object: [String: Any]
     ) -> (vault: VaultSettings, resetFields: [String], removalPaused: Bool) {
@@ -228,18 +228,12 @@ enum SettingsSalvage {
         field("isEnabled", "Project Vault on/off", Bool.self) { vault.isEnabled = $0 }
         optionalField("activeRootID", "Project Vault active folder", UUID.self) { vault.activeRootID = $0 }
         optionalField("archiveRootID", "Project Vault archive folder", UUID.self) { vault.archiveRootID = $0 }
-        field("automaticArchiving", "automatic archiving", Bool.self) { vault.automaticArchiving = $0 }
-        field("inactivityDays", "Project Vault inactivity days", Int.self) { vault.inactivityDays = $0 }
-        field("minimumFreeSpaceGiB", "Project Vault free-space threshold", Int.self) {
-            vault.minimumFreeSpaceGiB = $0
-        }
         field("transferFreeSpaceReserveGiB", "Project Vault free-space reserve", Int.self) {
             vault.transferFreeSpaceReserveGiB = $0
         }
         field("keepPreviousGenerationDays", "Project Vault previous-copy days", Int.self) {
             vault.keepPreviousGenerationDays = $0
         }
-        field("launchAtLogin", "Project Vault launch at login", Bool.self) { vault.launchAtLogin = $0 }
         field("rolloutStage", "Project Vault mode", VaultSettings.RolloutStage.self) { vault.rolloutStage = $0 }
 
         if let rawIntent = object["spaceIntent"] {
@@ -301,17 +295,7 @@ enum SettingsSalvage {
         }
 
         if removalPaused {
-            let wasArchivingAutomatically = vault.automaticArchiving
             vault = pausedVault(vault)
-            if wasArchivingAutomatically, !reset.contains("automatic archiving") {
-                reset.append("automatic archiving")
-            }
-        }
-        if (!reset.isEmpty || removalPaused), vault.automaticArchiving {
-            vault.automaticArchiving = false
-            if !reset.contains("automatic archiving") {
-                reset.append("automatic archiving")
-            }
         }
         return (vault, reset, removalPaused)
     }

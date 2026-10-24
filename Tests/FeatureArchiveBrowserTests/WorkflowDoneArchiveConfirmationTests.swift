@@ -108,7 +108,6 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         // free-space intent plus the backup acknowledgement remain: the
         // user-initiated Done offer must still present the archive + free-space
         // choice instead of silently degrading to a copy.
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let viewModel = fixture.viewModel(runtime: try fixture.runtime())
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })

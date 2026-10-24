@@ -110,7 +110,6 @@ final class ArchiveVaultObservationTests: XCTestCase {
             isEnabled: true,
             activeRootID: activeID,
             archiveRootID: archiveID,
-            automaticArchiving: true,
             independentBackupConfirmed: true
         )
         try store.saveSettings(settings)

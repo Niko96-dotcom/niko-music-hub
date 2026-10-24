@@ -9,9 +9,7 @@ struct ProjectVaultSettingsView: View {
     let context: ToolContext
     @Binding var settings: AppSettings
     let settingsAvailable: Bool
-    let loginItemEnabled: Bool
     let onSave: (@escaping @Sendable (inout AppSettings) -> Void) -> Bool
-    let onOpenLoginSetting: () -> Void
 
     @Environment(\.openWindow) private var openWindow
 
@@ -46,33 +44,6 @@ struct ProjectVaultSettingsView: View {
                     folderRow(role: .archive, title: "Archive / Vault")
                     SettingsRowDivider()
                     SettingsRow(
-                        "Archive automatically",
-                        description: "Archives projects you haven’t touched in a while, or when space runs low"
-                    ) {
-                        Toggle("Archive automatically", isOn: vaultBinding(\.automaticArchiving))
-                            .toggleStyle(.switch)
-                            .tint(HubDesignSystem.Palette.indicator)
-                            .labelsHidden()
-                    }
-                    SettingsRowDivider()
-                    SettingsRow("After \(CountCopy.count(settings.vault.inactivityDays, "day")) untouched") {
-                        Stepper(
-                            "After \(CountCopy.count(settings.vault.inactivityDays, "day")) untouched",
-                            value: intBinding(\.inactivityDays, range: 7...365)
-                        )
-                        .labelsHidden()
-                    }
-                    SettingsRowDivider()
-                    SettingsRow("Or when less than \(settings.vault.minimumFreeSpaceGiB) GiB is free") {
-                        Stepper(
-                            "Or when less than \(settings.vault.minimumFreeSpaceGiB) GiB is free",
-                            value: intBinding(\.minimumFreeSpaceGiB, range: 10...1000),
-                            step: 10
-                        )
-                        .labelsHidden()
-                    }
-                    SettingsRowDivider()
-                    SettingsRow(
                         "Keep \(settings.vault.transferFreeSpaceReserveGiB) GiB spare while copying"
                     ) {
                         Stepper(
@@ -89,8 +60,6 @@ struct ProjectVaultSettingsView: View {
                         )
                         .labelsHidden()
                     }
-                    SettingsRowDivider()
-                    loginItemStatusRow
                     SettingsRowDivider()
                     SettingsRow("After archiving", description: "Removal always asks first.") {
                         HubSegmentedChoice(
@@ -261,9 +230,7 @@ struct ProjectVaultSettingsView: View {
             $0.vault.isEnabled = true
             $0.vault.automationEmergencyStop = false
             // Preserve saved preferences on re-enable: never reset thresholds
-            // or re-enable background scheduling here. Background scheduling
-            // stays opt-in (off for new setups unless the user turns it on).
-            // New installs start safe with an explicit keep-a-copy intent;
+            // here. New installs start safe with an explicit keep-a-copy intent;
             // re-enabling a previously configured Vault keeps its intent.
             if $0.vault.rolloutStage == .disabled {
                 $0.vault.setSpaceIntent(.keepCopy)
@@ -394,33 +361,6 @@ struct ProjectVaultSettingsView: View {
 
     private func intBinding(_ keyPath: WritableKeyPath<VaultSettings, Int> & Sendable, range: ClosedRange<Int>) -> Binding<Int> {
         Binding(get: { settings.vault[keyPath: keyPath] }, set: { value in updateVault { $0[keyPath: keyPath] = min(max(value, range.lowerBound), range.upperBound) } })
-    }
-
-    @ViewBuilder
-    private var loginItemStatusRow: some View {
-        SettingsRow(VaultLaunchAtLoginPolicy.loginItemLabel(isEnabled: loginItemEnabled)) {
-            HubLabeledButton(
-                icon: "gearshape",
-                label: "Open Login Setting",
-                style: .ghost,
-                help: "Open the General Open at login switch"
-            ) {
-                onOpenLoginSetting()
-            }
-        }
-        if let warning = VaultLaunchAtLoginPolicy.warning(
-            for: settings.vault,
-            loginItemEnabled: loginItemEnabled
-        ) {
-            SettingsRowDivider()
-            Label(warning, systemImage: "exclamationmark.triangle.fill")
-                .font(HubDesignSystem.Typography.caption())
-                .foregroundStyle(HubDesignSystem.Colors.warning)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, HubDesignSystem.Spacing.cardPadding)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 
     private func updateVault(_ mutation: @escaping @Sendable (inout VaultSettings) -> Void) {

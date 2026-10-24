@@ -22,10 +22,8 @@ final class SettingsRepairTests: XCTestCase {
         let rootEntry = StoredMusicRoot(role: .scanOnly, url: root)
         let vault = VaultSettings(
             isEnabled: true,
-            automaticArchiving: false,
-            inactivityDays: 45,
-            minimumFreeSpaceGiB: 200,
-            launchAtLogin: false,
+            transferFreeSpaceReserveGiB: 9,
+            keepPreviousGenerationDays: 21,
             rolloutStage: .privateBeta,
             spaceIntent: .keepCopy,
             independentBackupConfirmed: true,
@@ -70,9 +68,8 @@ final class SettingsRepairTests: XCTestCase {
         XCTAssertTrue(repaired.setupAssistantShown)
         // Valid vault sub-fields survive; only the broken one is defaulted.
         XCTAssertTrue(repaired.vault.isEnabled)
-        XCTAssertEqual(repaired.vault.inactivityDays, 45)
-        XCTAssertEqual(repaired.vault.minimumFreeSpaceGiB, 200)
-        XCTAssertFalse(repaired.vault.launchAtLogin)
+        XCTAssertEqual(repaired.vault.transferFreeSpaceReserveGiB, 9)
+        XCTAssertEqual(repaired.vault.keepPreviousGenerationDays, 21)
         XCTAssertEqual(repaired.vault.rolloutStage, .privateBeta)
         XCTAssertTrue(repaired.vault.independentBackupConfirmed)
         XCTAssertEqual(repaired.vault.keepLocalPins.storedKeys, ["song-a", "song-b"])
@@ -92,6 +89,7 @@ final class SettingsRepairTests: XCTestCase {
 
     func testCorruptSpaceIntentNeverRepairsIntoFreeSpacePermission() throws {
         let (defaults, _) = makeDefaults()
+        // A 1.8.1 payload still holds the removed `automaticArchiving` key.
         let blob = Data(#"{"vault":{"isEnabled":true,"rolloutStage":"friends","spaceIntent":"bogus","automaticArchiving":true}}"#.utf8)
         defaults.set(blob, forKey: key)
         let store = UserDefaultsSettingsStore(userDefaults: defaults)
@@ -101,8 +99,7 @@ final class SettingsRepairTests: XCTestCase {
 
         XCTAssertEqual(repaired.vault.spaceIntent, .keepCopy)
         XCTAssertNotEqual(repaired.vault.rolloutStage, .friends, "legacy rollout must not keep removal permission")
-        XCTAssertFalse(repaired.vault.automaticArchiving, "background archiving pauses after any vault repair")
-        XCTAssertTrue(outcome.resetFields.contains("automatic archiving"))
+        XCTAssertEqual(outcome.resetFields, ["Project Vault free-space rule"])
     }
 
     func testUnreadableArchiveFolderEntryIsDroppedWhileOthersSurvive() throws {
@@ -257,9 +254,7 @@ final class SettingsRepairTests: XCTestCase {
     /// Every removal/archiving gate, most permissive first.
     private func permissions(_ vault: VaultSettings) -> [String: Bool] {
         [
-            "automaticArchiving": ProjectVaultRolloutPolicy.permitsAutomaticArchiving(vault),
             "userInitiatedArchiving": ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(vault),
-            "activeCopyRemoval": ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(vault),
             "userInitiatedRemoval": ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(vault),
         ]
     }
@@ -270,12 +265,8 @@ final class SettingsRepairTests: XCTestCase {
             "isEnabled": true,
             "activeRootID": UUID().uuidString,
             "archiveRootID": UUID().uuidString,
-            "automaticArchiving": true,
-            "inactivityDays": 30,
-            "minimumFreeSpaceGiB": 120,
             "transferFreeSpaceReserveGiB": 5,
             "keepPreviousGenerationDays": 30,
-            "launchAtLogin": true,
             "rolloutStage": "friends",
             "spaceIntent": "freeSpace",
             "automationEmergencyStop": false,
@@ -319,10 +310,8 @@ final class SettingsRepairTests: XCTestCase {
                 for (gate, allowed) in permissions(repaired) where allowed {
                     XCTAssertTrue(permissions(baseline)[gate] == true, "\(field)=\(junk): repair granted \(gate)")
                 }
-                XCTAssertFalse(repaired.automaticArchiving, "\(field)=\(junk): background archiving must pause")
                 if removalGatingFields.contains(field) {
                     XCTAssertFalse(permissions(repaired)["userInitiatedRemoval"]!, "\(field)=\(junk): removal must be denied")
-                    XCTAssertFalse(permissions(repaired)["activeCopyRemoval"]!, "\(field)=\(junk): removal must be denied")
                 }
                 XCTAssertFalse(outcome.message.isEmpty)
             }
@@ -345,8 +334,6 @@ final class SettingsRepairTests: XCTestCase {
             _ = try store.repairStoredSettings(backupDirectory: makeTempDirectory("restrictive-\(field)"))
             let repaired = try store.loadSettings().vault
             XCTAssertFalse(permissions(repaired)["userInitiatedRemoval"]!, field)
-            XCTAssertFalse(permissions(repaired)["activeCopyRemoval"]!, field)
-            XCTAssertFalse(permissions(repaired)["automaticArchiving"]!, field)
         }
     }
 

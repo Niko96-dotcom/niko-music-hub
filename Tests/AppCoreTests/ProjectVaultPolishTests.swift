@@ -52,25 +52,12 @@ final class ProjectVaultPolishTests: XCTestCase {
         }
     }
 
-    func testRolloutPolicyFailsClosedUntilFriendsStageAndBothRoots() {
-        var settings = VaultSettings(
-            isEnabled: true, activeRootID: UUID(), archiveRootID: UUID(),
-            automaticArchiving: true
-        )
-        XCTAssertFalse(ProjectVaultRolloutPolicy.permitsAutomaticArchiving(settings))
-        settings.rolloutStage = .friends
-        XCTAssertTrue(ProjectVaultRolloutPolicy.permitsAutomaticArchiving(settings))
-        settings.automationEmergencyStop = true
-        XCTAssertFalse(ProjectVaultRolloutPolicy.permitsAutomaticArchiving(settings))
-    }
-
     func testLegacyCopyOnlyNeverGainsRemovalThroughUpgrade() {
         let beta = VaultSettings(
             isEnabled: true, activeRootID: UUID(), archiveRootID: UUID(),
             rolloutStage: .privateBeta, independentBackupConfirmed: true
         )
         XCTAssertEqual(beta.spaceIntent, .keepCopy)
-        XCTAssertFalse(ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(beta))
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(beta))
 
         let disabled = VaultSettings(isEnabled: false, activeRootID: UUID(), archiveRootID: UUID())
@@ -112,7 +99,6 @@ final class ProjectVaultPolishTests: XCTestCase {
         XCTAssertEqual(stored.spaceIntent, .keepCopy)
         XCTAssertFalse(ProjectVaultRolloutPolicy.expressesFreeSpaceIntent(stored))
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(stored))
-        XCTAssertFalse(ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(stored))
 
         var decoded = try JSONDecoder().decode(
             VaultSettings.self,
@@ -140,24 +126,6 @@ final class ProjectVaultPolishTests: XCTestCase {
         XCTAssertTrue(ProjectVaultRolloutPolicy.expressesFreeSpaceIntent(settings))
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings))
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings))
-        XCTAssertFalse(ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(settings))
-    }
-
-    func testDoneEligibilityDecoupledFromSchedulerOptIn() {
-        var settings = VaultSettings(
-            isEnabled: true, activeRootID: UUID(), archiveRootID: UUID(),
-            automaticArchiving: false, rolloutStage: .privateBeta
-        )
-        XCTAssertTrue(
-            ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings),
-            "user-initiated Done must not wait on the background scheduler opt-in"
-        )
-        XCTAssertFalse(
-            ProjectVaultRolloutPolicy.permitsAutomaticArchiving(settings),
-            "background scheduling stays opt-in"
-        )
-        settings.rolloutStage = .disabled
-        XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings))
     }
 
     func testUserInitiatedRefusalNamesTheGateThatFailed() {

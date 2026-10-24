@@ -155,6 +155,30 @@ final class SettingsLiquidSourceTests: XCTestCase {
         )
     }
 
+    /// The Vault pane offers no background archiving and no login item, and
+    /// General's Open at login promises none: the only automatic archiving is
+    /// the Done copy, and General's switch is the one SMAppService writer.
+    func testVaultSettingsOfferNoBackgroundArchivingAndNoLoginItem() throws {
+        let vault = try String(
+            contentsOfFile: "Sources/NikoMusicHub/Settings/ProjectVaultSettingsView.swift",
+            encoding: .utf8
+        )
+        [
+            "Archive automatically",
+            "untouched",
+            "GiB is free",
+            "Login item",
+            "Open Login Setting",
+            "launchAtLogin",
+        ].forEach { forbidden in
+            XCTAssertFalse(vault.contains(forbidden), "Vault settings still show: \(forbidden)")
+        }
+        let general = try settingsSource()
+        XCTAssertTrue(general.contains("Toggle(\"Open at login\""))
+        XCTAssertTrue(general.contains("try context.launchAtLogin.setEnabled(enabled)"))
+        XCTAssertFalse(general.contains("archive while you"), "Open at login promises no background archiving")
+    }
+
     private func settingsSource() throws -> String {
         try String(
             contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift",

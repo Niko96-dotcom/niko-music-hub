@@ -126,9 +126,9 @@ extension LiveProjectVaultRuntime {
                 }
             } else {
                 // Done removal is user-initiated: it honors the explicit
-                // free-space intent plus the backup acknowledgement, but not
-                // the background scheduler opt-in. A copy-only capture stays
-                // copy-only; only an explicit removal capture may proceed.
+                // free-space intent plus the backup acknowledgement. A
+                // copy-only capture stays copy-only; only an explicit removal
+                // capture may proceed.
                 try validateAutomaticArchivingEligibility(settings: settings, song: song)
                 if let refusal = ProjectVaultRolloutPolicy.userInitiatedRefusal(settings.vault, removing: true) {
                     throw refusal
@@ -386,13 +386,10 @@ extension LiveProjectVaultRuntime {
         }
     }
 
-    /// User-initiated Done archiving is separate from background scheduling.
-    /// A Done confirmation copies when the vault is enabled, Emergency Stop is
-    /// off, the legacy rollout is not disabled, and Keep Local is off for this
-    /// song. It deliberately does not require the `automaticArchiving`
-    /// scheduler opt-in (inactivity/disk-pressure automation stays gated by
-    /// `VaultAutomationPolicy` and `permitsAutomaticArchiving`). The disabled
-    /// state is preserved: a stored disabled rollout still refuses Done.
+    /// A Done archive copies when the vault is enabled, Emergency Stop is off,
+    /// the legacy rollout is not disabled, both folders are chosen, and Keep
+    /// Local is off for this song. A refusal names the gate that failed
+    /// (`ProjectVaultRolloutPolicy.userInitiatedRefusal`).
     private func validateAutomaticArchivingEligibility(settings: AppSettings, song: Song) throws {
         if let refusal = ProjectVaultRolloutPolicy.userInitiatedRefusal(settings.vault, removing: false) {
             throw refusal
@@ -463,16 +460,12 @@ extension LiveProjectVaultRuntime {
             .verifiedArchiveGeneration(projectID: entry.record.id)?.id
         let policy = VaultAutomationPolicy(
             isVaultEnabled: settings.vault.isEnabled,
-            // User-initiated Done already passed `validateAutomaticArchivingEligibility`.
-            // Bypass ONLY the background scheduler opt-in so a Done confirmation
-            // copies even when `automaticArchiving` is off. Every other gate —
-            // vault enabled, capacity, eligibility, activity probes, backup /
-            // removal admission, Keep Local, Emergency Stop — stays enforced by
-            // the scheduler evaluator, the engine admissions, and the bound
-            // removal admission.
+            // Done already passed `validateAutomaticArchivingEligibility`.
+            // Every other gate — vault enabled, capacity, activity probes,
+            // backup / removal admission, Keep Local, Emergency Stop — stays
+            // enforced by the scheduler evaluator, the engine admissions, and
+            // the bound removal admission.
             isAutomaticArchivingEnabled: true,
-            inactivityDays: settings.vault.inactivityDays,
-            minimumFreeSpaceGiB: settings.vault.minimumFreeSpaceGiB,
             transferFreeSpaceReserveGiB: settings.vault.transferFreeSpaceReserveGiB
         )
         let capacity = try? capacityProbe.snapshot(

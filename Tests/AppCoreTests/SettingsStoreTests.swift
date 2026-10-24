@@ -379,11 +379,8 @@ final class SettingsStoreTests: XCTestCase {
     func testPresentNullVaultFieldsBlockUnrelatedUpdateAndPreserveBlob() throws {
         let vaultPayloads = [
             #"{"isEnabled":null,"rolloutStage":"privateBeta","independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
-            #"{"isEnabled":true,"automaticArchiving":null,"independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
             #"{"isEnabled":true,"rolloutStage":"privateBeta","independentBackupConfirmed":null,"keepLocalProjectIDs":["song-a"]}"#,
             #"{"isEnabled":true,"rolloutStage":"privateBeta","independentBackupConfirmed":true,"keepLocalProjectIDs":null}"#,
-            #"{"isEnabled":true,"inactivityDays":null,"independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
-            #"{"isEnabled":true,"launchAtLogin":null,"independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
             #"{"isEnabled":true,"rolloutStage":null,"independentBackupConfirmed":true,"keepLocalProjectIDs":["song-a"]}"#,
         ]
         for vault in vaultPayloads {

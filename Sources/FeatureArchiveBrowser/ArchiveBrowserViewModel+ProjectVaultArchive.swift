@@ -156,11 +156,9 @@ extension ArchiveBrowserViewModel {
             case .manual:
                 requestedRemoving = !keepLocalReviewRequired
             case .workflowDone:
-                // User-initiated Done is decoupled from the background
-                // scheduler opt-in: it honors the explicit free-space intent
+                // User-initiated Done honors the explicit free-space intent
                 // plus the backup acknowledgement (and master enablement,
-                // pause, Keep Local, and activity gates at capture/execution),
-                // but never waits on `automaticArchiving`.
+                // pause, Keep Local, and activity gates at capture/execution).
                 requestedRemoving = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault)
             case .backupCopy:
                 requestedRemoving = false

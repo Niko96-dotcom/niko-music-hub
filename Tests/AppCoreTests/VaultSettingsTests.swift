@@ -79,12 +79,8 @@ final class VaultSettingsTests: XCTestCase {
         XCTAssertFalse(vault.isEnabled)
         XCTAssertNil(vault.activeRootID)
         XCTAssertNil(vault.archiveRootID)
-        XCTAssertFalse(vault.automaticArchiving, "background inactivity/disk-pressure scheduling is independent opt-in")
-        XCTAssertEqual(vault.inactivityDays, 30)
-        XCTAssertEqual(vault.minimumFreeSpaceGiB, 120)
         XCTAssertEqual(vault.transferFreeSpaceReserveGiB, 5)
         XCTAssertEqual(vault.keepPreviousGenerationDays, 30)
-        XCTAssertTrue(vault.launchAtLogin)
         XCTAssertEqual(vault.spaceIntent, .keepCopy)
         XCTAssertEqual(vault.rolloutStage, .disabled)
     }
@@ -210,12 +206,8 @@ final class VaultSettingsTests: XCTestCase {
     func testPresentNullNonoptionalVaultFieldsThrow() throws {
         let payloads = [
             #"{"isEnabled":null}"#,
-            #"{"automaticArchiving":null}"#,
-            #"{"inactivityDays":null}"#,
-            #"{"minimumFreeSpaceGiB":null}"#,
             #"{"transferFreeSpaceReserveGiB":null}"#,
             #"{"keepPreviousGenerationDays":null}"#,
-            #"{"launchAtLogin":null}"#,
             #"{"rolloutStage":null}"#,
             #"{"automationEmergencyStop":null}"#,
             #"{"independentBackupConfirmed":null}"#,
@@ -245,12 +237,8 @@ final class VaultSettingsTests: XCTestCase {
             from: Data(#"{"isEnabled":true}"#.utf8)
         )
         XCTAssertTrue(partial.isEnabled)
-        XCTAssertFalse(partial.automaticArchiving)
-        XCTAssertEqual(partial.inactivityDays, 30)
-        XCTAssertEqual(partial.minimumFreeSpaceGiB, 120)
         XCTAssertEqual(partial.transferFreeSpaceReserveGiB, 5)
         XCTAssertEqual(partial.keepPreviousGenerationDays, 30)
-        XCTAssertTrue(partial.launchAtLogin)
         XCTAssertEqual(partial.rolloutStage, .disabled)
         XCTAssertEqual(partial.spaceIntent, .keepCopy)
         XCTAssertFalse(partial.automationEmergencyStop)
@@ -275,38 +263,53 @@ final class VaultSettingsTests: XCTestCase {
         XCTAssertNil(nulled.lastRestoreDrillAt)
     }
 
-    func testAutomaticArchivingMissingDecodesOffButExplicitTruePreserved() throws {
-        let missing = try JSONDecoder().decode(VaultSettings.self, from: Data(#"{"isEnabled":true}"#.utf8))
-        XCTAssertFalse(missing.automaticArchiving, "missing background-scheduling key must default off")
+    func testSettingsWithTheRemovedArchivingSwitchLoadWithoutRepairAndKeepEveryOtherValue() throws {
+        // 1.8.1 wrote the background-archiving switch, its two thresholds and
+        // the Vault login flag. They load without a repair, every other value
+        // stays, the old pressure threshold does not leak into the reserve,
+        // and the next save drops them.
+        let activeID = UUID()
+        let archiveID = UUID()
+        let verifiedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let vault = #"""
+        {"isEnabled":true,"activeRootID":"\#(activeID.uuidString)","archiveRootID":"\#(archiveID.uuidString)",\#
+        "automaticArchiving":true,"inactivityDays":45,"minimumFreeSpaceGiB":200,"launchAtLogin":false,\#
+        "keepPreviousGenerationDays":14,"rolloutStage":"friends","spaceIntent":"freeSpace",\#
+        "automationEmergencyStop":false,"independentBackupConfirmed":true,\#
+        "lastSuccessfulVerificationAt":\#(verifiedAt.timeIntervalSinceReferenceDate),\#
+        "keepLocalProjectIDs":["song-a"],"keepLocalReviewRequired":false}
+        """#
+        let defaults = try makeDefaults()
+        defaults.set(Data(#"{"appearance":"dark","vault":\#(vault)}"#.utf8), forKey: "nikoMusicHub.settings")
+        let store = UserDefaultsSettingsStore(userDefaults: defaults)
 
-        let empty = try JSONDecoder().decode(VaultSettings.self, from: Data(#"{}"#.utf8))
-        XCTAssertFalse(empty.automaticArchiving)
-
-        let explicitOn = try JSONDecoder().decode(
-            VaultSettings.self,
-            from: Data(#"{"isEnabled":true,"automaticArchiving":true}"#.utf8)
+        let loaded = try store.loadSettings()
+        XCTAssertEqual(loaded.appearance, .dark)
+        XCTAssertEqual(
+            loaded.vault,
+            VaultSettings(
+                isEnabled: true,
+                activeRootID: activeID,
+                archiveRootID: archiveID,
+                transferFreeSpaceReserveGiB: 5,
+                keepPreviousGenerationDays: 14,
+                rolloutStage: .friends,
+                spaceIntent: .freeSpace,
+                independentBackupConfirmed: true,
+                lastSuccessfulVerificationAt: verifiedAt,
+                keepLocalProjectIDs: ["song-a"]
+            )
         )
-        XCTAssertTrue(explicitOn.automaticArchiving, "explicit legacy true must be preserved")
 
-        let explicitOff = try JSONDecoder().decode(
-            VaultSettings.self,
-            from: Data(#"{"isEnabled":true,"automaticArchiving":false}"#.utf8)
+        try store.updateSettings { $0.appearance = .light }
+        let saved = try XCTUnwrap(defaults.data(forKey: "nikoMusicHub.settings"))
+        let savedVault = try XCTUnwrap(
+            (JSONSerialization.jsonObject(with: saved) as? [String: Any])?["vault"] as? [String: Any]
         )
-        XCTAssertFalse(explicitOff.automaticArchiving)
-
-        XCTAssertFalse(VaultSettings().automaticArchiving)
-        XCTAssertFalse(AppSettings.default.vault.automaticArchiving)
-    }
-
-    func testLegacyPressureThresholdDecodesIndependentlyOfTransferReserve() throws {
-        let legacy = Data(#"{"isEnabled":true,"minimumFreeSpaceGiB":120}"#.utf8)
-        var settings = try JSONDecoder().decode(VaultSettings.self, from: legacy)
-        XCTAssertEqual(settings.minimumFreeSpaceGiB, 120)
-        XCTAssertEqual(settings.transferFreeSpaceReserveGiB, 5)
-        settings.transferFreeSpaceReserveGiB = 12
-        let restored = try JSONDecoder().decode(VaultSettings.self, from: JSONEncoder().encode(settings))
-        XCTAssertEqual(restored.minimumFreeSpaceGiB, 120)
-        XCTAssertEqual(restored.transferFreeSpaceReserveGiB, 12)
+        for key in ["automaticArchiving", "inactivityDays", "minimumFreeSpaceGiB", "launchAtLogin"] {
+            XCTAssertNil(savedVault[key], key)
+        }
+        XCTAssertEqual(try store.loadSettings().vault, loaded.vault)
     }
 
     func testLegacyRootsMigrateToScanOnlyAndPersistTypedIdentity() throws {

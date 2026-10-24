@@ -30,7 +30,6 @@ enum BookmarkRelaunchProofCommands {
                     settings.vault.isEnabled = true
                     settings.vault.setSpaceIntent(.freeSpace)
                     settings.vault.independentBackupConfirmed = true
-                    settings.vault.automaticArchiving = false
                     settings.vault.automationEmergencyStop = false
                     settings.vault.transferFreeSpaceReserveGiB = 1
                     // Keep archive browser pointed at the fixture Active root only.

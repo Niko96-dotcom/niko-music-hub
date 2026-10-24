@@ -1,6 +1,6 @@
 # Decision memo: what "Archive automatically" should do
 
-**Status:** Waiting for Niko's decision.  
+**Status:** Decided: Niko chose **A** on 2026-10-24. Implementation plan: [remove-background-archiving.md](remove-background-archiving.md).  
 **Date:** 2026-10-24  
 **Source:** finding #8 of the 2026-10-22 architecture review ("Decide the background Vault archiving module"); gap 8
 and open question 5 in [architecture-map.md](../architecture-map.md). Facts observed at `c51e10f`.

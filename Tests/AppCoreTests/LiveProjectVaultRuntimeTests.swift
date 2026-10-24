@@ -330,7 +330,6 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener())
         let before = try VaultManifestBuilder().build(at: fixture.project)
         let copy = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
@@ -1064,7 +1063,6 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
         let settings = try fixture.settingsStore.loadSettings()
-        XCTAssertEqual(settings.vault.minimumFreeSpaceGiB, 120)
         XCTAssertEqual(settings.vault.transferFreeSpaceReserveGiB, 5)
         let gib: Int64 = 1_073_741_824
         let runtime = try fixture.runtime(capacity: ProjectVaultCapacitySnapshot(
@@ -3318,7 +3316,6 @@ private extension LiveProjectVaultRuntimeTests {
                 isEnabled: true,
                 activeRootID: activeID,
                 archiveRootID: archiveID,
-                automaticArchiving: true,
                 transferFreeSpaceReserveGiB: transferFreeSpaceReserveGiB,
                 rolloutStage: stage,
                 automationEmergencyStop: emergencyStop,
@@ -4315,7 +4312,6 @@ extension LiveProjectVaultRuntimeTests {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let cpr = fixture.project.appendingPathComponent("Synthetic Song.cpr")
         let onDisk = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: cpr.path)[.modificationDate] as? Date)
         let scanned = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first {
@@ -4460,7 +4456,6 @@ extension LiveProjectVaultRuntimeTests {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false)
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let runtime = try fixture.runtime()
         let result = try await runtime.archive(song: fixture.song, trigger: .workflowDone)
         XCTAssertEqual(result.transfer?.state, .archiveVerified)
@@ -4475,7 +4470,6 @@ extension LiveProjectVaultRuntimeTests {
         // without the legacy friends rollout.
         try fixture.settingsStore.updateSettings {
             $0.vault.spaceIntent = .freeSpace
-            $0.vault.automaticArchiving = false
         }
         let stored = try fixture.settingsStore.loadSettings()
         XCTAssertEqual(stored.vault.rolloutStage, .privateBeta)

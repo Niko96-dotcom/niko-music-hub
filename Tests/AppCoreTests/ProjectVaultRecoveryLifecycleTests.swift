@@ -44,7 +44,6 @@ final class ProjectVaultRecoveryLifecycleTests: XCTestCase {
         // Imported settings remain disabled/paused until an explicit user
         // choice; root UUID/path identities are preserved verbatim.
         XCTAssertFalse(recovered.settings.vault.isEnabled)
-        XCTAssertFalse(recovered.settings.vault.automaticArchiving)
         XCTAssertTrue(recovered.settings.vault.automationEmergencyStop)
         let originalSettings = try fixture.currentSettings()
         XCTAssertEqual(recovered.settings.musicRoots, originalSettings.musicRoots)
@@ -234,7 +233,6 @@ final class ProjectVaultRecoveryLifecycleTests: XCTestCase {
                     isEnabled: true,
                     activeRootID: activeRoot.id,
                     archiveRootID: archiveRoot.id,
-                    automaticArchiving: true,
                     automationEmergencyStop: false,
                     keepLocalProjectIDs: ["keep-1"]
                 )

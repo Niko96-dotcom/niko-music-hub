@@ -141,7 +141,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
     func testLinkedArchiveOffersRestoreAndPreservesHistoricalMetadata() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let archived = fixture.archive.appendingPathComponent("Existing Archive")
         try FileManager.default.copyItem(at: fixture.project, to: archived)
         let observedSong = Song(folderPath: archived, originalFolderName: "Existing Archive", displayTitle: "Existing Archive")
@@ -236,7 +235,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
     func testRapidArchiveAndRestoreRequestsQueueAndDeduplicate() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "Second Ableton", extension: "als")
         let secondManifest = try VaultManifestBuilder().build(at: second)
         let runtime = try fixture.runtime()
@@ -280,7 +278,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
     func testFailedArchiveContinuesWithNextSongAndKeepsFailureVisible() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "Second Cubase", extension: "cpr")
         let runtime = try fixture.runtime()
         let model = fixture.viewModel(runtime: runtime)
@@ -304,7 +301,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
     func testCancelWaitingArchiveDoesNotCancelRunningBackup() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "Cancelled Cubase", extension: "cpr")
         let secondManifest = try VaultManifestBuilder().build(at: second)
         let runtime = try fixture.runtime()
@@ -327,7 +323,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
     func testCancelActiveTransferDoesNotRemoveActive() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let provider = FriendsHoldingWriteProvider(root: fixture.archive)
         let model = fixture.viewModel(runtime: try fixture.runtime(provider: provider))
         await model.scan()
@@ -361,7 +356,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
     func testQueuedArchiveRechecksEmergencyStopAtDispatch() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "Waiting Cubase", extension: "cpr")
         let runtime = try fixture.runtime()
         let model = fixture.viewModel(runtime: runtime)
@@ -389,7 +383,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
     func testQueuedArchiveCancelsWhenConfiguredFoldersChange() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let runtime = try fixture.runtime()
         let model = fixture.viewModel(runtime: runtime)
         await model.scan()
@@ -410,7 +403,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
     func testLockAccessFailureEndsRequestAndAllowsNextQueuedBackup() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
-        try fixture.settingsStore.updateSettings { $0.vault.automaticArchiving = false }
         let second = try fixture.addSong(named: "After Lock Failure", extension: "cpr")
         let model = fixture.viewModel(runtime: try fixture.runtime())
         await model.scan()
@@ -464,7 +456,6 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         defer { fixture.cleanup() }
         try fixture.settingsStore.updateSettings {
             $0.vault.rolloutStage = .privateBeta
-            $0.vault.automaticArchiving = false
         }
         let runtime = try fixture.runtime()
         let viewModel = fixture.viewModel(runtime: runtime)
@@ -1186,7 +1177,6 @@ final class FriendsWorkflowFixture {
             isEnabled: true,
             activeRootID: activeID,
             archiveRootID: archiveID,
-            automaticArchiving: true,
             independentBackupConfirmed: true
         )
         settings.vault.setSpaceIntent(.freeSpace)

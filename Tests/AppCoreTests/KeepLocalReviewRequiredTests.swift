@@ -81,7 +81,6 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
             XCTAssertTrue(repaired.automationEmergencyStop, "\(junk)")
             XCTAssertEqual(repaired.spaceIntent, .keepCopy, "\(junk)")
             XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(repaired), "\(junk)")
-            XCTAssertFalse(ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(repaired), "\(junk)")
             XCTAssertTrue(
                 outcome.message.contains("Keep Local list couldn't be read"),
                 outcome.message
@@ -446,7 +445,6 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
 
         let vault = try fixture.settingsStore.loadSettings().vault
         XCTAssertFalse(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(vault))
-        XCTAssertFalse(ProjectVaultRolloutPolicy.permitsActiveCopyRemoval(vault))
         XCTAssertTrue(ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(vault), "copy-only archiving stays allowed")
     }
 
@@ -603,12 +601,8 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
             "isEnabled": true,
             "activeRootID": UUID().uuidString,
             "archiveRootID": UUID().uuidString,
-            "automaticArchiving": true,
-            "inactivityDays": 30,
-            "minimumFreeSpaceGiB": 120,
             "transferFreeSpaceReserveGiB": 5,
             "keepPreviousGenerationDays": 30,
-            "launchAtLogin": true,
             "rolloutStage": "friends",
             "spaceIntent": "freeSpace",
             "automationEmergencyStop": false,
@@ -689,7 +683,6 @@ private final class KeepLocalReviewFixture {
             isEnabled: true,
             activeRootID: activeID,
             archiveRootID: archiveID,
-            automaticArchiving: true,
             automationEmergencyStop: stop,
             independentBackupConfirmed: true,
             keepLocalReviewRequired: reviewRequired

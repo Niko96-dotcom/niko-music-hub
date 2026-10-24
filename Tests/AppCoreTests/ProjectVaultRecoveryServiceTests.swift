@@ -148,7 +148,6 @@ final class ProjectVaultRecoveryServiceTests: XCTestCase {
         let fresh = try freshStore.loadSettings()
         XCTAssertEqual(fresh, recovered.settings)
         XCTAssertFalse(fresh.vault.isEnabled)
-        XCTAssertFalse(fresh.vault.automaticArchiving)
         XCTAssertTrue(fresh.vault.automationEmergencyStop)
         XCTAssertEqual(fresh.vault.activeRootID, settingsBefore.vault.activeRootID)
         XCTAssertEqual(fresh.vault.archiveRootID, settingsBefore.vault.archiveRootID)
@@ -319,7 +318,6 @@ final class ProjectVaultRecoveryServiceTests: XCTestCase {
                     isEnabled: true,
                     activeRootID: activeRoot.id,
                     archiveRootID: archiveRoot.id,
-                    automaticArchiving: true,
                     automationEmergencyStop: false,
                     keepLocalProjectIDs: ["keep-1"]
                 )

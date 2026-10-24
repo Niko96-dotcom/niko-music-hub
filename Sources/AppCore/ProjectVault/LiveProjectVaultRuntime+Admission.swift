@@ -362,9 +362,8 @@ extension LiveProjectVaultRuntime {
                     }
                 } else {
                     // Done removal follows the user-initiated gate (explicit
-                    // free-space intent plus the backup acknowledgement),
-                    // not the background scheduler opt-in. Live settings may
-                    // only restrict.
+                    // free-space intent plus the backup acknowledgement).
+                    // Live settings may only restrict.
                     if let refusal = ProjectVaultRolloutPolicy.userInitiatedRefusal(liveSettings.vault, removing: true) {
                         throw refusal
                     }

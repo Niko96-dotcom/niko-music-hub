@@ -90,7 +90,6 @@ final class ProjectVaultRestoreBoardTests: XCTestCase {
                 isEnabled: true,
                 activeRootID: activeID,
                 archiveRootID: archiveID,
-                automaticArchiving: true,
                 independentBackupConfirmed: backup
             )
             stored.vault.setSpaceIntent(intent)
@@ -368,7 +367,6 @@ private final class RestoreBoardFixture {
             isEnabled: true,
             activeRootID: activeID,
             archiveRootID: archiveID,
-            automaticArchiving: true,
             independentBackupConfirmed: true
         )
         settings.vault.setSpaceIntent(.freeSpace)

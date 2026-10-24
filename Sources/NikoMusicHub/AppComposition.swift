@@ -46,16 +46,6 @@ struct AppComposition {
         // Shipped app uses unified logging; tests/CLI keep ConsoleDiagnostics.
         let diagnostics = OSLogDiagnostics(category: .general)
         let launchAtLogin = SMAppServiceLaunchAtLoginController()
-        // Reconciling registers or removes a login item, so unreadable settings
-        // skip it rather than reconcile the defaults (Vault off).
-        if !runtime.usesIsolatedSettingsSuite {
-            do {
-                let vaultSettings = try settingsStore.loadSettings().vault
-                try VaultLaunchAtLoginReconciler(controller: launchAtLogin).reconcile(settings: vaultSettings)
-            } catch {
-                diagnostics.log(.error, "Project Vault launch-at-login reconciliation failed: \(error)")
-            }
-        }
         // Automated end-to-end runs must never contact the feed or stage an
         // install over the bundle they are testing. Release bundles built
         // without update keys are already inert; this closes the case where an

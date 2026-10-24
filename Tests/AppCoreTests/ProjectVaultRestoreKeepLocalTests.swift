@@ -388,7 +388,6 @@ private final class RestoreKeepLocalFixture {
             isEnabled: true,
             activeRootID: activeID,
             archiveRootID: archiveID,
-            automaticArchiving: false,
             rolloutStage: .privateBeta,
             independentBackupConfirmed: true
         )

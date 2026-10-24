@@ -434,18 +434,6 @@ public enum ProjectVaultActivityExplanation {
 }
 
 public enum ProjectVaultRolloutPolicy {
-    /// Legacy scheduler gate, preserved for compatibility (diagnostics,
-    /// out-of-scope capture pre-selection). Background inactivity/disk-pressure
-    /// scheduling remains opt-in via `automaticArchiving`.
-    public static func permitsAutomaticArchiving(_ settings: VaultSettings) -> Bool {
-        settings.isEnabled
-            && settings.automaticArchiving
-            && !settings.automationEmergencyStop
-            && settings.rolloutStage != .disabled
-            && settings.activeRootID != nil
-            && settings.archiveRootID != nil
-    }
-
     /// The first reason the stored settings refuse a user-initiated archive
     /// (manual Archive Now, user-confirmed Done), or nil when they allow it.
     /// The disabled rollout still refuses, so upgrades never gain new file
@@ -466,8 +454,6 @@ public enum ProjectVaultRolloutPolicy {
     }
 
     /// User-initiated archiving (manual Archive Now, user-confirmed Done).
-    /// Decoupled from the background scheduler opt-in: a Done confirmation
-    /// copies even when `automaticArchiving` is off.
     public static func permitsUserInitiatedArchiving(_ settings: VaultSettings) -> Bool {
         userInitiatedRefusal(settings, removing: false) == nil
     }
@@ -481,26 +467,12 @@ public enum ProjectVaultRolloutPolicy {
         settings.spaceIntent == .freeSpace
     }
 
-    /// Scheduler-coupled removal gate. Honors the persisted free-space intent
-    /// (legacy payloads without an intent key migrate at decode, so upgraded
-    /// `friends` installs keep working while explicit `keepCopy` stays
-    /// copy-only). Still scheduler-coupled; the runtime uses
-    /// `permitsUserInitiatedRemoval` for Done so Done no longer waits on the
-    /// scheduler opt-in. A pending Keep Local review denies removal even when
-    /// every other gate passes; copy-only scheduling is unaffected.
-    public static func permitsActiveCopyRemoval(_ settings: VaultSettings) -> Bool {
-        !settings.keepLocalReviewRequired
-            && permitsAutomaticArchiving(settings)
-            && expressesFreeSpaceIntent(settings)
-            && settings.independentBackupConfirmed
-    }
-
     /// Done/manual removal gate used by the owned runtime admission: the
     /// user-initiated archiving base — so a disabled rollout cannot bypass the
-    /// capture gate — plus the removal gates of `userInitiatedRefusal`, but
-    /// not the background scheduler opt-in. A pending Keep Local review
-    /// denies removal even with Emergency Stop cleared; only Review Keep Local
-    /// in Settings clears it. Copy-only offers are unaffected.
+    /// capture gate — plus the removal gates of `userInitiatedRefusal`. A
+    /// pending Keep Local review denies removal even with Emergency Stop
+    /// cleared; only Review Keep Local in Settings clears it. Copy-only offers
+    /// are unaffected.
     public static func permitsUserInitiatedRemoval(_ settings: VaultSettings) -> Bool {
         userInitiatedRefusal(settings, removing: true) == nil
     }

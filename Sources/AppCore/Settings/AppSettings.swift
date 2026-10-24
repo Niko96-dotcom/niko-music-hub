@@ -88,14 +88,9 @@ public struct VaultSettings: Equatable, Codable, Sendable {
     public var isEnabled: Bool
     public var activeRootID: UUID?
     public var archiveRootID: UUID?
-    public var automaticArchiving: Bool
-    public var inactivityDays: Int
-    /// Active-volume pressure threshold that makes projects eligible for archiving.
-    public var minimumFreeSpaceGiB: Int
     /// Free space to retain on the destination after a projected archive/restore write.
     public var transferFreeSpaceReserveGiB: Int
     public var keepPreviousGenerationDays: Int
-    public var launchAtLogin: Bool
     /// Rollout stays explicit so a locally enabled development build cannot silently
     /// become an artist-library automation deployment.
     /// Legacy field: decoded, encoded, and honored by policy (see `SpaceIntent`
@@ -105,8 +100,8 @@ public struct VaultSettings: Equatable, Codable, Sendable {
     /// keys decode from the legacy rollout so upgrades perform no file
     /// operations and legacy copy-only users never acquire removal permission.
     public var spaceIntent: SpaceIntent
-    /// Independent, persisted stop control checked in addition to the master and
-    /// automatic-archiving switches.
+    /// Independent, persisted stop control checked in addition to the master
+    /// switch.
     public var automationEmergencyStop: Bool
     public var independentBackupConfirmed: Bool
     public var lastSuccessfulVerificationAt: Date?
@@ -128,12 +123,8 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         isEnabled: Bool = false,
         activeRootID: UUID? = nil,
         archiveRootID: UUID? = nil,
-        automaticArchiving: Bool = false,
-        inactivityDays: Int = 30,
-        minimumFreeSpaceGiB: Int = 120,
         transferFreeSpaceReserveGiB: Int = 5,
         keepPreviousGenerationDays: Int = 30,
-        launchAtLogin: Bool = true,
         rolloutStage: RolloutStage = .disabled,
         spaceIntent: SpaceIntent? = nil,
         automationEmergencyStop: Bool = false,
@@ -146,12 +137,8 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         self.isEnabled = isEnabled
         self.activeRootID = activeRootID
         self.archiveRootID = archiveRootID
-        self.automaticArchiving = automaticArchiving
-        self.inactivityDays = inactivityDays
-        self.minimumFreeSpaceGiB = minimumFreeSpaceGiB
         self.transferFreeSpaceReserveGiB = transferFreeSpaceReserveGiB
         self.keepPreviousGenerationDays = keepPreviousGenerationDays
-        self.launchAtLogin = launchAtLogin
         self.rolloutStage = rolloutStage
         // An explicit intent always wins; otherwise derive from the legacy
         // rollout so a missing key can never escalate a copy-only install.
@@ -192,9 +179,12 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         }
     }
 
+    /// Settings written by 1.8.1 and earlier also hold `automaticArchiving`,
+    /// `inactivityDays`, `minimumFreeSpaceGiB` and `launchAtLogin` (the
+    /// removed background-archiving switch). The decoder ignores those keys.
     private enum CodingKeys: String, CodingKey {
-        case isEnabled, activeRootID, archiveRootID, automaticArchiving
-        case inactivityDays, minimumFreeSpaceGiB, transferFreeSpaceReserveGiB, keepPreviousGenerationDays, launchAtLogin
+        case isEnabled, activeRootID, archiveRootID
+        case transferFreeSpaceReserveGiB, keepPreviousGenerationDays
         case rolloutStage, spaceIntent, automationEmergencyStop, independentBackupConfirmed
         case lastSuccessfulVerificationAt, lastRestoreDrillAt
         case keepLocalProjectIDs
@@ -216,24 +206,6 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         }
         activeRootID = try values.decodeIfPresent(UUID.self, forKey: .activeRootID)
         archiveRootID = try values.decodeIfPresent(UUID.self, forKey: .archiveRootID)
-        // Background inactivity/disk-pressure scheduling is independent
-        // OPT-IN: missing keys decode as off. An explicit stored `true` is
-        // preserved.
-        if values.contains(.automaticArchiving) {
-            automaticArchiving = try values.decode(Bool.self, forKey: .automaticArchiving)
-        } else {
-            automaticArchiving = false
-        }
-        if values.contains(.inactivityDays) {
-            inactivityDays = try values.decode(Int.self, forKey: .inactivityDays)
-        } else {
-            inactivityDays = 30
-        }
-        if values.contains(.minimumFreeSpaceGiB) {
-            minimumFreeSpaceGiB = try values.decode(Int.self, forKey: .minimumFreeSpaceGiB)
-        } else {
-            minimumFreeSpaceGiB = 120
-        }
         if values.contains(.transferFreeSpaceReserveGiB) {
             transferFreeSpaceReserveGiB = try values.decode(Int.self, forKey: .transferFreeSpaceReserveGiB)
         } else {
@@ -243,11 +215,6 @@ public struct VaultSettings: Equatable, Codable, Sendable {
             keepPreviousGenerationDays = try values.decode(Int.self, forKey: .keepPreviousGenerationDays)
         } else {
             keepPreviousGenerationDays = 30
-        }
-        if values.contains(.launchAtLogin) {
-            launchAtLogin = try values.decode(Bool.self, forKey: .launchAtLogin)
-        } else {
-            launchAtLogin = true
         }
         if values.contains(.rolloutStage) {
             rolloutStage = try values.decode(RolloutStage.self, forKey: .rolloutStage)

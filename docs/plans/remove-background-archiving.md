@@ -18,8 +18,8 @@ moves to [architecture.md](../architecture.md), and this file and the decision m
 | Step | State | Commit | Checks |
 | --- | --- | --- | --- |
 | 0 Baseline | taken from the coordinator | | `c51e10f`: 2,900 passed, 0 failed, 8 skipped; Swift Testing 86 passed |
-| 1 A true message when a Done archive is refused | done | this commit | strict build, 0 warnings; Vault suites 242 run, 0 failures; plant (order swap, two throw sites made constant) → exactly the 3 new tests fail |
-| 2 The settings and their readers go | not started | | |
+| 1 A true message when a Done archive is refused | done | `8096db7` | strict build, 0 warnings; Vault suites 242 run, 0 failures; plant (order swap, two throw sites made constant) → exactly the 3 new tests fail |
+| 2 The settings and their readers go | done | this commit | strict build, 0 warnings; settings, repair, bundle, Vault, Keep Local and source suites 395 run, 0 failures; plant (decoder rejects unknown keys, a login row in the Vault pane, repair lists "automatic archiving") → the 1.8.1 payload test, the 1.8.1 bundle test, the Vault-pane guard and both repair tests fail; General subtitle (revision 6a): plant (subtitle back) → the Vault-pane guard fails |
 | 3 The automation code keeps only what the Done copy uses | not started | | |
 | 4 Docs, full gates, live check | not started | | |
 
@@ -41,6 +41,18 @@ matches, except:
    `.unavailable` before any of the three throw sites run, so the `.disabled` (Vault off) and `.unavailable`
    reasons of `userInitiatedRefusal` are covered by policy tests; the runtime tests cover the reasons the runtime
    can reach (disabled rollout, Emergency Stop, removal not chosen at capture and at removal, backup not confirmed).
+4. **`VaultLaunchAtLoginTests` goes with the policy it tested.** Its source checks that still apply moved to
+   `SettingsLiquidSourceTests.testVaultSettingsOfferNoBackgroundArchivingAndNoLoginItem` (the Vault pane shows no
+   automation or login row; General's switch is the one login writer). The deleted test also pinned the General
+   subtitle "Lets Project Vault archive while you’re away", which promises background archiving as well; the plan
+   did not list it (see 6).
+5. **`SettingsStoreTests` loses three payloads** (`automaticArchiving`, `inactivityDays`, `launchAtLogin` set to
+   null): those keys are now ignored, so such a payload loads, which is requirement 2.
+6. **Two more texts, approved by Niko on 2026-10-24 during implementation.** (a) Step 2: Settings → General →
+   "Open at login" loses the subtitle "Lets Project Vault archive while you’re away"; the row shows only "Open at
+   login". Guarded by `testVaultSettingsOfferNoBackgroundArchivingAndNoLoginItem`. (b) Step 3: the `.invalidPolicy`
+   text "Check the Project Vault free-space and inactivity settings." becomes "Check the Project Vault free-space
+   settings."
 
 ## Decisions for Niko
 
