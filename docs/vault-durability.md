@@ -276,6 +276,20 @@ deterministic mid-copy POSIX ENOSPC plus flush-seam ENOSPC, destination
 disappears after copy/barrier and before removal, live temp syscall
 acceptance).
 
+Crash windows and state changes: `Tests/NikoMusicCoreTests/VaultCrashWindowTests.swift`
+(one crash-then-launch test per window between a side effect and the save that
+records it: the copy before its manifest, the generation rename, the removal
+re-proof, before and after `removeItem`, after eviction, interrupted-removal
+recovery before the preserving move and before its save, the launch and
+explicit retry rewinds, survivor retirement, the legacy normalization, and on
+restore the rename, the catalog write and the open, whose crash opens the
+project a second time; each run's edges must be observed ones), the portable
+retry windows in `VaultArchiveLayoutTests`, the two unlisted-edge tests (a
+transfer row in a restore-half state, a failed save of `archiveVerified`), the
+tables in `ProjectVaultStateMachineTests` and `VaultRestorePhaseTests`, and the
+one-writer guard `VaultStateWriterSourceTests`. See
+[architecture.md § Vault state changes](architecture.md#vault-state-changes).
+
 Covered elsewhere (not re-proven here, do not claim as new proof):
 
 - interrupted/relaunch recovery: `LocalVaultTransferEngineTests`

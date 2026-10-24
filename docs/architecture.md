@@ -460,6 +460,39 @@ readable, so the names, the nesting and the lowercased UUIDs never change (`Vaul
   engine gets the runtime's stores, clock and (for transfers) recovery policy. A transfer engine built without
   admissions refuses writes and removals.
 
+## Vault state changes
+
+A transfer's `state` (`VaultTransferState`, saved in `vault_transfers`) and a restore's `phase` (`VaultRestorePhase`,
+saved in `vault_restores`) each change only through one table.
+
+| Record | Table | Writers |
+| --- | --- | --- |
+| Transfer | [`ProjectVaultStateMachine`](../Sources/NikoMusicCore/Vault/ProjectVaultStateMachine.swift); removal only through `beginRemovingActiveCopy` with `VaultRemovalEvidence` | `LocalVaultTransferEngine.checkAndSave` |
+| Restore | `VaultRestorePhase.allowedNextPhases` in [`VaultRestoreRecord.swift`](../Sources/NikoMusicCore/Vault/VaultRestoreRecord.swift) | `LocalVaultRestoreEngine.checkAndSave`; the launch reconcile in `SQLiteVaultTransferStore` |
+
+- The tables list every edge a path reaches through one event (a thrown error, a cancel, a launch or retry decision),
+  each with the path that makes it: the archive chain and its stops, the removal rewinds (refused or stopped before
+  `removeItem`: back to `archiveVerified`) and reviews (`recoveryRequired`), the launch normalizations, survivor
+  retirement, the retries and the person's recovery of an interrupted removal; for restores the chain, the rewind to
+  `materializingArchive` and the reconcile's retirement of a losing duplicate.
+- An unlisted edge throws `VaultTransitionError` before anything is saved or any file is touched, and the record keeps
+  its last saved state for launch recovery. That covers the restore-half cases of `VaultTransferState`, which no
+  transfer record ever held, and the edges a path reaches only after a journal save already failed. In the reconcile,
+  a refusal rolls the whole transaction back.
+- Write-ahead order: each writer saves the new state before the side effect it describes. The phase fault points
+  (`VaultTransferFaultPoint`, `VaultRestoreFaultPoint`) and the crash windows (`VaultTransferCrashWindow`,
+  `VaultRestoreCrashWindow`: between a side effect and the save that records it) let a test stop an engine as if the
+  process died. `VaultCrashWindowTests` then runs a fresh engine's launch recovery twice and pins the state, the Active
+  folder, the generation and the file operations the relaunch replays.
+- `VaultStateWriterSourceTests` fails on any other assignment of `state` or `phase`. `ProjectVaultStateMachineTests`
+  and `VaultRestorePhaseTests` pin both tables and check them against `VaultObservedEdges`, the edges the Vault suites
+  made when the tables were written (2026-10-24).
+- Open: the store saves without an expected-state compare-and-set, so a stale writer is not refused (survivor
+  retirement does a read-compare); the removal evidence passes constant `manifestVerified` and `metadataPersisted`
+  values; a crash between a restore's open and its `completedAt` save opens the project again at the next launch;
+  survivor retirement can retire a transfer still in a removal phase when a newer verified generation of the project
+  exists (the table keeps that edge; without it, the record would go to `recoveryRequired`).
+
 ## Tool output destination
 
 A tool run writes only into a [`ToolOutputDestination`](../Sources/AppCore/Settings/ToolOutputDestination.swift): the

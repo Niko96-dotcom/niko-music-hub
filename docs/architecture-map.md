@@ -122,8 +122,8 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
 4. `LocalVaultTransferEngine` (actor, Core) stages a copy, verifies its `VaultManifest`, waits for
    durability (`ArchiveStorageProvider.waitUntilDurable`: `LocalVaultDurabilityBarrier` for a local folder,
    File Provider sync for a cloud folder), promotes the generation, and removes the active copy only with a
-   removal token and fresh evidence. Each phase is saved in `SQLiteVaultTransferStore`, the authoritative
-   journal.
+   removal token and fresh evidence. Each phase change is checked against `ProjectVaultStateMachine` and saved in
+   `SQLiteVaultTransferStore`, the authoritative journal ([architecture.md § Vault state changes](architecture.md#vault-state-changes)).
 5. Restore: `ProjectVaultRestoreSheet` → `restoreAndOpen` in the runtime (pins Keep Local first) →
    `LocalVaultRestoreEngine` from `makeRestoreEngine` (materialize, verify, copy, promote, save the
    location, open through `SafeVaultProjectOpener`).
@@ -165,6 +165,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Vault queue, retries, capacity | `ProjectVaultOperationCoordinator` | memory; the journal is authoritative |
 | Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
+| Vault transfer state, restore phase | the tables `ProjectVaultStateMachine` and `VaultRestorePhase.allowedNextPhases`; written only by each engine's `checkAndSave` and the restore reconcile ([architecture.md § Vault state changes](architecture.md#vault-state-changes)) | `vault_transfers`, `vault_restores` in `archive-index.sqlite` |
 | Preview playback | `ArchivePreviewSession`, held by `ArchiveBrowserViewModel.previewSession`; views get it by initializer ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
 | Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter`; each row's verb, Cancel help and cancel target come from its tool | memory |
 | A tool page's Return and Esc keys | `HubInspectorPage` (`primaryKey`, `cancelKey`), bound only on the visible page; the Archive Browser, no `HubInspectorPage`, owns its keys in `ArchiveBrowserView` under the same rule ([architecture.md § Tool page keys](architecture.md#tool-page-keys)) | code |
@@ -272,9 +273,9 @@ These rules are documented and, where named, enforced. The full table is in
 8. Closed on 2026-10-24: the "Archive automatically" switch, its steppers, the Vault login-item row and
    the unused background-scheduling code are gone. The only automatic archiving is the copy-only Done
    copy (main flow step 7; [architecture.md § Project Vault bound authorization](architecture.md#project-vault-bound-authorization)).
-9. **The Vault state machine is not the only writer of states.** `LocalVaultTransferEngine` sets
-   `.archiveVerified` and `.recoveryRequired` directly and rewinds states in launch recovery;
-   `LocalVaultRestoreEngine.advance` writes restore phases without a transition check.
+9. Closed on 2026-10-24: every transfer state and restore phase change goes through its table, and each engine's
+   `checkAndSave` (plus the restore reconcile) is the only writer; an unlisted edge throws before anything is saved
+   ([architecture.md § Vault state changes](architecture.md#vault-state-changes)).
 
 Documents that disagree with the code:
 
@@ -294,7 +295,8 @@ Documents that disagree with the code:
    it by initializer; the coordinator is gone ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)).
 5. Settled on 2026-10-24: no background Vault archiving (inactivity, low space). Niko chose to remove the
    switch; the Done copy is the only automatic archiving (gap 8).
-6. Should every transfer and restore state change go through `ProjectVaultStateMachine` (gap 9)?
+6. Settled on 2026-10-24: every transfer state change goes through `ProjectVaultStateMachine` and every restore phase
+   change through `VaultRestorePhase`'s table; an unlisted edge fails closed (gap 9).
 7. ADRs 001–016 are not in the public tree. Are they retired, or private planning history?
 8. `docs/architecture.md` and this map are not in the source-sale export list (`script/export-source-sale.sh`),
    although `README.md` links `docs/architecture.md`. Is that intended?
