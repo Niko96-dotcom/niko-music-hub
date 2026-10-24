@@ -127,6 +127,25 @@ final class HubDesignContractSourceTests: XCTestCase {
         }
     }
 
+    // §4 — a page you left stays mounted, so its own key handlers and focus follow
+    // `hubToolIsActive`: after a visit to BPM Tapper its tap pad kept the keyboard,
+    // and Esc on the WAV Converter reset the hidden tap run instead of stopping the
+    // conversion (live check, 2026-10-24).
+    func testToolPageKeyHandlersFollowThePagesVisibility() throws {
+        let scaffold = try readStripped("Sources/AppCore/Components/HubInspectorPage.swift")
+        expectMatch(scaffold, pattern: "installed\\s*\\(\\s*primaryKey\\s*,\\s*onVisiblePage\\s*:\\s*isVisiblePage", "Return binds only on the visible page")
+        expectMatch(scaffold, pattern: "installed\\s*\\(\\s*cancelKey\\s*,\\s*onVisiblePage\\s*:\\s*isVisiblePage", "Esc binds only on the visible page")
+        for page in toolPages {
+            let source = try readStripped(page)
+            let handlers = source.components(separatedBy: ".onKeyPress(").count - 1
+            let guarded = (try NSRegularExpression(pattern: "\\.onKeyPress\\s*\\([^)]*\\)\\s*\\{\\s*guard\\s+isActiveTool\\s+else"))
+                .numberOfMatches(in: source, range: NSRange(source.startIndex..., in: source))
+            XCTAssertEqual(guarded, handlers, "\(page): every onKeyPress handler ignores keys while the page is hidden")
+        }
+        let bpm = try readStripped("Sources/FeatureBPMTapper/BPMTapperView.swift")
+        expectMatch(bpm, pattern: "tapSurfaceFocused\\s*=\\s*active", "the tap pad's focus follows the page")
+    }
+
     // §4 — transient notices may not push the fixed primary object down.
     // Nesting (not textual order): `live` must be inside a ScrollView body.
     func testLiveNoticesAreInsideScrollingContent() throws {

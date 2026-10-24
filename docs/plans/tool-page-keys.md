@@ -23,7 +23,7 @@ Resume from the first step that is not done. Each step is one commit. Find a ste
 | 0 Baseline and evidence | done | — | full gates passed on `0a31f3a`, the same tree as `a4c19c5` (finding #9's integration); live evidence below |
 | 1 One progress row | done | `git log --grep='(tool page keys step 1)'` | strict build; AppCore and tool-page suites 1,376 passed, 1 failed (`ToolLiquidSurfaceSourceTests` pinned the Downloader's hand-built bar; retargeted, see revision 1), 7 skipped; Swift Testing 86 passed; a planted `ProgressView` in `StemSeparationView` failed `testToolPagesShowJobProgressThroughTheSharedRow`, then the file was restored |
 | 2 The page owns its Return and Esc keys | done | `git log --grep='(tool page keys step 2)'` | strict build; AppCore and tool-page suites 1,379 passed, 1 failed (`testStopAfterThisFileHonestyCopy` pinned the hand-rolled Esc button; retargeted, see revision 2, then passed), 7 skipped; Swift Testing 86 passed; with the converter's hidden Esc button put back, `testToolPageKeysAreBoundOnlyByTheScaffold` failed, then the file was restored |
-| 3 A page you left takes no key | not started | | |
+| 3 A page you left takes no key | done | `git log --grep='(tool page keys step 3)'` | strict build; AppCore and tool-page suites 1,381 passed, 0 failed, 7 skipped; Swift Testing 86 passed; with the visibility gate dropped from `HubPageKey.installed`, `testAPageYouLeftInstallsNoKey` failed, then the file was restored |
 | 4 Docs, full gates, live check | not started | | |
 
 ## Revisions

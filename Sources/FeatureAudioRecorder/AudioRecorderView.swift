@@ -18,6 +18,7 @@ public struct AudioRecorderView: View {
     // keyboard focus explicitly (NMH-133 pattern) for Full Keyboard Access.
     @FocusState private var filenameFocused: Bool
     @FocusState private var recordButtonFocused: Bool
+    @Environment(\.hubToolIsActive) private var isActiveTool
 
     public init(context: ToolContext, viewModel: AudioRecorderViewModel) {
         self.context = context
@@ -42,6 +43,11 @@ public struct AudioRecorderView: View {
         .onAppear {
             syncMaxDurationFromSettings()
             viewModel.onAppear()
+        }
+        // The pane stays mounted while another tool is shown: Space must not reach
+        // the record button there.
+        .onChange(of: isActiveTool) { _, active in
+            if !active { recordButtonFocused = false }
         }
         .onChange(of: appSettings.settings.maxRecordingDurationMinutes) { _, _ in
             syncMaxDurationFromSettings()
@@ -278,6 +284,7 @@ public struct AudioRecorderView: View {
             .focusEffectDisabled()
             .focused($recordButtonFocused)
             .onKeyPress(.space) {
+                guard isActiveTool else { return .ignored }
                 toggleRecording()
                 return .handled
             }

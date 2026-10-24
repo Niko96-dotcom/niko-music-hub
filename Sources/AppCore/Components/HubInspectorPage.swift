@@ -16,9 +16,11 @@ public struct HubPageKey {
         self.perform = perform
     }
 
-    /// The key `HubInspectorPage` binds: only an enabled one.
-    static func installed(_ key: HubPageKey?) -> HubPageKey? {
-        guard let key, key.isEnabled else { return nil }
+    /// The key `HubInspectorPage` binds: only an enabled one, and only on the
+    /// visible page. The shell keeps a page you left mounted (`AppShellView`), so
+    /// its key buttons would otherwise still take Return and Esc.
+    static func installed(_ key: HubPageKey?, onVisiblePage: Bool) -> HubPageKey? {
+        guard onVisiblePage, let key, key.isEnabled else { return nil }
         return key
     }
 }
@@ -41,6 +43,7 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
     public static var groupSpacing: CGFloat { 20 }
 
     @Environment(\.hubTitleRowInset) private var titleRowInset
+    @Environment(\.hubToolIsActive) private var isVisiblePage
 
     private let header: Header
     private let live: Live
@@ -139,17 +142,18 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Hidden buttons that give the page's keys their shortcuts; a disabled key
-    /// installs none, so Esc then reaches the shell's Edit ▸ Cancel.
+    /// Hidden buttons that give the page's keys their shortcuts; a disabled key, or
+    /// any key of a page you left, installs none, so Esc then reaches the shell's
+    /// Edit ▸ Cancel.
     @ViewBuilder
     private var pageKeyButtons: some View {
-        if let key = HubPageKey.installed(primaryKey) {
+        if let key = HubPageKey.installed(primaryKey, onVisiblePage: isVisiblePage) {
             Button(key.title, action: key.perform)
                 .keyboardShortcut(.defaultAction)
                 .hidden()
                 .accessibilityHidden(true)
         }
-        if let key = HubPageKey.installed(cancelKey) {
+        if let key = HubPageKey.installed(cancelKey, onVisiblePage: isVisiblePage) {
             Button(key.title, action: key.perform)
                 .keyboardShortcut(.cancelAction)
                 .hidden()

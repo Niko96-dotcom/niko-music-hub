@@ -8,6 +8,7 @@ public struct BPMTapperView: View {
     /// Owned by the feature session (`viewModel(for:)`), not by this view.
     @ObservedObject private var viewModel: BPMTapperViewModel
     @FocusState private var tapSurfaceFocused: Bool
+    @Environment(\.hubToolIsActive) private var isActiveTool
     @State private var clearHistoryConfirmationVisible = false
     @State private var tapSurfacePressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -38,6 +39,11 @@ public struct BPMTapperView: View {
         .onAppear {
             try? viewModel.loadHistory()
             tapSurfaceFocused = true
+        }
+        // The pane stays mounted while another tool is shown: the tap pad gives the
+        // keyboard up there and takes it back when this page is shown again.
+        .onChange(of: isActiveTool) { _, active in
+            tapSurfaceFocused = active
         }
         .alert(
             "Clear History?",
@@ -126,11 +132,13 @@ public struct BPMTapperView: View {
             }
         }
         .onKeyPress(.space) {
+            guard isActiveTool else { return .ignored }
             animateTapPress()
             viewModel.recordTap()
             return .handled
         }
         .onKeyPress(.escape) {
+            guard isActiveTool else { return .ignored }
             viewModel.resetTaps()
             return .handled
         }
