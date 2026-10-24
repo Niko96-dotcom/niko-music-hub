@@ -165,7 +165,7 @@ extension LiveProjectVaultRuntime {
               Array(candidateComponents.prefix(rootComponents.count)) == rootComponents else {
             return nil
         }
-        let staging = resolvedRoot.appendingPathComponent(".niko-staging", isDirectory: true)
+        let staging = VaultFolders.staging(in: resolvedRoot)
             .standardizedFileURL.resolvingSymlinksInPath()
         let stagingComponents = staging.pathComponents
         if candidateComponents.count >= stagingComponents.count,

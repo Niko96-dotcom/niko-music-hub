@@ -33,8 +33,7 @@ extension ArchiveBrowserViewModel {
         guard let transfer = projectVaultSnapshot(for: song)?.transfer,
               let active = projectVaultPresentationContext?.activeRoot,
               let root = try? active.resolvedURL(using: FoundationSecurityScopedBookmarks()) else { return nil }
-        let recoveryRoot = root.appendingPathComponent(".niko-recovery", isDirectory: true)
-            .appendingPathComponent(transfer.id.uuidString.lowercased(), isDirectory: true)
+        let recoveryRoot = VaultFolders.recovery(in: root, transferID: transfer.id)
         let safety = PathSafety()
         guard safety.isResolvedContainedWithoutNestedSymlinks(recoveryRoot, in: root) else { return nil }
         return transfer.preservedActiveCopies?.reversed().first {

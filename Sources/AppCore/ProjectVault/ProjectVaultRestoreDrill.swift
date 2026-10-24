@@ -34,7 +34,8 @@ public struct ProjectVaultRestoreDrill: @unchecked Sendable {
         let root = temporaryDirectory.appendingPathComponent("niko-vault-restore-drill-\(UUID().uuidString)", isDirectory: true)
         defer { try? fileManager.removeItem(at: root) }
         let archive = root.appendingPathComponent("archive/generation", isDirectory: true)
-        let staging = root.appendingPathComponent("active/.niko-staging/fixture", isDirectory: true)
+        let staging = VaultFolders.staging(in: root.appendingPathComponent("active", isDirectory: true))
+            .appendingPathComponent("fixture", isDirectory: true)
         let restored = root.appendingPathComponent("active/Restored Fixture", isDirectory: true)
         try fileManager.createDirectory(at: archive.appendingPathComponent("Audio", isDirectory: true), withIntermediateDirectories: true)
         try Data("synthetic cubase project".utf8).write(to: archive.appendingPathComponent("Restore Drill.cpr"))

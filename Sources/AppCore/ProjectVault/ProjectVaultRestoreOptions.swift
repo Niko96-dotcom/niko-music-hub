@@ -27,7 +27,7 @@ public struct ProjectVaultRestoreOptions: Sendable {
 
     public func destinationIssue(for path: String) -> String? {
         let components = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard !path.isEmpty, !path.hasPrefix("/"), !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." || $0.hasPrefix(".niko-") }) else {
+        guard !path.isEmpty, !path.hasPrefix("/"), !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." || VaultFolders.isReservedInActiveRoot(String($0)) }) else {
             return "Enter a folder path inside Active Projects."
         }
         let root = activeRoot.standardizedFileURL.resolvingSymlinksInPath()
@@ -67,7 +67,7 @@ public struct ProjectVaultRestoreOptions: Sendable {
     public func isOccupied(_ path: String) -> Bool {
         let components = path.split(separator: "/", omittingEmptySubsequences: false)
         guard !path.isEmpty, !path.hasPrefix("/"),
-              !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." || $0.hasPrefix(".niko-") }) else {
+              !components.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." || VaultFolders.isReservedInActiveRoot(String($0)) }) else {
             return false
         }
         let root = activeRoot.standardizedFileURL.resolvingSymlinksInPath()

@@ -76,8 +76,7 @@ public struct ProjectVaultGenerationReviewResolver: Equatable, Sendable {
     }
 
     public func resolveGeneration(_ generationURL: URL) -> URL? {
-        let generationsRoot = archiveRootURL
-            .appendingPathComponent("generations", isDirectory: true)
+        let generationsRoot = VaultFolders.generations(in: archiveRootURL)
             .standardizedFileURL
         let candidate = generationURL.standardizedFileURL
         let safety = PathSafety()
@@ -113,13 +112,7 @@ public struct ProjectVaultGenerationReviewResolver: Equatable, Sendable {
         }
 
         let candidate = generationURL.standardizedFileURL
-        let expected = archiveRootURL
-            .appendingPathComponent("generations", isDirectory: true)
-            .appendingPathComponent(projectID.description, isDirectory: true)
-            .appendingPathComponent(
-                "generation-\(transferID.uuidString.lowercased())",
-                isDirectory: true
-            )
+        let expected = VaultFolders.generation(in: archiveRootURL, projectID: projectID, transferID: transferID)
             .standardizedFileURL
         guard candidate.path == expected.path else {
             return false

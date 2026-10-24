@@ -22,7 +22,7 @@ commit with `git log --grep='(vault folders step N)'`.
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates passed on `14412e3`; `33bc9af` changed docs only; no re-run |
 | 1 One module for the folder names | done | `git log --grep='(vault folders step 1)'` | strict build; `NikoMusicCoreTests` 841 (5 new, 1 skipped), AppCore Vault and `*SourceTests` 278, archive Vault suites 79, 0 failures |
-| 2 Every other site uses it | not started | | |
+| 2 Every other site uses it | done | `git log --grep='(vault folders step 2)'` | strict build; `NikoMusicCoreTests` 841 (1 skipped), AppCore Vault and `*SourceTests` 280, archive Vault suites 79, 0 failures; a planted `".niko-staging"` in `LocalVaultRestoreEngine.swift` failed `VaultFoldersSourceTests`, then was removed |
 | 3 One place builds the engines | not started | | |
 | 4 The restore engine refuses every reserved Active folder | not started | | |
 | 5 Docs, full gates, live check | not started | | |

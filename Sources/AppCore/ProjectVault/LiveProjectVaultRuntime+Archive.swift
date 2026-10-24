@@ -40,10 +40,11 @@ extension LiveProjectVaultRuntime {
         mutating func matchesCurrentSource(_ transfer: VaultTransferRecord) throws -> Bool {
             if let cached = terminalIdentityMatches[transfer.id] { return cached }
             let canonicalSource = sourceURL.standardizedFileURL.resolvingSymlinksInPath()
-            let expectedGeneration = archiveRootURL
-                .appendingPathComponent("generations", isDirectory: true)
-                .appendingPathComponent(transfer.projectID.description, isDirectory: true)
-                .appendingPathComponent("generation-\(transfer.id.uuidString.lowercased())", isDirectory: true)
+            let expectedGeneration = VaultFolders.generation(
+                in: archiveRootURL,
+                projectID: transfer.projectID,
+                transferID: transfer.id
+            )
             guard transfer.sourceURL.standardizedFileURL.resolvingSymlinksInPath().path == canonicalSource.path,
                   transfer.destinationURL.standardizedFileURL.resolvingSymlinksInPath().path == expectedGeneration.standardizedFileURL.resolvingSymlinksInPath().path,
                   let expected = transfer.manifest,
