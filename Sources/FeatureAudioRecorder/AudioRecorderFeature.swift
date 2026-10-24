@@ -28,20 +28,25 @@ public struct AudioRecorderFeature: ToolFeature {
         if let viewModel = session.viewModel {
             return viewModel
         }
-        let capturePort = CoreAudioTapAdapter()
-        let useCase = RecordSystemAudioUseCase(capturePort: capturePort)
+        let viewModel = Self.makeViewModel(context: context, capturePort: CoreAudioTapAdapter())
+        session.viewModel = viewModel
+        return viewModel
+    }
+
+    /// The recorder wired to the app's context. Tests pass a fake capture port instead of CoreAudio.
+    @MainActor
+    static func makeViewModel(context: ToolContext, capturePort: AudioCapturePort) -> AudioRecorderViewModel {
         // Display-only value from the shared observer. Anything that gates a
         // write goes through `destinationProvider` below.
         let settings = context.appSettings.settings
-        let viewModel = AudioRecorderViewModel(
+        return AudioRecorderViewModel(
             capturePort: capturePort,
-            useCase: useCase,
+            useCase: RecordSystemAudioUseCase(capturePort: capturePort),
             destinationProvider: { try ToolOutputDestination.load(from: context.settingsStore) },
             outputInboxStore: context.outputInboxStore,
             initialMaxDurationMinutes: RecordingDurationOptions.normalized(settings.maxRecordingDurationMinutes),
-            jobStatusCenter: context.jobStatusCenter
+            jobStatusCenter: context.jobStatusCenter,
+            audioCaptureActivity: context.audioCaptureActivity
         )
-        session.viewModel = viewModel
-        return viewModel
     }
 }

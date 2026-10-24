@@ -29,7 +29,8 @@ final class ArchivePreviewSession: ObservableObject {
     private var selectedSong: Song?
     private var selectedSongAction: (() -> Void)?
 
-    init(player: ArchivePreviewPlayer = ArchivePreviewPlayer(), capture: AudioCaptureActivity = .shared) {
+    /// `capture` is the app's recording signal; the session only observes it.
+    init(player: ArchivePreviewPlayer = ArchivePreviewPlayer(), capture: AudioCaptureActivity) {
         self.player = player
         player.setVolume(volume)
         player.$playbackIntentActive.removeDuplicates().sink { [weak self] playing in

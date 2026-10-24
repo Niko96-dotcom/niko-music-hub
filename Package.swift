@@ -149,7 +149,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AppCoreTests",
-            dependencies: ["AppCore", "NikoMusicCore", "FeatureArchiveBrowser"],
+            dependencies: ["AppCore", "NikoMusicCore", "FeatureArchiveBrowser", "FeatureAudioRecorder"],
             swiftSettings: strictSwiftSettings
         ),
         .testTarget(

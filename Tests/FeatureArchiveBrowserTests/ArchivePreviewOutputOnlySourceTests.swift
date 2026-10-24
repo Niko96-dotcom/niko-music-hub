@@ -33,7 +33,8 @@ final class ArchivePreviewOutputOnlySourceTests: XCTestCase {
         "CATapDescription",
         "ScreenCaptureKit",
         "SCStream",
-        "AudioCaptureActivity.shared.setActive",
+        // The recorder alone sets the recording signal; preview only observes it.
+        "setActive(",
     ]
 
     func testPreviewPlaybackSourcesNeverTouchAudioInput() throws {

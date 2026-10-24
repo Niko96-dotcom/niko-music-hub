@@ -27,8 +27,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let browseRefreshDriver: ArchiveBrowseRefreshDriver
     let mixdownAnalysis = ArchiveMixdownAnalysisCoordinator()
     /// The archive's playback owner. Every write of `selectedSong` reaches it, and every
-    /// view that shows playback gets it from here.
-    let previewSession = ArchivePreviewSession()
+    /// view that shows playback gets it from here. It pauses on the context's recording signal.
+    let previewSession: ArchivePreviewSession
     let cprPlugins = ArchiveCPRPluginCoordinator()
     let opener: MusicItemOpener
     let pathSafety = PathSafety()
@@ -543,6 +543,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.diagnostics = context.diagnostics
         self.fileActions = context.fileActions
         self.jobStatusCenter = context.jobStatusCenter
+        self.previewSession = ArchivePreviewSession(capture: context.audioCaptureActivity)
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime

@@ -24,7 +24,7 @@ Resume from the first step that is not done. Each step is one commit. Find a ste
 | --- | --- | --- | --- |
 | 0 Baseline | done | — | full gates passed on `9733644` (finding #11, step 4): 2,901 passed, 0 failed, 8 skipped; Swift Testing 86 passed; strict E2E exit 0; no re-run |
 | 1 The tool context carries one recording signal | done | `git log --grep='(capture injection step 1)'` | strict build; capture suites 60, 0 failures (1 new); with a static fallback in `ToolContext` the new test failed 2 assertions |
-| 2 The recorder and the archive use the context's signal | not started | | |
+| 2 The recorder and the archive use the context's signal | done | `git log --grep='(capture injection step 2)'` | strict build; `FeatureArchiveBrowserTests`, `AppCoreTests`, recorder view-model suites: 1,561 passed, 0 failed, 2 skipped; plants (a) and (b) each failed the new test with 2 assertions, plant (c) failed the source guard; no `AudioCaptureActivity.shared` left |
 | 3 Docs, full gates, live check | not started | | |
 
 ## Revisions

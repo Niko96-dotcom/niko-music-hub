@@ -1,11 +1,12 @@
 import Combine
 import Foundation
 
-/// Shared arbitration between preview playback and system-audio recording.
-/// Feature modules do not need to import one another.
+/// The recording signal between system-audio recording and preview playback.
+/// `AppComposition` builds the app's one instance and both features get it from
+/// `ToolContext.audioCaptureActivity`, so feature modules do not import one another.
+/// The recorder sets it; archive preview only observes it.
 @MainActor
 public final class AudioCaptureActivity: ObservableObject {
-    public static let shared = AudioCaptureActivity()
     @Published public private(set) var isActive = false
     private var owners: Set<UUID> = []
 

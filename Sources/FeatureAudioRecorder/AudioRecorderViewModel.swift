@@ -53,12 +53,15 @@ public final class AudioRecorderViewModel: ObservableObject {
     @Published public private(set) var recordingState: RecordingDisplayState = .idle {
         didSet {
             let active = Self.isActive(recordingState)
-            AudioCaptureActivity.shared.setActive(active, owner: captureActivityID)
+            audioCaptureActivity?.setActive(active, owner: captureActivityID)
             if active != Self.isActive(oldValue) {
                 registerTakeForQuit(active)
             }
         }
     }
+    /// The app's recording signal (`ToolContext.audioCaptureActivity`): held from start until
+    /// the take is finalized; archive preview pauses on it. Nil when nobody listens (tests).
+    private let audioCaptureActivity: AudioCaptureActivity?
     private let captureActivityID = UUID()
     @Published public var filenameOverride: String = ""
     /// NMH-064: frozen preview of the next take's filename. Captured at
@@ -120,6 +123,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30,
         jobStatusCenter: ShellJobStatusCenter? = nil,
+        audioCaptureActivity: AudioCaptureActivity? = nil,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.init(
@@ -129,6 +133,7 @@ public final class AudioRecorderViewModel: ObservableObject {
             outputInboxStore: outputInboxStore,
             initialMaxDurationMinutes: initialMaxDurationMinutes,
             jobStatusCenter: jobStatusCenter,
+            audioCaptureActivity: audioCaptureActivity,
             now: now
         )
     }
@@ -140,6 +145,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         outputInboxStore: any OutputInboxStore,
         initialMaxDurationMinutes: Int = 30,
         jobStatusCenter: ShellJobStatusCenter? = nil,
+        audioCaptureActivity: AudioCaptureActivity? = nil,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.capturePort = capturePort
@@ -149,6 +155,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         self.outputInboxStore = outputInboxStore
         self.recentOutputs = ToolRecentOutputs(store: outputInboxStore, toolID: .audioRecorder, limit: 5)
         self.jobStatusCenter = jobStatusCenter
+        self.audioCaptureActivity = audioCaptureActivity
         self.maxDurationMinutes = RecordingDurationOptions.normalized(initialMaxDurationMinutes)
         refreshProposedFilename()
     }
@@ -156,7 +163,8 @@ public final class AudioRecorderViewModel: ObservableObject {
     deinit {
         jobStatusCenter?.setExtraJob(sourceID: ShellJobExtraSourceID.audioRecorder, status: nil)
         let owner = captureActivityID
-        Task { @MainActor in AudioCaptureActivity.shared.setActive(false, owner: owner) }
+        let activity = audioCaptureActivity
+        Task { @MainActor in activity?.setActive(false, owner: owner) }
     }
 
     public func startRecording() async {
