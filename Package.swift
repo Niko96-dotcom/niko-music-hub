@@ -7,6 +7,9 @@ import PackageDescription
 // warnings were cleared by hand twice (77d2d6d, 2e79a4f) and came back, and an
 // unused non-discardable result (a refused save) is only a warning otherwise.
 // PackageSettingsSourceTests fails when a target leaves this out.
+// The flag cannot promote a warning Swift downgraded itself (a call into isolation
+// inferred from a @preconcurrency protocol such as SwiftUI's View): ./script/ci.sh
+// fails on those through a clean build.
 let strictSwiftSettings: [SwiftSetting] = [
     .unsafeFlags(["-warnings-as-errors"])
 ]

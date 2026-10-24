@@ -208,9 +208,10 @@ caller.
 - Source guards in `Tests/AppCoreTests/*SourceTests.swift` read the source text and enforce the rules in
   [AGENTS.md](../AGENTS.md#rules-and-what-enforces-them): module boundaries, design contract, SwiftUI state
   ownership, output guard, real-defaults access, count copy, package settings.
-- `./script/ci.sh`: fixtures, strict build (`--explicit-target-dependency-import-check error`,
-  warnings as errors), `swift test` minus host-only CoreAudio tests, recorder gate, UI-probe self-test,
-  `NikoMusicCoreSelfTest`, CLI export smoke and refusal, release-engineering tests.
+- `./script/ci.sh`: fixtures, clean strict build (`--explicit-target-dependency-import-check error`,
+  warnings as errors, fails on any printed warning), `swift test` minus host-only CoreAudio tests,
+  recorder gate, UI-probe self-test, `NikoMusicCoreSelfTest`, CLI export smoke and refusal,
+  release-engineering tests.
 - `./script/e2e_user_smoke.sh`: builds the app and drives it with a fixture root, dry-run open and an
   isolated settings suite. Needs Accessibility and Screen Recording. See [user-e2e.md](user-e2e.md).
 - Release adds the exact-commit UAT record: [release-validation.md](release-validation.md),

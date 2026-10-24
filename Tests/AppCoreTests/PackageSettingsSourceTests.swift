@@ -3,7 +3,8 @@ import XCTest
 
 /// Warnings fail every build because each target in Package.swift takes
 /// `strictSwiftSettings` (-warnings-as-errors). A target added without it would
-/// let warnings, and ignored non-discardable results, back in.
+/// let warnings, and ignored non-discardable results, back in. The warnings the
+/// flag cannot promote fail ./script/ci.sh instead.
 final class PackageSettingsSourceTests: XCTestCase {
     func testEveryTargetBuildsWithWarningsAsErrors() throws {
         let manifest = SourceLex.strippedCommentsOnly(try SourceTestSupport.read("Package.swift"))
@@ -22,6 +23,24 @@ final class PackageSettingsSourceTests: XCTestCase {
                 declaration.contains("swiftSettings: strictSwiftSettings"),
                 "Target \(ns.substring(with: match.range(at: 1))) in Package.swift has no `swiftSettings: strictSwiftSettings`"
             )
+        }
+    }
+
+    /// -warnings-as-errors cannot promote a warning Swift downgraded itself: a call into
+    /// main-actor isolation inferred from a @preconcurrency protocol (SwiftUI's `View`) stays
+    /// a warning. ./script/ci.sh catches those with a build into an empty scratch path, the
+    /// only build that prints every file's warnings, and fails on any warning in its log.
+    func testCIFailsOnAnyWarningInACleanBuild() throws {
+        let script = try SourceTestSupport.read("script/ci.sh")
+            .components(separatedBy: .newlines)
+            .map { $0.replacingOccurrences(of: #"(^|\s)#.*$"#, with: "", options: .regularExpression) }
+            .joined(separator: "\n")
+        for fragment in [
+            #"CLEAN_BUILD="$(mktemp -d"#,
+            #"swift build --build-tests --explicit-target-dependency-import-check error --scratch-path "$CLEAN_BUILD" 2>&1 | tee "$CLEAN_BUILD_LOG""#,
+            #"if grep -q 'warning: ' "$CLEAN_BUILD_LOG"; then"#,
+        ] {
+            XCTAssertTrue(script.contains(fragment), "script/ci.sh no longer fails on warnings of a clean build: missing `\(fragment)`")
         }
     }
 }

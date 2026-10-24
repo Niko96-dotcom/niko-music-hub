@@ -52,7 +52,7 @@ public struct HubJobProgressRow: View {
     }
 
     /// `Elapsed m:ss` since `start`; a start in the future reads `Elapsed 0:00`.
-    public static func elapsedCaption(since start: Date, now: Date) -> String {
+    public nonisolated static func elapsedCaption(since start: Date, now: Date) -> String {
         let totalSeconds = Int(max(0, now.timeIntervalSince(start)))
         return String(format: "Elapsed %d:%02d", totalSeconds / 60, totalSeconds % 60)
     }

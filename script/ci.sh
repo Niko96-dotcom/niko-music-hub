@@ -11,8 +11,20 @@ fi
 echo "== generate deterministic fixtures =="
 ./script/fixtures/generate_cubase_archive_fixtures.sh
 
-echo "== swift build =="
-swift build --build-tests --explicit-target-dependency-import-check error
+echo "== swift build (clean, fails on any warning) =="
+# -warnings-as-errors (strictSwiftSettings) cannot promote every warning: Swift keeps
+# a call into main-actor isolation inferred from a @preconcurrency protocol (SwiftUI's
+# View) a warning. An incremental build prints nothing for a file it does not
+# recompile, so build into an empty scratch path and fail on any warning in its log.
+CLEAN_BUILD="$(mktemp -d -t niko-ci-build.XXXXXX)"
+CLEAN_BUILD_LOG="$CLEAN_BUILD/ci-build.log"
+trap 'rm -rf "$CLEAN_BUILD"' EXIT
+swift build --build-tests --explicit-target-dependency-import-check error --scratch-path "$CLEAN_BUILD" 2>&1 | tee "$CLEAN_BUILD_LOG"
+if grep -q 'warning: ' "$CLEAN_BUILD_LOG"; then
+  echo "swift build printed warnings; AGENTS.md allows none:" >&2
+  grep 'warning: ' "$CLEAN_BUILD_LOG" >&2
+  exit 1
+fi
 
 echo "== swift test (local deterministic gate) =="
 # The always-on Mac reports system-audio permission as authorized but cannot reliably
