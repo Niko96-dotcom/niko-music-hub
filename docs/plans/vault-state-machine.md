@@ -21,8 +21,8 @@ and this file is deleted.
 | 0 Baseline | waiting for the UI lock (runs on a clone at `4302564`) | | |
 | 1 Crash tests for every unguarded window, and a record of the real edges | done | `c94311b` | 17 new tests pass on today's code; the Vault-related suites (filter `Vault\|Restore\|Recovery\|KeepLocal\|Friends\|ArchiveStorage\|Workflow\|Done`): 804 passed, 0 failed, no warning; plants A–J below each fail their test, source restored from a backup copy |
 | 2 The transfer table lists exactly the real edges | done | `0e8229f` | `ProjectVaultStateMachineTests` 6/6 and `ArchiveStorageProviderSimulationTests` pass; the Vault-related suites: 803 passed, 0 failed (the state machine tests went from 7 to 6); plant: drop `removingActiveCopy → archiveVerified` → the coverage and frozen-graph tests fail; add `archiveVerified → failedRecoverable` → the illegal-edge and frozen-graph tests fail |
-| 3 Every transfer write goes through one checked function | done | this commit | wide Vault-related suites (filter as in step 1 plus `Archive`) with the checked writes, before the new tests: 1,491 passed, 0 failed; new: `VaultStateWriterSourceTests` 2/2, 2 unlisted-edge tests; plants: a direct `record.state = .archiveVerified` → the source test fails; the table allows `materializingArchive → failedRecoverable` or `archiveVerified → failedRecoverable` → the matching unlisted-edge test fails; `checkAndSave` without the check → both fail |
-| 4 Restore phases get their own checked table | not started | | |
+| 3 Every transfer write goes through one checked function | done | `ac9096a` | wide Vault-related suites (filter as in step 1 plus `Archive`) with the checked writes, before the new tests: 1,491 passed, 0 failed; new: `VaultStateWriterSourceTests` 2/2, 2 unlisted-edge tests; plants: a direct `record.state = .archiveVerified` → the source test fails; the table allows `materializingArchive → failedRecoverable` or `archiveVerified → failedRecoverable` → the matching unlisted-edge test fails; `checkAndSave` without the check → both fail |
+| 4 Restore phases get their own checked table | done | this commit | wide Vault-related suites: 1,498 passed, 0 failed (1,491 + the 7 tests of steps 3–4); new: `VaultRestorePhaseTests` 3/3, source test extended to `phase`; plants: a direct `record.phase = .materializingArchive` → the source test fails; the rewind dropped from the table → `testCopyingRecoveryWithMissingStagingRewindsThroughAdmittedExactMaterialization` and the table tests fail; `copyingToActiveStaging → superseded` dropped → `testLegacyDuplicateRestoreRecoverySupersedesLoserBeforeExecutingNewestOwner` fails (the reconcile transaction rolls back) |
 | 5 Docs, full gates, live check | not started | | |
 
 ### Revision 1 (2026-10-24, step 1)
@@ -92,6 +92,16 @@ and this file is deleted.
 - **Source test.** `VaultStateWriterSourceTests` (AppCoreTests) scans `Sources/NikoMusicCore`, `Sources/AppCore/
   ProjectVault` and every other file that names a transfer record, store or engine; an initializer's
   `self.state = state` is not a change.
+
+### Revision 4 (2026-10-24, step 4)
+
+- **Restore table.** `VaultRestorePhase.allowedNextPhases`: the chain, the rewind `copyingToActiveStaging →
+  materializingArchive`, and every incomplete phase `→ superseded` (launch reconcile). `checkedChange(to:)` throws
+  `VaultTransitionError.illegalRestorePhase`. Finishing (`completedAt`) and stopping (`stoppedAt`) are not phases.
+- **Writers.** `LocalVaultRestoreEngine.checkAndSave` (was `advance`) and the rewind go through the table; the store's
+  reconcile uses `checkedChange` inside its `BEGIN IMMEDIATE` transaction, so an unlisted retirement rolls the whole
+  reconcile back and launch recovers no restore (fail closed). No real path reaches an unlisted restore edge, so the
+  engine-level refusal is shown by the plants, not by a committed test.
 
 ## Decisions for Niko
 

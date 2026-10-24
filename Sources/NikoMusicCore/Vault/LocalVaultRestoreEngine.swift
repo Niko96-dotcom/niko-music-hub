@@ -443,7 +443,7 @@ public actor LocalVaultRestoreEngine {
                         record.error = nil
                         try persist(&record)
                     }
-                    try advance(&record, to: .copyingToActiveStaging)
+                    try checkAndSave(&record, to: .copyingToActiveStaging)
                 case .copyingToActiveStaging:
                     try inject(.copyingToActiveStaging, record)
                     if !fileManager.fileExists(atPath: record.stagingURL.path) {
@@ -462,8 +462,7 @@ public actor LocalVaultRestoreEngine {
                                 try markLegacyProjectionReview(&record)
                                 throw LocalVaultRestoreError.archiveLocalityUnavailable
                             }
-                            record.phase = .materializingArchive
-                            try persist(&record)
+                            try checkAndSave(&record, to: .materializingArchive)
                             continue
                         }
                     }
@@ -471,16 +470,16 @@ public actor LocalVaultRestoreEngine {
                         &record,
                         requiresArchiveTransferBinding: requiresArchiveTransferBinding
                     )
-                    try advance(&record, to: .verifyingActiveStaging)
+                    try checkAndSave(&record, to: .verifyingActiveStaging)
                 case .verifyingActiveStaging:
                     try inject(.verifyingActiveStaging, record)
                     try manifestBuilder.verify(record.manifest, at: record.stagingURL)
-                    try advance(&record, to: .promotingActiveCopy)
+                    try checkAndSave(&record, to: .promotingActiveCopy)
                 case .promotingActiveCopy:
                     try inject(.promotingActiveCopy, record)
                     try promote(record)
                     try crash(.renamedBeforePhaseSave, record)
-                    try advance(&record, to: .persistingActiveLocation)
+                    try checkAndSave(&record, to: .persistingActiveLocation)
                 case .persistingActiveLocation:
                     try inject(.persistingActiveLocation, record)
                     try revalidatePromotedActiveDestination(&record)
@@ -494,7 +493,7 @@ public actor LocalVaultRestoreEngine {
                         record.catalogLocationPersisted = true
                         try persist(&record)
                     }
-                    try advance(&record, to: .openingInCubase)
+                    try checkAndSave(&record, to: .openingInCubase)
                 case .openingInCubase:
                     try inject(.openingInCubase, record)
                     try revalidatePromotedActiveDestination(&record)
@@ -851,8 +850,12 @@ public actor LocalVaultRestoreEngine {
         }
     }
 
-    private func advance(_ record: inout VaultRestoreRecord, to phase: VaultRestorePhase) throws {
-        record.phase = phase
+    /// The engine's only writer of a restore's `phase`. The phase table checks
+    /// the change first, so an unlisted one throws before anything is saved;
+    /// then the record is saved with its new phase, before that phase's side
+    /// effect.
+    private func checkAndSave(_ record: inout VaultRestoreRecord, to phase: VaultRestorePhase) throws {
+        record.phase = try record.phase.checkedChange(to: phase)
         try persist(&record)
     }
 

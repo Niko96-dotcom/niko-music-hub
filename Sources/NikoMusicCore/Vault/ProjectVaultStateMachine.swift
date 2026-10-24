@@ -66,6 +66,7 @@ public enum VaultTransition: Equatable, Sendable {
 public enum VaultTransitionError: Error, Equatable, Sendable {
     case illegal(from: VaultTransferState, to: VaultTransferState)
     case removalNotProven
+    case illegalRestorePhase(from: VaultRestorePhase, to: VaultRestorePhase)
 }
 
 public enum VaultFailureReason: String, CaseIterable, Codable, Hashable, Sendable {

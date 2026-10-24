@@ -8,6 +8,31 @@ public enum VaultRestorePhase: String, CaseIterable, Codable, Sendable {
     case persistingActiveLocation
     case openingInCubase
     case superseded
+
+    /// Every phase change a restore makes, each with the path that makes it.
+    /// A change the table does not list throws before anything is saved.
+    /// Finishing sets `completedAt` and stopping sets `stoppedAt`; neither
+    /// changes the phase.
+    static let allowedNextPhases: [VaultRestorePhase: Set<VaultRestorePhase>] = [
+        // The restore chain (`LocalVaultRestoreEngine`). Launch reconcile retires
+        // a losing duplicate in any phase before it completes (`superseded`).
+        .materializingArchive: [.copyingToActiveStaging, .superseded],
+        // The staging copy is gone and the Vault copy is not local: materialize again.
+        .copyingToActiveStaging: [.verifyingActiveStaging, .materializingArchive, .superseded],
+        .verifyingActiveStaging: [.promotingActiveCopy, .superseded],
+        .promotingActiveCopy: [.persistingActiveLocation, .superseded],
+        .persistingActiveLocation: [.openingInCubase, .superseded],
+        .openingInCubase: [.superseded],
+        .superseded: [],
+    ]
+
+    /// `next`, when the table lists the change from this phase.
+    func checkedChange(to next: VaultRestorePhase) throws -> VaultRestorePhase {
+        guard Self.allowedNextPhases[self, default: []].contains(next) else {
+            throw VaultTransitionError.illegalRestorePhase(from: self, to: next)
+        }
+        return next
+    }
 }
 
 public enum VaultRestoreFailureReason: String, Codable, Equatable, Sendable {
