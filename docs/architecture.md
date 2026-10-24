@@ -481,6 +481,12 @@ saved in `vault_restores`) each change only through one table.
   its last saved state for launch recovery. That covers the restore-half cases of `VaultTransferState`, which no
   transfer record ever held, and the edges a path reaches only after a journal save already failed. In the reconcile,
   a refusal rolls the whole transaction back.
+- Launch never resumes, retries or retires an interrupted removal: a transfer in `removingActiveCopy` or
+  `evictingProviderCache`, or a legacy `failedRecoverable` whose `error.origin` is one of them, goes to
+  `recoveryRequired` for the person's review (`recoverInterruptedRemoval`), with its generation evidence kept and no
+  file touched. That holds when survivor retirement finds a newer verified generation of the project too: retirement
+  decides such a record itself, because the later launch pass reads only the newest record of each project. The
+  table has no edge from a removal phase to `superseded`; any other older incomplete transfer still retires.
 - Write-ahead order: each writer saves the new state before the side effect it describes. The phase fault points
   (`VaultTransferFaultPoint`, `VaultRestoreFaultPoint`) and the crash windows (`VaultTransferCrashWindow`,
   `VaultRestoreCrashWindow`: between a side effect and the save that records it) let a test stop an engine as if the
@@ -491,9 +497,7 @@ saved in `vault_restores`) each change only through one table.
   made when the tables were written (2026-10-24).
 - Open: the store saves without an expected-state compare-and-set, so a stale writer is not refused (survivor
   retirement does a read-compare); the removal evidence passes constant `manifestVerified` and `metadataPersisted`
-  values; a crash between a restore's open and its `completedAt` save opens the project again at the next launch;
-  survivor retirement can retire a transfer still in a removal phase when a newer verified generation of the project
-  exists (the table keeps that edge; without it, the record would go to `recoveryRequired`).
+  values; a crash between a restore's open and its `completedAt` save opens the project again at the next launch.
 
 ## Tool output destination
 

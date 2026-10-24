@@ -2070,9 +2070,14 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             let projectID = ProjectID()
             let baseDate = Date(timeIntervalSince1970: 50_000)
             var obsoleteIDs: [UUID] = []
+            var interruptedRemovalIDs: Set<UUID> = []
             for index in 0..<12 {
                 let id = UUID()
                 obsoleteIDs.append(id)
+                // Every other row is a legacy failed removal: it goes to review
+                // instead of retiring.
+                let isInterruptedRemoval = index.isMultiple(of: 2)
+                if isInterruptedRemoval { interruptedRemovalIDs.insert(id) }
                 let staging = fixture.archive
                     .appendingPathComponent(".niko-staging", isDirectory: true)
                     .appendingPathComponent(projectID.description, isDirectory: true)
@@ -2091,8 +2096,9 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                     createdAt: baseDate.addingTimeInterval(Double(index))
                 )
                 obsolete.updatedAt = baseDate.addingTimeInterval(Double(index))
+                obsolete.retryCount = VaultTransferRecoveryPolicy.production.maximumAutomaticAttempts
                 obsolete.error = VaultTransferError(
-                    origin: .removingActiveCopy,
+                    origin: isInterruptedRemoval ? .removingActiveCopy : .copyingToArchiveStaging,
                     reason: .unknown,
                     message: "obsolete failure must be retired without replay"
                 )
@@ -2129,6 +2135,20 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             survivor.durability = locality == .onlineOnly ? .syncedToProvider : .verifiedLocal
             try store.save(survivor)
 
+            func assertRetirementDecided(_ results: [VaultTransferRecord]) throws {
+                for id in obsoleteIDs {
+                    let record = try XCTUnwrap(store.record(id: id), "\(locality)")
+                    if interruptedRemovalIDs.contains(id) {
+                        XCTAssertEqual(record.state, .recoveryRequired, "\(locality)")
+                        XCTAssertNil(record.supersededBy, "\(locality)")
+                    } else {
+                        XCTAssertEqual(record.state, .superseded, "\(locality)")
+                        XCTAssertEqual(record.supersededBy, survivorID, "\(locality)")
+                    }
+                }
+                XCTAssertEqual(Set(results.map(\.id)), interruptedRemovalIDs, "\(locality)")
+            }
+
             let validationProbe = SurvivorValidationProbe()
             let writeAdmissions = VaultFaultPointRecorder()
             let writeAdmission: LocalVaultTransferEngine.WriteAdmission = { _, operation in
@@ -2151,9 +2171,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
 
                 let results = await engine.recoverAtLaunch()
 
-                let retired = try obsoleteIDs.compactMap { try store.record(id: $0) }
-                XCTAssertTrue(retired.allSatisfy { $0.state == .superseded }, "\(locality)")
-                XCTAssertTrue(retired.allSatisfy { $0.supersededBy == survivorID }, "\(locality)")
+                try assertRetirementDecided(results)
                 XCTAssertEqual(validationProbe.totalProbeCount, 0, "online-only evidence must remain byte-neutral")
                 let localityCallCount = await provider.localityCallCount()
                 let sideEffectCallCount = await provider.sideEffectCallCount()
@@ -2162,7 +2180,6 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                 XCTAssertEqual(barrierCallCount, 1, "online-only retirement requires fresh sync proof")
                 XCTAssertEqual(sideEffectCallCount, 0, "online-only retirement must not materialize")
                 XCTAssertEqual(writeAdmissions.count, 0, "retirement must not replay bulk-copy writes")
-                XCTAssertTrue(results.allSatisfy { retired.map(\.id).contains($0.id) == false })
             } else {
                 let provider = CountingRemovalProvider()
                 let engine = try LocalVaultTransferEngine(
@@ -2179,16 +2196,13 @@ final class LocalVaultTransferEngineTests: XCTestCase {
 
                 let results = await engine.recoverAtLaunch()
 
-                let retired = try obsoleteIDs.compactMap { try store.record(id: $0) }
-                XCTAssertTrue(retired.allSatisfy { $0.state == .superseded }, "\(locality)")
-                XCTAssertTrue(retired.allSatisfy { $0.supersededBy == survivorID }, "\(locality)")
+                try assertRetirementDecided(results)
                 XCTAssertEqual(validationProbe.verificationRootCount, 1, "one local survivor verify per project")
                 let barrierCallCount = await provider.barrierCount()
                 let evictionCallCount = await provider.evictionCount()
                 XCTAssertGreaterThanOrEqual(barrierCallCount, 1, "local retirement requires fresh barrier reproof")
                 XCTAssertEqual(evictionCallCount, 0)
                 XCTAssertEqual(writeAdmissions.count, 0, "retirement must not replay bulk-copy writes")
-                XCTAssertTrue(results.allSatisfy { retired.map(\.id).contains($0.id) == false })
             }
             XCTAssertTrue(obsoleteIDs.allSatisfy { id in
                 FileManager.default.fileExists(
@@ -2245,8 +2259,12 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                 createdAt: baseDate
             )
             obsolete.updatedAt = baseDate
+            // An archive-phase failure with a spent retry budget: only survivor
+            // retirement changes it. An interrupted removal would go to review
+            // whether or not the survivor evidence holds.
+            obsolete.retryCount = VaultTransferRecoveryPolicy.production.maximumAutomaticAttempts
             obsolete.error = VaultTransferError(
-                origin: .removingActiveCopy,
+                origin: .copyingToArchiveStaging,
                 reason: .unknown,
                 message: "must never replay while survivor evidence is reviewed"
             )

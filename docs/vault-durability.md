@@ -281,7 +281,8 @@ Crash windows and state changes: `Tests/NikoMusicCoreTests/VaultCrashWindowTests
 records it: the copy before its manifest, the generation rename, the removal
 re-proof, before and after `removeItem`, after eviction, interrupted-removal
 recovery before the preserving move and before its save, the launch and
-explicit retry rewinds, survivor retirement, the legacy normalization, and on
+explicit retry rewinds, survivor retirement and its hand-off of an interrupted
+removal to review, the legacy normalization, and on
 restore the rename, the catalog write and the open, whose crash opens the
 project a second time; each run's edges must be observed ones), the portable
 retry windows in `VaultArchiveLayoutTests`, the two unlisted-edge tests (a
@@ -371,7 +372,9 @@ not listed as gaps.
    held generations — existence plus exact manifest bytes; online-only stays
    byte-neutral (envelope plus path; locality already proven fresh). Then
    `proveRecoveryPersistence()` must succeed before any older record for
-   that project is marked `superseded`. Missing, corrupt, unproven (`nil`),
+   that project is marked `superseded`. An older record in a removal phase,
+   or a legacy failure saved in one, is never marked `superseded`: the same
+   pass saves it `recoveryRequired` for the person's review. Missing, corrupt, unproven (`nil`),
    fresh-barrier-throw, binding-mismatch, or journal-throw all leave older
    records recoverable with staging preserved. No `COPY` is replayed (gated
    by zero write-admission assertions on the retirement path) and no

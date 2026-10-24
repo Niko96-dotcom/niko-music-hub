@@ -283,18 +283,20 @@ public actor LocalVaultTransferEngine {
         // the journal proof, and the supersession persist. Any failure leaves
         // older records recoverable. Retirement never deletes staging or
         // generations and never replays a copy; it only marks the older
-        // record superseded. Cloud online-only never infers durability from a
-        // placeholder and never materializes: it requires fresh
-        // `.syncedToProvider` plus live locality (fullyLocalCurrent or
-        // materializationRequired) without any materialize call.
-        var retiredIDs = Set<UUID>()
+        // record superseded, or hands an interrupted removal to review.
+        // Cloud online-only never infers durability from a placeholder and
+        // never materializes: it requires fresh `.syncedToProvider` plus live
+        // locality (fullyLocalCurrent or materializationRequired) without any
+        // materialize call.
+        var decidedIDs = Set<UUID>()
+        var handedToReview: [VaultTransferRecord] = []
         for (_, survivor) in verifiedSurvivors where !holdsByteWork {
             // Verification can read gigabytes. It is needed here only if this
             // generation could retire an older incomplete transfer for its song.
             guard records.contains(where: {
                 $0.projectID == survivor.projectID
                     && Self.isCausallyOlder($0, than: survivor)
-                    && !retiredIDs.contains($0.id)
+                    && !decidedIDs.contains($0.id)
             }) else { continue }
             guard let fresh = await freshSurvivorDurabilityForRetirement(survivor) else { continue }
             // Final binding is synchronous. No awaits occur between this
@@ -307,30 +309,39 @@ public actor LocalVaultTransferEngine {
             }
             for var record in records where record.projectID == survivor.projectID
                 && Self.isCausallyOlder(record, than: survivor)
-                && !retiredIDs.contains(record.id) {
+                && !decidedIDs.contains(record.id) {
                 guard let current = try? store.record(id: record.id),
                       current.state == record.state,
                       current.supersededBy == nil else { continue }
+                // A newer generation does not show that an interrupted removal
+                // kept the Active folder. Decided here: the later pass reads
+                // only the newest record of each project.
+                if let origin = Self.interruptedRemovalOrigin(of: record) {
+                    guard let reviewed = try? handInterruptedRemovalToReview(record, origin: origin) else { continue }
+                    handedToReview.append(reviewed)
+                    decidedIDs.insert(record.id)
+                    continue
+                }
                 record.supersededBy = survivor.id
                 record.error = nil
                 record.nextRetryAt = nil
                 do {
                     try checkAndSave(&record, to: .superseded)
-                    retiredIDs.insert(record.id)
+                    decidedIDs.insert(record.id)
                 } catch {
                     continue
                 }
             }
         }
         records.removeAll { record in
-            retiredIDs.contains(record.id)
+            decidedIDs.contains(record.id)
                 || (try? store.record(id: record.id)?.state) == .superseded
         }
         // A failed automatic attempt used to create a fresh transfer every minute.
         // Resume only the newest record for each project so launch recovery cannot
         // replay several full-project copies and hashes for the same source.
         let newestRecords = VaultTransferRecoveryPolicy.candidates(from: records)
-        var results: [VaultTransferRecord] = []
+        var results = handedToReview
         for var record in newestRecords {
             if needsLegacyMetadataMigration(record) {
                 guard !holdsByteWork else {
@@ -344,56 +355,16 @@ public actor LocalVaultTransferEngine {
                     continue
                 }
             }
+            if let origin = Self.interruptedRemovalOrigin(of: record) {
+                results.append((try? handInterruptedRemovalToReview(record, origin: origin)) ?? record)
+                continue
+            }
             if record.state == .failedRecoverable {
                 guard let origin = record.error?.origin,
                       VaultTransferRetryPolicy.permitsNondestructiveArchiveOrigin(origin) else {
-                    // Legacy V1 persisted failedRecoverable with a destructive
-                    // origin (removingActiveCopy/evictingProviderCache). It has
-                    // no retry route: retryRecoverableTransfer rejects
-                    // destructive origins and recoverInterruptedRemoval requires
-                    // recoveryRequired. Normalize truthfully to recoveryRequired
-                    // independent of the attempt ceiling, preserving generation
-                    // evidence and without touching the filesystem.
-                    if let destructiveOrigin = record.error?.origin,
-                       destructiveOrigin == .removingActiveCopy || destructiveOrigin == .evictingProviderCache {
-                        let persistedLegacyFailure = record
-                        var migrated = record
-                        migrated.error = VaultTransferError(
-                            origin: destructiveOrigin,
-                            reason: record.error?.reason ?? .unknown,
-                            message: "An earlier transfer stopped while removing the Active folder or clearing the cloud app’s offline copy. The Active folder may be missing or incomplete. Recovery will verify the Vault copy first."
-                        )
-                        migrated.nextRetryAt = nil
-                        do {
-                            try checkAndSave(&migrated, to: .recoveryRequired)
-                            results.append(migrated)
-                        } catch {
-                            results.append(persistedLegacyFailure)
-                        }
-                    } else {
-                        results.append(record)
-                    }
+                    results.append(record)
                     continue
                 }
-            }
-            if record.state == .removingActiveCopy || record.state == .evictingProviderCache {
-                let persistedDestructivePhase = record
-                let origin = record.state
-                record.error = VaultTransferError(
-                    origin: origin,
-                    reason: .unknown,
-                    message: origin == .removingActiveCopy
-                        ? "At launch, the app couldn’t confirm whether removing the Active folder finished. It may be missing or incomplete. The Vault copy will be verified before recovery."
-                        : "At launch, the app couldn’t confirm whether clearing the cloud app’s offline copy finished. The Active folder had already been removed. The Vault copy will be verified before recovery."
-                )
-                record.nextRetryAt = nil
-                do {
-                    try checkAndSave(&record, to: .recoveryRequired)
-                    results.append(record)
-                } catch {
-                    results.append(persistedDestructivePhase)
-                }
-                continue
             }
             if holdsByteWork {
                 results.append(record)
@@ -424,6 +395,40 @@ public actor LocalVaultTransferEngine {
             catch { results.append((try? store.record(id: record.id)) ?? record) }
         }
         return VaultJournalReadReport(records: results, unreadableRows: journal.unreadableRows)
+    }
+
+    /// The removal phase a launch found a record in, or the origin of a legacy
+    /// V1 `failedRecoverable` saved in one; nil for any other record. Such a
+    /// removal may have removed part of the Active folder, so launch never
+    /// resumes, retries or retires it: the person reviews it.
+    private static func interruptedRemovalOrigin(of record: VaultTransferRecord) -> VaultTransferState? {
+        let phase = record.state == .failedRecoverable ? record.error?.origin : record.state
+        return phase == .removingActiveCopy || phase == .evictingProviderCache ? phase : nil
+    }
+
+    /// Saves an interrupted removal as `recoveryRequired`, the state
+    /// `recoverInterruptedRemoval` accepts, independent of the attempt ceiling.
+    /// Keeps the generation evidence and touches no file. Returns the saved
+    /// record; on a throw the journal keeps the record as it was.
+    private func handInterruptedRemovalToReview(
+        _ record: VaultTransferRecord, origin: VaultTransferState
+    ) throws -> VaultTransferRecord {
+        var reviewed = record
+        let message = if record.state == .failedRecoverable {
+            "An earlier transfer stopped while removing the Active folder or clearing the cloud app’s offline copy. The Active folder may be missing or incomplete. Recovery will verify the Vault copy first."
+        } else if origin == .removingActiveCopy {
+            "At launch, the app couldn’t confirm whether removing the Active folder finished. It may be missing or incomplete. The Vault copy will be verified before recovery."
+        } else {
+            "At launch, the app couldn’t confirm whether clearing the cloud app’s offline copy finished. The Active folder had already been removed. The Vault copy will be verified before recovery."
+        }
+        reviewed.error = VaultTransferError(
+            origin: origin,
+            reason: record.state == .failedRecoverable ? record.error?.reason ?? .unknown : .unknown,
+            message: message
+        )
+        reviewed.nextRetryAt = nil
+        try checkAndSave(&reviewed, to: .recoveryRequired)
+        return reviewed
     }
 
     /// Explicit user-authorized retry path for records that reached the automatic

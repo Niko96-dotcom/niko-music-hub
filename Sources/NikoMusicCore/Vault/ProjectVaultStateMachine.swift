@@ -135,16 +135,16 @@ public struct ProjectVaultStateMachine: Sendable {
         .archiveVerified: [.archiveVerified],
         // Refused or stopped before `removeItem`: back to `archiveVerified`, the
         // Active folder kept. Stopped or failed at or after it, or found at
-        // launch: `recoveryRequired`. Survivor retirement at launch reaches these
-        // phases too (`superseded`), as for every phase launch recovery reads.
-        .removingActiveCopy: [.evictingProviderCache, .archiveVerified, .recoveryRequired, .superseded],
-        .evictingProviderCache: [.archivedOnlineOnly, .archivedLocal, .recoveryRequired, .superseded],
+        // launch: `recoveryRequired`. A newer verified generation never retires
+        // an interrupted removal; launch hands it to review instead.
+        .removingActiveCopy: [.evictingProviderCache, .archiveVerified, .recoveryRequired],
+        .evictingProviderCache: [.archivedOnlineOnly, .archivedLocal, .recoveryRequired],
         // A restored project's earlier generation: removal re-proves it.
         .archivedOnlineOnly: [.archiveVerified],
         .archivedLocal: [.archiveVerified],
         // Retry, at launch or by the person: back to the failed phase, or to a
         // fresh copy (portable retry). A legacy failure in a removal phase needs
-        // review; a newer verified generation retires it.
+        // review; a newer verified generation retires any other failure.
         .failedRecoverable: [
             .activeLocal, .archiveEligible, .preparingArchive, .copyingToArchiveStaging,
             .verifyingArchiveStaging, .awaitingProviderDurability, .promotingArchiveGeneration,

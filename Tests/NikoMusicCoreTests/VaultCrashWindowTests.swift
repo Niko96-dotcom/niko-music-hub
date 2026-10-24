@@ -246,6 +246,78 @@ final class VaultCrashWindowTests: XCTestCase {
         fixture.assertEdgesWereObserved()
     }
 
+    /// A newer verified generation does not show that an interrupted removal
+    /// kept the Active folder, so retirement hands the removal to the person's
+    /// review instead, and their recovery works as for any interrupted removal.
+    /// An archive-phase failure of the same project still retires.
+    func testSurvivorRetirementHandsAnInterruptedRemovalToReview() async throws {
+        let removals: [(phase: VaultTransferState, legacyFailure: Bool)] = [
+            (.removingActiveCopy, false),
+            (.evictingProviderCache, false),
+            (.removingActiveCopy, true),
+            (.evictingProviderCache, true),
+        ]
+        for (phase, legacyFailure) in removals {
+            let label = legacyFailure ? "legacy failure in \(phase)" : "\(phase)"
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.stoppedRemoval(in: phase, legacyFailure: legacyFailure)
+            let archiveFailure = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 1,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(5)
+            )
+            let survivor = try fixture.verifiedSurvivor(for: removal, createdAt: removal.createdAt.addingTimeInterval(10))
+
+            let relaunch = try await fixture.launchTwice()
+
+            let reviewed = try XCTUnwrap(fixture.store.record(id: removal.id), label)
+            XCTAssertEqual(reviewed.state, .recoveryRequired, label)
+            XCTAssertEqual(reviewed.error?.origin, phase, label)
+            XCTAssertNil(reviewed.supersededBy, label)
+            XCTAssertNil(reviewed.nextRetryAt, label)
+            XCTAssertEqual(reviewed.manifest, removal.manifest, label)
+            XCTAssertEqual(reviewed.durability, removal.durability, label)
+            XCTAssertEqual(reviewed.destinationURL, removal.destinationURL, label)
+            XCTAssertEqual(relaunch.first.map(\.id), [removal.id], label)
+            XCTAssertEqual(relaunch.firstOperations, [], "launch never resumes or retires a removal (\(label))")
+            relaunch.assertSecondLaunchChangesNothing()
+            let retired = try XCTUnwrap(fixture.store.record(id: archiveFailure.id), label)
+            XCTAssertEqual(retired.state, .superseded, label)
+            XCTAssertEqual(retired.supersededBy, survivor.id, label)
+
+            let recovered = try await fixture.engine().recoverInterruptedRemoval(id: removal.id)
+            XCTAssertEqual(recovered.state, .archiveVerified, label)
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
+    /// The later launch normalization sees only the newest record of a
+    /// project, so retirement decides an older interrupted removal itself.
+    func testSurvivorRetirementHandsAnOlderInterruptedRemovalToReviewBesideANewerFailure() async throws {
+        let fixture = try TransferCrashFixture()
+        defer { fixture.remove() }
+        let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy)
+        let survivor = try fixture.verifiedSurvivor(for: removal, createdAt: removal.createdAt.addingTimeInterval(10))
+        let newerFailure = try fixture.failedRecord(
+            origin: .awaitingProviderDurability, retryCount: 5,
+            projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+        )
+        let savedFailure = try fixture.store.record(id: newerFailure.id)
+
+        let relaunch = try await fixture.launchTwice()
+
+        let reviewed = try XCTUnwrap(fixture.store.record(id: removal.id))
+        XCTAssertEqual(reviewed.state, .recoveryRequired)
+        XCTAssertEqual(reviewed.error?.origin, .removingActiveCopy)
+        XCTAssertNil(reviewed.supersededBy)
+        XCTAssertEqual(try fixture.store.record(id: newerFailure.id), savedFailure, "a failure newer than the survivor stays")
+        XCTAssertEqual(try fixture.store.record(id: survivor.id)?.state, .archiveVerified)
+        XCTAssertEqual(relaunch.firstOperations, [])
+        relaunch.assertSecondLaunchChangesNothing()
+        XCTAssertEqual(fixture.store.transferEdges.last, .init(.removingActiveCopy, .recoveryRequired))
+        fixture.assertEdgesWereObserved()
+    }
+
     func testRelaunchAfterTheLegacyDestructiveFailureNormalizationChangesNothing() async throws {
         let fixture = try TransferCrashFixture()
         defer { fixture.remove() }
@@ -559,13 +631,24 @@ private final class TransferCrashFixture {
         return record
     }
 
+    /// A verified archive whose removal stopped in `phase` without a launch
+    /// since; with `legacyFailure`, saved as the V1 `failedRecoverable` of that
+    /// phase instead. Saved past the recorder, since the test sets it up.
+    func stoppedRemoval(in phase: VaultTransferState, legacyFailure: Bool = false) async throws -> VaultTransferRecord {
+        var record = try await verifiedArchive()
+        record.state = legacyFailure ? .failedRecoverable : phase
+        record.error = legacyFailure ? VaultTransferError(origin: phase, reason: .unknown, message: "stopped") : nil
+        try store.base.save(record)
+        return record
+    }
+
     /// A failed transfer with a complete staging copy, saved past the recorder.
     func failedRecord(
         origin: VaultTransferState,
         retryCount: Int,
+        projectID: ProjectID = ProjectID(),
         createdAt: Date
     ) throws -> VaultTransferRecord {
-        let projectID = ProjectID()
         let transferID = UUID()
         let staging = VaultFolders.staging(in: archive, projectID: projectID, operationID: transferID)
         try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(), withIntermediateDirectories: true)

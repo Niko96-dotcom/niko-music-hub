@@ -19,8 +19,8 @@ final class ProjectVaultStateMachineTests: XCTestCase {
             .awaitingProviderDurability: [.promotingArchiveGeneration, .failedRecoverable, .superseded],
             .promotingArchiveGeneration: [.archiveVerified, .failedRecoverable, .recoveryRequired, .superseded],
             .archiveVerified: [.archiveVerified],
-            .removingActiveCopy: [.evictingProviderCache, .archiveVerified, .recoveryRequired, .superseded],
-            .evictingProviderCache: [.archivedOnlineOnly, .archivedLocal, .recoveryRequired, .superseded],
+            .removingActiveCopy: [.evictingProviderCache, .archiveVerified, .recoveryRequired],
+            .evictingProviderCache: [.archivedOnlineOnly, .archivedLocal, .recoveryRequired],
             .archivedOnlineOnly: [.archiveVerified],
             .archivedLocal: [.archiveVerified],
             .failedRecoverable: Set(archivePhases).union([.recoveryRequired, .superseded]),
@@ -70,6 +70,9 @@ final class ProjectVaultStateMachineTests: XCTestCase {
             .init(.failedRecoverable, .archiveVerified),
             .init(.failedRecoverable, .removingActiveCopy),
             .init(.failedRecoverable, .evictingProviderCache),
+            // An interrupted removal goes to review; a newer generation never retires it.
+            .init(.removingActiveCopy, .superseded),
+            .init(.evictingProviderCache, .superseded),
             // A retired or never-held state goes nowhere.
             .init(.superseded, .activeLocal),
             .init(.superseded, .archiveVerified),
