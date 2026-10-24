@@ -106,7 +106,8 @@ Archive domain and safety. No SwiftUI/AppKit.
   installer, Set Up model; see [Helper tools](#helper-tools)), `Archive/` (FSEvents archive-root watcher), `Audio/` (WAV output spec and verification), `QuickAccess/`
   (router, menu bar model), `Navigation/` (`HubNavigationHistory`).
 - Shell jobs and quit: `ShellJobStatusCenter`, `CancelCopy`, `HubTerminationCoordinator` (see
-  [Running work and quit](#running-work-and-quit)).
+  [Running work and quit](#running-work-and-quit)); Esc and ⌘. routing (`InAppJobCancelRouting`, see
+  [Tool self-description](#tool-self-description)).
 - Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, the admissions and the capacity probe (`FoundationProjectVaultCapacityProbe`); it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`. The activity probe (`SystemVaultAutomationActivityProbe`) lives in `NikoMusicCore/Vault/VaultAutomation.swift`.
 - Shared UI: `ToolHeaderBlock`, `HubInspectorPage`, hub design tokens (see `docs/design-contract.md`).
 - `HubRelativeTime` formats relative dates in English, matching the app's UI independently of the system locale.
@@ -337,6 +338,33 @@ Archive Browser footer shows: at most one message and one warning, joined by one
   (the archive's board⇄list flip icon).
 - Production tools render through `HubInspectorPage` (content column + fixed inspector rail). Layout
   rules and keylines: `docs/design-contract.md`.
+
+## Tool self-description
+
+Shared shell code knows a tool only through what the tool says about itself. It does not branch on tool IDs to
+order, route or label anything (2026-10-24, finding #9 of the 2026-10-22 review).
+
+- **IDs.** The six product tools' IDs are defined once, in
+  [`BuiltInToolIDs.swift`](../Sources/AppCore/Features/BuiltInToolIDs.swift) (`ToolFeatureID.archiveBrowser` …
+  `.stemSeparation`); Settings and the Dev Tool spell theirs in their feature files. An ID is stored (the shell's
+  selection, inbox items) and typed (`-ui-tool`), so it never changes. AppCore names a tool only for the curated menu
+  bar list (`QuickAccessEntry.allowlist`), the router's two cross-tool requests (Search Archive…, a converter
+  hand-off) and `OutputHandoff`'s Downloader file types. `ToolIDSourceTests` keeps the literals in their owners.
+- **Order.** `ToolMetadata.section` (`library`, `production`, `settings`) places a tool. `ToolSection.sidebarOrder`
+  is the one order: the sidebar, the Tools menu, ⌘1…⌘9, the arrow keys and the Dock menu use it. Registration order
+  alone is not enough, because the Dev Tool registers after Settings. A `settings` tool opens the Settings window:
+  it is never the main pane or the launch tool and has no ⌘ digit. The menu bar menu keeps its own curated order.
+- **Esc and ⌘.** Each job says what the keys cancel it as (`ShellJobStatus.cancelTarget`) and whose it is
+  (`sourceToolID`; `nil` for shell work such as a Vault transfer or a scan). Each tool says whether its pane keeps
+  Esc (`ToolMetadata.handlesEscape`: the Archive Browser, Downloader, Stem Separation and WAV Converter).
+  `InAppJobCancelRouting` is two functions over the job list: Esc on a pane that keeps Esc cancels that tool's own
+  jobs (the archive owns none, so Esc stays with its views); on any other pane it cancels the shell work of the first
+  target. ⌘. cancels every job of the first target present. The ⌘. order is `InAppJobCancelTarget`'s case order
+  (downloads, stem separations, the conversion, the Vault transfer, the scan). A job without a target (the Dev Tool's
+  sample job) is cancelled only from the jobs strip.
+- **Jobs strip.** A row's verb and Cancel help come from its tool: a `JobRunner` job carries the verb and target its
+  tool passed to `enqueue`; an extra source builds its own `ShellJobStatus` (the converter's in
+  `ConverterJobReporting`, the Vault's and the scan's in `ShellJobStatusCopy`).
 
 ## Project Vault bound authorization
 

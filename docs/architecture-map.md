@@ -165,7 +165,8 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
 | Preview playback | `ArchivePreviewSession`, held by `ArchiveBrowserViewModel.previewSession`; views get it by initializer ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
-| Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter` | memory |
+| Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter`; each row's verb, Cancel help and cancel target come from its tool | memory |
+| Tool order, the Settings row, which pane keeps Esc | each tool's `ToolMetadata` (`section`, `handlesEscape`), read through `ToolSection.sidebarOrder` and `InAppJobCancelRouting` ([architecture.md § Tool self-description](architecture.md#tool-self-description)) | code |
 | Output Inbox | `JSONOutputInboxStore` | `output-inbox.json` |
 | A tool page's list of its own outputs | `ToolRecentOutputs` (AppCore), held by the tool's view model | derived from `output-inbox.json` |
 | Cross-tool requests | `QuickAccessRouter` (one-shot values) | memory |
@@ -181,7 +182,7 @@ caller.
 
 | Seam | Production adapter | Replaced in tests to |
 | --- | --- | --- |
-| `ToolFeature` | the seven feature structs | register fakes in `FeatureRegistryTests` |
+| `ToolFeature` | the seven feature structs (their `ToolMetadata` gives the sidebar section and whether the pane keeps Esc) | register fakes in `FeatureRegistryTests` |
 | `SettingsStore`, `PreferenceStore` | `UserDefaultsSettingsStore`, `UserDefaultsPreferenceStore` | use in-memory stores |
 | `OutputInboxStore` | `JSONOutputInboxStore` | capture handoffs |
 | `JobRunning` | `JobRunner` | control job timing |
@@ -221,6 +222,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Archive access is read-only; writes outside a confirmed Vault transfer are refused | [architecture.md § Safety](architecture.md#safety-architecture) | `ReadOnlyArchivePolicy`, `PathSafety`, `OutputGuardSourceTests` |
 | Every feature registers through `ToolFeature`; the archive is not special | [architecture.md § Principles](architecture.md#principles) | judgment (see gap 1) |
 | One registry of running work; quit reads it | [ADR 019](decisions/019-running-work-and-quit.md) | `HubTerminationSourceTests`, `ShellJobStatusCenterTests` |
+| Each built-in tool ID is defined once; shell code orders, routes and labels tools from their metadata and job rows, never by ID | [architecture.md § Tool self-description](architecture.md#tool-self-description) | `ToolIDSourceTests`, `ToolSectionTests`, `InAppJobCancelRoutingTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
 | A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
 | Archive views state intent; only the view model writes the archive page, and the song detail uses the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `ArchiveViewIntentSourceTests` |
