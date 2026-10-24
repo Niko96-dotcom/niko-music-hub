@@ -366,6 +366,25 @@ order, route or label anything (2026-10-24, finding #9 of the 2026-10-22 review)
   tool passed to `enqueue`; an extra source builds its own `ShellJobStatus` (the converter's in
   `ConverterJobReporting`, the Vault's and the scan's in `ShellJobStatusCopy`).
 
+## Tool page keys
+
+Return and Esc on a tool page have one owner each (2026-10-24, finding #10 of the 2026-10-22 review; rule in
+[design-contract.md §4](design-contract.md#4-tool-pages--hubinspectorpage)).
+
+- `HubInspectorPage` binds the page's `primaryKey` (Return) and `cancelKey` (Esc) as hidden keyboard-shortcut buttons,
+  only while the key is enabled and the page is the visible one (`hubToolIsActive`). The shell keeps pages you left
+  mounted, so before this a hidden page could keep Return, Esc and Space.
+- Esc: the visible page's enabled cancel key, otherwise the shell's Edit ▸ Cancel ([Tool
+  self-description](#tool-self-description)). AppKit gives a window's key buttons the key before the menu. The WAV
+  Converter's cancel key is its soft stop; Edit ▸ Cancel chosen from the menu, ⌘. and the jobs strip stop the file
+  in flight now. The stop request is not published to the view, so the key (and the visible button) stays enabled
+  until the file ends, and a second Esc only repeats the request. The Downloader and Stem Separation declare no
+  cancel key: the shell's Esc cancels their jobs. The Audio Recorder's cancel key stops the take.
+- The BPM Tapper's tap pad and the recorder's record button answer their keys only while their page is visible; the
+  tap pad gives up keyboard focus when its page is hidden and takes it back when it is shown.
+- A running job's progress is `HubJobProgressRow` (bar, optional percent and elapsed line, status line); it owns the
+  elapsed format.
+
 ## Project Vault bound authorization
 
 - Every explicit Archive confirmation captures a `ProjectVaultArchiveAuthorization` before the dialog;

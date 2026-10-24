@@ -86,6 +86,8 @@ question updates `docs/architecture-map.md` in the same commit.
 - Inspector mirrors the sidebar: 12pt inset, labels on the "Library" keyline (y=120), 30pt controls on
   the nav-row keyline (y=144). Choices are `HubSegmentedChoice` (grid via `columns:`); fields, sliders and
   paths use `.hubInspectorRow()`. Nothing in an inspector changes height with state.
+- Return and Esc on a tool page go through `HubInspectorPage(primaryKey:cancelKey:)`, bound only on the visible
+  page; a running job shows as `HubJobProgressRow`.
 - The primary action is `HubLabeledButton(.primary, expands: true)`, FIRST in the `action` slot; it is
   pinned to the bottom on every tool (`HubPrimaryLastStack`).
 - Every `.focusable()` pairs with `.focusEffectDisabled()` — the system focus ring is blue and blue is

@@ -28,8 +28,8 @@ public struct AudioConverterView: View {
             primaryKey: HubPageKey("Convert", isEnabled: viewModel.canConvertToWAV) {
                 viewModel.startConversion()
             },
-            // Esc asks for the soft stop; once it is requested, Esc reaches the
-            // shell's Edit ▸ Cancel, which stops the file in flight now.
+            // Esc asks for the soft stop. Edit ▸ Cancel, ⌘. and the jobs strip stop
+            // the file in flight now.
             cancelKey: HubPageKey(AudioConverterCopy.stopAfterThisFile, isEnabled: viewModel.canRequestStopAfterCurrent) {
                 viewModel.requestStopAfterCurrent()
             }

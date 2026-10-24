@@ -132,6 +132,8 @@ Stem Separation) renders through `HubInspectorPage`:
 - `header` — `ToolHeaderBlock(title:statusText:)`; status is `""`/nil when idle.
 - `live` — actionable errors and recovery notices inside the scrollable content,
   never inserted above the primary object. Idle pages have no live strip.
+- A running job shows as `HubJobProgressRow` (bar, optional `NN% complete` and
+  `Elapsed m:ss` line, status line), never a hand-built `ProgressView`.
 - Working progress and saved confirmations replace content INSIDE the fixed primary
   object. Starting, finishing, or canceling work must not move the header, primary
   bounds, or inspector actions. Show readable phases; raw helper logs stay out of
@@ -144,6 +146,14 @@ Stem Separation) renders through `HubInspectorPage`:
   Produced files go through the shared `ToolOutputShelf` (keeps the drag-to-DAW
   handoff, HAND-03).
 - `inspector` — `HubInspectorGroup(label) { control }` per option, in a fixed order.
+- Keys belong to the action slot: `HubInspectorPage(…, primaryKey:, cancelKey:)`
+  (`HubPageKey`) binds Return and Esc, only while the key is enabled and the page is
+  the visible one (the shell keeps pages you left mounted). With no enabled cancel
+  key, Esc reaches the shell's Edit ▸ Cancel, which cancels the tool's own job, so a
+  page declares a cancel key only when Esc must mean something else (the WAV
+  Converter's "Stop After This File", the recorder's Stop). Tool views never bind
+  `.defaultAction` / `.cancelAction` themselves, and their own key handlers and focus
+  follow `hubToolIsActive`.
 - `action` — the primary `HubLabeledButton(style: .primary, expands: true)` FIRST;
   secondaries (Stop/Cancel/Retry/Reset/Copy) after it as `.ghost, expands: true`.
   `HubPrimaryLastStack` pins the first child to the bottom, so the primary lands on
