@@ -105,6 +105,28 @@ final class HubDesignContractSourceTests: XCTestCase {
         }
     }
 
+    // §4 — a tool page's Return and Esc keys have one owner: the action slot of
+    // HubInspectorPage (`primaryKey`, `cancelKey`). Hand-rolled hidden buttons gave
+    // the converter two Esc owners (its soft stop and the shell's cancel) and nothing
+    // said which one ran. Pages whose job the shell's Esc cancels declare no cancel key.
+    func testToolPageKeysAreBoundOnlyByTheScaffold() throws {
+        let keyShortcut = "keyboardShortcut\\s*\\(\\s*\\.(defaultAction|cancelAction)\\s*\\)"
+        // BPM Tapper's "Clear History?" alert is a dialog, not a page key.
+        let dialogKeys = ["Sources/FeatureBPMTapper/BPMTapperView.swift": 1]
+        for page in toolPages {
+            let source = try readStripped(page)
+            let count = (try NSRegularExpression(pattern: keyShortcut))
+                .numberOfMatches(in: source, range: NSRange(source.startIndex..., in: source))
+            XCTAssertEqual(count, dialogKeys[page, default: 0], "\(page): bind Return and Esc through HubInspectorPage keys")
+        }
+        let scaffold = try readStripped("Sources/AppCore/Components/HubInspectorPage.swift")
+        expectMatch(scaffold, pattern: "keyboardShortcut\\s*\\(\\s*\\.defaultAction", "the scaffold binds Return")
+        expectMatch(scaffold, pattern: "keyboardShortcut\\s*\\(\\s*\\.cancelAction", "the scaffold binds Esc")
+        for page in ["Sources/FeatureDownloader/DownloaderView.swift", "Sources/FeatureStemSeparation/StemSeparationView.swift"] {
+            expectNoMatch(try readStripped(page), pattern: "cancelKey\\s*:", "\(page): the shell's Esc cancels this tool's job")
+        }
+    }
+
     // §4 — transient notices may not push the fixed primary object down.
     // Nesting (not textual order): `live` must be inside a ScrollView body.
     func testLiveNoticesAreInsideScrollingContent() throws {

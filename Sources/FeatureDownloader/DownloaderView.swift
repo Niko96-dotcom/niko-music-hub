@@ -25,7 +25,14 @@ public struct DownloaderView: View {
             primary: { urlCard },
             list: { detailsSection },
             inspector: { inspectorGroups },
-            action: { downloadActions }
+            action: { downloadActions },
+            // No cancel key: the shell's Esc cancels the download.
+            primaryKey: HubPageKey(
+                DownloaderCopy.download,
+                isEnabled: viewModel.downloadState == .readyToDownload || viewModel.downloadState == .canceled
+            ) {
+                viewModel.startDownload()
+            }
         )
     }
 
@@ -305,17 +312,6 @@ public struct DownloaderView: View {
                 expands: true
             ) {
                 viewModel.startDownload()
-            }
-
-            .background {
-                if viewModel.downloadState == .readyToDownload || viewModel.downloadState == .canceled {
-                    Button(DownloaderCopy.download) {
-                        viewModel.startDownload()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .hidden()
-                    .accessibilityHidden(true)
-                }
             }
 
             if viewModel.downloadState == .downloading {

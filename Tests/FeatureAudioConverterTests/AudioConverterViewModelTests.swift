@@ -475,7 +475,9 @@ final class AudioConverterViewModelTests: XCTestCase {
                 || source.contains("Finishes the file that is converting, then skips the rest. Verified WAV files are kept."),
             "Stop help must explain skip-rest and kept WAVs"
         )
-        XCTAssertTrue(source.contains(".keyboardShortcut(.cancelAction)"))
+        // Esc is the soft stop: the page's cancel key, bound by HubInspectorPage.
+        XCTAssertTrue(source.contains("cancelKey: HubPageKey(AudioConverterCopy.stopAfterThisFile"))
+        XCTAssertTrue(source.contains("viewModel.requestStopAfterCurrent()"))
         XCTAssertFalse(
             source.contains("label: \"Stop\""),
             "Visible converting control must not keep the short Stop label"

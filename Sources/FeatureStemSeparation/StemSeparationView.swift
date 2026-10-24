@@ -22,7 +22,14 @@ public struct StemSeparationView: View {
             primary: { intakeCard },
             list: { resultsSection },
             inspector: { inspectorGroups },
-            action: { separationActions }
+            action: { separationActions },
+            // No cancel key: the shell's Esc cancels the separation.
+            primaryKey: HubPageKey(
+                viewModel.canStartYouTube ? "Download & Separate" : "Start Separation",
+                isEnabled: viewModel.canStart || viewModel.canStartYouTube
+            ) {
+                submitPrimaryStemJob()
+            }
         )
         .onAppear { viewModel.onAppear() }
     }
@@ -348,17 +355,6 @@ public struct StemSeparationView: View {
                 viewModel.startSeparation()
             }
 
-            .background {
-                if viewModel.canStart || viewModel.canStartYouTube {
-                    Button(viewModel.canStartYouTube ? "Download & Separate" : "Start Separation") {
-                        submitPrimaryStemJob()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .hidden()
-                    .accessibilityHidden(true)
-                }
-            }
-
             if viewModel.canCancel {
                 HubLabeledButton(
                     icon: "xmark",
@@ -367,14 +363,6 @@ public struct StemSeparationView: View {
                     expands: true
                 ) {
                     viewModel.cancelSeparation()
-                }
-                .background {
-                    Button("Cancel") {
-                        viewModel.cancelSeparation()
-                    }
-                    .keyboardShortcut(.cancelAction)
-                    .hidden()
-                    .accessibilityHidden(true)
                 }
             }
         }

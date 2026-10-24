@@ -24,7 +24,15 @@ public struct AudioConverterView: View {
             primary: { intakeSurface },
             list: { queueSection },
             inspector: { inspectorGroups },
-            action: { convertActions }
+            action: { convertActions },
+            primaryKey: HubPageKey("Convert", isEnabled: viewModel.canConvertToWAV) {
+                viewModel.startConversion()
+            },
+            // Esc asks for the soft stop; once it is requested, Esc reaches the
+            // shell's Edit ▸ Cancel, which stops the file in flight now.
+            cancelKey: HubPageKey(AudioConverterCopy.stopAfterThisFile, isEnabled: viewModel.canRequestStopAfterCurrent) {
+                viewModel.requestStopAfterCurrent()
+            }
         )
         .fileImporter(
             isPresented: $fileImporterVisible,
@@ -347,17 +355,6 @@ public struct AudioConverterView: View {
                 viewModel.startConversion()
             }
 
-            .background {
-                if viewModel.canConvertToWAV {
-                    Button("Convert") {
-                        viewModel.startConversion()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .hidden()
-                    .accessibilityHidden(true)
-                }
-            }
-
             if viewModel.isConverting {
                 HubLabeledButton(
                     icon: "stop.fill",
@@ -368,15 +365,6 @@ public struct AudioConverterView: View {
                     expands: true
                 ) {
                     viewModel.requestStopAfterCurrent()
-                }
-                .background {
-                    Button(AudioConverterCopy.stopAfterThisFile) {
-                        viewModel.requestStopAfterCurrent()
-                    }
-                    .keyboardShortcut(.cancelAction)
-                    .disabled(!viewModel.canRequestStopAfterCurrent)
-                    .hidden()
-                    .accessibilityHidden(true)
                 }
             }
         }

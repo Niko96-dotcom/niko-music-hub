@@ -1,5 +1,28 @@
 import SwiftUI
 
+/// A key a tool page answers itself (design contract §4): Return runs the page's
+/// primary key, Esc its cancel key. `HubInspectorPage` is the only place that binds
+/// them. While a page has no enabled cancel key, Esc reaches the shell's
+/// Edit ▸ Cancel (`HubCancelCommands`), so a page declares one only when Esc must
+/// mean something else than cancelling its tool's job.
+public struct HubPageKey {
+    public let title: String
+    public let isEnabled: Bool
+    let perform: @MainActor () -> Void
+
+    public init(_ title: String, isEnabled: Bool = true, perform: @escaping @MainActor () -> Void) {
+        self.title = title
+        self.isEnabled = isEnabled
+        self.perform = perform
+    }
+
+    /// The key `HubInspectorPage` binds: only an enabled one.
+    static func installed(_ key: HubPageKey?) -> HubPageKey? {
+        guard let key, key.isEnabled else { return nil }
+        return key
+    }
+}
+
 /// Tool-page scaffold: content on the left, a fixed inspector on the right.
 ///
 /// Left column (flexible): `HubPageHeader` on the shared keyline, one
@@ -7,7 +30,8 @@ import SwiftUI
 /// tap pad, capture readout, URL entry), then a flat list that fills the rest.
 /// Right column (fixed `inspectorWidth`, sidebar chrome material, hairline seam): the
 /// page's options as labelled groups, and the primary action pinned at the
-/// bottom so it sits in the same place on every tool.
+/// bottom so it sits in the same place on every tool. The action slot also owns
+/// the page's Return and Esc keys (`primaryKey`, `cancelKey`).
 public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: View, Inspector: View, Action: View>: View {
     public static var inspectorWidth: CGFloat { HubDesignSystem.Size.chromeRailWidth }
     public static var primaryHeight: CGFloat { 168 }
@@ -24,6 +48,8 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
     private let list: List
     private let inspector: Inspector
     private let action: Action
+    private let primaryKey: HubPageKey?
+    private let cancelKey: HubPageKey?
 
     public init(
         @ViewBuilder header: () -> Header,
@@ -31,7 +57,9 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
         @ViewBuilder primary: () -> Primary,
         @ViewBuilder list: () -> List,
         @ViewBuilder inspector: () -> Inspector,
-        @ViewBuilder action: () -> Action
+        @ViewBuilder action: () -> Action,
+        primaryKey: HubPageKey? = nil,
+        cancelKey: HubPageKey? = nil
     ) {
         self.header = header()
         self.live = live()
@@ -39,6 +67,8 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
         self.list = list()
         self.inspector = inspector()
         self.action = action()
+        self.primaryKey = primaryKey
+        self.cancelKey = cancelKey
     }
 
     public var body: some View {
@@ -95,6 +125,7 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
                 HubPrimaryLastStack(spacing: HubDesignSystem.Spacing.controlGap) {
                     action
                 }
+                .background { pageKeyButtons }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, Self.inspectorInset)
                 .padding(.bottom, HubToolLayout.bottomPadding)
@@ -106,6 +137,24 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
             .hubChromeMaterial(extendAboveBy: titleRowInset)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Hidden buttons that give the page's keys their shortcuts; a disabled key
+    /// installs none, so Esc then reaches the shell's Edit ▸ Cancel.
+    @ViewBuilder
+    private var pageKeyButtons: some View {
+        if let key = HubPageKey.installed(primaryKey) {
+            Button(key.title, action: key.perform)
+                .keyboardShortcut(.defaultAction)
+                .hidden()
+                .accessibilityHidden(true)
+        }
+        if let key = HubPageKey.installed(cancelKey) {
+            Button(key.title, action: key.perform)
+                .keyboardShortcut(.cancelAction)
+                .hidden()
+                .accessibilityHidden(true)
+        }
     }
 }
 

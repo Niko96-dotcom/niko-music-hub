@@ -34,7 +34,10 @@ public struct AudioRecorderView: View {
             primary: { captureCard },
             list: { recordingsList },
             inspector: { inspectorGroups },
-            action: { controlSection }
+            action: { controlSection },
+            cancelKey: HubPageKey("Stop", isEnabled: viewModel.isCaptureActive) {
+                Task { await viewModel.stopRecording() }
+            }
         )
         .onAppear {
             syncMaxDurationFromSettings()
@@ -291,15 +294,6 @@ public struct AudioRecorderView: View {
             .disabled(viewModel.recordingState == .stopping)
             .accessibilityLabel(viewModel.isCaptureActive ? "Stop recording" : "Start recording")
 
-            if viewModel.isCaptureActive {
-                Button("Stop") {
-                    Task { await viewModel.stopRecording() }
-                }
-                .keyboardShortcut(.cancelAction)
-                .frame(width: 0, height: 0)
-                .hidden()
-                .accessibilityHidden(true)
-            }
         }
     }
 
