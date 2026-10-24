@@ -318,6 +318,182 @@ final class VaultCrashWindowTests: XCTestCase {
         fixture.assertEdgesWereObserved()
     }
 
+    /// Both removal phases, and the legacy V1 failure saved in each.
+    private static let interruptedRemovals: [(phase: VaultTransferState, legacyFailure: Bool)] = [
+        (.removingActiveCopy, false),
+        (.evictingProviderCache, false),
+        (.removingActiveCopy, true),
+        (.evictingProviderCache, true),
+    ]
+
+    /// Launch hands every interrupted removal to review before survivor
+    /// retirement, so a survivor whose checks fail changes nothing for it. The
+    /// older archive failure shows that the survivor retired nothing.
+    func testLaunchHandsAnOlderInterruptedRemovalToReviewWhenTheSurvivorChecksFail() async throws {
+        for check in ["fresh durability", "generation bytes", "journal proof"] {
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy)
+            let archiveFailure = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 5,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(5)
+            )
+            var survivor = try fixture.verifiedSurvivor(for: removal, createdAt: removal.createdAt.addingTimeInterval(10))
+            let newerFailure = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 5,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+            )
+            switch check {
+            case "fresh durability":
+                // A local generation that claims a cloud sync: the fresh local
+                // proof does not match it.
+                survivor.durability = .syncedToProvider
+                try fixture.store.base.save(survivor)
+            case "generation bytes":
+                try Data("changed".utf8).write(to: survivor.destinationURL.appendingPathComponent("Artist Song.cpr"))
+            default:
+                fixture.store.failRecoveryPersistenceProofs()
+            }
+            let savedArchiveFailure = try fixture.store.record(id: archiveFailure.id)
+            let savedNewerFailure = try fixture.store.record(id: newerFailure.id)
+            let setupEdges = fixture.store.transferEdges.count
+
+            let relaunch = try await fixture.launchTwice()
+
+            let reviewed = try XCTUnwrap(fixture.store.record(id: removal.id), check)
+            XCTAssertEqual(reviewed.state, .recoveryRequired, check)
+            XCTAssertEqual(reviewed.error?.origin, .removingActiveCopy, check)
+            XCTAssertNil(reviewed.supersededBy, check)
+            XCTAssertTrue(relaunch.first.contains { $0.id == removal.id && $0.state == .recoveryRequired }, check)
+            XCTAssertEqual(try fixture.store.record(id: archiveFailure.id), savedArchiveFailure, "nothing retired (\(check))")
+            XCTAssertEqual(try fixture.store.record(id: newerFailure.id), savedNewerFailure, check)
+            XCTAssertEqual(relaunch.firstOperations, [], check)
+            relaunch.assertSecondLaunchChangesNothing()
+            XCTAssertEqual(fixture.store.transferEdges.dropFirst(setupEdges), [.init(.removingActiveCopy, .recoveryRequired)], check)
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
+    /// Without a verified generation, the newest-record pass sees only the
+    /// newer record of the project. The older interrupted removal still goes
+    /// to review, and the newer record stays as launch leaves it.
+    func testLaunchHandsAnOlderInterruptedRemovalToReviewBesideANewerIncompleteRecord() async throws {
+        for (phase, legacyFailure) in Self.interruptedRemovals {
+            let label = legacyFailure ? "legacy failure in \(phase)" : "\(phase)"
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.stoppedRemoval(in: phase, legacyFailure: legacyFailure)
+            let newerFailure = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 5,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+            )
+            let savedFailure = try fixture.store.record(id: newerFailure.id)
+
+            let relaunch = try await fixture.launchTwice()
+
+            let reviewed = try XCTUnwrap(fixture.store.record(id: removal.id), label)
+            XCTAssertEqual(reviewed.state, .recoveryRequired, label)
+            XCTAssertEqual(reviewed.error?.origin, phase, label)
+            XCTAssertNil(reviewed.supersededBy, label)
+            XCTAssertEqual(reviewed.manifest, removal.manifest, label)
+            XCTAssertEqual(reviewed.durability, removal.durability, label)
+            XCTAssertEqual(Set(relaunch.first.map(\.id)), [removal.id, newerFailure.id], label)
+            XCTAssertEqual(try fixture.store.record(id: newerFailure.id), savedFailure, label)
+            XCTAssertEqual(relaunch.firstOperations, [], label)
+            relaunch.assertSecondLaunchChangesNothing()
+
+            let recovered = try await fixture.engine().recoverInterruptedRemoval(id: removal.id)
+            XCTAssertEqual(recovered.state, .archiveVerified, label)
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
+    /// An unreadable journal row holds every copy, retry and retirement, but
+    /// not the journal-only hand-off of an interrupted removal.
+    func testLaunchHandsAnOlderInterruptedRemovalToReviewWhileAJournalRowIsUnreadable() async throws {
+        for (phase, legacyFailure) in Self.interruptedRemovals {
+            let label = legacyFailure ? "legacy failure in \(phase)" : "\(phase)"
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.stoppedRemoval(in: phase, legacyFailure: legacyFailure)
+            // Retryable: without the unreadable row, launch would resume it.
+            let newerFailure = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 1,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(20)
+            )
+            let savedFailure = try fixture.store.record(id: newerFailure.id)
+            let unreadableID = UUID()
+            try UndecodableVaultJournalRow.insertTransfer(
+                id: unreadableID,
+                state: VaultTransferState.removingActiveCopy.rawValue,
+                databaseURL: fixture.databaseURL
+            )
+            let engine = try fixture.engine()
+            fixture.files.reset()
+
+            let firstReport = await engine.recoverAtLaunchReport()
+            let first = try XCTUnwrap(firstReport, label)
+
+            let reviewed = try XCTUnwrap(fixture.store.record(id: removal.id), label)
+            XCTAssertEqual(reviewed.state, .recoveryRequired, label)
+            XCTAssertEqual(reviewed.error?.origin, phase, label)
+            XCTAssertNil(reviewed.supersededBy, label)
+            XCTAssertEqual(Set(first.records.map(\.id)), [removal.id, newerFailure.id], label)
+            XCTAssertEqual(try fixture.store.record(id: newerFailure.id), savedFailure, "the copy waits (\(label))")
+            XCTAssertEqual(first.unreadableRows.map(\.id), [unreadableID.uuidString], label)
+
+            let secondReport = await engine.recoverAtLaunchReport()
+            let second = try XCTUnwrap(secondReport, label)
+            XCTAssertEqual(second.records.map(\.id), [newerFailure.id], label)
+            XCTAssertEqual(try fixture.store.record(id: removal.id), reviewed, label)
+            XCTAssertEqual(try fixture.store.record(id: newerFailure.id), savedFailure, label)
+            XCTAssertEqual(fixture.files.operations, [], label)
+            // The undecodable row is reported, never rewritten.
+            XCTAssertEqual(try fixture.store.allTransferRecordsReport().unreadableRows.map(\.id), [unreadableID.uuidString], label)
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
+    /// A hand-off whose save throws leaves the removal as the journal holds
+    /// it: launch neither resumes, retries nor retires it in that run, and the
+    /// next launch hands it to review.
+    func testLaunchKeepsAnInterruptedRemovalAsSavedWhenItsReviewSaveFails() async throws {
+        for legacyFailure in [false, true] {
+            let label = legacyFailure ? "legacy failure" : "removingActiveCopy"
+            let fixture = try TransferCrashFixture()
+            defer { fixture.remove() }
+            let removal = try await fixture.stoppedRemoval(in: .removingActiveCopy, legacyFailure: legacyFailure)
+            let archiveFailure = try fixture.failedRecord(
+                origin: .awaitingProviderDurability, retryCount: 1,
+                projectID: removal.projectID, createdAt: removal.createdAt.addingTimeInterval(5)
+            )
+            let survivor = try fixture.verifiedSurvivor(for: removal, createdAt: removal.createdAt.addingTimeInterval(10))
+            let savedRemoval = try XCTUnwrap(fixture.store.record(id: removal.id), label)
+            let setupEdges = fixture.store.transferEdges.count
+            fixture.store.failNextSave(of: .recoveryRequired)
+            let engine = try fixture.engine()
+            fixture.files.reset()
+
+            let firstLaunch = await engine.recoverAtLaunch()
+
+            XCTAssertEqual(try fixture.store.record(id: removal.id), savedRemoval, label)
+            XCTAssertEqual(firstLaunch.first { $0.id == removal.id }, savedRemoval, label)
+            XCTAssertEqual(fixture.files.operations, [], "nothing resumed (\(label))")
+            let retired = try XCTUnwrap(fixture.store.record(id: archiveFailure.id), label)
+            XCTAssertEqual(retired.state, .superseded, label)
+            XCTAssertEqual(retired.supersededBy, survivor.id, label)
+            XCTAssertEqual(fixture.store.transferEdges.dropFirst(setupEdges), [.init(.failedRecoverable, .superseded)], label)
+
+            _ = await engine.recoverAtLaunch()
+
+            let reviewed = try XCTUnwrap(fixture.store.record(id: removal.id), label)
+            XCTAssertEqual(reviewed.state, .recoveryRequired, label)
+            XCTAssertNil(reviewed.supersededBy, label)
+            XCTAssertEqual(fixture.files.operations, [], label)
+            fixture.assertEdgesWereObserved()
+        }
+    }
+
     func testRelaunchAfterTheLegacyDestructiveFailureNormalizationChangesNothing() async throws {
         let fixture = try TransferCrashFixture()
         defer { fixture.remove() }
@@ -528,6 +704,7 @@ private final class TransferCrashFixture {
     let active: URL
     let archive: URL
     let source: URL
+    let databaseURL: URL
     let store: VaultEdgeRecordingStore
     let files = VaultMutationLog()
 
@@ -544,7 +721,8 @@ private final class TransferCrashFixture {
         try Data("cubase-project".utf8).write(to: source.appendingPathComponent("Artist Song.cpr"))
         try Data((0..<4096).map { UInt8($0 % 251) }).write(to: source.appendingPathComponent("Audio/take.wav"))
         try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
-        store = try VaultEdgeRecordingStore(databaseURL: root.appendingPathComponent("state/vault.sqlite"))
+        databaseURL = root.appendingPathComponent("state/vault.sqlite")
+        store = try VaultEdgeRecordingStore(databaseURL: databaseURL)
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }

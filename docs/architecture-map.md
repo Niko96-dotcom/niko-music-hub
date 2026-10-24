@@ -129,8 +129,9 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
    location, open through `SafeVaultProjectOpener`).
 6. Recover: the view model calls `recoverAtLaunch()` at launch and after settings changes;
    `ArchiveVaultObservation.scheduleRecovery` repeats it with a 30 s backoff. Launch recovery never
-   deletes, and an interrupted removal goes to the person's review (`recoveryRequired`), even when a newer
-   verified generation exists. Settings exports and imports a metadata recovery bundle (`ProjectVaultRecoveryService`).
+   deletes, and it first hands every interrupted removal to the person's review (`recoveryRequired`), whatever
+   newer records or verified generations its project has. Settings exports and imports a metadata recovery
+   bundle (`ProjectVaultRecoveryService`).
 7. Copy-only Done archiving also starts without a dialog: `enqueueDoneVaultProjectsIfNeeded`
    (`+ProjectVault.swift`) runs after each successful snapshot refresh and queues every Done song that has
    no transfer, is not Keep Local, not busy and not waiting for an identity review. This is the only

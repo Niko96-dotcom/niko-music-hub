@@ -372,9 +372,10 @@ not listed as gaps.
    held generations — existence plus exact manifest bytes; online-only stays
    byte-neutral (envelope plus path; locality already proven fresh). Then
    `proveRecoveryPersistence()` must succeed before any older record for
-   that project is marked `superseded`. An older record in a removal phase,
-   or a legacy failure saved in one, is never marked `superseded`: the same
-   pass saves it `recoveryRequired` for the person's review. Missing, corrupt, unproven (`nil`),
+   that project is marked `superseded`. A record in a removal phase, or a
+   legacy failure saved in one, is never marked `superseded`: the first pass
+   of the same launch has already saved it `recoveryRequired` for the person's
+   review, whether or not the survivor checks pass. Missing, corrupt, unproven (`nil`),
    fresh-barrier-throw, binding-mismatch, or journal-throw all leave older
    records recoverable with staging preserved. No `COPY` is replayed (gated
    by zero write-admission assertions on the retirement path) and no

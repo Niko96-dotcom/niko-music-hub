@@ -268,6 +268,16 @@ public actor LocalVaultTransferEngine {
               var records = try? store.recoverableRecordsReport().records else { return nil }
         let allRecords = journal.records
         let holdsByteWork = !journal.unreadableRows.isEmpty
+        // Every interrupted removal goes to review first, before anything below
+        // reads `records`: no newer record or generation of its project shows
+        // that it kept the Active folder. A record whose save throws keeps its
+        // journal state until the next launch and leaves `records` all the same.
+        var results: [VaultTransferRecord] = []
+        for record in records {
+            guard let origin = Self.interruptedRemovalOrigin(of: record) else { continue }
+            results.append((try? handInterruptedRemovalToReview(record, origin: origin)) ?? record)
+        }
+        records.removeAll { Self.interruptedRemovalOrigin(of: $0) != nil }
         let verifiedSurvivors = Dictionary(grouping: allRecords.filter {
             VaultTransferOwnershipPolicy.isVerifiedTerminal($0.state)
         }, by: \.projectID).compactMapValues { records in
@@ -283,20 +293,18 @@ public actor LocalVaultTransferEngine {
         // the journal proof, and the supersession persist. Any failure leaves
         // older records recoverable. Retirement never deletes staging or
         // generations and never replays a copy; it only marks the older
-        // record superseded, or hands an interrupted removal to review.
-        // Cloud online-only never infers durability from a placeholder and
-        // never materializes: it requires fresh `.syncedToProvider` plus live
-        // locality (fullyLocalCurrent or materializationRequired) without any
-        // materialize call.
-        var decidedIDs = Set<UUID>()
-        var handedToReview: [VaultTransferRecord] = []
+        // record superseded. Cloud online-only never infers durability from a
+        // placeholder and never materializes: it requires fresh
+        // `.syncedToProvider` plus live locality (fullyLocalCurrent or
+        // materializationRequired) without any materialize call.
+        var retiredIDs = Set<UUID>()
         for (_, survivor) in verifiedSurvivors where !holdsByteWork {
             // Verification can read gigabytes. It is needed here only if this
             // generation could retire an older incomplete transfer for its song.
             guard records.contains(where: {
                 $0.projectID == survivor.projectID
                     && Self.isCausallyOlder($0, than: survivor)
-                    && !decidedIDs.contains($0.id)
+                    && !retiredIDs.contains($0.id)
             }) else { continue }
             guard let fresh = await freshSurvivorDurabilityForRetirement(survivor) else { continue }
             // Final binding is synchronous. No awaits occur between this
@@ -309,39 +317,29 @@ public actor LocalVaultTransferEngine {
             }
             for var record in records where record.projectID == survivor.projectID
                 && Self.isCausallyOlder(record, than: survivor)
-                && !decidedIDs.contains(record.id) {
+                && !retiredIDs.contains(record.id) {
                 guard let current = try? store.record(id: record.id),
                       current.state == record.state,
                       current.supersededBy == nil else { continue }
-                // A newer generation does not show that an interrupted removal
-                // kept the Active folder. Decided here: the later pass reads
-                // only the newest record of each project.
-                if let origin = Self.interruptedRemovalOrigin(of: record) {
-                    guard let reviewed = try? handInterruptedRemovalToReview(record, origin: origin) else { continue }
-                    handedToReview.append(reviewed)
-                    decidedIDs.insert(record.id)
-                    continue
-                }
                 record.supersededBy = survivor.id
                 record.error = nil
                 record.nextRetryAt = nil
                 do {
                     try checkAndSave(&record, to: .superseded)
-                    decidedIDs.insert(record.id)
+                    retiredIDs.insert(record.id)
                 } catch {
                     continue
                 }
             }
         }
         records.removeAll { record in
-            decidedIDs.contains(record.id)
+            retiredIDs.contains(record.id)
                 || (try? store.record(id: record.id)?.state) == .superseded
         }
         // A failed automatic attempt used to create a fresh transfer every minute.
         // Resume only the newest record for each project so launch recovery cannot
         // replay several full-project copies and hashes for the same source.
         let newestRecords = VaultTransferRecoveryPolicy.candidates(from: records)
-        var results = handedToReview
         for var record in newestRecords {
             if needsLegacyMetadataMigration(record) {
                 guard !holdsByteWork else {
@@ -354,10 +352,6 @@ public actor LocalVaultTransferEngine {
                     results.append(record)
                     continue
                 }
-            }
-            if let origin = Self.interruptedRemovalOrigin(of: record) {
-                results.append((try? handInterruptedRemovalToReview(record, origin: origin)) ?? record)
-                continue
             }
             if record.state == .failedRecoverable {
                 guard let origin = record.error?.origin,

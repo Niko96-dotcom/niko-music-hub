@@ -481,12 +481,14 @@ saved in `vault_restores`) each change only through one table.
   its last saved state for launch recovery. That covers the restore-half cases of `VaultTransferState`, which no
   transfer record ever held, and the edges a path reaches only after a journal save already failed. In the reconcile,
   a refusal rolls the whole transaction back.
-- Launch never resumes, retries or retires an interrupted removal: a transfer in `removingActiveCopy` or
-  `evictingProviderCache`, or a legacy `failedRecoverable` whose `error.origin` is one of them, goes to
+- Launch never resumes, retries or retires an interrupted removal: every transfer in `removingActiveCopy` or
+  `evictingProviderCache`, and every legacy `failedRecoverable` whose `error.origin` is one of them, goes to
   `recoveryRequired` for the person's review (`recoverInterruptedRemoval`), with its generation evidence kept and no
-  file touched. That holds when survivor retirement finds a newer verified generation of the project too: retirement
-  decides such a record itself, because the later launch pass reads only the newest record of each project. The
-  table has no edge from a removal phase to `superseded`; any other older incomplete transfer still retires.
+  file touched. One pass at the start of `recoverAtLaunchReport()` decides them all, before survivor retirement and
+  the newest-record pass, so the outcome does not depend on a newer record or verified generation of the project, on
+  that generation's checks, or on an unreadable journal row. If the save throws, the record keeps its journal state
+  until the next launch, and nothing else in that launch touches it. The table has no edge from a removal phase to
+  `superseded`; any other older incomplete transfer still retires.
 - Write-ahead order: each writer saves the new state before the side effect it describes. The phase fault points
   (`VaultTransferFaultPoint`, `VaultRestoreFaultPoint`) and the crash windows (`VaultTransferCrashWindow`,
   `VaultRestoreCrashWindow`: between a side effect and the save that records it) let a test stop an engine as if the

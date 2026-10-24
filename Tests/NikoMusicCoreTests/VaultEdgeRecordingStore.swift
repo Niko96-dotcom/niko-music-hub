@@ -91,6 +91,7 @@ final class VaultEdgeRecordingStore: VaultTransferStoring, VaultRestoreStoring, 
     private var storedTransferEdges: [VaultTransferEdge] = []
     private var storedRestoreEdges: [VaultRestoreEdge] = []
     private var failingSaveState: VaultTransferState?
+    private var failsRecoveryPersistenceProofs = false
 
     init(databaseURL: URL) throws {
         base = try SQLiteVaultTransferStore(databaseURL: databaseURL)
@@ -102,6 +103,11 @@ final class VaultEdgeRecordingStore: VaultTransferStoring, VaultRestoreStoring, 
     /// The next save of a transfer in `state` throws, as a full disk would.
     func failNextSave(of state: VaultTransferState) {
         lock.withLock { failingSaveState = state }
+    }
+
+    /// Every later journal proof throws, as a catalog that cannot checkpoint would.
+    func failRecoveryPersistenceProofs() {
+        lock.withLock { failsRecoveryPersistenceProofs = true }
     }
 
     func save(_ record: VaultTransferRecord) throws {
@@ -134,7 +140,12 @@ final class VaultEdgeRecordingStore: VaultTransferStoring, VaultRestoreStoring, 
         try base.allTransferRecordsReport()
     }
 
-    func proveRecoveryPersistence() throws { try base.proveRecoveryPersistence() }
+    func proveRecoveryPersistence() throws {
+        if lock.withLock({ failsRecoveryPersistenceProofs }) {
+            throw VaultTransferPersistenceProofError.unproven("injected proof failure")
+        }
+        try base.proveRecoveryPersistence()
+    }
 
     func verifiedArchiveGeneration(projectID: ProjectID) throws -> VaultTransferRecord? {
         try base.verifiedArchiveGeneration(projectID: projectID)
