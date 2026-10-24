@@ -19,8 +19,8 @@ and this file is deleted.
 | Step | State | Commit | Checks |
 | --- | --- | --- | --- |
 | 0 Baseline | waiting for the UI lock (runs on a clone at `4302564`) | | |
-| 1 Crash tests for every unguarded window, and a record of the real edges | done | this commit | 17 new tests pass on today's code; the Vault-related suites (filter `Vault\|Restore\|Recovery\|KeepLocal\|Friends\|ArchiveStorage\|Workflow\|Done`): 804 passed, 0 failed, no warning; plants A–J below each fail their test, source restored from a backup copy |
-| 2 The transfer table lists exactly the real edges | not started | | |
+| 1 Crash tests for every unguarded window, and a record of the real edges | done | `c94311b` | 17 new tests pass on today's code; the Vault-related suites (filter `Vault\|Restore\|Recovery\|KeepLocal\|Friends\|ArchiveStorage\|Workflow\|Done`): 804 passed, 0 failed, no warning; plants A–J below each fail their test, source restored from a backup copy |
+| 2 The transfer table lists exactly the real edges | done | this commit | `ProjectVaultStateMachineTests` 6/6 and `ArchiveStorageProviderSimulationTests` pass; the Vault-related suites: 803 passed, 0 failed (the state machine tests went from 7 to 6); plant: drop `removingActiveCopy → archiveVerified` → the coverage and frozen-graph tests fail; add `archiveVerified → failedRecoverable` → the illegal-edge and frozen-graph tests fail |
 | 3 Every transfer write goes through one checked function | not started | | |
 | 4 Restore phases get their own checked table | not started | | |
 | 5 Docs, full gates, live check | not started | | |
@@ -55,6 +55,28 @@ and this file is deleted.
   saved before the open → the double-open test fails. H: the catalog flag saved before the catalog write → its test
   fails. I: `evictingProviderCache` saved before `removeItem` → the after-`removeItem` test fails. J: one edge removed
   from `VaultObservedEdges` → the recorder flags it.
+
+### Revision 2 (2026-10-24, step 2)
+
+- **Which edges the table lists.** Every edge a path reaches through one event (one thrown error, one cancel, one
+  launch or retry decision): the 27 observed edges plus the inventory's paths no test reaches (see Revision 1).
+  Two kinds are left out, so they fail closed: the restore-half states of `VaultTransferState`, which no transfer
+  record ever held (the restore engine has used `VaultRestorePhase` since the first Vault commit, `15e7c81`), and the
+  edges a path reaches only after a journal save already failed (`archiveVerified`, `archivedLocal`,
+  `archivedOnlineOnly → failedRecoverable` after the save at `:740` or `:797` failed). There the journal keeps
+  `promotingArchiveGeneration` or `evictingProviderCache`, which launch recovery resumes or normalizes; today such a
+  record would end in `failedRecoverable` with an origin no retry accepts.
+- **Kept as today, for Niko:** survivor retirement at launch supersedes any phase launch recovery reads, so the table
+  lists `removingActiveCopy → superseded` and `evictingProviderCache → superseded`. That path needs a newer verified
+  generation of the same project while an older one is in a removal phase, which the runtime's reuse of an earlier
+  verified generation for removal can produce. Dropping the two edges would send such a record to `recoveryRequired`
+  instead. This is a change in what a person sees after an interrupted removal, so it is a follow-up, not part of
+  this plan.
+- **Tests that change with the table.** `ProjectVaultStateMachineTests` pins the table, so its frozen graph changes
+  with it; the tests of the removed `.fail` / `VaultFailure` / `VaultRecoveryDecision` and of the restore half go
+  with that code, and so do the 4 lines in `ArchiveStorageProviderSimulationTests` that read
+  `VaultFailure.recoveryDecision`. `VaultFailureReason` stays: `VaultTransferError` saves it. Every engine,
+  durability and recovery test stays unchanged.
 
 ## Decisions for Niko
 

@@ -1,6 +1,8 @@
 import Foundation
 
-/// Durable phases for one archive or restore operation.
+/// Durable phases of one archive transfer, saved in `vault_transfers`. Restores
+/// use `VaultRestorePhase`; no transfer record holds the restore-half cases
+/// (`materializingArchive` … `openingInCubase`).
 ///
 /// The model deliberately contains no generic `delete` transition. The only
 /// removal phase is gated by evidence that the archive is durable and the
@@ -56,60 +58,14 @@ public struct VaultRemovalEvidence: Codable, Equatable, Sendable {
 }
 
 public enum VaultTransition: Equatable, Sendable {
+    /// Any change the table below lists: forward, a rewind, a stop or a retirement.
     case advance(to: VaultTransferState)
     case beginRemovingActiveCopy(VaultRemovalEvidence)
-    case fail(VaultFailure)
 }
 
 public enum VaultTransitionError: Error, Equatable, Sendable {
     case illegal(from: VaultTransferState, to: VaultTransferState)
     case removalNotProven
-    case failureOriginMismatch(expected: VaultTransferState, actual: VaultTransferState)
-}
-
-public struct VaultFailure: Codable, Equatable, Sendable {
-    public let origin: VaultTransferState
-    public let reason: VaultFailureReason
-    public let requiresUserDecision: Bool
-
-    public init(
-        origin: VaultTransferState,
-        reason: VaultFailureReason,
-        requiresUserDecision: Bool = false
-    ) {
-        self.origin = origin
-        self.reason = reason
-        self.requiresUserDecision = requiresUserDecision
-    }
-
-    public var failureState: VaultTransferState {
-        requiresUserDecision ? .recoveryRequired : .failedRecoverable
-    }
-
-    public var recoveryDecision: VaultRecoveryDecision {
-        switch reason {
-        case .slowProviderSync:
-            .waitForProviderDurability(resumeAt: origin)
-        case .providerOffline:
-            .waitForConnectivity(resumeAt: origin)
-        case .providerUnsynced:
-            .waitForProviderDurability(resumeAt: origin)
-        case .evictionUnsupported:
-            .keepArchiveLocal
-        case .permissionLost:
-            .requestPermission(resumeAt: origin)
-        case .sourceMutated:
-            .discardStagingAndRestart
-        case .integrityMismatch:
-            .discardStagingAndRetry(resumeAt: origin)
-        case .occupiedDestination:
-            .requestAlternateDestination
-        case .insufficientSpace:
-            .freeSpaceAndRetry(resumeAt: origin)
-        case .unknown:
-            .manualReviewKeepingAllCopies
-        }
-    }
 }
 
 public enum VaultFailureReason: String, CaseIterable, Codable, Hashable, Sendable {
@@ -123,18 +79,6 @@ public enum VaultFailureReason: String, CaseIterable, Codable, Hashable, Sendabl
     case occupiedDestination
     case insufficientSpace
     case unknown
-}
-
-public enum VaultRecoveryDecision: Equatable, Sendable {
-    case waitForProviderDurability(resumeAt: VaultTransferState)
-    case waitForConnectivity(resumeAt: VaultTransferState)
-    case keepArchiveLocal
-    case requestPermission(resumeAt: VaultTransferState)
-    case discardStagingAndRestart
-    case discardStagingAndRetry(resumeAt: VaultTransferState)
-    case requestAlternateDestination
-    case freeSpaceAndRetry(resumeAt: VaultTransferState)
-    case manualReviewKeepingAllCopies
 }
 
 public struct ProjectVaultStateMachine: Sendable {
@@ -159,15 +103,6 @@ public struct ProjectVaultStateMachine: Sendable {
                 throw VaultTransitionError.removalNotProven
             }
             return .removingActiveCopy
-
-        case let .fail(failure):
-            guard failure.origin == state else {
-                throw VaultTransitionError.failureOriginMismatch(
-                    expected: state,
-                    actual: failure.origin
-                )
-            }
-            return failure.failureState
         }
     }
 
@@ -175,27 +110,53 @@ public struct ProjectVaultStateMachine: Sendable {
         Self.allowedDestinations[state, default: []]
     }
 
+    /// Every state change `LocalVaultTransferEngine` makes, each with the path
+    /// that makes it. A change the table does not list throws before anything is
+    /// saved or any file is touched. Listed: each edge a path reaches through one
+    /// event (one thrown error, one cancel, one launch or retry decision). Not
+    /// listed: the restore-half states, which no transfer record ever held
+    /// (restores use `VaultRestorePhase`), and the edges a path reaches only after
+    /// a journal save already failed; the record then keeps its last saved state.
     private static let allowedDestinations: [VaultTransferState: Set<VaultTransferState>] = [
-        .activeLocal: [.archiveEligible],
-        .archiveEligible: [.preparingArchive],
-        .preparingArchive: [.copyingToArchiveStaging],
-        .copyingToArchiveStaging: [.verifyingArchiveStaging],
-        .verifyingArchiveStaging: [.awaitingProviderDurability],
-        .awaitingProviderDurability: [.promotingArchiveGeneration],
-        .promotingArchiveGeneration: [.archiveVerified],
-        .archiveVerified: [], // removal uses the evidence-gated transition above
-        .removingActiveCopy: [.evictingProviderCache],
-        .evictingProviderCache: [.archivedOnlineOnly, .archivedLocal],
-        .archivedOnlineOnly: [.materializingArchive],
-        .archivedLocal: [.materializingArchive],
-        .materializingArchive: [.copyingToActiveStaging],
-        .copyingToActiveStaging: [.verifyingActiveStaging],
-        .verifyingActiveStaging: [.promotingActiveCopy],
-        .promotingActiveCopy: [.readyLocal],
-        .readyLocal: [.openingInCubase],
+        // Archive chain. Each archive phase can also stop (`failedRecoverable`,
+        // after a cancel or an error) and be retired at launch when a newer
+        // verified generation of its project exists (`superseded`).
+        .activeLocal: [.archiveEligible, .failedRecoverable, .superseded],
+        .archiveEligible: [.preparingArchive, .failedRecoverable, .superseded],
+        .preparingArchive: [.copyingToArchiveStaging, .failedRecoverable, .superseded],
+        .copyingToArchiveStaging: [.verifyingArchiveStaging, .failedRecoverable, .superseded],
+        .verifyingArchiveStaging: [.awaitingProviderDurability, .failedRecoverable, .superseded],
+        .awaitingProviderDurability: [.promotingArchiveGeneration, .failedRecoverable, .superseded],
+        // An occupied generation folder needs review (`recoveryRequired`).
+        .promotingArchiveGeneration: [.archiveVerified, .failedRecoverable, .recoveryRequired, .superseded],
+        // Removal re-proves the generation in place; entering removal takes the
+        // evidence-gated transition above.
+        .archiveVerified: [.archiveVerified],
+        // Refused or stopped before `removeItem`: back to `archiveVerified`, the
+        // Active folder kept. Stopped or failed at or after it, or found at
+        // launch: `recoveryRequired`. Survivor retirement at launch reaches these
+        // phases too (`superseded`), as for every phase launch recovery reads.
+        .removingActiveCopy: [.evictingProviderCache, .archiveVerified, .recoveryRequired, .superseded],
+        .evictingProviderCache: [.archivedOnlineOnly, .archivedLocal, .recoveryRequired, .superseded],
+        // A restored project's earlier generation: removal re-proves it.
+        .archivedOnlineOnly: [.archiveVerified],
+        .archivedLocal: [.archiveVerified],
+        // Retry, at launch or by the person: back to the failed phase, or to a
+        // fresh copy (portable retry). A legacy failure in a removal phase needs
+        // review; a newer verified generation retires it.
+        .failedRecoverable: [
+            .activeLocal, .archiveEligible, .preparingArchive, .copyingToArchiveStaging,
+            .verifyingArchiveStaging, .awaitingProviderDurability, .promotingArchiveGeneration,
+            .recoveryRequired, .superseded,
+        ],
+        // The person's recovery of an interrupted removal.
+        .recoveryRequired: [.archiveVerified],
+        .superseded: [],
+        .materializingArchive: [],
+        .copyingToActiveStaging: [],
+        .verifyingActiveStaging: [],
+        .promotingActiveCopy: [],
+        .readyLocal: [],
         .openingInCubase: [],
-        .failedRecoverable: [],
-        .recoveryRequired: [],
-        .superseded: []
     ]
 }

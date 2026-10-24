@@ -4,63 +4,82 @@ import XCTest
 final class ProjectVaultStateMachineTests: XCTestCase {
     private let machine = ProjectVaultStateMachine()
 
-    func testEveryNormalTransitionInFrozenArchiveAndRestoreGraph() throws {
-        let transitions: [(VaultTransferState, VaultTransferState)] = [
-            (.activeLocal, .archiveEligible),
-            (.archiveEligible, .preparingArchive),
-            (.preparingArchive, .copyingToArchiveStaging),
-            (.copyingToArchiveStaging, .verifyingArchiveStaging),
-            (.verifyingArchiveStaging, .awaitingProviderDurability),
-            (.awaitingProviderDurability, .promotingArchiveGeneration),
-            (.promotingArchiveGeneration, .archiveVerified),
-            (.removingActiveCopy, .evictingProviderCache),
-            (.evictingProviderCache, .archivedOnlineOnly),
-            (.evictingProviderCache, .archivedLocal),
-            (.archivedOnlineOnly, .materializingArchive),
-            (.archivedLocal, .materializingArchive),
-            (.materializingArchive, .copyingToActiveStaging),
-            (.copyingToActiveStaging, .verifyingActiveStaging),
-            (.verifyingActiveStaging, .promotingActiveCopy),
-            (.promotingActiveCopy, .readyLocal),
-            (.readyLocal, .openingInCubase)
+    /// A frozen copy of the table: changing an edge means changing this test.
+    func testAllStatesHaveExactlyTheFrozenOutgoingGraph() throws {
+        let archivePhases: [VaultTransferState] = [
+            .activeLocal, .archiveEligible, .preparingArchive, .copyingToArchiveStaging,
+            .verifyingArchiveStaging, .awaitingProviderDurability, .promotingArchiveGeneration,
         ]
-
-        for (source, destination) in transitions {
-            XCTAssertEqual(
-                try machine.applying(.advance(to: destination), to: source),
-                destination,
-                "\(source) -> \(destination)"
-            )
-        }
-    }
-
-    func testAllStatesHaveExactlyTheFrozenOutgoingGraph() {
         let expected: [VaultTransferState: Set<VaultTransferState>] = [
-            .activeLocal: [.archiveEligible],
-            .archiveEligible: [.preparingArchive],
-            .preparingArchive: [.copyingToArchiveStaging],
-            .copyingToArchiveStaging: [.verifyingArchiveStaging],
-            .verifyingArchiveStaging: [.awaitingProviderDurability],
-            .awaitingProviderDurability: [.promotingArchiveGeneration],
-            .promotingArchiveGeneration: [.archiveVerified],
-            .archiveVerified: [],
-            .removingActiveCopy: [.evictingProviderCache],
-            .evictingProviderCache: [.archivedOnlineOnly, .archivedLocal],
-            .archivedOnlineOnly: [.materializingArchive],
-            .archivedLocal: [.materializingArchive],
-            .materializingArchive: [.copyingToActiveStaging],
-            .copyingToActiveStaging: [.verifyingActiveStaging],
-            .verifyingActiveStaging: [.promotingActiveCopy],
-            .promotingActiveCopy: [.readyLocal],
-            .readyLocal: [.openingInCubase],
+            .activeLocal: [.archiveEligible, .failedRecoverable, .superseded],
+            .archiveEligible: [.preparingArchive, .failedRecoverable, .superseded],
+            .preparingArchive: [.copyingToArchiveStaging, .failedRecoverable, .superseded],
+            .copyingToArchiveStaging: [.verifyingArchiveStaging, .failedRecoverable, .superseded],
+            .verifyingArchiveStaging: [.awaitingProviderDurability, .failedRecoverable, .superseded],
+            .awaitingProviderDurability: [.promotingArchiveGeneration, .failedRecoverable, .superseded],
+            .promotingArchiveGeneration: [.archiveVerified, .failedRecoverable, .recoveryRequired, .superseded],
+            .archiveVerified: [.archiveVerified],
+            .removingActiveCopy: [.evictingProviderCache, .archiveVerified, .recoveryRequired, .superseded],
+            .evictingProviderCache: [.archivedOnlineOnly, .archivedLocal, .recoveryRequired, .superseded],
+            .archivedOnlineOnly: [.archiveVerified],
+            .archivedLocal: [.archiveVerified],
+            .failedRecoverable: Set(archivePhases).union([.recoveryRequired, .superseded]),
+            .recoveryRequired: [.archiveVerified],
+            .superseded: [],
+            .materializingArchive: [],
+            .copyingToActiveStaging: [],
+            .verifyingActiveStaging: [],
+            .promotingActiveCopy: [],
+            .readyLocal: [],
             .openingInCubase: [],
-            .failedRecoverable: [],
-            .recoveryRequired: [],
-            .superseded: []
         ]
         XCTAssertEqual(Set(expected.keys), Set(VaultTransferState.allCases))
         for state in VaultTransferState.allCases {
-            XCTAssertEqual(machine.allowedDestinations(from: state), expected[state])
+            XCTAssertEqual(machine.allowedDestinations(from: state), expected[state], "\(state)")
+            for destination in expected[state] ?? [] {
+                XCTAssertEqual(try machine.applying(.advance(to: destination), to: state), destination)
+            }
+        }
+    }
+
+    /// Every edge the Vault suites made (step 1 of the state machine plan) is
+    /// legal, so the engines' checked writes cannot refuse a path a test knows.
+    func testTableContainsEveryObservedEdge() throws {
+        let evidence = VaultRemovalEvidence(manifestVerified: true, archiveDurability: .verifiedLocal, metadataPersisted: true)
+        for edge in VaultObservedEdges.transfer {
+            if edge == VaultTransferEdge(.archiveVerified, .removingActiveCopy) {
+                XCTAssertEqual(try machine.applying(.beginRemovingActiveCopy(evidence), to: edge.from), edge.to)
+            } else {
+                XCTAssertTrue(machine.allowedDestinations(from: edge.from).contains(edge.to), "missing \(edge)")
+            }
+        }
+    }
+
+    func testTableRejectsEdgesNoPathMakes() {
+        let illegal: [VaultTransferEdge] = [
+            // A verified copy fails only after its save failed; the journal keeps it.
+            .init(.archiveVerified, .failedRecoverable),
+            .init(.archivedLocal, .failedRecoverable),
+            .init(.archivedOnlineOnly, .failedRecoverable),
+            // Skipping a phase, or leaving review without the person's recovery.
+            .init(.copyingToArchiveStaging, .promotingArchiveGeneration),
+            .init(.archiveVerified, .archivedLocal),
+            .init(.removingActiveCopy, .archivedLocal),
+            .init(.recoveryRequired, .removingActiveCopy),
+            .init(.recoveryRequired, .failedRecoverable),
+            .init(.failedRecoverable, .archiveVerified),
+            .init(.failedRecoverable, .removingActiveCopy),
+            .init(.failedRecoverable, .evictingProviderCache),
+            // A retired or never-held state goes nowhere.
+            .init(.superseded, .activeLocal),
+            .init(.superseded, .archiveVerified),
+            .init(.archivedLocal, .materializingArchive),
+            .init(.readyLocal, .openingInCubase),
+        ]
+        for edge in illegal {
+            XCTAssertThrowsError(try machine.applying(.advance(to: edge.to), to: edge.from), "\(edge)") {
+                XCTAssertEqual($0 as? VaultTransitionError, .illegal(from: edge.from, to: edge.to))
+            }
         }
     }
 
@@ -132,46 +151,6 @@ final class ProjectVaultStateMachineTests: XCTestCase {
                     "unexpected \(source) -> \(destination)"
                 )
             }
-        }
-    }
-
-    func testEveryFailureReasonHasAnExplicitFailClosedRecoveryDecision() throws {
-        let expected: [VaultFailureReason: VaultRecoveryDecision] = [
-            .slowProviderSync: .waitForProviderDurability(resumeAt: .awaitingProviderDurability),
-            .providerOffline: .waitForConnectivity(resumeAt: .awaitingProviderDurability),
-            .providerUnsynced: .waitForProviderDurability(resumeAt: .awaitingProviderDurability),
-            .evictionUnsupported: .keepArchiveLocal,
-            .permissionLost: .requestPermission(resumeAt: .awaitingProviderDurability),
-            .sourceMutated: .discardStagingAndRestart,
-            .integrityMismatch: .discardStagingAndRetry(resumeAt: .awaitingProviderDurability),
-            .occupiedDestination: .requestAlternateDestination,
-            .insufficientSpace: .freeSpaceAndRetry(resumeAt: .awaitingProviderDurability),
-            .unknown: .manualReviewKeepingAllCopies
-        ]
-        XCTAssertEqual(Set(expected.keys), Set(VaultFailureReason.allCases))
-
-        for reason in VaultFailureReason.allCases {
-            let needsUser = reason == .occupiedDestination || reason == .unknown
-            let failure = VaultFailure(
-                origin: .awaitingProviderDurability,
-                reason: reason,
-                requiresUserDecision: needsUser
-            )
-            XCTAssertEqual(failure.recoveryDecision, expected[reason])
-            XCTAssertEqual(
-                try machine.applying(.fail(failure), to: .awaitingProviderDurability),
-                needsUser ? .recoveryRequired : .failedRecoverable
-            )
-        }
-    }
-
-    func testFailureCannotBeAttachedToADifferentOrigin() {
-        let failure = VaultFailure(origin: .copyingToArchiveStaging, reason: .permissionLost)
-        XCTAssertThrowsError(try machine.applying(.fail(failure), to: .archiveVerified)) {
-            XCTAssertEqual(
-                $0 as? VaultTransitionError,
-                .failureOriginMismatch(expected: .archiveVerified, actual: .copyingToArchiveStaging)
-            )
         }
     }
 }

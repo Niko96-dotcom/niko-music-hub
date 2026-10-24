@@ -92,10 +92,6 @@ final class ArchiveStorageProviderSimulationTests: XCTestCase {
         XCTAssertFalse(capabilities.supportsEviction)
         let eviction = try await provider.evictIfSupported(URL(fileURLWithPath: "/tmp/archive"))
         XCTAssertEqual(eviction, .unsupported)
-        XCTAssertEqual(
-            VaultFailure(origin: .evictingProviderCache, reason: .evictionUnsupported).recoveryDecision,
-            .keepArchiveLocal
-        )
     }
 
     func testPermissionLossFailsClosedBeforeWriting() async {
