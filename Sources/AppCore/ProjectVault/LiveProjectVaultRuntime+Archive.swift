@@ -444,7 +444,7 @@ extension LiveProjectVaultRuntime {
     }
 
     /// Runs a workflow-done archive through the automation scheduler so the
-    /// inactivity, capacity, and activity policy gate the copy. The scheduler
+    /// capacity and activity checks gate the copy. The scheduler
     /// only attempts removal when a bound authorization permits it; otherwise
     /// it preserves the automatic copy. The bound admission still restricts
     /// via live settings and revalidates after its final await.
@@ -465,7 +465,6 @@ extension LiveProjectVaultRuntime {
             // backup / removal admission, Keep Local, Emergency Stop — stays
             // enforced by the scheduler evaluator, the engine admissions, and
             // the bound removal admission.
-            isAutomaticArchivingEnabled: true,
             transferFreeSpaceReserveGiB: settings.vault.transferFreeSpaceReserveGiB
         )
         let capacity = try? capacityProbe.snapshot(
@@ -482,12 +481,8 @@ extension LiveProjectVaultRuntime {
         let candidate = VaultAutomationCandidate(
             projectID: entry.record.id,
             sourceURL: song.folderPath,
-            isKeepLocal: false,
-            lastActivityAt: song.effectiveLatestCPR?.modifiedAt,
-            availableCapacityBytes: capacity?.activeAvailableCapacityBytes,
             archiveAvailableCapacityBytes: capacity?.archiveAvailableCapacityBytes,
-            projectedArchiveBytes: capacity?.projectedArchiveBytes,
-            trigger: .workflowDone
+            projectedArchiveBytes: capacity?.projectedArchiveBytes
         )
         guard let result = try await scheduler.run(candidates: [candidate]).first else {
             throw ProjectVaultRuntimeError.unavailable

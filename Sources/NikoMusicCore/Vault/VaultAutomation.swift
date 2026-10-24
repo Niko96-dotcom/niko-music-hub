@@ -2,82 +2,47 @@ import Foundation
 
 public struct VaultAutomationPolicy: Equatable, Sendable {
     public var isVaultEnabled: Bool
-    public var isAutomaticArchivingEnabled: Bool
-    public var inactivityDays: Int
-    public var minimumFreeSpaceGiB: Int
     public var transferFreeSpaceReserveGiB: Int
     public var writeQuietPeriod: TimeInterval
 
     public init(
         isVaultEnabled: Bool,
-        isAutomaticArchivingEnabled: Bool,
-        inactivityDays: Int = 30,
-        minimumFreeSpaceGiB: Int = 120,
         transferFreeSpaceReserveGiB: Int = 5,
         writeQuietPeriod: TimeInterval = 10 * 60
     ) {
         self.isVaultEnabled = isVaultEnabled
-        self.isAutomaticArchivingEnabled = isAutomaticArchivingEnabled
-        self.inactivityDays = inactivityDays
-        self.minimumFreeSpaceGiB = minimumFreeSpaceGiB
         self.transferFreeSpaceReserveGiB = transferFreeSpaceReserveGiB
         self.writeQuietPeriod = writeQuietPeriod
     }
 }
 
+/// One Done project to archive. Keep Local was checked before the run.
 public struct VaultAutomationCandidate: Equatable, Sendable {
-    public enum Trigger: Equatable, Sendable {
-        case policy
-        case workflowDone
-    }
-
     public let projectID: ProjectID
     public let sourceURL: URL
-    public let isKeepLocal: Bool
-    public let lastActivityAt: Date?
-    /// Free bytes on the Active volume, used only to trigger early disk-pressure eligibility.
-    public let availableCapacityBytes: Int64?
     /// Free bytes on the Archive destination volume before a new automatic write.
     public let archiveAvailableCapacityBytes: Int64?
     /// Logical bytes the automatic Archive write is projected to add.
     public let projectedArchiveBytes: Int64?
-    public let trigger: Trigger
 
     public init(
         projectID: ProjectID,
         sourceURL: URL,
-        isKeepLocal: Bool,
-        lastActivityAt: Date?,
-        availableCapacityBytes: Int64?,
-        archiveAvailableCapacityBytes: Int64? = nil,
-        projectedArchiveBytes: Int64? = nil,
-        trigger: Trigger = .policy
+        archiveAvailableCapacityBytes: Int64?,
+        projectedArchiveBytes: Int64?
     ) {
         self.projectID = projectID
         self.sourceURL = sourceURL
-        self.isKeepLocal = isKeepLocal
-        self.lastActivityAt = lastActivityAt
-        self.availableCapacityBytes = availableCapacityBytes
         self.archiveAvailableCapacityBytes = archiveAvailableCapacityBytes
         self.projectedArchiveBytes = projectedArchiveBytes
-        self.trigger = trigger
     }
-}
-
-public enum VaultAutomationEligibilityReason: Equatable, Sendable {
-    case inactivity
-    case diskPressure
 }
 
 public enum VaultAutomationPostponement: Equatable, Sendable {
     case vaultDisabled
-    case automaticArchivingDisabled
-    case keepLocal
     case invalidPolicy
     case archiveCapacityUnavailable
     case insufficientArchiveCapacity
-    case unknownLastActivity
-    case notOldEnoughAndNoDiskPressure
     case cubaseRunning
     case openFiles
     case recentWriteActivity
@@ -86,13 +51,9 @@ public enum VaultAutomationPostponement: Equatable, Sendable {
     public var message: String {
         switch self {
         case .vaultDisabled: "Project Vault is turned off."
-        case .automaticArchivingDisabled: "Automatic archiving is turned off."
-        case .keepLocal: "Keep Local is on for this song."
-        case .invalidPolicy: "Check the Project Vault free-space and inactivity settings."
+        case .invalidPolicy: "Check the Project Vault free-space settings."
         case .archiveCapacityUnavailable: "Available space could not be checked. Reconnect the destination drive and check folder access, then retry."
         case .insufficientArchiveCapacity: "There isn’t enough free space on the Vault drive for this project plus the spare room you set. Free up space and retry. Every copy was kept."
-        case .unknownLastActivity: "Couldn’t tell when this project was last worked on."
-        case .notOldEnoughAndNoDiskPressure: "This project hasn’t been untouched long enough to archive automatically."
         case .cubaseRunning: "Close Cubase and Ableton Live before removing the Active copy."
         case .openFiles: "Close programs using files in this project and retry."
         case .recentWriteActivity: "Files in this project are still changing. Wait for saving to finish and retry."
@@ -111,7 +72,7 @@ public enum VaultAutomationPostponement: Equatable, Sendable {
 }
 
 public enum VaultAutomationEligibility: Equatable, Sendable {
-    case eligible(VaultAutomationEligibilityReason)
+    case eligible
     case postponed(VaultAutomationPostponement)
 }
 
@@ -149,17 +110,9 @@ public struct VaultAutomationEligibilityEvaluator: Sendable {
 
     public func evaluate(
         _ candidate: VaultAutomationCandidate,
-        policy: VaultAutomationPolicy,
-        now: Date
+        policy: VaultAutomationPolicy
     ) -> VaultAutomationEligibility {
         guard policy.isVaultEnabled else { return .postponed(.vaultDisabled) }
-        guard policy.isAutomaticArchivingEnabled else { return .postponed(.automaticArchivingDisabled) }
-        guard !candidate.isKeepLocal else { return .postponed(.keepLocal) }
-        guard policy.inactivityDays > 0, policy.minimumFreeSpaceGiB >= 0,
-              Int64(policy.minimumFreeSpaceGiB) <= Int64.max / 1_073_741_824,
-              policy.writeQuietPeriod >= 0 else {
-            return .postponed(.invalidPolicy)
-        }
         if let postponement = VaultArchiveWriteAdmissionEvaluator().postponement(
             availableCapacityBytes: candidate.archiveAvailableCapacityBytes,
             projectedCopyBytes: candidate.projectedArchiveBytes,
@@ -167,20 +120,7 @@ public struct VaultAutomationEligibilityEvaluator: Sendable {
         ) {
             return .postponed(postponement)
         }
-        if candidate.trigger == .workflowDone { return .eligible(.inactivity) }
-        guard let lastActivity = candidate.lastActivityAt, lastActivity <= now else {
-            return .postponed(.unknownLastActivity)
-        }
-        let seconds = TimeInterval(policy.inactivityDays) * 86_400
-        if now.timeIntervalSince(lastActivity) >= seconds { return .eligible(.inactivity) }
-
-        guard let freeBytes = candidate.availableCapacityBytes else {
-            return .postponed(.notOldEnoughAndNoDiskPressure)
-        }
-        let threshold = Int64(policy.minimumFreeSpaceGiB) * 1_073_741_824
-        return freeBytes < threshold
-            ? .eligible(.diskPressure)
-            : .postponed(.notOldEnoughAndNoDiskPressure)
+        return .eligible
     }
 }
 
@@ -560,26 +500,24 @@ public enum VaultAutomationRunResult: Equatable, Sendable {
     case failed(VaultAutomationFailureNotification)
 }
 
-/// One quiet, opt-in scheduler pass. Successful and postponed projects emit no
-/// notifications; only structured failures are sent to the supplied sink.
+/// Runs the Done archive: the Vault and capacity checks, the activity probes,
+/// the copy, and — only when the caller says the run removes the Active copy —
+/// the probes again and the removal. A busy or uncertain probe after the copy
+/// keeps both copies. Postponements and failures come back as results.
 public actor VaultAutomationScheduler {
-    public typealias FailureSink = @Sendable (VaultAutomationFailureNotification) async -> Void
-
     private let policy: VaultAutomationPolicy
     private let evaluator: VaultAutomationEligibilityEvaluator
     private let activityProbe: any VaultAutomationActivityProbing
     private let archiver: any VaultAutomaticArchiving
     private let now: @Sendable () -> Date
-    private let failureSink: FailureSink
     private let removesActiveCopy: Bool
 
     public init(
         policy: VaultAutomationPolicy,
         activityProbe: any VaultAutomationActivityProbing,
         archiver: any VaultAutomaticArchiving,
-        removesActiveCopy: Bool = true,
-        now: @escaping @Sendable () -> Date = Date.init,
-        failureSink: @escaping FailureSink = { _ in }
+        removesActiveCopy: Bool,
+        now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.policy = policy
         self.evaluator = VaultAutomationEligibilityEvaluator()
@@ -587,19 +525,14 @@ public actor VaultAutomationScheduler {
         self.archiver = archiver
         self.removesActiveCopy = removesActiveCopy
         self.now = now
-        self.failureSink = failureSink
     }
 
     /// Throws `CancellationError` or `VaultTransferInterruption` when the
     /// archive is stopped; every other error becomes a `.failed` result.
     public func run(candidates: [VaultAutomationCandidate]) async throws -> [VaultAutomationRunResult] {
-        guard policy.isVaultEnabled, policy.isAutomaticArchivingEnabled else {
-            let reason: VaultAutomationPostponement = policy.isVaultEnabled ? .automaticArchivingDisabled : .vaultDisabled
-            return candidates.map { .postponed($0.projectID, reason) }
-        }
         var results: [VaultAutomationRunResult] = []
         for candidate in candidates {
-            let eligibility = evaluator.evaluate(candidate, policy: policy, now: now())
+            let eligibility = evaluator.evaluate(candidate, policy: policy)
             guard case .eligible = eligibility else {
                 if case let .postponed(reason) = eligibility { results.append(.postponed(candidate.projectID, reason)) }
                 continue
@@ -642,7 +575,6 @@ public actor VaultAutomationScheduler {
                     stage: "automatic-archive",
                     message: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 )
-                await failureSink(failure)
                 results.append(.failed(failure))
             }
         }

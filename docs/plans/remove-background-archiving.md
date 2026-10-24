@@ -19,8 +19,8 @@ moves to [architecture.md](../architecture.md), and this file and the decision m
 | --- | --- | --- | --- |
 | 0 Baseline | taken from the coordinator | | `c51e10f`: 2,900 passed, 0 failed, 8 skipped; Swift Testing 86 passed |
 | 1 A true message when a Done archive is refused | done | `8096db7` | strict build, 0 warnings; Vault suites 242 run, 0 failures; plant (order swap, two throw sites made constant) → exactly the 3 new tests fail |
-| 2 The settings and their readers go | done | this commit | strict build, 0 warnings; settings, repair, bundle, Vault, Keep Local and source suites 395 run, 0 failures; plant (decoder rejects unknown keys, a login row in the Vault pane, repair lists "automatic archiving") → the 1.8.1 payload test, the 1.8.1 bundle test, the Vault-pane guard and both repair tests fail; General subtitle (revision 6a): plant (subtitle back) → the Vault-pane guard fails |
-| 3 The automation code keeps only what the Done copy uses | not started | | |
+| 2 The settings and their readers go | done | `4c73f29` | strict build, 0 warnings; settings, repair, bundle, Vault, Keep Local and source suites 395 run, 0 failures; plant (decoder rejects unknown keys, a login row in the Vault pane, repair lists "automatic archiving") → the 1.8.1 payload test, the 1.8.1 bundle test, the Vault-pane guard and both repair tests fail; General subtitle (revision 6a): Settings and source suites 202 run, 0 failures; plant (subtitle back) → the Vault-pane guard fails |
+| 3 The automation code keeps only what the Done copy uses | done | this commit | strict build, 0 warnings; automation, runtime, Done, queue, Keep Local and engine suites 226 run, 0 failures; plant (Done caller always removes, scheduler ignores `removesActiveCopy`, evaluator skips the reserve) → the new copy-only scheduler test, both reserve tests and the copy-only Done runtime tests fail; `.invalidPolicy` text (revision 6b): same suites 226 run, 0 failures; plant (old text back) → `testPostponementTextsNameNoRemovedSetting` fails |
 | 4 Docs, full gates, live check | not started | | |
 
 ## Revisions
@@ -32,8 +32,7 @@ matches, except:
    returns it for an out-of-range reserve, `LiveProjectVaultRuntime+Admission.swift:142` throws it when the settings
    cannot be read during a write admission, and `LocalVaultTransferEngine.swift:1191` maps it to
    `.insufficientSpace`. Design A removes the evaluator's own `.invalidPolicy` check (`VaultAutomation.swift:158-162`),
-   not the case. Its text "Check the Project Vault free-space and inactivity settings." still names the removed
-   inactivity setting; the plan does not list a new text, so it stays as it is (follow-up).
+   not the case. Its text named the removed inactivity setting; it changes in step 3 (revision 6b).
 2. **`activeAvailableCapacityBytes` stays in `ProjectVaultCapacitySnapshot`.** After step 3 nothing reads it, but the
    probe reads the Active volume as part of one throwing snapshot, so removing the read would let a Done copy start
    when the Active volume cannot be read. That is a behavior change outside this plan (follow-up).
@@ -52,7 +51,12 @@ matches, except:
    "Open at login" loses the subtitle "Lets Project Vault archive while you’re away"; the row shows only "Open at
    login". Guarded by `testVaultSettingsOfferNoBackgroundArchivingAndNoLoginItem`. (b) Step 3: the `.invalidPolicy`
    text "Check the Project Vault free-space and inactivity settings." becomes "Check the Project Vault free-space
-   settings."
+   settings." Guarded by `testPostponementTextsNameNoRemovedSetting`.
+7. **`VaultAutomationTests:37` is kept, not deleted.** Half of it tested the inactivity trigger, but its "roomy /
+   tight" half tests the live copy-reserve check. It became `testVaultSwitchAndCopyReserveGateTheDoneCopy` (Vault off,
+   enough room, too little room, unknown capacity). New: `testCopyOnlyRunKeepsTheActiveCopyWithoutProbingAgain`, for
+   the now explicit `removesActiveCopy: false`. The four scheduler tests pass `removesActiveCopy: true`, the old
+   default, and keep their assertions.
 
 ## Decisions for Niko
 

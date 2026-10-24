@@ -6,55 +6,41 @@ import XCTest
 final class VaultAutomationTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 2_000_000_000)
 
-    func testEligibilityCoversInactivityDiskPressureKeepLocalAndUnknownInputs() {
+    func testVaultSwitchAndCopyReserveGateTheDoneCopy() {
         let evaluator = VaultAutomationEligibilityEvaluator()
-        let policy = VaultAutomationPolicy(
-            isVaultEnabled: true,
-            isAutomaticArchivingEnabled: true,
-            inactivityDays: 30,
-            minimumFreeSpaceGiB: 120
+        let gib: Int64 = 1_073_741_824
+        let roomy = VaultAutomationCandidate(
+            projectID: candidateID, sourceURL: URL(fileURLWithPath: "/tmp/project"),
+            archiveAvailableCapacityBytes: 117 * gib, projectedArchiveBytes: 4 * gib
         )
-
-        XCTAssertEqual(evaluator.evaluate(candidate(lastActivityDaysAgo: 31), policy: policy, now: now), .eligible(.inactivity))
+        XCTAssertEqual(evaluator.evaluate(roomy, policy: enabledPolicy), .eligible)
         XCTAssertEqual(
-            evaluator.evaluate(candidate(lastActivityDaysAgo: 2, freeSpaceGiB: 119), policy: policy, now: now),
-            .eligible(.diskPressure)
+            evaluator.evaluate(roomy, policy: VaultAutomationPolicy(isVaultEnabled: false)),
+            .postponed(.vaultDisabled)
         )
-        XCTAssertEqual(
-            evaluator.evaluate(candidate(keepLocal: true, lastActivityDaysAgo: 31), policy: policy, now: now),
-            .postponed(.keepLocal)
+        let tight = VaultAutomationCandidate(
+            projectID: candidateID, sourceURL: roomy.sourceURL,
+            archiveAvailableCapacityBytes: 8 * gib, projectedArchiveBytes: 4 * gib
         )
-        XCTAssertEqual(
-            evaluator.evaluate(candidate(lastActivityDaysAgo: nil), policy: policy, now: now),
-            .postponed(.unknownLastActivity)
+        XCTAssertEqual(evaluator.evaluate(tight, policy: enabledPolicy), .postponed(.insufficientArchiveCapacity))
+        let unknown = VaultAutomationCandidate(
+            projectID: candidateID, sourceURL: roomy.sourceURL,
+            archiveAvailableCapacityBytes: nil, projectedArchiveBytes: 4 * gib
         )
-        XCTAssertEqual(
-            evaluator.evaluate(candidate(lastActivityDaysAgo: 2, freeSpaceGiB: nil), policy: policy, now: now),
-            .postponed(.notOldEnoughAndNoDiskPressure)
-        )
+        XCTAssertEqual(evaluator.evaluate(unknown, policy: enabledPolicy), .postponed(.archiveCapacityUnavailable))
     }
 
-    func testPressureTriggerAndCopyReserveAreIndependentOnSameVolume() {
-        let evaluator = VaultAutomationEligibilityEvaluator()
-        let policy = VaultAutomationPolicy(isVaultEnabled: true, isAutomaticArchivingEnabled: true)
-        let gib: Int64 = 1_073_741_824
-        for trigger in [VaultAutomationCandidate.Trigger.policy, .workflowDone] {
-            let roomy = VaultAutomationCandidate(
-                projectID: candidateID, sourceURL: URL(fileURLWithPath: "/tmp/project"),
-                isKeepLocal: false, lastActivityAt: now,
-                availableCapacityBytes: 117 * gib, archiveAvailableCapacityBytes: 117 * gib,
-                projectedArchiveBytes: 4 * gib, trigger: trigger
-            )
-            XCTAssertEqual(evaluator.evaluate(roomy, policy: policy, now: now),
-                           .eligible(trigger == .workflowDone ? .inactivity : .diskPressure))
-            let tight = VaultAutomationCandidate(
-                projectID: candidateID, sourceURL: roomy.sourceURL,
-                isKeepLocal: false, lastActivityAt: now,
-                availableCapacityBytes: 8 * gib, archiveAvailableCapacityBytes: 8 * gib,
-                projectedArchiveBytes: 4 * gib, trigger: trigger
-            )
-            XCTAssertEqual(evaluator.evaluate(tight, policy: policy, now: now), .postponed(.insufficientArchiveCapacity))
+    func testPostponementTextsNameNoRemovedSetting() {
+        let postponements: [VaultAutomationPostponement] = [
+            .vaultDisabled, .invalidPolicy, .archiveCapacityUnavailable, .insufficientArchiveCapacity,
+            .cubaseRunning, .openFiles, .recentWriteActivity, .uncertainActivity("probe-failed")
+        ]
+        for postponement in postponements {
+            for removed in ["inactivity", "untouched", "Automatic archiving"] {
+                XCTAssertFalse(postponement.message.contains(removed), "\(postponement): \(removed)")
+            }
         }
+        XCTAssertEqual(VaultAutomationPostponement.invalidPolicy.message, "Check the Project Vault free-space settings.")
     }
 
     func testWorkflowDonePostponesWhenProjectedCopyWouldBreachFreeSpaceFloor() {
@@ -64,25 +50,15 @@ final class VaultAutomationTests: XCTestCase {
         let projectedProjectBytes = 21 * bytesPerGiB
         let projectedRemainingBytes = availableCapacityBytes - projectedProjectBytes
         XCTAssertEqual(projectedRemainingBytes, 59 * bytesPerGiB)
-        let policy = VaultAutomationPolicy(
-            isVaultEnabled: true,
-            isAutomaticArchivingEnabled: true,
-            inactivityDays: 30,
-            minimumFreeSpaceGiB: 120,
-            transferFreeSpaceReserveGiB: 60
-        )
+        let policy = VaultAutomationPolicy(isVaultEnabled: true, transferFreeSpaceReserveGiB: 60)
         let candidate = VaultAutomationCandidate(
             projectID: candidateID,
             sourceURL: URL(fileURLWithPath: "/tmp/projected-headroom-fixture"),
-            isKeepLocal: false,
-            lastActivityAt: now,
-            availableCapacityBytes: availableCapacityBytes,
             archiveAvailableCapacityBytes: availableCapacityBytes,
-            projectedArchiveBytes: projectedProjectBytes,
-            trigger: .workflowDone
+            projectedArchiveBytes: projectedProjectBytes
         )
 
-        let result = evaluator.evaluate(candidate, policy: policy, now: now)
+        let result = evaluator.evaluate(candidate, policy: policy)
 
         if case .eligible = result {
             XCTFail("80 GiB available minus 21 GiB projected must not cross a 60 GiB floor")
@@ -106,10 +82,11 @@ final class VaultAutomationTests: XCTestCase {
                 policy: enabledPolicy,
                 activityProbe: FixedActivityProbe(cubase: cubase, openFiles: openFiles, writes: writes),
                 archiver: archiver,
+                removesActiveCopy: true,
                 now: { fixedNow }
             )
 
-            let results = try await scheduler.run(candidates: [candidate(lastActivityDaysAgo: 31)])
+            let results = try await scheduler.run(candidates: [candidate()])
 
             XCTAssertEqual(results, [.postponed(candidateID, expected)])
             let archiveCalls = await archiver.archiveCallCount()
@@ -127,12 +104,38 @@ final class VaultAutomationTests: XCTestCase {
             policy: enabledPolicy,
             activityProbe: probe,
             archiver: archiver,
+            removesActiveCopy: true,
             now: { fixedNow }
         )
 
-        let results = try await scheduler.run(candidates: [candidate(lastActivityDaysAgo: 31)])
+        let results = try await scheduler.run(candidates: [candidate()])
 
         XCTAssertEqual(results, [.postponed(candidateID, .cubaseRunning)])
+        let archiveCalls = await archiver.archiveCallCount()
+        let removalCalls = await archiver.removalCallCount()
+        XCTAssertEqual(archiveCalls, 1)
+        XCTAssertEqual(removalCalls, 0)
+    }
+
+    func testCopyOnlyRunKeepsTheActiveCopyWithoutProbingAgain() async throws {
+        let archiver = RecordingAutomaticArchiver()
+        let probe = SequencedActivityProbe(cubase: [.clear, .busy], openFiles: [.clear], writes: [.clear])
+        let fixedNow = now
+        let scheduler = VaultAutomationScheduler(
+            policy: enabledPolicy,
+            activityProbe: probe,
+            archiver: archiver,
+            removesActiveCopy: false,
+            now: { fixedNow }
+        )
+
+        let results = try await scheduler.run(candidates: [candidate()])
+
+        guard case let .archived(projectID, record) = results.first else {
+            return XCTFail("Expected a copy-only archive, got \(results)")
+        }
+        XCTAssertEqual(projectID, candidateID)
+        XCTAssertEqual(record.state, .archiveVerified)
         let archiveCalls = await archiver.archiveCallCount()
         let removalCalls = await archiver.removalCallCount()
         XCTAssertEqual(archiveCalls, 1)
@@ -148,11 +151,12 @@ final class VaultAutomationTests: XCTestCase {
                 policy: enabledPolicy,
                 activityProbe: FixedActivityProbe(cubase: .clear, openFiles: .clear, writes: .clear),
                 archiver: archiver,
+                removesActiveCopy: true,
                 now: { fixedNow }
             )
             do {
                 let results = try await scheduler.run(candidates: [
-                    candidate(lastActivityDaysAgo: 31), candidate(lastActivityDaysAgo: 31)
+                    candidate(), candidate()
                 ])
                 XCTFail("Expected \(stop) to be rethrown, got \(results)")
             } catch {
@@ -167,9 +171,10 @@ final class VaultAutomationTests: XCTestCase {
             policy: enabledPolicy,
             activityProbe: FixedActivityProbe(cubase: .clear, openFiles: .clear, writes: .clear),
             archiver: failing,
+            removesActiveCopy: true,
             now: { fixedNow }
         )
-        let results = try await scheduler.run(candidates: [candidate(lastActivityDaysAgo: 31)])
+        let results = try await scheduler.run(candidates: [candidate()])
         guard case let .failed(failure) = results.first else {
             return XCTFail("Expected a failure, got \(results)")
         }
@@ -193,6 +198,7 @@ final class VaultAutomationTests: XCTestCase {
             policy: enabledPolicy,
             activityProbe: FixedActivityProbe(cubase: .clear, openFiles: .clear, writes: .clear),
             archiver: engine,
+            removesActiveCopy: true,
             now: { fixedNow }
         )
 
@@ -200,9 +206,6 @@ final class VaultAutomationTests: XCTestCase {
             VaultAutomationCandidate(
                 projectID: candidateID,
                 sourceURL: fixture.source,
-                isKeepLocal: false,
-                lastActivityAt: now.addingTimeInterval(-31 * 86_400),
-                availableCapacityBytes: 500 * 1_073_741_824,
                 archiveAvailableCapacityBytes: 500 * 1_073_741_824,
                 projectedArchiveBytes: 1_073_741_824
             )
@@ -382,20 +385,13 @@ final class VaultAutomationTests: XCTestCase {
     }
 
     private var enabledPolicy: VaultAutomationPolicy {
-        VaultAutomationPolicy(isVaultEnabled: true, isAutomaticArchivingEnabled: true)
+        VaultAutomationPolicy(isVaultEnabled: true)
     }
 
-    private func candidate(
-        keepLocal: Bool = false,
-        lastActivityDaysAgo: Int?,
-        freeSpaceGiB: Int? = 500
-    ) -> VaultAutomationCandidate {
+    private func candidate() -> VaultAutomationCandidate {
         VaultAutomationCandidate(
             projectID: candidateID,
             sourceURL: URL(fileURLWithPath: "/tmp/fixture-project"),
-            isKeepLocal: keepLocal,
-            lastActivityAt: lastActivityDaysAgo.map { now.addingTimeInterval(-Double($0) * 86_400) },
-            availableCapacityBytes: freeSpaceGiB.map { Int64($0) * 1_073_741_824 },
             archiveAvailableCapacityBytes: 500 * 1_073_741_824,
             projectedArchiveBytes: 1_073_741_824
         )
