@@ -10,6 +10,10 @@ import SwiftUI
 /// downloads, stem separations, conversions, archive scan, vault transfer) and the selected tool from the main
 /// window's focused scene value, so the items refresh when a job starts or
 /// ends and Esc only routes while the main window is key.
+///
+/// AppKit never offers a plain Esc to the menu while a window is key, so the Esc item
+/// fires only from a click; the key itself is bound in the window by `HubInspectorPage`
+/// through the same `HubShellEscape`.
 struct HubCancelCommands: Commands {
     @ObservedObject var jobStatusCenter: ShellJobStatusCenter
     @FocusedValue(\.hubShellCancelContext) private var cancelContext
@@ -31,31 +35,25 @@ struct HubCancelCommands: Commands {
     }
 
     private var canCancelEscape: Bool {
-        !escapeJobs.isEmpty
+        escape?.jobs.isEmpty == false
     }
 
     private var canCancelForemost: Bool {
         cancelContext != nil && !InAppJobCancelRouting.commandPeriodJobs(in: jobStatusCenter.jobs).isEmpty
     }
 
-    /// Empty when the main window is not the key scene.
-    private var escapeJobs: [ShellJobStatus] {
-        guard let cancelContext else { return [] }
-        return InAppJobCancelRouting.escapeJobs(selectedTool: cancelContext.selectedTool, in: jobStatusCenter.jobs)
+    /// Nil when the main window is not the key scene.
+    private var escape: HubShellEscape? {
+        guard let cancelContext else { return nil }
+        return HubShellEscape(jobStatusCenter: jobStatusCenter, tool: cancelContext.selectedTool)
     }
 
     func cancelEscapeTarget() {
-        cancel(escapeJobs)
+        escape?.cancel()
     }
 
     func cancelForemostJob() {
         guard cancelContext != nil else { return }
-        cancel(InAppJobCancelRouting.commandPeriodJobs(in: jobStatusCenter.jobs))
-    }
-
-    private func cancel(_ jobs: [ShellJobStatus]) {
-        for job in jobs {
-            jobStatusCenter.cancel(id: job.cancelActionID ?? job.id)
-        }
+        jobStatusCenter.cancel(InAppJobCancelRouting.commandPeriodJobs(in: jobStatusCenter.jobs))
     }
 }

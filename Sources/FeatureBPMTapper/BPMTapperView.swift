@@ -139,6 +139,9 @@ public struct BPMTapperView: View {
         }
         .onKeyPress(.escape) {
             guard isActiveTool else { return .ignored }
+            // Esc resets a run, like the Reset button; with no run it goes on to the
+            // page's Esc, which cancels shell work as Edit ▸ Cancel does.
+            guard viewModel.hasStartedRun else { return .ignored }
             viewModel.resetTaps()
             return .handled
         }

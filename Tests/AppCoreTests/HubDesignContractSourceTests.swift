@@ -144,6 +144,9 @@ final class HubDesignContractSourceTests: XCTestCase {
         }
         let bpm = try readStripped("Sources/FeatureBPMTapper/BPMTapperView.swift")
         expectMatch(bpm, pattern: "tapSurfaceFocused\\s*=\\s*active", "the tap pad's focus follows the page")
+        // The tap pad has the keyboard while its page is shown; with no run to reset it
+        // lets Esc go on to the page's Esc, which cancels shell work like Edit ▸ Cancel.
+        expectMatch(bpm, pattern: "guard\\s+viewModel\\.hasStartedRun\\s+else\\s*\\{\\s*return\\s+\\.ignored", "with no tap run, Esc goes on to the shell's Esc")
     }
 
     // §4 — the Archive Browser stays mounted as well but is no HubInspectorPage: it

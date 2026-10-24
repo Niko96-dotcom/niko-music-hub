@@ -380,16 +380,21 @@ Return and Esc on a tool page have one owner each (2026-10-24, finding #10 of th
 - `HubInspectorPage` binds the page's `primaryKey` (Return) and `cancelKey` (Esc) as hidden keyboard-shortcut buttons,
   only while the key is enabled and the page is the visible one (`hubToolIsActive`). The shell keeps pages you left
   mounted, so before this a hidden page could keep Return, Esc and Space.
-- Esc: the visible page's enabled cancel key, otherwise the shell's Edit ▸ Cancel ([Tool
-  self-description](#tool-self-description)). AppKit gives a window's key buttons the key before the menu. The WAV
-  Converter's cancel key is its soft stop; Edit ▸ Cancel chosen from the menu, ⌘. and the jobs strip stop the file
-  in flight now. The stop request publishes, so the visible button greys and the cancel key unbinds. A second Esc
-  does not stop the file: in the live check of 2026-10-24 a plain Esc did not fire Edit ▸ Cancel, while the menu and
-  ⌘. did ([architecture-map.md](architecture-map.md#where-the-code-differs-from-the-intent-observed), gap 10). The
-  Downloader and Stem Separation declare no cancel key: the shell's Esc is meant to cancel their jobs. The Audio
-  Recorder's cancel key stops the take.
+- Esc: the visible page's enabled cancel key, otherwise the shell's Esc, which cancels what Edit ▸ Cancel cancels on
+  that pane ([Tool self-description](#tool-self-description)). AppKit offers a key without ⌘ to the main menu only
+  while no window is key. In the main window a plain Esc goes to the window (`keyDown:`, then `cancelOperation:`),
+  which looks only for its own cancel button (traced 2026-10-24), so the Esc item of `HubCancelCommands` fires only
+  from a click; ⌘. has a modifier and reaches the menu. The shell hands each pane it mounts a `HubShellEscape` (the
+  job center and the pane's tool), and the menu item and the page both cancel through it. `HubInspectorPage` binds
+  it as the visible page's cancel button while the page has no enabled cancel key and there is a job to cancel.
+- The WAV Converter's cancel key is its soft stop. The stop request publishes, so the visible button greys and the
+  cancel key unbinds; a second Esc is then the shell's Esc and stops the file in flight. The Downloader and Stem
+  Separation declare no cancel key, so Esc cancels their own jobs. The Audio Recorder's cancel key stops the take;
+  without a take, and on the BPM Tapper, Esc cancels shell work: a Vault transfer asks first, a scan stops. The live
+  check of 2026-10-24 proved the converter's second Esc and Stem Separation's Esc.
 - The BPM Tapper's tap pad and the recorder's record button answer their keys only while their page is visible; the
-  tap pad gives up keyboard focus when its page is hidden and takes it back when it is shown.
+  tap pad gives up keyboard focus when its page is hidden and takes it back when it is shown. Esc on the tap pad
+  resets a tap run, like Reset; with no run it goes on to the page's Esc.
 - The Archive Browser is no `HubInspectorPage`, so it follows the same rule itself: its key handlers (Esc, Return,
   arrows, the song letters, Space, the list layout's arrows and the search field's Esc) act only while it is the
   visible tool, and the pane gives up keyboard focus when it is hidden and takes it back when it is shown. Esc on

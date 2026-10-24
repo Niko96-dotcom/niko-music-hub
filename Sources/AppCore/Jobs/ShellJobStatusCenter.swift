@@ -77,6 +77,13 @@ public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Cancels each job through its cancel action, or as a runner job.
+    public func cancel(_ jobs: [ShellJobStatus]) {
+        for job in jobs {
+            cancel(id: job.cancelActionID ?? job.id)
+        }
+    }
+
     // MARK: - Quit (ADR-019)
 
     /// Work quit must not cut off silently: every unfinished runner job plus the

@@ -170,7 +170,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Vault transfer state, restore phase | the tables `ProjectVaultStateMachine` and `VaultRestorePhase.allowedNextPhases`; written only by each engine's `checkAndSave` and the restore reconcile ([architecture.md § Vault state changes](architecture.md#vault-state-changes)) | `vault_transfers`, `vault_restores` in `archive-index.sqlite` |
 | Preview playback | `ArchivePreviewSession`, held by `ArchiveBrowserViewModel.previewSession`; views get it by initializer ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
 | Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter`; each row's verb, Cancel help and cancel target come from its tool | memory |
-| A tool page's Return and Esc keys | `HubInspectorPage` (`primaryKey`, `cancelKey`), bound only on the visible page; the Archive Browser, no `HubInspectorPage`, owns its keys in `ArchiveBrowserView` under the same rule ([architecture.md § Tool page keys](architecture.md#tool-page-keys)) | code |
+| A tool page's Return and Esc keys | `HubInspectorPage` (`primaryKey`, `cancelKey`, otherwise the shell's Esc from `HubShellEscape`), bound only on the visible page; the Archive Browser, no `HubInspectorPage`, owns its keys in `ArchiveBrowserView` under the same rule ([architecture.md § Tool page keys](architecture.md#tool-page-keys)) | code |
 | Tool order, the Settings row, which pane keeps Esc | each tool's `ToolMetadata` (`section`, `handlesEscape`), read through `ToolSection.sidebarOrder` and `InAppJobCancelRouting` ([architecture.md § Tool self-description](architecture.md#tool-self-description)) | code |
 | Output Inbox | `JSONOutputInboxStore` | `output-inbox.json` |
 | A tool page's list of its own outputs | `ToolRecentOutputs` (AppCore), held by the tool's view model | derived from `output-inbox.json` |
@@ -278,11 +278,11 @@ These rules are documented and, where named, enforced. The full table is in
 9. Closed on 2026-10-24: every transfer state and restore phase change goes through its table, and each engine's
    `checkAndSave` (plus the restore reconcile) is the only writer; an unlisted edge throws before anything is saved
    ([architecture.md § Vault state changes](architecture.md#vault-state-changes)).
-10. **A plain Esc on a tool page does not reach the shell's Edit ▸ Cancel.** Observed live on 2026-10-24 on the
-    WAV Converter with a file in flight and the page's cancel key unbound: Esc left the file running, while the
-    same Edit ▸ Cancel chosen from the menu, and ⌘. from the keyboard, stopped it at once. The Downloader and
-    Stem Separation rely on the same Esc item (`HubCancelCommands`) and were not checked. No earlier live check
-    proved this path ([architecture.md § Tool page keys](architecture.md#tool-page-keys)).
+10. Closed on 2026-10-24: a plain Esc on a tool page cancels what Edit ▸ Cancel cancels. AppKit offers a key
+    without ⌘ to the menu only while no window is key, so the menu item never got it; the visible
+    `HubInspectorPage` now binds the shell's Esc (`HubShellEscape`) while it has no enabled cancel key. Checked live
+    on the WAV Converter (the second Esc stops the file in flight) and on Stem Separation
+    ([architecture.md § Tool page keys](architecture.md#tool-page-keys)).
 
 Documents that disagree with the code:
 

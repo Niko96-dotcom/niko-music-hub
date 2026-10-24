@@ -149,7 +149,8 @@ Stem Separation) renders through `HubInspectorPage`:
 - Keys belong to the action slot: `HubInspectorPage(…, primaryKey:, cancelKey:)`
   (`HubPageKey`) binds Return and Esc, only while the key is enabled and the page is
   the visible one (the shell keeps pages you left mounted). With no enabled cancel
-  key, Esc reaches the shell's Edit ▸ Cancel, which cancels the tool's own job, so a
+  key, the scaffold binds the shell's Esc (`HubShellEscape`: what Edit ▸ Cancel
+  cancels, the tool's own job), so a
   page declares a cancel key only when Esc must mean something else (the WAV
   Converter's "Stop After This File", the recorder's Stop). Tool views never bind
   `.defaultAction` / `.cancelAction` themselves, and their own key handlers and focus

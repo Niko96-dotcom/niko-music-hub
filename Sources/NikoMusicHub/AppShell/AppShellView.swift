@@ -327,6 +327,12 @@ struct AppShellView: View {
                                 // Hidden panes stay mounted; tell them so app-wide
                                 // effects (menu values, key monitors) follow visibility.
                                 .environment(\.hubToolIsActive, isActive)
+                                // What Esc cancels on this pane; the visible tool page
+                                // binds it, as the Edit ▸ Cancel item cannot get a plain Esc.
+                                .environment(\.hubShellEscape, HubShellEscape(
+                                    jobStatusCenter: context.jobStatusCenter,
+                                    tool: registry.feature(for: toolID)?.metadata
+                                ))
                         }
                     }
                 }

@@ -2,8 +2,8 @@ import SwiftUI
 
 /// A key a tool page answers itself (design contract §4): Return runs the page's
 /// primary key, Esc its cancel key. `HubInspectorPage` is the only place that binds
-/// them. While a page has no enabled cancel key, Esc reaches the shell's
-/// Edit ▸ Cancel (`HubCancelCommands`), so a page declares one only when Esc must
+/// them. While a page has no enabled cancel key, Esc does what the shell's
+/// Edit ▸ Cancel does (`HubShellEscape`), so a page declares one only when Esc must
 /// mean something else than cancelling its tool's job.
 public struct HubPageKey {
     public let title: String
@@ -44,6 +44,7 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
 
     @Environment(\.hubTitleRowInset) private var titleRowInset
     @Environment(\.hubToolIsActive) private var isVisiblePage
+    @Environment(\.hubShellEscape) private var shellEscape
 
     private let header: Header
     private let live: Live
@@ -143,8 +144,9 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
     }
 
     /// Hidden buttons that give the page's keys their shortcuts; a disabled key, or
-    /// any key of a page you left, installs none, so Esc then reaches the shell's
-    /// Edit ▸ Cancel.
+    /// any key of a page you left, installs none. Without an enabled cancel key the
+    /// visible page binds the shell's Esc instead: AppKit never gives a plain Esc to
+    /// the Edit ▸ Cancel menu item while the window is key (`HubShellEscape`).
     @ViewBuilder
     private var pageKeyButtons: some View {
         if let key = HubPageKey.installed(primaryKey, onVisiblePage: isVisiblePage) {
@@ -155,6 +157,30 @@ public struct HubInspectorPage<Header: View, Live: View, Primary: View, List: Vi
         }
         if let key = HubPageKey.installed(cancelKey, onVisiblePage: isVisiblePage) {
             Button(key.title, action: key.perform)
+                .keyboardShortcut(.cancelAction)
+                .hidden()
+                .accessibilityHidden(true)
+        } else if isVisiblePage, let shellEscape {
+            HubShellEscapeButton(escape: shellEscape)
+        }
+    }
+}
+
+/// The shell's Esc as the visible page's cancel button, bound only while there is
+/// a job to cancel, as the Edit ▸ Cancel item is enabled only then. Only this view
+/// observes the job list, so a job's progress redraws it and not the page.
+private struct HubShellEscapeButton: View {
+    @ObservedObject private var jobStatusCenter: ShellJobStatusCenter
+    private let escape: HubShellEscape
+
+    init(escape: HubShellEscape) {
+        self.escape = escape
+        self.jobStatusCenter = escape.jobStatusCenter
+    }
+
+    var body: some View {
+        if !escape.jobs.isEmpty {
+            Button(CancelCopy.cancelOperation) { escape.cancel() }
                 .keyboardShortcut(.cancelAction)
                 .hidden()
                 .accessibilityHidden(true)

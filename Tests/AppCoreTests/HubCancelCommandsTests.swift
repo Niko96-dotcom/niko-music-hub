@@ -21,6 +21,19 @@ final class HubCancelCommandsTests: XCTestCase {
         XCTAssertFalse(CancelCopy.stopTransferMessage.contains("!"))
     }
 
+    /// AppKit never offers a plain Esc to the main menu while a window is key, so the Esc
+    /// item never fired by key: on the WAV Converter the second Esc left the file running
+    /// (live check, 2026-10-24). The shell hands each pane the target the item cancels,
+    /// and the visible `HubInspectorPage` binds it (`HubInspectorPageKeysTests`).
+    func testPlainEscIsBoundInTheWindowWithTheMenuItemsTarget() throws {
+        let commands = try SourceTestSupport.read("Sources/NikoMusicHub/Commands/HubCancelCommands.swift")
+        XCTAssertTrue(commands.contains("HubShellEscape(jobStatusCenter: jobStatusCenter, tool: cancelContext.selectedTool)"))
+        XCTAssertTrue(commands.contains("escape?.cancel()"))
+
+        let shell = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
+        XCTAssertTrue(shell.contains(".environment(\\.hubShellEscape, HubShellEscape("), "every mounted pane gets the shell's Esc")
+    }
+
     func testCommandPeriodCancelsForemostJob() throws {
         let commands = try SourceTestSupport.read("Sources/NikoMusicHub/Commands/HubCancelCommands.swift")
         XCTAssertTrue(commands.contains("keyboardShortcut(\".\", modifiers: .command)"))
