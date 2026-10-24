@@ -132,7 +132,8 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
    deletes. Settings exports and imports a metadata recovery bundle (`ProjectVaultRecoveryService`).
 7. Copy-only Done archiving also starts without a dialog: `enqueueDoneVaultProjectsIfNeeded`
    (`+ProjectVault.swift`) runs after each successful snapshot refresh and queues every Done song that has
-   no transfer, is not Keep Local, not busy and not waiting for an identity review.
+   no transfer, is not Keep Local, not busy and not waiting for an identity review. This is the only
+   automatic archiving; nothing archives on a timer, after inactivity or on low space.
 
 `NikoMusicCore/Vault` does every file operation and takes each policy decision as an injected admission
 closure. `AppCore/ProjectVault` turns settings, Keep Local, Emergency Stop, capacity and the bound token
@@ -262,12 +263,9 @@ These rules are documented and, where named, enforced. The full table is in
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, except the scenario structs after
    the `#endif` in `ArchiveUserFlowSmokeScenarios.swift`. `DevToolFeature` always compiles and is shown
    only with `NIKO_MUSIC_HUB_SHOW_DEV_TOOL=1`.
-8. **The "Archive automatically" switch starts no background archiving.** Its text in
-   `ProjectVaultSettingsView.swift` and [vault-durability.md](vault-durability.md) describe archiving after
-   inactivity or when space runs low. No production code builds a background (`.policy`) candidate for
-   `VaultAutomationScheduler`; the only caller passes `.workflowDone`. The setting is read by diagnostics,
-   the login-item warning, settings repair and `ProjectVaultRolloutPolicy.permitsActiveCopyRemoval`, which
-   has no production caller.
+8. Closed on 2026-10-24: the "Archive automatically" switch, its steppers, the Vault login-item row and
+   the unused background-scheduling code are gone. The only automatic archiving is the copy-only Done
+   copy (main flow step 7; [architecture.md § Project Vault bound authorization](architecture.md#project-vault-bound-authorization)).
 9. **The Vault state machine is not the only writer of states.** `LocalVaultTransferEngine` sets
    `.archiveVerified` and `.recoveryRequired` directly and rewinds states in launch recovery;
    `LocalVaultRestoreEngine.advance` writes restore phases without a transition check.
@@ -277,8 +275,6 @@ Documents that disagree with the code:
 - [vault-durability.md § Capabilities note](vault-durability.md#capabilities-note) says no production code
   branches on `waitsForDurability`. `LocalVaultTransferEngine` branches on it before removal and when it
   retires survivors.
-- [vault-durability.md](vault-durability.md) (summary list) describes background scheduling that is not
-  wired (gap 8).
 
 ## Open questions
 
@@ -290,8 +286,8 @@ Documents that disagree with the code:
 3. What triggers moving the Project Vault runtime out of `AppCore`?
 4. Settled on 2026-10-24: preview playback is injected. The archive view model owns the one session and views get
    it by initializer; the coordinator is gone ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)).
-5. Is background Vault archiving (inactivity, low space) still planned? If yes, it needs wiring; if no,
-   the Settings switch text and vault-durability.md need to change (gap 8).
+5. Settled on 2026-10-24: no background Vault archiving (inactivity, low space). Niko chose to remove the
+   switch; the Done copy is the only automatic archiving (gap 8).
 6. Should every transfer and restore state change go through `ProjectVaultStateMachine` (gap 9)?
 7. ADRs 001–016 are not in the public tree. Are they retired, or private planning history?
 8. `docs/architecture.md` and this map are not in the source-sale export list (`script/export-source-sale.sh`),

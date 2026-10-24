@@ -371,6 +371,10 @@ order, route or label anything (2026-10-24, finding #9 of the 2026-10-22 review)
 - Every explicit Archive confirmation captures a `ProjectVaultArchiveAuthorization` before the dialog;
   the exact token travels confirmation → queue → bounded Done retries and is never re-captured or
   escalated at execution (copy-only stays copy-only; drift fails closed in the runtime).
+- The automatic Done copy is the only automatic archiving: no timer, inactivity or low-space trigger
+  exists (the "Archive automatically" switch was removed on 2026-10-24). `VaultAutomationScheduler`
+  runs a Done archive and removes the Active copy only when its caller says so (`removesActiveCopy`,
+  true only for a bound removal authorization).
 - The nil-authorization overload (automatic Done, relaunch) is always copy-only; a new destructive
   action needs a fresh confirmation. Undo or leaving Done revokes that song's capture, dialog,
   queued Done operation, retry budget, and inflight Done task; revoked approvals are never reused.

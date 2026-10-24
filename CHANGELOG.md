@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Remove "Archive automatically", its "After *n* days untouched" and "Or when less than *n* GiB is free" steppers, and the login-item row with its warning from Settings → Project Vault: they promised background archiving that never ran. Marking a song Done still makes a verified copy that keeps the Active folder. Open at login stays in General, without its subtitle "Lets Project Vault archive while you’re away".
+- Name the real reason when a Done archive is refused (Emergency Stop, Project Vault off, a missing folder, the Keep Local review, "After archiving" set to keep the Active copy, or the missing backup confirmation) instead of "Automatic archiving is turned off." When the Vault free-space settings cannot be checked, the message no longer names the removed inactivity setting.
+- Drop the `automatic_archiving`, `automation_permitted`, `inactivity_days` and `minimum_free_space_gib` lines from Project Vault diagnostics. Settings and recovery copies saved by 1.8.1 still load.
+
 ## 1.8.1 - 2026-10-21
 
 - Download online-only Dropbox files when restoring a Project Vault copy. Retry starts a fresh download after a provider error and resumes failed or stopped restores, including after restarting the app; the verified copy and song metadata stay intact.

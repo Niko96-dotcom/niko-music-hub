@@ -18,7 +18,7 @@ missing proof never authorizes deletion.
 ## User-visible workflow
 
 - Archiving intent is **Keep a verified copy** or **Archive and free up space**. It replaces the earlier rollout selector in the UI; the legacy value is retained for existing records. Choosing copy-only never gains removal later through a settings change.
-- Background scheduling is off by default and opted in independently from manual archiving.
+- Nothing archives in the background: there is no timer, inactivity or low-space trigger. The only automatic archiving is the copy-only Done copy: after each archive refresh, a Done song without a Vault transfer, Keep Local or pending identity review gets a verified copy, and its Active folder stays.
 - Song completion offers **Archive and free up space** (only when permitted), **Keep a verified copy**, **Keep on this Mac**, or **Keep Status**, with the same shared manual confirmation on the board and in song detail.
 - Delayed retries stay copy-only. A verified archive with persisted recovery evidence can offer **Ready to free space** under a fresh confirmation.
 - Copies, pending transfers, and failures stay on the board. Archive-only songs stay hidden until shown again.

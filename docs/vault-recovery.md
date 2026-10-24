@@ -15,8 +15,7 @@ the Active copy and how restores behave is described in
   database backup (index, song metadata, full transfer/catalog records),
   normalized to a standalone file.
 - The current app settings, with automation forced off and paused on import
-  (`isEnabled=false`, `automaticArchiving=false`,
-  `automationEmergencyStop=true`). Root UUIDs, paths, and Keep Local marks are
+  (`isEnabled=false`, `automationEmergencyStop=true`). Root UUIDs, paths, and Keep Local marks are
   preserved.
 - A manifest recording the bundle version and file checksums. Import
   validates the manifest, checksums, settings schema, and database integrity
@@ -68,8 +67,7 @@ confirmation only; Music Hub does not create or verify that backup for you.
    replacement of your primary library. Nothing launches until you click and
    the import succeeds.
 4. Safest activation, in order: verify Active Projects and Archive / Vault
-   roots are the correct folders; keep background scheduling off; choose Keep
-   a verified copy first if the archiving intent needs changing; only unpause
+   roots are the correct folders; choose Keep a verified copy first if the archiving intent needs changing; only unpause
    when ready to resume work. Roots, identities, and Keep Local marks are
    preserved on import, so unchanged same-Mac roots need no repick — verify
    only. Re-point paths and re-grant folder access only when folders moved or
