@@ -39,15 +39,53 @@ final class ArchiveKeyboardFocusTests: XCTestCase {
         // the keyboard again. Without it this wait runs out and Esc goes nowhere.
         waitUntil { (window.firstResponder as? NSView)?.isDescendant(of: host) == true }
 
-        let escape = try XCTUnwrap(NSEvent.keyEvent(
+        window.sendEvent(try escapeKey(in: window))
+        waitUntil { model.viewMode == .board }
+
+        XCTAssertEqual(model.viewMode, .board, "Esc must leave a detail that was opened without a click")
+    }
+
+    /// The shell keeps the archive pane mounted while another tool is shown. The keys
+    /// then belong to the visible page: the hidden archive gives the keyboard up, so
+    /// Esc there does not close its song detail (nor stop a Vault transfer or cancel a
+    /// scan), and it takes the keyboard back when it is shown again.
+    func testHiddenArchiveGivesTheKeyboardUpAndTakesItBackWhenShown() throws {
+        let context = TestToolContext.make()
+        let model = ArchiveBrowserViewModel(context: context, archiveRootWatcher: NoopArchiveRootWatcher())
+        let song = Song(folderPath: URL(fileURLWithPath: "/fixture/keyboard-focus/Song", isDirectory: true),
+                        originalFolderName: "Focus Song", displayTitle: "Focus Song")
+        model.applyCatalogEdit(.load([song]))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1100, height: 700),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let host = NSHostingView(rootView: MountedArchivePane(context: context, model: model, isActiveTool: true))
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        spin()
+        model.openSongDetail(song)
+        waitUntil { (window.firstResponder as? NSView)?.isDescendant(of: host) == true }
+
+        host.rootView = MountedArchivePane(context: context, model: model, isActiveTool: false)
+        waitUntil { window.firstResponder === window }
+        XCTAssertTrue(window.firstResponder === window, "the hidden archive gives the keyboard up")
+        window.sendEvent(try escapeKey(in: window))
+
+        host.rootView = MountedArchivePane(context: context, model: model, isActiveTool: true)
+        waitUntil { (window.firstResponder as? NSView)?.isDescendant(of: host) == true }
+        XCTAssertEqual(model.viewMode, .boardDetail, "Esc on another tool's page must not close the hidden song detail")
+        window.sendEvent(try escapeKey(in: window))
+        waitUntil { model.viewMode == .board }
+
+        XCTAssertEqual(model.viewMode, .board, "shown again, the archive takes the keyboard back without a click")
+    }
+
+    private func escapeKey(in window: NSWindow) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [],
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
             characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53
         ))
-        window.sendEvent(escape)
-        waitUntil { model.viewMode == .board }
-
-        XCTAssertEqual(model.viewMode, .board, "Esc must leave a detail that was opened without a click")
     }
 
     /// Lets the hosted view render once after it is put in the window.
@@ -61,5 +99,17 @@ final class ArchiveKeyboardFocusTests: XCTestCase {
         while !condition(), Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.02))
         }
+    }
+}
+
+/// The archive pane as the shell mounts it: the visible tool, or hidden behind another one.
+private struct MountedArchivePane: View {
+    let context: ToolContext
+    let model: ArchiveBrowserViewModel
+    let isActiveTool: Bool
+
+    var body: some View {
+        ArchiveBrowserView(context: context, viewModel: model)
+            .environment(\.hubToolIsActive, isActiveTool)
     }
 }

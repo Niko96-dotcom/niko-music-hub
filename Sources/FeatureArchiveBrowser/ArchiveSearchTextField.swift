@@ -18,6 +18,8 @@ struct ArchiveSearchTextField: View {
     let onEdit: @MainActor @Sendable (String) -> Void
     var isDisabled: Bool = false
     @FocusState.Binding var keyboardFocus: ArchiveKeyboardFocus?
+    /// False while another tool is shown; the shell keeps the archive pane mounted.
+    @Environment(\.hubToolIsActive) private var isActiveTool
 
     var body: some View {
         HStack(spacing: 4) {
@@ -41,6 +43,7 @@ struct ArchiveSearchTextField: View {
                     : "Filters the song list as you type."
             )
             .onKeyPress(.escape) {
+                guard isActiveTool else { return .ignored }
                 handleEscape()
                 return .handled
             }

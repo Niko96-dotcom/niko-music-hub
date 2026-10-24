@@ -167,7 +167,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
 | Preview playback | `ArchivePreviewSession`, held by `ArchiveBrowserViewModel.previewSession`; views get it by initializer ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
 | Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter`; each row's verb, Cancel help and cancel target come from its tool | memory |
-| A tool page's Return and Esc keys | `HubInspectorPage` (`primaryKey`, `cancelKey`), bound only on the visible page ([architecture.md § Tool page keys](architecture.md#tool-page-keys)) | code |
+| A tool page's Return and Esc keys | `HubInspectorPage` (`primaryKey`, `cancelKey`), bound only on the visible page; the Archive Browser, no `HubInspectorPage`, owns its keys in `ArchiveBrowserView` under the same rule ([architecture.md § Tool page keys](architecture.md#tool-page-keys)) | code |
 | Tool order, the Settings row, which pane keeps Esc | each tool's `ToolMetadata` (`section`, `handlesEscape`), read through `ToolSection.sidebarOrder` and `InAppJobCancelRouting` ([architecture.md § Tool self-description](architecture.md#tool-self-description)) | code |
 | Output Inbox | `JSONOutputInboxStore` | `output-inbox.json` |
 | A tool page's list of its own outputs | `ToolRecentOutputs` (AppCore), held by the tool's view model | derived from `output-inbox.json` |

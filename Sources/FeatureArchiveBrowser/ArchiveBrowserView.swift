@@ -190,9 +190,17 @@ struct ArchiveBrowserView: View {
             ArchiveShortcutFocusPolicy.removeArchiveArrowKeyMonitor()
         }
         // The pane stays mounted across tool switches, so the app-wide arrow
-        // monitor follows the active-tool flag, not appear/disappear.
+        // monitor follows the active-tool flag, not appear/disappear. So does the
+        // keyboard: the pane gives it up while another tool is shown and takes it
+        // back when it is shown again.
         .onChange(of: isActiveTool) { _, active in
             updateArrowKeyMonitor(active: active)
+            if active {
+                ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
+                keyboardFocus = .archive
+            } else {
+                keyboardFocus = nil
+            }
         }
         // A page change that does not come from a click (VoiceOver's "Open song
         // detail", the Song menu, Back/Forward) would leave the keyboard where it
@@ -205,41 +213,42 @@ struct ArchiveBrowserView: View {
         }
         .onMoveCommand(perform: handleArchiveMoveCommand)
         .onKeyPress(.upArrow) {
-            guard allowsSongShortcuts else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts else { return .ignored }
             handleArchiveMoveCommand(.up)
             return .handled
         }
         .onKeyPress(.downArrow) {
-            guard allowsSongShortcuts else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts else { return .ignored }
             handleArchiveMoveCommand(.down)
             return .handled
         }
         .onKeyPress(.return) {
-            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
             viewModel.openSelectedSongDetail()
             return .handled
         }
         .onKeyPress("p") {
-            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
             performOpenPreview()
             return .handled
         }
         .onKeyPress("o") {
-            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
             performOpenProject()
             return .handled
         }
         .onKeyPress("f") {
-            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
             performRevealInFinder()
             return .handled
         }
         .onKeyPress("d") {
-            guard allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
             performShowVersions()
             return .handled
         }
         .onKeyPress(.escape) {
+            guard isActiveTool else { return .ignored }
             if keyboardFocus == .search {
                 if viewModel.searchQuery.isEmpty {
                     keyboardFocus = .archive
@@ -269,7 +278,8 @@ struct ArchiveBrowserView: View {
             }
         }
         .onKeyPress(.space) {
-            ArchiveShortcutFocusPolicy.handleSpaceKey(
+            guard isActiveTool else { return .ignored }
+            return ArchiveShortcutFocusPolicy.handleSpaceKey(
                 archiveFocused: keyboardFocus == .archive,
                 in: NSApp?.keyWindow,
                 playPause: performPlayPausePreview
@@ -570,7 +580,7 @@ struct ArchiveBrowserView: View {
 
 
     private func handleArchiveMoveCommand(_ direction: MoveCommandDirection) {
-        guard allowsSongShortcuts else { return }
+        guard isActiveTool, allowsSongShortcuts else { return }
         viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
     }
 

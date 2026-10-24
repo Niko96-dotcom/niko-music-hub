@@ -146,6 +146,41 @@ final class HubDesignContractSourceTests: XCTestCase {
         expectMatch(bpm, pattern: "tapSurfaceFocused\\s*=\\s*active", "the tap pad's focus follows the page")
     }
 
+    // §4 — the Archive Browser stays mounted as well but is no HubInspectorPage: it
+    // kept the keyboard after you left it, so Esc on another tool's page closed the
+    // hidden song detail (`ArchiveKeyboardFocusTests`). Its own Esc, Return, arrow,
+    // letter and Space handlers now ignore keys while it is hidden.
+    func testArchiveKeyHandlersFollowThePanesVisibility() throws {
+        let archivePane = [
+            "Sources/FeatureArchiveBrowser/ArchiveBrowserView.swift",
+            "Sources/FeatureArchiveBrowser/ArchiveSidebarView.swift",
+            "Sources/FeatureArchiveBrowser/ArchiveSearchTextField.swift",
+        ]
+        let guardedKey = try NSRegularExpression(pattern: "\\.onKeyPress\\s*\\([^)]*\\)\\s*\\{\\s*guard\\s+isActiveTool\\s*(,|else)")
+        let guardedMove = try NSRegularExpression(pattern: "\\.onMoveCommand\\s*(\\{\\s*\\w+\\s+in\\s+guard\\s+isActiveTool\\s+else|\\(\\s*perform\\s*:\\s*handleArchiveMoveCommand\\s*\\))")
+        for file in archivePane {
+            let source = try readStripped(file)
+            let range = NSRange(source.startIndex..., in: source)
+            XCTAssertEqual(
+                guardedKey.numberOfMatches(in: source, range: range),
+                source.components(separatedBy: ".onKeyPress(").count - 1,
+                "\(file): every onKeyPress handler ignores keys while the archive is hidden"
+            )
+            XCTAssertEqual(
+                guardedMove.numberOfMatches(in: source, range: range),
+                source.components(separatedBy: ".onMoveCommand").count - 1,
+                "\(file): every move command ignores keys while the archive is hidden"
+            )
+        }
+        let pane = try readStripped(archivePane[0])
+        expectMatch(pane, pattern: "func\\s+handleArchiveMoveCommand\\s*\\([^)]*\\)\\s*\\{\\s*guard\\s+isActiveTool\\s*,", "the pane's move command ignores keys while hidden")
+        expectMatch(
+            pane,
+            pattern: "onChange\\s*\\(\\s*of\\s*:\\s*isActiveTool\\s*\\)\\s*\\{[^}]*keyboardFocus\\s*=\\s*\\.archive\\s*\\}\\s*else\\s*\\{\\s*keyboardFocus\\s*=\\s*nil",
+            "the pane gives the keyboard up while hidden and takes it back when shown"
+        )
+    }
+
     // §4 — transient notices may not push the fixed primary object down.
     // Nesting (not textual order): `live` must be inside a ScrollView body.
     func testLiveNoticesAreInsideScrollingContent() throws {

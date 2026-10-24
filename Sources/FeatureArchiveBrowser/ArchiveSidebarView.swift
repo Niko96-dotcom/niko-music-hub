@@ -10,6 +10,8 @@ struct ArchiveSidebarView: View {
     @Binding var showNewSongSheet: Bool
     let onChooseRoot: () -> Void
     @FocusState.Binding var keyboardFocus: ArchiveKeyboardFocus?
+    /// False while another tool is shown; the shell keeps the archive pane mounted.
+    @Environment(\.hubToolIsActive) private var isActiveTool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -348,21 +350,26 @@ struct ArchiveSidebarView: View {
             .focusable(true)
             .focusEffectDisabled()
             .onMoveCommand { direction in
+                guard isActiveTool else { return }
                 viewModel.moveSongSelection(ArchiveSongMoveDirection(direction))
             }
             .onKeyPress(.upArrow) {
+                guard isActiveTool else { return .ignored }
                 viewModel.moveSongSelection(.up)
                 return .handled
             }
             .onKeyPress(.downArrow) {
+                guard isActiveTool else { return .ignored }
                 viewModel.moveSongSelection(.down)
                 return .handled
             }
             .onKeyPress(.leftArrow) {
+                guard isActiveTool else { return .ignored }
                 viewModel.moveSongSelection(.left)
                 return .handled
             }
             .onKeyPress(.rightArrow) {
+                guard isActiveTool else { return .ignored }
                 viewModel.moveSongSelection(.right)
                 return .handled
             }

@@ -388,6 +388,11 @@ Return and Esc on a tool page have one owner each (2026-10-24, finding #10 of th
   cancel key: the shell's Esc cancels their jobs. The Audio Recorder's cancel key stops the take.
 - The BPM Tapper's tap pad and the recorder's record button answer their keys only while their page is visible; the
   tap pad gives up keyboard focus when its page is hidden and takes it back when it is shown.
+- The Archive Browser is no `HubInspectorPage`, so it follows the same rule itself: its key handlers (Esc, Return,
+  arrows, the song letters, Space, the list layout's arrows and the search field's Esc) act only while it is the
+  visible tool, and the pane gives up keyboard focus when it is hidden and takes it back when it is shown. Esc on
+  another page goes to that page's keys or the shell's Edit ▸ Cancel (above); the hidden archive no longer closes its
+  song detail, asks to stop a Vault transfer or cancels a scan.
 - A running job's progress is `HubJobProgressRow` (bar, optional percent and elapsed line, status line); it owns the
   elapsed format.
 
