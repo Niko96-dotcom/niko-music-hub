@@ -4,10 +4,10 @@ import SwiftUI
 /// selected tool, published as a focused *scene* value so the items act only
 /// while the main window is the key scene (not Settings or Help).
 public struct HubShellCancelContext: Equatable, Sendable {
-    public let selectedToolID: ToolFeatureID?
+    public let selectedTool: ToolMetadata?
 
-    public init(selectedToolID: ToolFeatureID?) {
-        self.selectedToolID = selectedToolID
+    public init(selectedTool: ToolMetadata?) {
+        self.selectedTool = selectedTool
     }
 }
 

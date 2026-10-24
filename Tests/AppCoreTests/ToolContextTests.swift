@@ -116,6 +116,8 @@ private struct FixtureJobRunner: JobRunning {
     func enqueue(
         title: String,
         sourceToolID: ToolFeatureID,
+        activityVerb: String? = nil,
+        cancelTarget: InAppJobCancelTarget? = nil,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job {
         Job(sourceToolID: sourceToolID, title: title)

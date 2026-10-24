@@ -291,7 +291,7 @@ public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
             status: ShellJobStatus(
                 id: ShellJobExtraSourceID.downloadStart,
                 title: DownloaderUseCase.fallbackJobTitle(for: sourceURL),
-                activityVerb: "Downloading",
+                activityVerb: DownloaderUseCase.activityVerb,
                 sourceToolID: .downloader,
                 blocksQuit: true,
                 listed: false

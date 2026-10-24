@@ -50,10 +50,17 @@ final class AudioConverterCancelTests: XCTestCase {
 
         viewModel.startConversion()
         try await waitUntil(seconds: 2) { secondStarted.isSet }
-        XCTAssertTrue(context.jobStatusCenter.jobs.contains { $0.id == ShellJobExtraSourceID.converter })
-        XCTAssertTrue(ShellJobStatusCopy.converterCancelHelp.hasPrefix("Stops converting now"))
+        // Esc on the real feature's pane reaches the converter's row, and only it.
+        let routed = InAppJobCancelRouting.escapeJobs(
+            selectedTool: AudioConverterFeature().metadata,
+            in: context.jobStatusCenter.jobs
+        )
+        XCTAssertEqual(routed.map(\.id), [ShellJobExtraSourceID.converter])
+        XCTAssertTrue(routed.first?.cancelHelp?.hasPrefix("Stops converting now") == true)
 
-        context.jobStatusCenter.cancel(id: ShellJobExtraSourceID.converter)
+        for status in routed {
+            context.jobStatusCenter.cancel(id: status.cancelActionID ?? status.id)
+        }
 
         try await waitUntil(seconds: 1) { !viewModel.isConverting }
         XCTAssertFalse(viewModel.isConverting, "Cancel must not wait for the file in flight to finish")
@@ -265,6 +272,8 @@ private struct IdleJobRunner: JobRunning {
     func enqueue(
         title: String,
         sourceToolID: ToolFeatureID,
+        activityVerb: String? = nil,
+        cancelTarget: InAppJobCancelTarget? = nil,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job {
         Job(sourceToolID: sourceToolID, title: title)

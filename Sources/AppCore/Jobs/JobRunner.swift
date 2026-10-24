@@ -117,11 +117,15 @@ public final class JobRunner: JobRunning, @unchecked Sendable {
     public func enqueue(
         title: String,
         sourceToolID: ToolFeatureID,
+        activityVerb: String? = nil,
+        cancelTarget: InAppJobCancelTarget? = nil,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job {
         let job = Job(
             sourceToolID: sourceToolID,
             title: boundedText(title, maximumUTF8Bytes: maximumSnapshotTextBytes),
+            activityVerb: activityVerb,
+            cancelTarget: cancelTarget,
             message: "Queued"
         )
         lock.withLock {

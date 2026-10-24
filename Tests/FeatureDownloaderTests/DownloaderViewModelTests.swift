@@ -1576,6 +1576,8 @@ private final class StaticJobRunner: JobRunning, @unchecked Sendable {
     func enqueue(
         title: String,
         sourceToolID: ToolFeatureID,
+        activityVerb: String? = nil,
+        cancelTarget: InAppJobCancelTarget? = nil,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job {
         XCTFail("DownloaderViewModel tests should not enqueue through the context job runner")

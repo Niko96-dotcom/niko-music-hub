@@ -267,13 +267,12 @@ struct StemSeparationViewModelTests {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
 
-        let activity = InAppJobActivity(jobs: center.jobs)
-        #expect(
-            InAppJobCancelRouting.escapeTarget(selectedToolID: ToolFeatureID.stemSeparation, activity)
-                == .stemSeparation
-        )
-        let routed = activity.jobs(for: .stemSeparation)
+        // Route as Esc does on the real feature's pane: the feature says that its pane
+        // keeps Esc, the job says that it is a stem separation of this tool.
+        let routed = InAppJobCancelRouting.escapeJobs(selectedTool: StemSeparationFeature().metadata, in: center.jobs)
         #expect(routed.map(\.id) == [jobID.uuidString])
+        #expect(routed.map(\.displayLine).allSatisfy { $0.hasPrefix("Separating “") })
+        #expect(InAppJobCancelRouting.commandPeriodJobs(in: center.jobs).map(\.id) == [jobID.uuidString])
         for status in routed {
             center.cancel(id: status.cancelActionID ?? status.id)
         }

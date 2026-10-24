@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Esc / ⌘. cancel the foremost in-app download, stem separation, conversion, vault transfer,
 /// or archive scan (NMH-009).
-/// The routing policy is `InAppJobCancelRouting` in AppCore.
+/// The routing policy is `InAppJobCancelRouting` in AppCore; each job and each tool
+/// describe themselves (`ShellJobStatus.cancelTarget`, `ToolMetadata.handlesEscape`).
 ///
 /// State comes from `ShellJobStatusCenter` (the one observable job list —
 /// downloads, stem separations, conversions, archive scan, vault transfer) and the selected tool from the main
@@ -29,36 +30,31 @@ struct HubCancelCommands: Commands {
         }
     }
 
-    private var activity: InAppJobActivity {
-        InAppJobActivity(jobs: jobStatusCenter.jobs)
-    }
-
     private var canCancelEscape: Bool {
-        escapeTarget != nil
+        !escapeJobs.isEmpty
     }
 
     private var canCancelForemost: Bool {
-        cancelContext != nil && InAppJobCancelRouting.foremost(activity) != nil
+        cancelContext != nil && !InAppJobCancelRouting.commandPeriodJobs(in: jobStatusCenter.jobs).isEmpty
     }
 
-    /// `nil` when the main window is not the key scene.
-    private var escapeTarget: InAppJobCancelTarget? {
-        guard let cancelContext else { return nil }
-        return InAppJobCancelRouting.escapeTarget(selectedToolID: cancelContext.selectedToolID, activity)
+    /// Empty when the main window is not the key scene.
+    private var escapeJobs: [ShellJobStatus] {
+        guard let cancelContext else { return [] }
+        return InAppJobCancelRouting.escapeJobs(selectedTool: cancelContext.selectedTool, in: jobStatusCenter.jobs)
     }
 
     func cancelEscapeTarget() {
-        perform(escapeTarget)
+        cancel(escapeJobs)
     }
 
     func cancelForemostJob() {
         guard cancelContext != nil else { return }
-        perform(InAppJobCancelRouting.foremost(activity))
+        cancel(InAppJobCancelRouting.commandPeriodJobs(in: jobStatusCenter.jobs))
     }
 
-    private func perform(_ target: InAppJobCancelTarget?) {
-        guard let target else { return }
-        for job in activity.jobs(for: target) {
+    private func cancel(_ jobs: [ShellJobStatus]) {
+        for job in jobs {
             jobStatusCenter.cancel(id: job.cancelActionID ?? job.id)
         }
     }

@@ -8,10 +8,14 @@ public protocol JobRunning: Sendable {
     /// Emits the current job snapshot and subsequent changes until terminal.
     func updates(for id: Job.ID) -> AsyncStream<Job>
 
+    /// `activityVerb` and `cancelTarget` describe the job in the shell's jobs
+    /// strip and for Esc / ⌘. (`ShellJobStatus.fromJob`).
     @discardableResult
     func enqueue(
         title: String,
         sourceToolID: ToolFeatureID,
+        activityVerb: String?,
+        cancelTarget: InAppJobCancelTarget?,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job
 

@@ -120,7 +120,10 @@ struct AppShellView: View {
         .hubOpensMainWindowFromDock()
         // Esc/⌘. cancel routing reads the selected tool as a scene value, so the
         // Edit-menu items only act while this window is the key scene.
-        .focusedSceneValue(\.hubShellCancelContext, HubShellCancelContext(selectedToolID: selectedToolID))
+        .focusedSceneValue(
+            \.hubShellCancelContext,
+            HubShellCancelContext(selectedTool: selectedToolID.flatMap { registry.feature(for: $0)?.metadata })
+        )
         .onAppear {
             HubLogging.logger(category: .windowing).info("Main window opened tool=\(selectedToolID?.rawValue ?? "none", privacy: .public)")
             // Drain any pending router state that was set while the window was absent

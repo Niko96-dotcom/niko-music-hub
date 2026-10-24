@@ -111,7 +111,9 @@ struct DevToolDetailView: View {
     private func runSampleJob() {
         _ = context.jobRunner.enqueue(
             title: "Sample Job",
-            sourceToolID: metadata.id
+            sourceToolID: metadata.id,
+            activityVerb: "Running",
+            cancelTarget: nil
         ) { progress in
             progress.update(progress: 0.35, message: "Preparing handoff")
             progress.log("Sample job started")

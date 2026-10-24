@@ -40,19 +40,25 @@ public struct ToolMetadata: Hashable, Codable, Sendable {
     public let shortLabel: String
     public let systemImage: String
     public let section: ToolSection
+    /// The tool's pane keeps Esc: while it is selected, Esc cancels only this
+    /// tool's own jobs, and does nothing when none runs (NMH-009,
+    /// `InAppJobCancelRouting`). On a pane that does not, Esc cancels shell work.
+    public let handlesEscape: Bool
 
     public init(
         id: ToolFeatureID,
         displayName: String,
         shortLabel: String,
         systemImage: String,
-        section: ToolSection = .production
+        section: ToolSection = .production,
+        handlesEscape: Bool = false
     ) {
         self.id = id
         self.displayName = displayName
         self.shortLabel = shortLabel
         self.systemImage = systemImage
         self.section = section
+        self.handlesEscape = handlesEscape
     }
 }
 

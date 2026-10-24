@@ -1,125 +1,164 @@
 @testable import AppCore
+import FeatureArchiveBrowser
 import XCTest
 
-/// Esc / ⌘. routing (NMH-009) over the shell job list.
+/// Esc / ⌘. routing (NMH-009) over the shell job list. The jobs are built as their
+/// tools build them, and the panes are the tools' metadata, so these cases pin the
+/// same results as the ID-based routing they replaced.
 @MainActor
 final class InAppJobCancelRoutingTests: XCTestCase {
-    private let stemToolID = ToolFeatureID("stem-separation")
-
     func testEscapeCancelsStemJobWhileStemPaneIsSelected() {
-        let activity = InAppJobActivity(jobs: [stemJob()])
+        let jobs = InAppJobCancelRouting.escapeJobs(selectedTool: Panes.stems, in: [stemJob()])
 
-        let target = InAppJobCancelRouting.escapeTarget(selectedToolID: stemToolID, activity)
-
-        XCTAssertEqual(target, .stemSeparation)
-        XCTAssertEqual(activity.jobs(for: .stemSeparation).map(\.id), [stemJob().id])
+        XCTAssertEqual(jobs.map(\.id), [stemJob().id])
     }
 
     func testEscapeLeavesStemJobAloneOnOtherPanes() {
-        let activity = InAppJobActivity(jobs: [stemJob()])
-
-        for toolID in ["downloader", "archive-browser", "bpm-tapper", "wav-converter"] {
-            XCTAssertNil(
-                InAppJobCancelRouting.escapeTarget(selectedToolID: ToolFeatureID(toolID), activity),
-                "Esc on \(toolID) must not cancel a stem separation"
+        for pane in [Panes.downloader, Panes.archive, Panes.bpm, Panes.converter] {
+            XCTAssertEqual(
+                InAppJobCancelRouting.escapeJobs(selectedTool: pane, in: [stemJob()]),
+                [],
+                "Esc on \(pane.id) must not cancel a stem separation"
             )
         }
-        XCTAssertNil(InAppJobCancelRouting.escapeTarget(selectedToolID: nil, activity))
+        XCTAssertEqual(InAppJobCancelRouting.escapeJobs(selectedTool: nil, in: [stemJob()]), [])
     }
 
     func testEscapeOnStemPaneOnlyCancelsStemJobs() {
-        let activity = InAppJobActivity(jobs: [downloadJob(), vaultJob()])
-
-        XCTAssertNil(InAppJobCancelRouting.escapeTarget(selectedToolID: stemToolID, activity))
         XCTAssertEqual(
-            InAppJobCancelRouting.escapeTarget(
-                selectedToolID: stemToolID,
-                InAppJobActivity(jobs: [downloadJob(), vaultJob(), stemJob()])
-            ),
-            .stemSeparation
+            InAppJobCancelRouting.escapeJobs(selectedTool: Panes.stems, in: [downloadJob(), vaultJob()]),
+            []
+        )
+        XCTAssertEqual(
+            InAppJobCancelRouting.escapeJobs(selectedTool: Panes.stems, in: [downloadJob(), vaultJob(), stemJob()])
+                .map(\.id),
+            [stemJob().id]
         )
     }
 
     func testCommandPeriodCancelsStemJob() {
-        XCTAssertEqual(InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [stemJob()])), .stemSeparation)
+        XCTAssertEqual(InAppJobCancelRouting.commandPeriodJobs(in: [stemJob()]).map(\.id), [stemJob().id])
+        XCTAssertEqual(InAppJobCancelRouting.commandPeriodJobs(in: [vaultJob(), stemJob()]).map(\.id), [stemJob().id])
         XCTAssertEqual(
-            InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [vaultJob(), stemJob()])),
-            .stemSeparation
-        )
-        XCTAssertEqual(
-            InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [stemJob(), downloadJob()])),
-            .download
+            InAppJobCancelRouting.commandPeriodJobs(in: [stemJob(), downloadJob()]).map(\.id),
+            [downloadJob().id]
         )
     }
 
     func testEscapeCancelsConversionWhileConverterPaneIsSelected() {
-        let activity = InAppJobActivity(jobs: [converterJob()])
-        let converterToolID = ToolFeatureID("wav-converter")
-
         XCTAssertEqual(
-            InAppJobCancelRouting.escapeTarget(selectedToolID: converterToolID, activity),
-            .conversion
+            InAppJobCancelRouting.escapeJobs(selectedTool: Panes.converter, in: [converterJob()]).map(\.id),
+            [converterJob().id]
         )
-        XCTAssertEqual(activity.jobs(for: .conversion).map(\.id), [converterJob().id])
     }
 
     func testEscapeOnConverterPaneIgnoresOtherJobs() {
-        let converterToolID = ToolFeatureID("wav-converter")
-
-        XCTAssertNil(
-            InAppJobCancelRouting.escapeTarget(
-                selectedToolID: converterToolID,
-                InAppJobActivity(jobs: [vaultJob()])
-            )
-        )
-        XCTAssertNil(
-            InAppJobCancelRouting.escapeTarget(
-                selectedToolID: converterToolID,
-                InAppJobActivity(jobs: [stemJob()])
-            )
-        )
+        XCTAssertEqual(InAppJobCancelRouting.escapeJobs(selectedTool: Panes.converter, in: [vaultJob()]), [])
+        XCTAssertEqual(InAppJobCancelRouting.escapeJobs(selectedTool: Panes.converter, in: [stemJob()]), [])
     }
 
     func testCommandPeriodPrefersConversionOverVault() {
+        XCTAssertEqual(InAppJobCancelRouting.commandPeriodJobs(in: [converterJob()]).map(\.id), [converterJob().id])
         XCTAssertEqual(
-            InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [converterJob()])),
-            .conversion
+            InAppJobCancelRouting.commandPeriodJobs(in: [converterJob(), vaultJob()]).map(\.id),
+            [converterJob().id]
         )
         XCTAssertEqual(
-            InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [converterJob(), vaultJob()])),
-            .conversion
-        )
-        XCTAssertEqual(
-            InAppJobCancelRouting.foremost(InAppJobActivity(jobs: [downloadJob(), converterJob()])),
-            .download
+            InAppJobCancelRouting.commandPeriodJobs(in: [downloadJob(), converterJob()]).map(\.id),
+            [downloadJob().id]
         )
     }
 
-    func testConversionJobsFilterReturnsOnlyConverterJob() {
-        let activity = InAppJobActivity(jobs: [downloadJob(), converterJob(), vaultJob(), stemJob()])
+    /// The ⌘. order: downloads, stem separations, the conversion, the Vault transfer, the scan.
+    func testCommandPeriodOrderAcrossEveryTarget() {
+        var jobs = [scanJob(), vaultJob(), converterJob(), stemJob(), downloadJob(), downloadJob(id: "download-2")]
+        for expected in [["download", "download-2"], [stemJob().id], [converterJob().id], [vaultJob().id], [scanJob().id]] {
+            let cancelled = InAppJobCancelRouting.commandPeriodJobs(in: jobs).map(\.id)
+            XCTAssertEqual(Set(cancelled), Set(expected))
+            jobs.removeAll { cancelled.contains($0.id) }
+        }
+        XCTAssertEqual(InAppJobCancelRouting.commandPeriodJobs(in: jobs), [])
+    }
 
-        XCTAssertEqual(activity.jobs(for: .conversion).map(\.id), [converterJob().id])
+    func testArchivePaneKeepsEscapeWhileShellWorkRuns() {
+        XCTAssertEqual(InAppJobCancelRouting.escapeJobs(selectedTool: Panes.archive, in: [vaultJob(), scanJob()]), [])
+    }
+
+    func testPaneThatDoesNotHandleEscapeCancelsTheVaultTransferBeforeTheScan() {
+        for pane in [Panes.bpm, Panes.recorder, nil] {
+            XCTAssertEqual(
+                InAppJobCancelRouting.escapeJobs(selectedTool: pane, in: [scanJob(), vaultJob(), downloadJob()])
+                    .map(\.id),
+                [vaultJob().id]
+            )
+            XCTAssertEqual(
+                InAppJobCancelRouting.escapeJobs(selectedTool: pane, in: [scanJob(), converterJob()]).map(\.id),
+                [scanJob().id]
+            )
+        }
+    }
+
+    func testIdleDownloaderPaneKeepsEscapeWhileShellWorkRuns() {
+        XCTAssertEqual(InAppJobCancelRouting.escapeJobs(selectedTool: Panes.downloader, in: [vaultJob(), scanJob()]), [])
+    }
+
+    func testJobWithoutTargetIsNeverCancelledByTheKeys() {
+        let sample = ShellJobStatus(id: "sample", title: "Sample Job", activityVerb: "Running", sourceToolID: "dev-tool")
+        let devPane = ToolMetadata(id: "dev-tool", displayName: "Dev", shortLabel: "Dev", systemImage: "hammer")
+        XCTAssertEqual(InAppJobCancelRouting.commandPeriodJobs(in: [sample]), [])
+        XCTAssertEqual(InAppJobCancelRouting.escapeJobs(selectedTool: devPane, in: [sample]), [])
     }
 
     func testEscapeRoutesCancelThroughShellJobCenterToJobRunner() async throws {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
-        let job = runner.enqueue(title: "YouTube to Stems: youtu.be", sourceToolID: stemToolID) { _ in
+        let job = runner.enqueue(
+            title: "YouTube to Stems: youtu.be",
+            sourceToolID: .stemSeparation,
+            activityVerb: "Separating",
+            cancelTarget: .stemSeparation
+        ) { _ in
             try await Task.sleep(nanoseconds: 30_000_000_000)
         }
         try await waitUntil { center.jobs.contains { $0.id == job.id.uuidString } }
 
-        let activity = InAppJobActivity(jobs: center.jobs)
-        XCTAssertEqual(
-            InAppJobCancelRouting.escapeTarget(selectedToolID: stemToolID, activity),
-            .stemSeparation
-        )
-        for status in activity.jobs(for: .stemSeparation) {
+        let routed = InAppJobCancelRouting.escapeJobs(selectedTool: Panes.stems, in: center.jobs)
+        XCTAssertEqual(routed.map(\.id), [job.id.uuidString])
+        for status in routed {
             center.cancel(id: status.cancelActionID ?? status.id)
         }
 
         XCTAssertEqual(runner.job(id: job.id)?.state, .canceled)
         try await waitUntil { center.jobs.isEmpty }
+    }
+
+    /// The real archive feature keeps Esc; the panes below stand in for the other tools
+    /// as their features declare them (their modules are not visible to AppCoreTests).
+    func testArchiveFeatureDeclaresThatItsPaneHandlesEscape() {
+        let feature = ArchiveBrowserFeature(viewModel: ArchiveBrowserViewModel(context: ToolContext.smokeTest()))
+        XCTAssertTrue(feature.metadata.handlesEscape)
+        XCTAssertEqual(feature.metadata, Panes.archive)
+    }
+
+    private enum Panes {
+        static let archive = ToolMetadata(
+            id: .archiveBrowser,
+            displayName: "Archive Browser",
+            shortLabel: "Archive",
+            systemImage: "music.note.list",
+            section: .library,
+            handlesEscape: true
+        )
+        static let downloader = pane(.downloader, handlesEscape: true)
+        static let stems = pane(.stemSeparation, handlesEscape: true)
+        static let converter = pane(.wavConverter, handlesEscape: true)
+        static let bpm = pane(.bpmTapper, handlesEscape: false)
+        static let recorder = pane(.audioRecorder, handlesEscape: false)
+
+        private static func pane(_ id: ToolFeatureID, handlesEscape: Bool) -> ToolMetadata {
+            ToolMetadata(id: id, displayName: id.rawValue, shortLabel: id.rawValue, systemImage: "hammer",
+                         handlesEscape: handlesEscape)
+        }
     }
 
     private func stemJob() -> ShellJobStatus {
@@ -129,24 +168,33 @@ final class InAppJobCancelRoutingTests: XCTestCase {
             percent: 0.3,
             cancelActionID: "8D8E4C0C-5A55-4E36-9A1B-000000000001",
             activityVerb: "Separating",
-            sourceToolID: stemToolID
+            sourceToolID: .stemSeparation,
+            cancelTarget: .stemSeparation
         )
     }
 
-    private func downloadJob() -> ShellJobStatus {
-        ShellJobStatus(id: "download", title: "Track", sourceToolID: "downloader")
+    private func downloadJob(id: String = "download") -> ShellJobStatus {
+        ShellJobStatus(id: id, title: "Track", sourceToolID: .downloader, cancelTarget: .download)
     }
 
     private func converterJob() -> ShellJobStatus {
-        ShellJobStatusCopy.converterStatus(isConverting: true, filename: "a.mp3", percent: 0.4)!
+        ShellJobStatus(
+            id: ShellJobExtraSourceID.converter,
+            title: "a.mp3",
+            percent: 0.4,
+            cancelActionID: ShellJobExtraSourceID.converter,
+            activityVerb: "Converting",
+            sourceToolID: .wavConverter,
+            cancelTarget: .conversion
+        )
     }
 
     private func vaultJob() -> ShellJobStatus {
-        ShellJobStatus(
-            id: ShellJobExtraSourceID.vaultTransfer,
-            title: "Song",
-            cancelActionID: ShellJobExtraSourceID.vaultTransfer
-        )
+        ShellJobStatusCopy.vaultTransferStatus(songName: "Song", progress: nil)
+    }
+
+    private func scanJob() -> ShellJobStatus {
+        ShellJobStatusCopy.archiveScanStatus
     }
 
     private func waitUntil(

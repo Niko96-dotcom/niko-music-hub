@@ -140,6 +140,12 @@ final class DownloaderUseCaseTests: XCTestCase {
         )
 
         XCTAssertEqual(jobRunner.lastTitle, "Download: Me at the zoo")
+        // The Downloader describes its job for the jobs strip and for Esc / ⌘.
+        let job = try XCTUnwrap(jobRunner.lastJob)
+        XCTAssertEqual(job.sourceToolID, DownloaderFeature().metadata.id)
+        XCTAssertEqual(ShellJobStatus.fromJob(job).displayLine, "Downloading “Download: Me at the zoo”")
+        XCTAssertEqual(job.cancelTarget, .download)
+        XCTAssertTrue(DownloaderFeature().metadata.handlesEscape)
     }
 
     func testPlaylistSimulateUsesFirstTitleLineForJobName() async throws {
@@ -1401,6 +1407,7 @@ private final class SpyJobRunner: JobRunning, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var enqueueCount = 0
     private(set) var lastTitle: String?
+    private(set) var lastJob: Job?
 
     func listJobs() -> [Job] { [] }
     func job(id: Job.ID) -> Job? { nil }
@@ -1408,13 +1415,17 @@ private final class SpyJobRunner: JobRunning, @unchecked Sendable {
     func enqueue(
         title: String,
         sourceToolID: ToolFeatureID,
+        activityVerb: String? = nil,
+        cancelTarget: InAppJobCancelTarget? = nil,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job {
+        let job = Job(sourceToolID: sourceToolID, title: title, activityVerb: activityVerb, cancelTarget: cancelTarget)
         lock.withLock {
             enqueueCount += 1
             lastTitle = title
+            lastJob = job
         }
-        return Job(sourceToolID: sourceToolID, title: title)
+        return job
     }
 
     func cancelJob(id: Job.ID) {}

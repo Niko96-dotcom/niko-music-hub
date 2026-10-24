@@ -95,9 +95,6 @@ struct HubJobsStatusView: View {
     }
 
     private func help(for job: ShellJobStatus) -> String {
-        if job.id == ShellJobExtraSourceID.converter {
-            return ShellJobStatusCopy.converterCancelHelp
-        }
-        return ShellJobStatusCopy.cancel
+        job.cancelHelp ?? ShellJobStatusCopy.cancel
     }
 }

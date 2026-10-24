@@ -6,7 +6,8 @@ public struct AudioConverterFeature: ToolFeature {
         id: .wavConverter,
         displayName: "WAV Converter",
         shortLabel: "WAV Converter",
-        systemImage: "waveform"
+        systemImage: "waveform",
+        handlesEscape: true
     )
 
     private let router: QuickAccessRouter?

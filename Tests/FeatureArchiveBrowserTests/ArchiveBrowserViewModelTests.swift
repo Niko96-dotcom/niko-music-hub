@@ -4440,6 +4440,15 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         XCTAssertTrue(viewModel.jobStatusCenter.jobs.contains { $0.id == ShellJobExtraSourceID.archiveScan })
         XCTAssertTrue(viewModel.jobStatusCenter.quitBlockingWork.isEmpty)
+        // Shell work: Esc keeps the archive's own meaning on the archive pane and
+        // cancels the scan from a pane that does not handle Esc.
+        let archivePane = ArchiveBrowserFeature(viewModel: viewModel).metadata
+        let jobs = viewModel.jobStatusCenter.jobs
+        XCTAssertEqual(InAppJobCancelRouting.escapeJobs(selectedTool: archivePane, in: jobs), [])
+        XCTAssertEqual(
+            InAppJobCancelRouting.escapeJobs(selectedTool: nil, in: jobs).map(\.id),
+            [ShellJobExtraSourceID.archiveScan]
+        )
         viewModel.isScanning = false
     }
 

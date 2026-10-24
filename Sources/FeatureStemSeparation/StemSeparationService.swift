@@ -3,6 +3,9 @@ import Foundation
 import NikoMusicCore
 
 public struct StemSeparationService: Sendable {
+    /// The jobs strip shows `Separating “title”` for a file and for a YouTube link.
+    static let activityVerb = "Separating"
+
     private let backend: any StemSeparationBackend
     private let outputInboxStore: any OutputInboxStore
     private let jobRunner: any JobRunning
@@ -20,7 +23,12 @@ public struct StemSeparationService: Sendable {
     @discardableResult
     public func startJob(request: StemSeparationRequest) -> Job {
         let title = request.title ?? defaultTitle(for: request.inputURL)
-        return jobRunner.enqueue(title: title, sourceToolID: .stemSeparation) { progress in
+        return jobRunner.enqueue(
+            title: title,
+            sourceToolID: .stemSeparation,
+            activityVerb: Self.activityVerb,
+            cancelTarget: .stemSeparation
+        ) { progress in
             try await self.separate(request: request, progress: progress)
         }
     }

@@ -678,12 +678,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         if isScanning {
             jobStatusCenter.setExtraJob(
                 sourceID: ShellJobExtraSourceID.archiveScan,
-                status: ShellJobStatus(
-                    id: ShellJobExtraSourceID.archiveScan,
-                    title: ShellJobStatusCopy.scanningArchive,
-                    cancelActionID: ShellJobExtraSourceID.archiveScan,
-                    blocksQuit: false
-                ),
+                status: ShellJobStatusCopy.archiveScanStatus,
                 cancel: { [weak self] in
                     Task { @MainActor in
                         self?.cancelScan()
@@ -697,12 +692,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         if let operation = projectVaultActiveOperation {
             jobStatusCenter.setExtraJob(
                 sourceID: ShellJobExtraSourceID.vaultTransfer,
-                status: ShellJobStatus(
-                    id: ShellJobExtraSourceID.vaultTransfer,
-                    title: operation.songName,
-                    cancelActionID: ShellJobExtraSourceID.vaultTransfer,
-                    activityVerb: "Transferring"
-                ),
+                status: ShellJobStatusCopy.vaultTransferStatus(songName: operation.songName, progress: nil),
                 cancel: { [weak self] in
                     Task { @MainActor in
                         self?.requestStopActiveProjectVaultTransfer()

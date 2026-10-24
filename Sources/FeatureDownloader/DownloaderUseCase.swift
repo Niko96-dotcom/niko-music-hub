@@ -84,6 +84,9 @@ public protocol DownloaderUseCaseRunning: Sendable {
 
 public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Sendable {
     static let jobTitlePrefix = "Download: "
+    /// The jobs strip shows `Downloading “title”`, also for a start whose title
+    /// lookup is still running (`DownloaderViewModel`).
+    static let activityVerb = "Downloading"
     private let downloader: any DownloadRunning
     private let helperProbe: HelperToolProbe
     private let jobRunner: any JobRunning
@@ -167,7 +170,9 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
 
         let job = jobRunner.enqueue(
             title: Self.jobTitlePrefix + simulateTitle,
-            sourceToolID: .downloader
+            sourceToolID: .downloader,
+            activityVerb: Self.activityVerb,
+            cancelTarget: .download
         ) { progress in
             let result = try await capturedUseCase.downloadResultWithRetry(
                 url: capturedURL,

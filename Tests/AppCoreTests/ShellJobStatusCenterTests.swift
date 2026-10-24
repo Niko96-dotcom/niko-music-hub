@@ -6,7 +6,12 @@ final class ShellJobStatusCenterTests: XCTestCase {
     func testEnqueueFakeJobAppearsInSnapshot() async throws {
         let runner = FakeJobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
-        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in }
+        let job = runner.enqueue(
+            title: "Track Mix",
+            sourceToolID: "downloader",
+            activityVerb: "Downloading",
+            cancelTarget: .download
+        ) { _ in }
 
         try await waitUntil { center.jobs.contains { $0.title == job.title } }
 
@@ -16,6 +21,8 @@ final class ShellJobStatusCenterTests: XCTestCase {
         XCTAssertEqual(status.percent, 0.42)
         XCTAssertEqual(status.displayLine, "Downloading “Track Mix” · 42%")
         XCTAssertEqual(status.cancelActionID, job.id.uuidString)
+        XCTAssertEqual(status.sourceToolID, "downloader")
+        XCTAssertEqual(status.cancelTarget, .download)
 
         center.cancel(id: try XCTUnwrap(status.cancelActionID))
         XCTAssertEqual(runner.canceledIDs, [job.id])
@@ -34,26 +41,15 @@ final class ShellJobStatusCenterTests: XCTestCase {
         XCTAssertEqual(ShellJobStatusCopy.multipleJobsTitle(count: 2), "2 jobs running")
     }
 
-    func testConverterReportingHook() {
-        XCTAssertNil(
-            ConverterJobReporting.status(isConverting: false, filename: "Loop.m4a", percent: 0.2)
-        )
-        let converting = ConverterJobReporting.status(
-            isConverting: true,
-            filename: "Loop.m4a",
-            percent: 0.5
-        )
-        XCTAssertEqual(converting?.title, "Loop.m4a")
-        XCTAssertEqual(converting?.displayLine, "Converting “Loop.m4a” · 50%")
-        XCTAssertEqual(converting?.cancelActionID, ShellJobExtraSourceID.converter)
+    /// A runner job without a verb shows its title alone, and the keys never reach it.
+    func testRunnerJobWithoutVerbOrTargetShowsItsTitle() async throws {
+        let runner = FakeJobRunner()
+        let center = ShellJobStatusCenter(jobRunner: runner)
+        _ = runner.enqueue(title: "Sample Job", sourceToolID: "dev-tool") { _ in }
 
-        let fallback = ConverterJobReporting.status(
-            isConverting: true,
-            filename: nil,
-            percent: 0
-        )
-        XCTAssertEqual(fallback?.title, "WAV Converter")
-        XCTAssertEqual(fallback?.displayLine, "WAV Converter")
+        try await waitUntil { center.jobs.count == 1 }
+        XCTAssertEqual(center.jobs.first?.displayLine, "Sample Job · 42%")
+        XCTAssertNil(center.jobs.first?.cancelTarget)
     }
 
     func testConverterExtraJobCancelMapsToStopAfterCurrent() async throws {
@@ -62,11 +58,7 @@ final class ShellJobStatusCenterTests: XCTestCase {
         let stopFlag = CancelFlag()
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.converter,
-            status: ConverterJobReporting.status(
-                isConverting: true,
-                filename: "Loop.m4a",
-                percent: 0.3
-            ),
+            status: converterRow(),
             cancel: { stopFlag.mark() }
         )
 
@@ -81,11 +73,7 @@ final class ShellJobStatusCenterTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(50))
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.converter,
-            status: ConverterJobReporting.status(
-                isConverting: true,
-                filename: "Loop.m4a",
-                percent: 1
-            )
+            status: converterRow()
         )
         XCTAssertTrue(center.jobs.contains { $0.id == ShellJobExtraSourceID.converter })
 
@@ -115,6 +103,15 @@ final class ShellJobStatusCenterTests: XCTestCase {
         try await waitUntil { center.jobs.isEmpty }
         XCTAssertEqual(runner.job(id: job.id)?.state, .canceled)
         release.open()
+    }
+
+    private func converterRow() -> ShellJobStatus {
+        ShellJobStatus(
+            id: ShellJobExtraSourceID.converter,
+            title: "Loop.m4a",
+            cancelActionID: ShellJobExtraSourceID.converter,
+            activityVerb: "Converting"
+        )
     }
 
     private func blockMainThread(seconds: TimeInterval) {
@@ -187,11 +184,15 @@ private final class FakeJobRunner: JobRunning, @unchecked Sendable {
     func enqueue(
         title: String,
         sourceToolID: ToolFeatureID,
+        activityVerb: String? = nil,
+        cancelTarget: InAppJobCancelTarget? = nil,
         operation: @escaping @Sendable (JobProgress) async throws -> Void
     ) -> Job {
         let job = Job(
             sourceToolID: sourceToolID,
             title: title,
+            activityVerb: activityVerb,
+            cancelTarget: cancelTarget,
             state: .running,
             progress: 0.42,
             message: "Running"

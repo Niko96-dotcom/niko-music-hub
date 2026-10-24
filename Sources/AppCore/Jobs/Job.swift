@@ -35,6 +35,10 @@ public struct Job: Identifiable, Equatable, Codable, Sendable {
     public let id: UUID
     public var sourceToolID: ToolFeatureID
     public var title: String
+    /// The jobs strip shows `{verb} “{title}”`; supplied by the tool (NMH-011).
+    public var activityVerb: String?
+    /// What Esc and ⌘. cancel this job as; `nil`: only the jobs strip cancels it.
+    public var cancelTarget: InAppJobCancelTarget?
     public var state: JobState
     public var progress: Double
     public var message: String
@@ -49,6 +53,8 @@ public struct Job: Identifiable, Equatable, Codable, Sendable {
         id: UUID = UUID(),
         sourceToolID: ToolFeatureID,
         title: String,
+        activityVerb: String? = nil,
+        cancelTarget: InAppJobCancelTarget? = nil,
         state: JobState = .queued,
         progress: Double = 0,
         message: String = "",
@@ -62,6 +68,8 @@ public struct Job: Identifiable, Equatable, Codable, Sendable {
         self.id = id
         self.sourceToolID = sourceToolID
         self.title = title
+        self.activityVerb = activityVerb
+        self.cancelTarget = cancelTarget
         self.state = state
         self.progress = progress
         self.message = message

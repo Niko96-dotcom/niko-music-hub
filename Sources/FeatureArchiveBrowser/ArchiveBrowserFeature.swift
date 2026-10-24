@@ -7,7 +7,10 @@ public struct ArchiveBrowserFeature: ToolFeature {
         displayName: "Archive Browser",
         shortLabel: "Archive",
         systemImage: "music.note.list",
-        section: .library
+        section: .library,
+        // Esc is the archive's own (clear the selection, close the detail); its
+        // scan and Vault transfer are shell work that Esc cancels from other panes.
+        handlesEscape: true
     )
 
     private let viewModel: ArchiveBrowserViewModel

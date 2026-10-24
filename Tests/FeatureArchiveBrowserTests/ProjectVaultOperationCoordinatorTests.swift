@@ -579,6 +579,10 @@ final class ProjectVaultOperationCoordinatorTests: XCTestCase {
             viewModel.jobStatusCenter.jobs.contains(where: { $0.id == ShellJobExtraSourceID.vaultTransfer }),
             "vault-transfer job must be present while active"
         )
+        let vaultRow = try XCTUnwrap(viewModel.jobStatusCenter.jobs.first { $0.id == ShellJobExtraSourceID.vaultTransfer })
+        XCTAssertEqual(vaultRow.displayLine, "Transferring “VM Job”")
+        XCTAssertEqual(vaultRow.cancelTarget, .vaultTransfer)
+        XCTAssertNil(vaultRow.sourceToolID)
         await gate.open()
         try await waitUntil { viewModel.projectVaultActiveOperation == nil && viewModel.projectVaultBusySongIDs.isEmpty }
         try await waitUntil {

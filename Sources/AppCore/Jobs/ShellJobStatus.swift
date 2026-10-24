@@ -9,8 +9,15 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
     public var cancelActionID: String?
     /// When set, `displayLine` wraps `title` as `{verb} “{title}”`.
     public var activityVerb: String?
-    /// Tool that started a `JobRunner` job; `nil` for extra (archive) sources.
+    /// The tool whose job this is: Esc cancels it on that tool's pane (NMH-009).
+    /// `nil` for shell work (archive scan, Vault transfer), which Esc cancels from
+    /// a pane that does not handle Esc.
     public var sourceToolID: ToolFeatureID?
+    /// What Esc and ⌘. cancel this job as (`InAppJobCancelRouting`); `nil`: only
+    /// the jobs strip's Cancel reaches it.
+    public var cancelTarget: InAppJobCancelTarget?
+    /// Help of the jobs strip's Cancel button; `nil` uses its title.
+    public var cancelHelp: String?
     /// Quit asks before cutting this off (ADR-019). A background archive scan is
     /// read-only and safe to stop, so it is shown but does not block quit.
     public var blocksQuit: Bool
@@ -26,6 +33,8 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
         cancelActionID: String? = nil,
         activityVerb: String? = nil,
         sourceToolID: ToolFeatureID? = nil,
+        cancelTarget: InAppJobCancelTarget? = nil,
+        cancelHelp: String? = nil,
         blocksQuit: Bool = true,
         listed: Bool = true
     ) {
@@ -35,6 +44,8 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
         self.cancelActionID = cancelActionID
         self.activityVerb = activityVerb
         self.sourceToolID = sourceToolID
+        self.cancelTarget = cancelTarget
+        self.cancelHelp = cancelHelp
         self.blocksQuit = blocksQuit
         self.listed = listed
     }
@@ -56,22 +67,10 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
             title: job.title,
             percent: job.progress > 0 ? job.progress : nil,
             cancelActionID: job.id.uuidString,
-            activityVerb: activityVerb(for: job.sourceToolID),
-            sourceToolID: job.sourceToolID
+            activityVerb: job.activityVerb,
+            sourceToolID: job.sourceToolID,
+            cancelTarget: job.cancelTarget
         )
-    }
-
-    public static func activityVerb(for sourceToolID: ToolFeatureID) -> String {
-        switch sourceToolID {
-        case .downloader:
-            return "Downloading"
-        case .stemSeparation:
-            return "Separating"
-        case .wavConverter:
-            return "Converting"
-        default:
-            return "Running"
-        }
     }
 }
 
@@ -84,60 +83,29 @@ public enum ShellJobExtraSourceID: Sendable {
     public static let downloadStart = "download-start"
 }
 
-/// Converter reporting hook (NMH-011). Maps conversion-task state to a shell job.
-public enum ConverterJobReporting: Sendable {
-    public static func status(
-        isConverting: Bool,
-        filename: String?,
-        percent: Double
-    ) -> ShellJobStatus? {
-        ShellJobStatusCopy.converterStatus(
-            isConverting: isConverting,
-            filename: filename,
-            percent: percent
-        )
-    }
-}
-
 public enum ShellJobStatusCopy: Sendable {
     public static let cancel = CancelCopy.cancelOperation
     public static let scanningArchive = "Scanning archive"
     public static let vaultTransferFallback = "Project Vault transfer"
-    public static let converterFallback = "WAV Converter"
     public static let recordingTake = "Recording system audio"
     public static let installingHelperTools = "Installing helper tools"
-    public static let converterCancelHelp =
-        "Stops converting now and skips the rest. Verified WAV files are kept."
 
     public static func multipleJobsTitle(count: Int) -> String {
         "\(CountCopy.count(count, "job")) running"
     }
 
-    public static func converterStatus(
-        isConverting: Bool,
-        filename: String?,
-        percent: Double
-    ) -> ShellJobStatus? {
-        guard isConverting else { return nil }
-        let resolvedPercent: Double? = percent > 0 ? percent : nil
-        if let filename, !filename.isEmpty {
-            return ShellJobStatus(
-                id: ShellJobExtraSourceID.converter,
-                title: filename,
-                percent: resolvedPercent,
-                cancelActionID: ShellJobExtraSourceID.converter,
-                activityVerb: "Converting"
-            )
-        }
-        return ShellJobStatus(
-            id: ShellJobExtraSourceID.converter,
-            title: converterFallback,
-            percent: resolvedPercent,
-            cancelActionID: ShellJobExtraSourceID.converter
-        )
-    }
+    /// The archive scan row: shell work, stopped by Esc on a pane that does not
+    /// handle Esc, after a Vault transfer.
+    public static let archiveScanStatus = ShellJobStatus(
+        id: ShellJobExtraSourceID.archiveScan,
+        title: scanningArchive,
+        cancelActionID: ShellJobExtraSourceID.archiveScan,
+        cancelTarget: .scan,
+        blocksQuit: false
+    )
 
-    /// NMH-054: vault restore row. `percent` is the honest staging fraction
+    /// NMH-054: vault transfer row, at operation start (`progress == nil`) and
+    /// during a restore. `percent` is the honest staging fraction
     /// (nil while totals are unknown), so the jobs row reads determinate
     /// (`Transferring “Song” · 42%`) exactly when the detail bar does.
     public static func vaultTransferStatus(
@@ -149,7 +117,8 @@ public enum ShellJobStatusCopy: Sendable {
             title: songName.isEmpty ? vaultTransferFallback : songName,
             percent: progress?.fraction,
             cancelActionID: ShellJobExtraSourceID.vaultTransfer,
-            activityVerb: "Transferring"
+            activityVerb: "Transferring",
+            cancelTarget: .vaultTransfer
         )
     }
 }

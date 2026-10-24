@@ -24,7 +24,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
     func testRunningDownloadAsksAndNamesTheWork() throws {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
-        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: .downloader, activityVerb: "Downloading", cancelTarget: .download) { _ in
             try await Task.sleep(for: .seconds(30))
         }
         defer { runner.cancelJob(id: job.id) }
@@ -64,7 +64,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let started = Flag()
         let release = Flag()
         let unwound = Flag()
-        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: .downloader, activityVerb: "Downloading", cancelTarget: .download) { _ in
             started.mark()
             do {
                 try await Task.sleep(for: .seconds(30))
@@ -86,7 +86,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let converterStopped = Flag()
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.converter,
-            status: ConverterJobReporting.status(isConverting: true, filename: "Loop.m4a", percent: 0.3),
+            status: ShellJobStatus(id: ShellJobExtraSourceID.converter, title: "Loop.m4a", activityVerb: "Converting"),
             cancel: { [weak center] in
                 converterStopped.mark()
                 center?.setExtraJob(sourceID: ShellJobExtraSourceID.converter, status: nil)
@@ -136,7 +136,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let started = Flag()
         let release = Flag()
         let unwound = Flag()
-        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: .downloader, activityVerb: "Downloading", cancelTarget: .download) { _ in
             started.mark()
             do {
                 try await Task.sleep(for: .seconds(30))
@@ -247,7 +247,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
     func testAnswerTerminateRequestDeclinedKeepsWork() async throws {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
-        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: .downloader, activityVerb: "Downloading", cancelTarget: .download) { _ in
             try await Task.sleep(for: .seconds(30))
         }
         defer { runner.cancelJob(id: job.id) }
@@ -279,7 +279,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
     func testAnswerTerminateRequestConfirmedCancelsAndRepliesOnce() async throws {
         let runner = JobRunner()
         let center = ShellJobStatusCenter(jobRunner: runner)
-        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: .downloader, activityVerb: "Downloading", cancelTarget: .download) { _ in
             try await Task.sleep(for: .seconds(30))
         }
         let coordinator = HubTerminationCoordinator(
@@ -315,7 +315,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let center = ShellJobStatusCenter(jobRunner: runner)
         let started = Flag()
         let release = Flag()
-        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: .downloader, activityVerb: "Downloading", cancelTarget: .download) { _ in
             started.mark()
             do {
                 try await Task.sleep(for: .seconds(30))
@@ -374,7 +374,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let center = ShellJobStatusCenter(jobRunner: runner)
         let started = Flag()
         let release = Flag()
-        let job = runner.enqueue(title: "Track Mix", sourceToolID: "downloader") { _ in
+        let job = runner.enqueue(title: "Track Mix", sourceToolID: .downloader, activityVerb: "Downloading", cancelTarget: .download) { _ in
             started.mark()
             do {
                 try await Task.sleep(for: .seconds(30))
