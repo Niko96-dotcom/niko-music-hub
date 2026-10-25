@@ -2,7 +2,8 @@
 
 Last verified: 2026-10-22 at `3ace650` (source read); modules, dependencies and the Vault flow re-checked on
 2026-10-25 at the commit that adds `ProjectVaultRuntime` (parent `1b2caea`); the archive state owners, flows and
-gap 6 re-checked on 2026-10-25 at `d55a7a3`. Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
+gap 6 re-checked on 2026-10-25 at `d55a7a3`; tests and gates re-checked on 2026-10-25 at `d0a317e`. Latest
+`./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
 
 Start here. This page names the entry points, modules, main flows, state owners, seams and gates, and
 links to the documents that hold the detail. It does not repeat them.
@@ -353,19 +354,22 @@ Documents that disagree with the code: none known. (Closed on 2026-10-25:
 
 ## Check baseline (2026-10-25)
 
-`./script/ci.sh` at `8332bdb` (the 1.9.0 release preparation), run from Terminal.app: **exit 0, no failures.**
+`./script/ci.sh` at `d0a317e` (the process wave: docs history and index, link check, `RepoRuleTests`), run
+from Terminal.app: **exit 0, no failures.**
 
-- XCTest: 2,978 tests run, 8 skipped (opt-in live and hardware tests), 0 failures. Swift Testing: 89 tests
-  in 8 suites passed. Recorder gate, UI-probe self-test, core self-test, CLI export and refusal smokes,
-  and the release and source-distribution script tests passed.
-- `NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh` passed on the same files; production preferences unchanged.
+- XCTest: 3,023 tests run, 8 skipped (opt-in live and hardware tests), 0 failures; `RepoRuleTests` ran 176 of
+  them. Swift Testing: 89 tests in 8 suites passed. The link check, recorder gate, UI-probe self-test, core
+  self-test, CLI export and refusal smokes, and the release and source-distribution script tests passed.
+- The previous baseline, `8332bdb` (1.9.0 release preparation): exit 0, 2,978 XCTest tests, 8 skipped;
+  `NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh` passed on those files with production preferences unchanged.
+  The process wave changed no product behavior, so E2E was not rerun.
 - `ci.sh` skips the host-only CoreAudio capture tests by design.
-- The first `ci.sh` run on these files stopped at the clean build: SwiftPM printed a package-cache warning
-  (`'sparkle': skipping cache due to an error`), and `ci.sh` failed on any printed warning. The rerun was clean.
-  Since 2026-10-25 `ci.sh` lets SwiftPM's notices about a pinned dependency (`warning: '<identity>': …`, the
-  identities from `Package.resolved`) pass and still fails on every other warning: compiler
-  (`<file>.swift:<line>:<col>: warning:`), this package's manifest, the driver and the linker (checked with a
-  planted unused variable and `-warnings-as-errors` removed: exit 1).
+- The first `ci.sh` run on `8332bdb` stopped at the clean build: SwiftPM printed a package-cache warning
+  (`'sparkle': skipping cache due to an error`), and `ci.sh` failed on any printed warning. Since 2026-10-25
+  `ci.sh` lets SwiftPM's notices about a pinned dependency (`warning: '<identity>': …`, the identities from
+  `Package.resolved`) pass and still fails on every other warning: compiler (`<file>.swift:<line>:<col>:
+  warning:`), this package's manifest, the driver and the linker (checked with a planted unused variable and
+  `-warnings-as-errors` removed: exit 1).
 - In an agent shell at utility QoS, four recorder probe tests can fail on unchanged code; run `ci.sh`
   from Terminal.app for a trustworthy result.
 
