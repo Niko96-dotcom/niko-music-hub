@@ -708,6 +708,7 @@ Vault destinations are restore/review handles, never generic filesystem authorit
 | Core scanner/ranker/search | `Tests/NikoMusicCoreTests/` + fixtures under `Fixtures/CubaseArchive/` |
 | Feature VM/UI logic + Vault operation owner | `Tests/FeatureArchiveBrowserTests/` (`ProjectVaultOperationCoordinatorTests`, `BoundArchiveAuthorizationTests`, `ProjectVaultQueueLivePhaseTests`, `ArchiveWorkflowUndoWiringTests`) |
 | Registry integration | `Tests/AppCoreTests/FeatureRegistryTests.swift` |
+| Repository rules (source text) | `Tests/RepoRuleTests/` (`AGENTS.md`, "Rules and what enforces them") |
 | User E2E | `script/e2e_user_smoke.sh` + env vars `NIKO_MUSIC_HUB_FIXTURE_ROOT`, `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1` |
 
 - Fixture-backed Vault tests use `FriendsWorkflowFixture` (temporary Active/Archive roots, `LiveProjectVaultRuntime` with safe probes); no real music data.

@@ -49,8 +49,8 @@ ApplicationServices AX).
 
 ## Rule tests
 
-The `*SourceTests` in `Tests/AppCoreTests/` and `Tests/FeatureArchiveBrowserTests/` read the source text and
-check a repository rule that the compiler cannot: who may build a guard, which strings a view may show,
+The test target `RepoRuleTests` (`Tests/RepoRuleTests/`) reads the source text and checks the repository's
+rules that the compiler cannot: who may build a guard, which strings a view may show,
 which module may import which. They check rules, not behavior. Each one exists because the same mistake
 shipped more than once.
 
