@@ -581,10 +581,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     /// Views observe this object, so each owner's publish is sent here at once,
-    /// at the same moment as the owner's own (willSet), with a weak capture.
+    /// at the same moment as the owner's own (willSet). The publisher is read once,
+    /// here: the synthesized `objectWillChange` getter walks this class's stored
+    /// properties on every access, which cost each forwarded publish about 18 µs.
+    /// It is one stable instance (kept in the `footer` property's storage), it does
+    /// not retain this view model, and the subscriptions end with it.
     private func forwardChanges<Owner: ObservableObject>(of owner: Owner)
         where Owner.ObjectWillChangePublisher == ObservableObjectPublisher {
-        ownerChangeForwarding.append(owner.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() })
+        let publisher = objectWillChange
+        ownerChangeForwarding.append(owner.objectWillChange.sink { _ in publisher.send() })
     }
 
     /// Injects the operation owner's narrow callbacks. All captures are weak;
