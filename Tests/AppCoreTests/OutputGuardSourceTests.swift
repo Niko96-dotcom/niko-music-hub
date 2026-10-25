@@ -148,10 +148,10 @@ final class OutputGuardSourceTests: XCTestCase {
         "Sources/AppCore/Settings/AppSettingsObserver.swift": 1,
         // First-launch probe: a damaged blob belongs to a returning user, who gets no Set Up sheet.
         "Sources/AppCore/Shell/HubFirstLaunchSetupPolicy.swift": 1,
-        // Probe: while settings are unreadable the repair notice already explains a Vault read failure.
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVault.swift": 1,
-        // nil keeps the last Vault health and hides cards; the observer lags the model's own saves.
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
+        // Probe: while settings are unreadable the repair notice already explains a Vault read failure;
+        // and the card context: nil keeps the last Vault health and hides cards, the observer lags the
+        // model's own saves.
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVault.swift": 2,
         // First-run probe (no new-user sheet for damaged settings), and the access-failure
         // check after a retry, which only presents the next failed root.
         "Sources/FeatureArchiveBrowser/ArchiveLibraryModel.swift": 2,

@@ -258,7 +258,7 @@ struct ArchiveBrowserView: View {
                 }
                 return .handled
             }
-            if viewModel.pendingStopTransferConfirmation {
+            if viewModel.vaultDialogs.pendingStopTransferConfirmation {
                 return .ignored
             }
             if viewModel.projectVaultActiveOperation != nil {
@@ -285,11 +285,11 @@ struct ArchiveBrowserView: View {
                 playPause: performPlayPausePreview
             )
         }
-        .sheet(item: $viewModel.projectVaultRestoreRequest) { request in
+        .sheet(item: restoreRequestBinding) { request in
             ProjectVaultRestoreSheet(request: request, viewModel: viewModel)
                 .hubAllowsApplicationQuit()
         }
-        .sheet(item: $viewModel.identityReviewPresentation) { presentation in
+        .sheet(item: identityReviewBinding) { presentation in
             ProjectIdentityReviewSheet(presentation: presentation, viewModel: viewModel)
                 .hubAllowsApplicationQuit()
         }
@@ -312,7 +312,7 @@ struct ArchiveBrowserView: View {
         }
         .sheet(
             isPresented: Binding(
-                get: { viewModel.pendingArchiveConfirmation != nil },
+                get: { viewModel.vaultDialogs.pendingArchiveConfirmation != nil },
                 set: { presented in
                     // The single presenter for every archive confirmation
                     // (manual Archive Now + workflow Done choices). Sheet
@@ -325,7 +325,7 @@ struct ArchiveBrowserView: View {
                     // (status/root change nils pending and dismisses on its
                     // own), or a replacement capture never cancels the wrong
                     // state before its callback runs.
-                    if !presented, viewModel.pendingArchiveConfirmation != nil {
+                    if !presented, viewModel.vaultDialogs.pendingArchiveConfirmation != nil {
                         viewModel.cancelPendingArchive()
                     }
                 }
@@ -337,7 +337,7 @@ struct ArchiveBrowserView: View {
         .alert(
             CancelCopy.stopTransferTitle,
             isPresented: Binding(
-                get: { viewModel.pendingStopTransferConfirmation },
+                get: { viewModel.vaultDialogs.pendingStopTransferConfirmation },
                 set: { if !$0 { viewModel.keepActiveProjectVaultTransfer() } }
             )
         ) {
@@ -368,6 +368,22 @@ struct ArchiveBrowserView: View {
     /// Fullscreen detail reached from the board — back returns to the board.
     /// The content column is width-capped and centered so a wide window reads
     /// as one calm reading column instead of content pinned to the left edge.
+    /// The restore sheet shows while a restore request waits; a system dismiss closes it.
+    private var restoreRequestBinding: Binding<ProjectVaultRestoreRequest?> {
+        Binding(
+            get: { viewModel.vaultDialogs.projectVaultRestoreRequest },
+            set: { if $0 == nil { viewModel.vaultDialogs.closeRestore() } }
+        )
+    }
+
+    /// The identity review sheet shows while a review waits; a system dismiss cancels it.
+    private var identityReviewBinding: Binding<ProjectIdentityReviewPresentation?> {
+        Binding(
+            get: { viewModel.vaultDialogs.identityReviewPresentation },
+            set: { if $0 == nil { viewModel.cancelPresentedIdentityReview() } }
+        )
+    }
+
     @ViewBuilder
     private var boardDetailPage: some View {
         if let song = viewModel.page.selectedSong {

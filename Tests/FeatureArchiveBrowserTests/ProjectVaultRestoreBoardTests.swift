@@ -55,7 +55,7 @@ final class ProjectVaultRestoreBoardTests: XCTestCase {
         XCTAssertEqual(presentation.state, .active)
         XCTAssertEqual(presentation.statusLabel, "Verified copy")
         XCTAssertEqual(presentation.primaryAction, .openInCubase)
-        XCTAssertFalse(model.showArchivedProjects)
+        XCTAssertFalse(model.vaultObservation.showsArchivedProjects)
         XCTAssertTrue(model.songs.contains { $0.id == song.id })
 
         // Readiness needs the generation to still exist in the configured
@@ -164,7 +164,7 @@ final class ProjectVaultRestoreBoardTests: XCTestCase {
         await model.refreshProjectVaultSnapshots()
         await model.scan()
 
-        XCTAssertFalse(model.showArchivedProjects)
+        XCTAssertFalse(model.vaultObservation.showsArchivedProjects)
         XCTAssertEqual(model.archivedProjectCount, 1)
         let visible = Set(model.songs.map(\.originalFolderName))
         XCTAssertFalse(visible.contains("Board Removed"))
@@ -247,8 +247,8 @@ final class ProjectVaultArchiveConfirmationRoutingTests: XCTestCase {
         XCTAssertNil(song.workflowStatus)
 
         model.requestArchiveNow(for: song)
-        try await waitUntil { model.pendingArchiveConfirmation != nil }
-        let pending = try XCTUnwrap(model.pendingArchiveConfirmation)
+        try await waitUntil { model.vaultDialogs.pendingArchiveConfirmation != nil }
+        let pending = try XCTUnwrap(model.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.trigger, .manual)
         XCTAssertEqual(pending.songID, song.id)
         let bound = try XCTUnwrap(pending.authorization)
@@ -257,7 +257,7 @@ final class ProjectVaultArchiveConfirmationRoutingTests: XCTestCase {
         // Manual confirm consumes the pending itself: no fresh capture, no
         // workflow change, and the manual operation is queued exactly once.
         model.confirmPendingArchive()
-        XCTAssertNil(model.pendingArchiveConfirmation)
+        XCTAssertNil(model.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertNil(model.songs.first { $0.id == song.id }?.workflowStatus)
         let enqueued = [model.projectVaultActiveOperation].compactMap { $0 }
             + model.projectVaultPendingOperations
@@ -274,11 +274,11 @@ final class ProjectVaultArchiveConfirmationRoutingTests: XCTestCase {
         let song = try XCTUnwrap(model.songs.first)
 
         model.requestArchiveNow(for: song)
-        try await waitUntil { model.pendingArchiveConfirmation != nil }
-        XCTAssertNotNil(model.pendingArchiveConfirmation)
+        try await waitUntil { model.vaultDialogs.pendingArchiveConfirmation != nil }
+        XCTAssertNotNil(model.vaultDialogs.pendingArchiveConfirmation)
         model.cancelPendingArchive()
 
-        XCTAssertNil(model.pendingArchiveConfirmation)
+        XCTAssertNil(model.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertNil(model.songs.first { $0.id == song.id }?.workflowStatus)
         XCTAssertTrue(model.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(model.projectVaultActiveOperation)
@@ -295,22 +295,22 @@ final class ProjectVaultArchiveConfirmationRoutingTests: XCTestCase {
         let song = try XCTUnwrap(model.songs.first)
 
         model.requestArchiveNow(for: song)
-        try await waitUntil { model.pendingArchiveConfirmation != nil }
+        try await waitUntil { model.vaultDialogs.pendingArchiveConfirmation != nil }
 
         // Every Done-only choice must ignore a manual pending: the dialog,
         // the workflow status, and the queue all stay untouched.
         model.confirmWorkflowDoneFreeSpace()
-        XCTAssertNotNil(model.pendingArchiveConfirmation)
+        XCTAssertNotNil(model.vaultDialogs.pendingArchiveConfirmation)
         model.confirmWorkflowDoneKeepCopy()
-        XCTAssertNotNil(model.pendingArchiveConfirmation)
+        XCTAssertNotNil(model.vaultDialogs.pendingArchiveConfirmation)
         model.confirmWorkflowDoneKeepLocal()
-        XCTAssertNotNil(model.pendingArchiveConfirmation)
+        XCTAssertNotNil(model.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertNil(model.songs.first { $0.id == song.id }?.workflowStatus)
         XCTAssertTrue(model.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(model.projectVaultActiveOperation)
 
         model.cancelPendingArchive()
-        XCTAssertNil(model.pendingArchiveConfirmation)
+        XCTAssertNil(model.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 

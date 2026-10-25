@@ -259,7 +259,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         ArchivePreviewPlayer.clearMetadataCaches()
         browse.clearForRootChange()
         page.clearForRootChange()
-        showArchivedProjects = false
         vaultObservation.clearForRootChange(notifyWhenChanged: false)
         library.clearScanForRootChange()
         applyCatalogEdit(.clear)
@@ -288,10 +287,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// Collaborator suggestions, duplicate hints, the missing-audio summary and
     /// the "until the next scan" dismissals. `refreshIntelligence()` feeds it.
     let intelligence = ArchiveIntelligenceModel()
-    /// Archived Project Vault generations are opt-in in the browse projection so the
-    /// active workspace stays calm. Turning this on exposes verified archive-only
-    /// projects in their persisted workflow stage.
-    @Published var showArchivedProjects = false
     /// Archived count is owned by `ArchiveVaultObservation`; this read-only
     /// peer preserves the existing view/test API with no duplicate storage.
     /// SwiftUI updates flow through the observation bridge in
@@ -396,24 +391,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var projectVaultRetryAttemptCounts: [String: Int] { vaultOperations.retryAttemptCounts }
     var projectVaultCapacityPostponedSongIDs: Set<String> { vaultOperations.capacityPostponedSongIDs }
     var projectVaultQueueTask: Task<Void, Never>? { vaultOperations.queueTask }
-    @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
-    @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
-    var boundArchiveCaptureSongID: String?
-    @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
-    @Published var pendingStopTransferConfirmation = false
-    /// Set once quit has stopped the Vault queue (ADR-019): no new operation is
-    /// queued and no recovery is scheduled for the exiting app to cut off.
-    var projectVaultStoppedForQuit = false
-    @Published var identityReviewPresentation: ProjectIdentityReviewPresentation?
-    /// A Vault dialog that `ArchiveBrowserView` presents is waiting. SwiftUI
-    /// shows it only once no other sheet is open, so the song detail closes
-    /// "Manage storage" for it instead of hiding it until the user does.
-    var hasPendingProjectVaultDialog: Bool {
-        pendingArchiveConfirmation != nil
-            || projectVaultRestoreRequest != nil
-            || identityReviewPresentation != nil
-            || pendingStopTransferConfirmation
-    }
+    /// The Vault dialogs the page presents (archive/Done confirmation, restore,
+    /// identity review, stop transfer), the bound-authorization capture before the
+    /// archive dialog, restore progress, and whether quit stopped the Vault.
+    let vaultDialogs = ArchiveVaultDialogsModel()
     /// Sidebar Project Vault provider status (NMH-057). Owned by
     /// `ArchiveVaultObservation`; this read-only peer preserves the existing
     /// view API with no duplicate storage.
@@ -426,7 +407,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// generations are projected into `songs` only when the user opts into them, so
     /// toggling that view never loses the clean scan baseline.
     var scannedSongs: [Song] { songCatalog.scanned }
-    var projectVaultRestoreOptionsLoading = false
     /// Undo stack for workflow-status and metadata edits. Owned by
     /// `ArchiveMetadataEditingCoordinator` (owned/injected/weak window-bound
     /// managers plus the weak undo target). SwiftUI's main window
@@ -469,17 +449,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var addressBookCancellable: AnyCancellable?
     var fileAccessCancellable: AnyCancellable?
     var libraryCancellable: AnyCancellable?
-    /// V3 bound-authorization capture state. Every confirmation request bumps
-    /// `projectVaultAuthCaptureGeneration` and replaces
-    /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
-    /// its generation is still current and the task was not cancelled, so a
-    /// stale or superseded capture can never produce a surprise late modal.
-    var projectVaultAuthCaptureGeneration: UInt64 = 0
-    var projectVaultAuthCaptureTask: Task<Void, Never>?
-    /// Deterministic seam for behavioral tests: awaited at the start of every
-    /// bound-authorization capture so settings/roots/source changes can be
-    /// applied while a confirmation is still in flight.
-    var projectVaultAuthCaptureProbe: (@Sendable () async -> Void)?
+    var vaultDialogsCancellable: AnyCancellable?
     // Vault observation storage moved to `ArchiveVaultObservation`
     // (context, health, snapshots, path index, card cache, archived count,
     // recovery timer). Read-only peers above preserve the view API; writes
@@ -612,6 +582,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
         libraryCancellable = library.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+        vaultDialogsCancellable = vaultDialogs.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
         library.loadRootsFromSettings()
         followStoredSettingsChanges()
         page.attach(context.navigationHistory) { [weak self] route in
@@ -708,8 +680,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         // running queue task so no callback fires after the owner is gone.
         // Recovery timer lifetime is owned by `ArchiveVaultObservation.deinit`.
         // Delayed index persistence is owned by
-        // `ArchiveMetadataEditingCoordinator.deinit`.
-        projectVaultAuthCaptureTask?.cancel()
+        // `ArchiveMetadataEditingCoordinator.deinit`. The authorization capture
+        // is cancelled by `ArchiveVaultDialogsModel.deinit`.
     }
 
     // MARK: - Helpers

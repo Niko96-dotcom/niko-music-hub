@@ -106,14 +106,14 @@ struct ArchiveBoardView: View {
             if viewModel.canBrowseArchivedProjects {
                 HubIconButton(
                     systemImage: "archivebox",
-                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived songs" : "Show archived songs",
-                    help: viewModel.showArchivedProjects
+                    accessibilityLabel: viewModel.vaultObservation.showsArchivedProjects ? "Hide archived songs" : "Show archived songs",
+                    help: viewModel.vaultObservation.showsArchivedProjects
                         ? "Hide archived songs"
                         : "Show \(viewModel.archivedProjectCount) archived \(CountCopy.noun(for: viewModel.archivedProjectCount, "song"))",
-                    isSelected: viewModel.showArchivedProjects,
+                    isSelected: viewModel.vaultObservation.showsArchivedProjects,
                     isToggle: true
                 ) {
-                    viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                    viewModel.setShowArchivedProjects(!viewModel.vaultObservation.showsArchivedProjects)
                 }
             }
 

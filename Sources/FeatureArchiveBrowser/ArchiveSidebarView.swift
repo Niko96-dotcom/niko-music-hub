@@ -51,14 +51,14 @@ struct ArchiveSidebarView: View {
             if viewModel.canBrowseArchivedProjects && !compactList {
                 HubIconButton(
                     systemImage: "archivebox",
-                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived songs" : "Show archived songs",
-                    help: viewModel.showArchivedProjects
+                    accessibilityLabel: viewModel.vaultObservation.showsArchivedProjects ? "Hide archived songs" : "Show archived songs",
+                    help: viewModel.vaultObservation.showsArchivedProjects
                         ? "Hide archived songs"
                         : "Show \(viewModel.archivedProjectCount) archived \(CountCopy.noun(for: viewModel.archivedProjectCount, "song"))",
-                    isSelected: viewModel.showArchivedProjects,
+                    isSelected: viewModel.vaultObservation.showsArchivedProjects,
                     isToggle: true
                 ) {
-                    viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                    viewModel.setShowArchivedProjects(!viewModel.vaultObservation.showsArchivedProjects)
                 }
             }
 
@@ -81,8 +81,8 @@ struct ArchiveSidebarView: View {
                 }
                 .disabled(viewModel.library.isScanning || viewModel.library.roots.isEmpty)
                 if viewModel.canBrowseArchivedProjects {
-                    Button(viewModel.showArchivedProjects ? "Hide Archived Songs" : "Show Archived Songs") {
-                        viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                    Button(viewModel.vaultObservation.showsArchivedProjects ? "Hide Archived Songs" : "Show Archived Songs") {
+                        viewModel.setShowArchivedProjects(!viewModel.vaultObservation.showsArchivedProjects)
                     }
                 }
                 Divider()
@@ -185,9 +185,9 @@ struct ArchiveSidebarView: View {
             if viewModel.canBrowseArchivedProjects {
                 Section("Project Vault") {
                     Button {
-                        viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                        viewModel.setShowArchivedProjects(!viewModel.vaultObservation.showsArchivedProjects)
                     } label: {
-                        if viewModel.showArchivedProjects {
+                        if viewModel.vaultObservation.showsArchivedProjects {
                             Label("Hide Archived Songs", systemImage: "checkmark")
                         } else {
                             Label("Show Archived Songs", systemImage: "archivebox")

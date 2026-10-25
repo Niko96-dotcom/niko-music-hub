@@ -132,10 +132,10 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
 
         viewModel.archiveInProjectVault(song, trigger: .manual)
         try await waitUntil {
-            viewModel.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
+            viewModel.vaultDialogs.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
         }
 
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(presentation.title, song.effectiveDisplayTitle)
         XCTAssertEqual(
             presentation.message,
@@ -149,16 +149,16 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         // initiating song earns a fresh explicit Archive Now confirmation.
         // V3: that fresh confirmation captures its bound authorization first.
         viewModel.resolvePresentedIdentityReview(as: .keepSeparate)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        XCTAssertNil(viewModel.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertTrue(viewModel.identityReviewViewModel.pendingReviews.isEmpty)
         XCTAssertEqual(
             try fixture.catalogStore().loadReviews().first { $0.id == presentation.review.id }?.resolution,
             .keepSeparate
         )
         let confirmation = try XCTUnwrap(
-            viewModel.pendingArchiveConfirmation,
+            viewModel.vaultDialogs.pendingArchiveConfirmation,
             "explicit Link/Keep Separate flow requires fresh Archive Now confirmation"
         )
         _ = try XCTUnwrap(confirmation.authorization, "V3 fresh confirmation must carry its captured token")
@@ -172,7 +172,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         viewModel.confirmPendingArchive()
 
         try await waitUntil {
-            viewModel.pendingArchiveConfirmation == nil && viewModel.projectVaultBusySongIDs.isEmpty
+            viewModel.vaultDialogs.pendingArchiveConfirmation == nil && viewModel.projectVaultBusySongIDs.isEmpty
         }
         let transfers = try fixture.transferStore().allTransferRecords()
         XCTAssertFalse(transfers.isEmpty, viewModel.statusMessage ?? "confirmed archive produced no transfer")
@@ -208,11 +208,11 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         ))
 
         let viewModel = fixture.viewModel(runtime: try fixture.runtime())
-        XCTAssertNil(viewModel.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
 
         viewModel.presentPendingIdentityReviewsIfNeeded()
 
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(presentation.review.id, review.id)
         XCTAssertEqual(presentation.title, "Friends Workflow Song")
         // V2 stable identity: entries carry no locations, so no song binds by
@@ -222,16 +222,16 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
             "persisted review must not bind an unrelated same-title song by title"
         )
         XCTAssertNil(presentation.trigger)
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
 
         viewModel.cancelPresentedIdentityReview()
 
-        XCTAssertNil(viewModel.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(viewModel.identityReviewViewModel.pendingReviews.map(\.id), [review.id])
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
         XCTAssertEqual(try fixture.catalogStore().loadReviews().first?.resolution, .pending)
     }
@@ -297,20 +297,20 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.folderPath.path))
 
         viewModel.presentPendingIdentityReviewsIfNeeded()
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(presentation.review.id, review.id)
         XCTAssertNil(presentation.trigger, "persisted review carries no authorization")
         XCTAssertNil(
             presentation.song,
             "stable identity must not bind the unrelated same-title song by title"
         )
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
 
         viewModel.resolvePresentedIdentityReview(as: .keepSeparate)
 
-        XCTAssertNil(viewModel.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertNil(
-            viewModel.pendingArchiveConfirmation,
+            viewModel.vaultDialogs.pendingArchiveConfirmation,
             "persisted review resolution must not bypass explicit Archive Now/Done confirmation"
         )
         let queuedManualArchive = viewModel.projectVaultBusySongIDs.contains(unrelated.id)
@@ -361,7 +361,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.songs.count, 2, "expected fixture plus second project, got \(viewModel.songs.map(\.originalFolderName))")
 
         viewModel.presentPendingIdentityReviewsIfNeeded()
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertNil(
             presentation.song,
             "title-only overlap across two scanned songs must not bind either song"
@@ -369,7 +369,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         XCTAssertNil(presentation.trigger)
 
         viewModel.resolvePresentedIdentityReview(as: .link)
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
@@ -423,15 +423,15 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let stable = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.presentPendingIdentityReviewsIfNeeded()
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(presentation.song?.id, stable.id, "stable location/id must resolve the scanned song")
         XCTAssertNil(presentation.trigger, "persisted review carries no authorization even when stable")
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
 
         viewModel.resolvePresentedIdentityReview(as: .keepSeparate)
-        XCTAssertNil(viewModel.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertNil(
-            viewModel.pendingArchiveConfirmation,
+            viewModel.vaultDialogs.pendingArchiveConfirmation,
             "stable persisted resolution alone must not invent Archive Now/Done authorization"
         )
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
@@ -457,14 +457,14 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         await viewModel.scan()
 
         viewModel.presentPendingIdentityReviewsIfNeeded()
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(presentation.title, "this project")
         XCTAssertNil(presentation.song, "unknown IDs are failed resolution, never a title match")
         XCTAssertNil(presentation.trigger)
 
         viewModel.resolvePresentedIdentityReview(as: .link)
-        XCTAssertNil(viewModel.identityReviewPresentation)
-        XCTAssertNil(viewModel.pendingArchiveConfirmation, "failed resolution must not trigger a new archive")
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation, "failed resolution must not trigger a new archive")
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
@@ -489,14 +489,14 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         await viewModel.scan()
 
         viewModel.presentPendingIdentityReviewsIfNeeded()
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertNil(presentation.trigger, "persisted review carries no authorization")
         XCTAssertNil(presentation.song, "unknown IDs never bind by title")
 
         viewModel.resolvePresentedIdentityReview(as: .keepSeparate)
 
-        XCTAssertNil(viewModel.identityReviewPresentation)
-        XCTAssertNil(viewModel.pendingArchiveConfirmation, "persisted review must not invent confirmation")
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation, "persisted review must not invent confirmation")
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
@@ -526,9 +526,9 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
 
         viewModel.archiveInProjectVault(song, trigger: .manual)
         try await waitUntil {
-            viewModel.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
+            viewModel.vaultDialogs.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
         }
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(presentation.trigger, .manual)
 
         // Project disappears before the decision: stable binding is lost.
@@ -536,8 +536,8 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
 
         viewModel.resolvePresentedIdentityReview(as: .keepSeparate)
 
-        XCTAssertNil(viewModel.identityReviewPresentation)
-        XCTAssertNil(viewModel.pendingArchiveConfirmation, "lost binding must not earn fresh confirmation or auto-archive")
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation, "lost binding must not earn fresh confirmation or auto-archive")
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
@@ -567,24 +567,24 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         XCTAssertNotEqual(song.workflowStatus, .done)
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.trigger, .workflowDone)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.trigger, .workflowDone)
 
         viewModel.confirmPendingArchive()
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
         try await waitUntil {
-            viewModel.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
+            viewModel.vaultDialogs.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
         }
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(presentation.trigger, .workflowDone)
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
 
         viewModel.resolvePresentedIdentityReview(as: .link)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        XCTAssertNil(viewModel.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
         let confirmation = try XCTUnwrap(
-            viewModel.pendingArchiveConfirmation,
+            viewModel.vaultDialogs.pendingArchiveConfirmation,
             "explicit Done flow requires fresh Done confirmation after identity resolution"
         )
         _ = try XCTUnwrap(confirmation.authorization, "V3 fresh Done confirmation must carry its captured token")
@@ -595,7 +595,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
 
         viewModel.confirmPendingArchive()
         try await waitUntil {
-            viewModel.pendingArchiveConfirmation == nil && viewModel.projectVaultBusySongIDs.isEmpty
+            viewModel.vaultDialogs.pendingArchiveConfirmation == nil && viewModel.projectVaultBusySongIDs.isEmpty
         }
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
         XCTAssertFalse(try fixture.transferStore().allTransferRecords().isEmpty)
@@ -625,16 +625,16 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let song = try XCTUnwrap(browser.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         browser.archiveInProjectVault(song, trigger: .manual)
         try await waitUntil {
-            browser.identityReviewPresentation != nil && browser.projectVaultBusySongIDs.isEmpty
+            browser.vaultDialogs.identityReviewPresentation != nil && browser.projectVaultBusySongIDs.isEmpty
         }
-        let presentedID = try XCTUnwrap(browser.identityReviewPresentation?.review.id)
+        let presentedID = try XCTUnwrap(browser.vaultDialogs.identityReviewPresentation?.review.id)
         browser.identityReviewViewModel.persistenceOverride = { _, _ in throw NSError(domain: "nmh-test", code: 1) }
 
         browser.resolvePresentedIdentityReview(as: .keepSeparate)
 
-        XCTAssertNotNil(browser.identityReviewPresentation, "persistence failure must stay visible")
+        XCTAssertNotNil(browser.vaultDialogs.identityReviewPresentation, "persistence failure must stay visible")
         XCTAssertEqual(browser.identityReviewViewModel.pendingReviews.map(\.id), [presentedID])
-        XCTAssertNil(browser.pendingArchiveConfirmation)
+        XCTAssertNil(browser.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(browser.projectVaultBusySongIDs.isEmpty)
         XCTAssertTrue(browser.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(browser.projectVaultActiveOperation)
@@ -642,12 +642,12 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
 
         browser.identityReviewViewModel.persistenceOverride = nil
         browser.resolvePresentedIdentityReview(as: .keepSeparate)
-        try await waitUntil { browser.pendingArchiveConfirmation != nil }
+        try await waitUntil { browser.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        XCTAssertNil(browser.identityReviewPresentation)
-        XCTAssertEqual(browser.pendingArchiveConfirmation?.trigger, .manual)
-        XCTAssertEqual(browser.pendingArchiveConfirmation?.songID, song.id)
-        XCTAssertNotNil(browser.pendingArchiveConfirmation?.authorization)
+        XCTAssertNil(browser.vaultDialogs.identityReviewPresentation)
+        XCTAssertEqual(browser.vaultDialogs.pendingArchiveConfirmation?.trigger, .manual)
+        XCTAssertEqual(browser.vaultDialogs.pendingArchiveConfirmation?.songID, song.id)
+        XCTAssertNotNil(browser.vaultDialogs.pendingArchiveConfirmation?.authorization)
         browser.cancelPendingArchive()
     }
 
@@ -665,15 +665,15 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
 
         viewModel.archiveInProjectVault(song, trigger: .backupCopy)
         try await waitUntil {
-            viewModel.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
+            viewModel.vaultDialogs.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
         }
-        XCTAssertEqual(viewModel.identityReviewPresentation?.trigger, .backupCopy)
+        XCTAssertEqual(viewModel.vaultDialogs.identityReviewPresentation?.trigger, .backupCopy)
 
         viewModel.resolvePresentedIdentityReview(as: .keepSeparate)
 
-        XCTAssertNil(viewModel.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertNil(
-            viewModel.pendingArchiveConfirmation,
+            viewModel.vaultDialogs.pendingArchiveConfirmation,
             "backup-copy resolution must not escalate to an Archive Now confirmation"
         )
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
@@ -761,7 +761,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
             "fixture song must be scanned so the nil binding is meaningful"
         )
         viewModel.presentPendingIdentityReviewsIfNeeded()
-        let presentation = try XCTUnwrap(viewModel.identityReviewPresentation)
+        let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertNil(
             presentation.song,
             "stale fallback path must not authorize another project when the bookmark resolves elsewhere"
@@ -769,8 +769,8 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         XCTAssertNil(presentation.trigger)
 
         viewModel.resolvePresentedIdentityReview(as: .keepSeparate)
-        XCTAssertNil(viewModel.identityReviewPresentation)
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)

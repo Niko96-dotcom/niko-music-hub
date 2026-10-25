@@ -181,22 +181,22 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let gate = CaptureGate()
-        viewModel.projectVaultAuthCaptureProbe = { await gate.enterAndWait() }
+        viewModel.vaultDialogs.captureProbe = { await gate.enterAndWait() }
 
         viewModel.requestArchiveNow(for: song)
         try await waitUntil { await gate.entered >= 1 }
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
 
         viewModel.cancelPendingArchive()
         await gate.open()
         // Let the cancelled capture resume and exit without presenting.
         for _ in 0..<20 { await Task.yield() }
-        try await waitUntil(timeout: .milliseconds(300)) { runtime.captureCalls.isEmpty || viewModel.pendingArchiveConfirmation == nil }
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        try await waitUntil(timeout: .milliseconds(300)) { runtime.captureCalls.isEmpty || viewModel.vaultDialogs.pendingArchiveConfirmation == nil }
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
-        viewModel.projectVaultAuthCaptureProbe = nil
+        viewModel.vaultDialogs.captureProbe = nil
     }
 
     // MARK: - Suspended capture: replacement presents only the latest
@@ -211,7 +211,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         let first = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let second = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Second Project" })
         let gate = CaptureGate()
-        viewModel.projectVaultAuthCaptureProbe = { await gate.enterAndWait() }
+        viewModel.vaultDialogs.captureProbe = { await gate.enterAndWait() }
 
         viewModel.requestArchiveNow(for: first)
         try await waitUntil { await gate.entered >= 1 }
@@ -219,9 +219,9 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         viewModel.requestArchiveNow(for: second)
         try await waitUntil { await gate.entered >= 2 }
         await gate.open()
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.songID, second.id)
         let bound = try XCTUnwrap(pending.authorization)
         XCTAssertEqual(bound.songID, second.id)
@@ -230,7 +230,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         // The superseded first capture never presented a late modal for the
         // wrong source.
         XCTAssertNotEqual(pending.songID, first.id)
-        viewModel.projectVaultAuthCaptureProbe = nil
+        viewModel.vaultDialogs.captureProbe = nil
         viewModel.cancelPendingArchive()
     }
 
@@ -255,8 +255,8 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         }
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let captured = try XCTUnwrap(try XCTUnwrap(viewModel.pendingArchiveConfirmation).authorization)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let captured = try XCTUnwrap(try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation).authorization)
         XCTAssertEqual(runtime.captureCalls.count, 1)
         XCTAssertEqual(runtime.captureCalls.first?.trigger, .workflowDone)
 
@@ -303,8 +303,8 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.willRemoveActiveCopy, false)
         let captured = try XCTUnwrap(pending.authorization)
         XCTAssertEqual(captured.maximumDestructiveness, .copyOnly)
@@ -351,12 +351,12 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         viewModel.bindInjectedUndoManager(undoManager)
 
         viewModel.requestArchiveNow(for: first)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultActiveOperation?.songID == first.id }
 
         viewModel.requestWorkflowDoneArchive(for: second)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultPendingOperations.contains(where: { $0.songID == second.id }) }
         XCTAssertEqual(viewModel.projectVaultActiveOperation?.songID, first.id)
@@ -401,13 +401,13 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         viewModel.bindInjectedUndoManager(undoManager)
 
         viewModel.requestArchiveNow(for: first)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultActiveOperation?.songID == first.id }
 
         undoManager.beginUndoGrouping()
         viewModel.requestWorkflowDoneArchive(for: second)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         undoManager.endUndoGrouping()
         try await waitUntil { viewModel.projectVaultPendingOperations.contains(where: { $0.songID == second.id }) }
@@ -456,31 +456,31 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         viewModel.bindInjectedUndoManager(undoManager)
 
         let gate = CaptureGate()
-        viewModel.projectVaultAuthCaptureProbe = { await gate.enterAndWait() }
+        viewModel.vaultDialogs.captureProbe = { await gate.enterAndWait() }
         viewModel.requestWorkflowDoneArchive(for: viewModel.songs.first(where: { $0.id == song.id })!)
         try await waitUntil { await gate.entered >= 1 }
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         await gate.open()
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        viewModel.projectVaultAuthCaptureProbe = nil
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        viewModel.vaultDialogs.captureProbe = nil
         viewModel.confirmPendingArchive()
         XCTAssertEqual(viewModel.songs.first(where: { $0.id == song.id })?.workflowStatus, .done)
         try await waitUntil(timeout: .seconds(5)) { viewModel.projectVaultBusySongIDs.isEmpty }
 
         let reconfirmGate = CaptureGate()
-        viewModel.projectVaultAuthCaptureProbe = { await reconfirmGate.enterAndWait() }
+        viewModel.vaultDialogs.captureProbe = { await reconfirmGate.enterAndWait() }
         let doneSong = try XCTUnwrap(viewModel.songs.first(where: { $0.id == song.id }))
         viewModel.requestWorkflowDoneReconfirmation(for: doneSong)
         try await waitUntil { await reconfirmGate.entered >= 1 }
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         undoManager.undo()
         XCTAssertEqual(viewModel.songs.first(where: { $0.id == song.id })?.workflowStatus, .prod)
         await reconfirmGate.open()
         for _ in 0..<20 { await Task.yield() }
         try await Task.sleep(for: .milliseconds(100))
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
-        viewModel.projectVaultAuthCaptureProbe = nil
+        viewModel.vaultDialogs.captureProbe = nil
     }
 
     func testCancellingOneSongPreservesOtherSongsCapture() async throws {
@@ -493,16 +493,16 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         let first = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         let second = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Second Project" })
         let gate = CaptureGate()
-        viewModel.projectVaultAuthCaptureProbe = { await gate.enterAndWait() }
+        viewModel.vaultDialogs.captureProbe = { await gate.enterAndWait() }
 
         viewModel.requestWorkflowDoneArchive(for: second)
         try await waitUntil { await gate.entered >= 1 }
-        viewModel.cancelBoundArchiveCapture(for: first.id)
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        viewModel.vaultDialogs.cancelCapture(for: first.id)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         await gate.open()
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.songID, second.id)
-        viewModel.projectVaultAuthCaptureProbe = nil
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.songID, second.id)
+        viewModel.vaultDialogs.captureProbe = nil
         viewModel.cancelPendingArchive()
     }
 
@@ -526,7 +526,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         viewModel.bindInjectedUndoManager(undoManager)
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil(timeout: .seconds(5)) { runtime.authCalls.count >= 1 }
         XCTAssertEqual(runtime.authCalls.count, 1)
@@ -572,12 +572,12 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         try seedDuplicateCatalogEntriesForAutomaticDone(on: fixture, projectIDs: [idA, idB])
         let review = ProjectIdentityReview(existingProjectID: idA, candidateProjectID: idB, reason: "Fixture ambiguity")
         viewModel.identityReviewViewModel.adopt(review)
-        viewModel.identityReviewPresentation = ProjectIdentityReviewPresentation(
+        viewModel.vaultDialogs.presentIdentityReview(ProjectIdentityReviewPresentation(
             review: review,
             title: firstDone.effectiveDisplayTitle,
             song: firstDone,
             trigger: .workflowDone
-        )
+        ))
 
         await viewModel.refreshProjectVaultSnapshots()
         // Unrelated Done song still gets its automatic copy-only archive.
@@ -591,12 +591,12 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         XCTAssertNil(viewModel.projectVaultRetryTasks[first.id])
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         // The sheet promise holds: nothing archived for the blocked song until chosen.
-        XCTAssertNotNil(viewModel.identityReviewPresentation)
+        XCTAssertNotNil(viewModel.vaultDialogs.identityReviewPresentation)
 
         // Explicit resolution resumes normally via a fresh Done confirmation.
         viewModel.resolvePresentedIdentityReview(as: .keepSeparate)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let confirmation = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let confirmation = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(confirmation.songID, first.id)
         XCTAssertEqual(confirmation.trigger, .workflowDone)
         _ = try XCTUnwrap(confirmation.authorization)
@@ -658,7 +658,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         try await waitUntil { viewModel.projectVaultActiveOperation?.songID == first.id }
 
         viewModel.requestStopActiveProjectVaultTransfer()
-        XCTAssertTrue(viewModel.pendingStopTransferConfirmation)
+        XCTAssertTrue(viewModel.vaultDialogs.pendingStopTransferConfirmation)
         viewModel.confirmStopActiveProjectVaultTransfer()
         await gate.open()
         try await waitUntil(timeout: .seconds(5)) { viewModel.projectVaultBusySongIDs.isEmpty }
@@ -744,7 +744,7 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         XCTAssertTrue(cancelledPerSong.contains("No project files were changed"))
 
         viewModel.requestStopActiveProjectVaultTransfer()
-        XCTAssertTrue(viewModel.pendingStopTransferConfirmation)
+        XCTAssertTrue(viewModel.vaultDialogs.pendingStopTransferConfirmation)
         viewModel.confirmStopActiveProjectVaultTransfer()
         await gate.open()
         try await waitUntil(timeout: .seconds(5)) { viewModel.projectVaultBusySongIDs.isEmpty }
@@ -1048,17 +1048,17 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
         // Free Up Space routes through the manual capture, which mints a fresh
         // token for the same source with its own trigger.
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let staleDone = try XCTUnwrap(try XCTUnwrap(viewModel.pendingArchiveConfirmation).authorization)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let staleDone = try XCTUnwrap(try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation).authorization)
         XCTAssertEqual(staleDone.trigger, .workflowDone)
         viewModel.cancelPendingArchive()
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
 
         // The free-space path is the existing manual capture: a fresh
         // confirmation that rechecks every live gate at execution.
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let freshManual = try XCTUnwrap(try XCTUnwrap(viewModel.pendingArchiveConfirmation).authorization)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let freshManual = try XCTUnwrap(try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation).authorization)
         XCTAssertEqual(freshManual.trigger, .manual)
         XCTAssertEqual(freshManual.maximumDestructiveness, .mayRemoveActiveCopy)
         XCTAssertNotEqual(freshManual, staleDone)

@@ -118,7 +118,7 @@ exceptions with their reasons ([architecture.md § How a tool runs its work](arc
 
 1. A Done drop, the Done command or Archive Now calls `startBoundArchiveCapture`
    (`+ProjectVaultArchive.swift`). It captures a `ProjectVaultArchiveAuthorization` from the runtime
-   **before** `ProjectVaultDoneChoiceSheet` opens. "Keep a verified copy" downgrades that same token to
+   **before** `ProjectVaultDoneChoiceSheet` opens; `ArchiveVaultDialogsModel` lets only the current capture present. "Keep a verified copy" downgrades that same token to
    copy-only.
 2. `ProjectVaultOperationCoordinator.enqueue` runs one operation at a time, rejects duplicates and retries
    a failed Done at most 3 times, copy-only.
@@ -176,7 +176,8 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
 | Keep Local pins | `KeepLocalPins` over `VaultSettings.keepLocalProjectIDs` ([ADR 021](decisions/021-keep-local-pin-format.md)) | settings JSON in UserDefaults |
 | Vault queue, retries, capacity | `ProjectVaultOperationCoordinator` | memory; the journal is authoritative |
-| Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
+| Vault presentation, automatic recovery and the "Show archived" choice | `ArchiveVaultObservation` | derived; the choice in memory |
+| Archive Vault dialogs (archive/Done confirmation and its authorization capture, restore sheet and progress, identity review, stop transfer, stopped for quit) | `ArchiveVaultDialogsModel`, held as `ArchiveBrowserViewModel.vaultDialogs` | memory |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
 | Vault transfer state, restore phase | the tables `ProjectVaultStateMachine` and `VaultRestorePhase.allowedNextPhases`; written only by each engine's `checkAndSave` and the restore reconcile ([architecture.md § Vault state changes](architecture.md#vault-state-changes)) | `vault_transfers`, `vault_restores` in `archive-index.sqlite` |
 | Archive file access results (nearby open error, last dry-run path, last export paths) | `ArchiveFileAccessModel`, held as `ArchiveBrowserViewModel.fileAccess` | memory |
@@ -287,14 +288,13 @@ These rules are documented and, where named, enforced. The full table is in
    consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to
    the archive view model, and the recorder and the archive share one recording signal through `ToolContext`, since
    2026-10-24.)
-6. **`ArchiveBrowserViewModel` is one type in 15 files** (the main file plus 14 `+*.swift` extensions; the
-   footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog` on 2026-10-23).
-   Owners extracted so far: scan orchestrator, catalog, metadata editing, Vault queue and observation, and since
-   2026-10-25 the song analysis (`ArchiveSongAnalysisModel`), the intelligence hints (`ArchiveIntelligenceModel`),
-   the browse page (`ArchiveBrowseModel`), the page and selection (`ArchivePageModel`), the address book
-   (`ArchiveAddressBookModel`), file access (`ArchiveFileAccessModel`) and the library (`ArchiveLibraryModel`). The
-   Vault dialogs and the bound-authorization capture are still view-model state, and the root reset still sets one
-   of them (`showArchivedProjects`) by hand.
+6. Closed on 2026-10-25: `ArchiveBrowserViewModel` is the composition of state owners. Each owner holds one set of
+   state with its rules and its own tests: `ArchiveBrowseModel`, `ArchivePageModel`, `ArchiveLibraryModel`,
+   `ArchiveIntelligenceModel`, `ArchiveSongAnalysisModel`, `ArchiveAddressBookModel`, `ArchiveFileAccessModel`,
+   `ArchiveVaultDialogsModel`, beside the earlier `ArchiveScanOrchestrator`, `ArchiveCatalogCoordinator`,
+   `ArchiveMetadataEditingCoordinator`, `ProjectVaultOperationCoordinator` and `ArchiveVaultObservation`. The view
+   model keeps the song catalog writer, the footer, the root reset (one call per owner, in a documented order) and
+   the intents that cross owners, in 10 files (it was 22).
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
    2026-10-25. `DevToolFeature` always compiles and is shown

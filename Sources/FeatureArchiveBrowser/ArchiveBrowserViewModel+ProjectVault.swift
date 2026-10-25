@@ -48,13 +48,12 @@ extension ArchiveBrowserViewModel {
     /// snapshot list without another scan or round trip. Showing refreshes
     /// snapshots for liveness; hiding never scans.
     func setShowArchivedProjects(_ isShown: Bool) {
-        guard showArchivedProjects != isShown else {
+        guard vaultObservation.setShowsArchivedProjects(isShown) else {
             if isShown {
                 Task { await refreshProjectVaultSnapshots() }
             }
             return
         }
-        showArchivedProjects = isShown
         applyCatalogEdit(.reproject)
         if isShown {
             Task { await refreshProjectVaultSnapshots() }
@@ -193,7 +192,7 @@ extension ArchiveBrowserViewModel {
     /// deduplication, and 30-second backoff to the observation owner with
     /// narrow weak callbacks. The owner never retains this view model.
     func scheduleProjectVaultRecovery() async {
-        guard let projectVaultRuntime, !projectVaultStoppedForQuit else {
+        guard let projectVaultRuntime, !vaultDialogs.stoppedForQuit else {
             vaultObservation.cancelRecovery()
             return
         }
@@ -255,8 +254,86 @@ extension ArchiveBrowserViewModel {
     }
 
     private func isBlockedByUnresolvedIdentityReview(_ song: Song) -> Bool {
-        guard let presented = identityReviewPresentation,
+        guard let presented = vaultDialogs.identityReviewPresentation,
               let bound = presented.song else { return false }
         return bound.id == song.id
+    }
+}
+
+// MARK: - Card presentation (owned by ArchiveVaultObservation)
+
+extension ArchiveBrowserViewModel {
+    /// O(1) card lookup. Owned by `ArchiveVaultObservation`; no settings reads.
+    func projectVaultPresentation(for song: Song) -> ProjectVaultCardPresentation? {
+        vaultObservation.presentation(for: song)
+    }
+
+    /// Loads the narrow settings context at an explicit settings boundary, then
+    /// rebuilds the card map. The render path itself never calls `SettingsStore`.
+    /// Derivation lives in `ArchiveVaultObservation`; this is the explicit
+    /// boundary that loads settings once and forwards the snapshot.
+    func refreshProjectVaultPresentationContext(notifyWhenChanged: Bool = true) {
+        // nil keeps the last health and hides cards; appSettings would lag this model's own saves.
+        let settings = try? settingsStore.loadSettings()
+        vaultObservation.refreshContext(settings: settings, songs: songs, notifyWhenChanged: notifyWhenChanged)
+    }
+
+    /// Rebuilds immutable card data at a catalog or snapshot boundary. This is
+    /// intentionally internal: `songs` is owned in the primary view-model file
+    /// and calls this before it publishes a replacement catalog. Delegates to
+    /// the observation owner, which never reads settings here.
+    @discardableResult
+    func rebuildProjectVaultPresentationCache(
+        for songs: [Song]? = nil,
+        notifyWhenChanged: Bool = true
+    ) -> Bool {
+        vaultObservation.rebuildCards(for: songs ?? self.songs, notifyWhenChanged: notifyWhenChanged)
+    }
+}
+
+// MARK: - Snapshot lookups (owned by ArchiveVaultObservation)
+
+extension ArchiveBrowserViewModel {
+    /// O(1) snapshot lookup. Owned by `ArchiveVaultObservation`.
+    func projectVaultSnapshot(for song: Song) -> ProjectVaultRuntimeSnapshot? {
+        vaultObservation.snapshot(for: song)
+    }
+
+    /// Caches one live snapshot through the observation owner. Index-only;
+    /// callers rebuild cards explicitly to stay coalesced.
+    func cacheProjectVaultSnapshot(_ snapshot: ProjectVaultRuntimeSnapshot) {
+        vaultObservation.cache(snapshot)
+    }
+
+    /// Linked-archive validation. Owned by the observation; thin delegate here
+    /// preserves existing callers with no duplicate logic.
+    func linkedArchive(for snapshot: ProjectVaultRuntimeSnapshot) -> ProjectVaultLinkedArchive? {
+        vaultObservation.linkedArchive(for: snapshot)
+    }
+
+    /// Canonical path for Vault lookups. Owned by the observation; thin
+    /// delegate here preserves existing callers (`+ProjectVaultActions`,
+    /// `+ProjectVaultIdentityReview`).
+    static func vaultCanonicalPath(_ url: URL) -> String {
+        ArchiveVaultObservation.vaultCanonicalPath(url)
+    }
+}
+
+// MARK: - Catalog projection
+
+extension ArchiveBrowserViewModel {
+    /// Projects a baseline with the current "Show archived" toggle, collaborators
+    /// and the catalog metadata store; `applyCatalogEdit(_:)` calls it for every
+    /// edit. The archive-only projection itself is owned by
+    /// `ArchiveVaultObservation`: it can read persisted metadata and inspect
+    /// archive paths, but never starts a scan or reloads settings. A metadata-load
+    /// failure is reported through `recordPersistenceWarning`.
+    func projectVaultCatalog(from baselineSongs: [Song]) -> (scannedSongs: [Song], visibleSongs: [Song]) {
+        vaultObservation.projectCatalog(
+            from: baselineSongs,
+            collaborators: collaborators,
+            metadataStore: catalog.songMetadataStore,
+            onMetadataWarning: { [weak self] message in self?.recordPersistenceWarning(message) }
+        )
     }
 }

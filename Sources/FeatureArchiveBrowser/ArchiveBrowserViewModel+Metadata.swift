@@ -125,10 +125,8 @@ extension ArchiveBrowserViewModel {
     /// model: Done authorization capture and revoke belong to VM/Vault; the
     /// metadata owner requests this through its `revokeDoneWork` callback.
     func revokeBoundDoneWork(for songID: String) {
-        cancelBoundArchiveCapture(for: songID)
-        if pendingArchiveConfirmation?.songID == songID {
-            pendingArchiveConfirmation = nil
-        }
+        vaultDialogs.cancelCapture(for: songID)
+        vaultDialogs.dismissConfirmation(for: songID)
         vaultOperations.revokeDoneWork(songID: songID)
     }
 

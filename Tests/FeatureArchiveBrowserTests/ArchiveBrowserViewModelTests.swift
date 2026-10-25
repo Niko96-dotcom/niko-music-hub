@@ -1730,10 +1730,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.applyCatalogEdit(.load([song]))
 
         viewModel.updateWorkflowStatus(for: song, status: .done)
-        for _ in 0..<100 where viewModel.pendingArchiveConfirmation == nil {
+        for _ in 0..<100 where viewModel.vaultDialogs.pendingArchiveConfirmation == nil {
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertNotNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNotNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         viewModel.confirmPendingArchive()
 
         var archivedSong: Song?
@@ -2840,7 +2840,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         // The dedicated Restore & Open action is the sole mutating authority.
         viewModel.performProjectVaultPrimaryAction(for: archivedSong)
-        for _ in 0..<100 where viewModel.projectVaultRestoreOptionsLoading || viewModel.projectVaultBusySongIDs.contains(archivedSong.id) {
+        for _ in 0..<100 where viewModel.vaultDialogs.restoreOptionsLoading || viewModel.projectVaultBusySongIDs.contains(archivedSong.id) {
             try await Task.sleep(for: .milliseconds(10))
         }
         let restoreCalls = await runtime.restoreCallCount()
@@ -4390,8 +4390,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             viewModel.projectVaultBusySongIDs.isEmpty && !center.hasUnfinishedQuitBlockingWork
         }
         XCTAssertFalse(ran.secondRan, "a waiting request must be cancelled, not run, on quit")
-        XCTAssertFalse(viewModel.pendingStopTransferConfirmation, "quit must not open the stop sheet")
-        XCTAssertTrue(viewModel.projectVaultStoppedForQuit, "the drained queue must not schedule recovery during quit")
+        XCTAssertFalse(viewModel.vaultDialogs.pendingStopTransferConfirmation, "quit must not open the stop sheet")
+        XCTAssertTrue(viewModel.vaultDialogs.stoppedForQuit, "the drained queue must not schedule recovery during quit")
         XCTAssertTrue(center.quitBlockingWork.isEmpty)
     }
 

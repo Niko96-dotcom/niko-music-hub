@@ -121,7 +121,7 @@ struct SongDetailView: View {
         // Archive Now, Cancel transfer and the other Vault actions in "Manage
         // storage" ask for confirmation in a dialog the board presents. A sheet
         // cannot open over this one, so close it as soon as a dialog waits.
-        .onChange(of: viewModel.hasPendingProjectVaultDialog) { _, pending in
+        .onChange(of: viewModel.vaultDialogs.hasPendingDialog) { _, pending in
             if pending { storageExpanded = false }
         }
         .onChange(of: viewModel.page.songDetailsExpanded) { _, expanded in
@@ -427,7 +427,7 @@ struct SongDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let message = viewModel.projectVaultQueueMessage(for: liveSong) {
                     if viewModel.projectVaultActiveOperation?.songID == liveSong.id {
-                        if let progress = viewModel.projectVaultRestoreProgress,
+                        if let progress = viewModel.vaultDialogs.projectVaultRestoreProgress,
                            let value = progress.fraction {
                             ProgressView(value: value).controlSize(.small)
                             Text(progress.title)
@@ -439,7 +439,7 @@ struct SongDetailView: View {
                             Text("\(Int((value * 100).rounded()))% copied")
                                 .font(HubDesignSystem.Typography.caption())
                                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                        } else if let progress = viewModel.projectVaultRestoreProgress {
+                        } else if let progress = viewModel.vaultDialogs.projectVaultRestoreProgress {
                             ProgressView(progress.title).controlSize(.small)
                             if let scope = progress.scopeDescription {
                                 Text(scope).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)

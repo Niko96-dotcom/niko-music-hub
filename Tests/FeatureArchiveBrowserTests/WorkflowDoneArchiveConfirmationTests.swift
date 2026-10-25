@@ -15,12 +15,12 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         XCTAssertNotEqual(song.workflowStatus, .done)
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.trigger, .workflowDone)
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.songID, song.id)
-        XCTAssertTrue(viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy == true)
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.trigger, .workflowDone)
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.songID, song.id)
+        XCTAssertTrue(viewModel.vaultDialogs.pendingArchiveConfirmation?.willRemoveActiveCopy == true)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         let bound = try XCTUnwrap(pending.authorization)
         XCTAssertEqual(bound.songID, song.id)
         XCTAssertEqual(bound.trigger, .workflowDone)
@@ -37,7 +37,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let enqueued = [viewModel.projectVaultActiveOperation].compactMap { $0 }
             + viewModel.projectVaultPendingOperations
         XCTAssertEqual(enqueued.map(\.trigger), [.workflowDone])
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
 
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
     }
@@ -50,11 +50,11 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        XCTAssertNotNil(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        XCTAssertNotNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         viewModel.cancelPendingArchive()
 
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertNil(viewModel.songs.first { $0.id == song.id }?.workflowStatus)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
@@ -70,10 +70,10 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.applyWorkflowStatus(.done, for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.trigger, .workflowDone)
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.songID, song.id)
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.trigger, .workflowDone)
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.songID, song.id)
         XCTAssertNil(viewModel.songs.first { $0.id == song.id }?.workflowStatus)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
@@ -91,9 +91,9 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy, false)
-        let privateBetaPending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.willRemoveActiveCopy, false)
+        let privateBetaPending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(try XCTUnwrap(privateBetaPending.authorization).maximumDestructiveness, .copyOnly)
         viewModel.confirmPendingArchive()
 
@@ -114,9 +114,9 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.trigger, .workflowDone)
         XCTAssertEqual(pending.willRemoveActiveCopy, true)
         let bound = try XCTUnwrap(pending.authorization)
@@ -142,7 +142,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let undoManager = UndoManager()
         viewModel.bindInjectedUndoManager(undoManager)
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
 
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
@@ -207,7 +207,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         }
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
 
@@ -230,8 +230,8 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
 
         viewModel.setProjectKeepLocal(true, for: song)
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let keepLocalPending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let keepLocalPending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(keepLocalPending.willRemoveActiveCopy, false)
         XCTAssertEqual(try XCTUnwrap(keepLocalPending.authorization).maximumDestructiveness, .copyOnly)
         viewModel.cancelPendingArchive()
@@ -240,8 +240,8 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
 
         try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let pausedPending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let pausedPending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pausedPending.willRemoveActiveCopy, false)
         XCTAssertEqual(try XCTUnwrap(pausedPending.authorization).maximumDestructiveness, .copyOnly)
         viewModel.cancelPendingArchive()
@@ -257,14 +257,14 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.willRemoveActiveCopy, true)
         let captured = try XCTUnwrap(pending.authorization)
         XCTAssertEqual(captured.maximumDestructiveness, .mayRemoveActiveCopy)
 
         viewModel.confirmWorkflowDoneFreeSpace()
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(viewModel.songs.first(where: { $0.id == song.id })?.workflowStatus, .done)
         try await waitUntil(timeout: .seconds(5)) { runtime.authCalls.count >= 1 }
         XCTAssertEqual(runtime.authCalls.count, 1)
@@ -284,11 +284,11 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy, false)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.willRemoveActiveCopy, false)
 
         viewModel.confirmWorkflowDoneFreeSpace()
-        XCTAssertNotNil(viewModel.pendingArchiveConfirmation, "copy-only token must not authorize free-space removal")
+        XCTAssertNotNil(viewModel.vaultDialogs.pendingArchiveConfirmation, "copy-only token must not authorize free-space removal")
         XCTAssertNil(viewModel.songs.first(where: { $0.id == song.id })?.workflowStatus)
         XCTAssertTrue(runtime.authCalls.isEmpty)
         XCTAssertTrue(runtime.copyCalls.isEmpty)
@@ -304,12 +304,12 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let captured = try XCTUnwrap(try XCTUnwrap(viewModel.pendingArchiveConfirmation).authorization)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let captured = try XCTUnwrap(try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation).authorization)
         XCTAssertEqual(captured.maximumDestructiveness, .mayRemoveActiveCopy)
 
         viewModel.confirmWorkflowDoneKeepCopy()
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(viewModel.songs.first(where: { $0.id == song.id })?.workflowStatus, .done)
         try await waitUntil(timeout: .seconds(5)) { runtime.authCalls.count >= 1 }
         XCTAssertEqual(runtime.authCalls.count, 1)
@@ -333,10 +333,10 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
         viewModel.confirmWorkflowDoneKeepLocal()
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(viewModel.songs.first(where: { $0.id == song.id })?.workflowStatus, .done)
         // No transfer queued for Keep on this Mac.
         for _ in 0..<20 { await Task.yield() }

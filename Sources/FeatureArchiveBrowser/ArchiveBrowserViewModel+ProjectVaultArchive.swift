@@ -55,43 +55,6 @@ extension ArchiveBrowserViewModel {
         startBoundArchiveCapture(for: song, trigger: .workflowDone)
     }
 
-    /// Cancels an in-flight bound capture for one song (or every capture when
-    /// `songID` is nil). Per-song ownership: cancelling one song never drops a
-    /// different song's dialog or capture. Bumping the generation guarantees a
-    /// superseded capture can never present a stale late modal after its awaits.
-    func cancelBoundArchiveCapture(for songID: String? = nil) {
-        if let songID {
-            if let pendingSong = pendingArchiveConfirmation?.songID,
-               pendingSong != songID,
-               boundArchiveCaptureSongID != songID {
-                return
-            }
-            if let capturing = boundArchiveCaptureSongID, capturing != songID {
-                return
-            }
-            let ownsDialog = pendingArchiveConfirmation?.songID == songID
-            let ownsCapture = boundArchiveCaptureSongID == songID
-            if !ownsDialog && !ownsCapture {
-                return
-            }
-            projectVaultAuthCaptureGeneration &+= 1
-            projectVaultAuthCaptureTask?.cancel()
-            projectVaultAuthCaptureTask = nil
-            if boundArchiveCaptureSongID == songID {
-                boundArchiveCaptureSongID = nil
-            }
-            if pendingArchiveConfirmation?.songID == songID {
-                pendingArchiveConfirmation = nil
-            }
-            return
-        }
-        projectVaultAuthCaptureGeneration &+= 1
-        projectVaultAuthCaptureTask?.cancel()
-        projectVaultAuthCaptureTask = nil
-        boundArchiveCaptureSongID = nil
-        pendingArchiveConfirmation = nil
-    }
-
     /// Asynchronously captures the bound authorization before presenting the
     /// dialog. Manual intent requests removal; Done intent requests the
     /// current settings ceiling. A removal request that is already gated falls
@@ -100,176 +63,155 @@ extension ArchiveBrowserViewModel {
     /// queued destruction. A missing current song never falls back to a wrong
     /// source: the capture aborts and the runtime rechecks the binding.
     private func startBoundArchiveCapture(for song: Song, trigger: ProjectVaultArchiveTrigger) {
-        projectVaultAuthCaptureGeneration &+= 1
-        let generation = projectVaultAuthCaptureGeneration
-        projectVaultAuthCaptureTask?.cancel()
-        // A replacement supersedes any presented dialog for the previous
-        // capture; the new capture re-presents only when it is still current.
-        pendingArchiveConfirmation = nil
         let songID = song.id
-        boundArchiveCaptureSongID = songID
-        projectVaultAuthCaptureTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            if let probe = self.projectVaultAuthCaptureProbe {
-                await probe()
+        vaultDialogs.beginCapture(songID: songID) { generation in
+            Task { @MainActor [weak self] in
+                await self?.captureArchiveAuthorization(songID: songID, trigger: trigger, generation: generation)
             }
-            guard !Task.isCancelled, self.projectVaultAuthCaptureGeneration == generation else { return }
-            guard let runtime = self.projectVaultRuntime else {
-                if self.projectVaultAuthCaptureGeneration == generation,
-                   self.boundArchiveCaptureSongID == songID {
-                    self.boundArchiveCaptureSongID = nil
-                }
-                return
-            }
-            guard let current = self.songs.first(where: { $0.id == songID }) else {
-                if self.projectVaultAuthCaptureGeneration == generation,
-                   self.boundArchiveCaptureSongID == songID {
-                    self.boundArchiveCaptureSongID = nil
-                }
-                return
-            }
-            let catalogID = self.projectVaultSnapshot(for: current)?.record.id
-            // Settings decide whether removal is requested; unreadable settings
-            // refuse the capture instead of reading as "no review pending".
-            let settings: AppSettings
+        }
+    }
+
+    /// The body of one capture. Every await is followed by a check that the
+    /// capture is still current (`isCurrentCapture`) and not cancelled, so a
+    /// superseded capture presents nothing.
+    private func captureArchiveAuthorization(
+        songID: String,
+        trigger: ProjectVaultArchiveTrigger,
+        generation: UInt64
+    ) async {
+        if let probe = vaultDialogs.captureProbe {
+            await probe()
+        }
+        guard !Task.isCancelled, vaultDialogs.isCurrentCapture(generation) else { return }
+        guard let runtime = projectVaultRuntime else {
+            vaultDialogs.endCurrentCapture(songID: songID, generation: generation)
+            return
+        }
+        guard let current = songs.first(where: { $0.id == songID }) else {
+            vaultDialogs.endCurrentCapture(songID: songID, generation: generation)
+            return
+        }
+        let catalogID = projectVaultSnapshot(for: current)?.record.id
+        // Settings decide whether removal is requested; unreadable settings
+        // refuse the capture instead of reading as "no review pending".
+        let settings: AppSettings
+        do {
+            settings = try library.loadSettingsForWrite()
+        } catch {
+            vaultDialogs.endCapture(songID: songID)
+            setProjectVaultStatusMessage(error.localizedDescription)
+            return
+        }
+        // A pending Keep Local review never presents the removal prompt:
+        // Archive Now points at the review and captures copy-only, so an
+        // explicit Archive Copy may still proceed. Done derives its
+        // ceiling from `permitsUserInitiatedRemoval`, which is already
+        // false while review is pending.
+        let keepLocalReviewRequired = settings.vault.keepLocalReviewRequired
+        if trigger == .manual, keepLocalReviewRequired {
+            setProjectVaultStatusMessage(
+                ProjectVaultConfirmationCopy.keepLocalReviewRequiredArchiveNowMessage
+            )
+        }
+        let requestedRemoving: Bool
+        switch trigger {
+        case .manual:
+            requestedRemoving = !keepLocalReviewRequired
+        case .workflowDone:
+            // User-initiated Done honors the explicit free-space intent
+            // plus the backup acknowledgement (and master enablement,
+            // pause, Keep Local, and activity gates at capture/execution).
+            requestedRemoving = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault)
+        case .backupCopy:
+            requestedRemoving = false
+        @unknown default:
+            requestedRemoving = false
+        }
+        let authorization: ProjectVaultArchiveAuthorization
+        if requestedRemoving {
             do {
-                settings = try self.library.loadSettingsForWrite()
-            } catch {
-                if self.boundArchiveCaptureSongID == songID {
-                    self.boundArchiveCaptureSongID = nil
-                }
-                self.setProjectVaultStatusMessage(error.localizedDescription)
-                return
-            }
-            // A pending Keep Local review never presents the removal prompt:
-            // Archive Now points at the review and captures copy-only, so an
-            // explicit Archive Copy may still proceed. Done derives its
-            // ceiling from `permitsUserInitiatedRemoval`, which is already
-            // false while review is pending.
-            let keepLocalReviewRequired = settings.vault.keepLocalReviewRequired
-            if trigger == .manual, keepLocalReviewRequired {
-                self.setProjectVaultStatusMessage(
-                    ProjectVaultConfirmationCopy.keepLocalReviewRequiredArchiveNowMessage
+                authorization = try await runtime.captureArchiveAuthorization(
+                    for: current,
+                    trigger: trigger,
+                    removingActiveCopy: true,
+                    catalogProjectID: catalogID
                 )
-            }
-            let requestedRemoving: Bool
-            switch trigger {
-            case .manual:
-                requestedRemoving = !keepLocalReviewRequired
-            case .workflowDone:
-                // User-initiated Done honors the explicit free-space intent
-                // plus the backup acknowledgement (and master enablement,
-                // pause, Keep Local, and activity gates at capture/execution).
-                requestedRemoving = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault)
-            case .backupCopy:
-                requestedRemoving = false
-            @unknown default:
-                requestedRemoving = false
-            }
-            let authorization: ProjectVaultArchiveAuthorization
-            // The dialog song for the token. Refreshed after each await so a
-            // song change never falls back to a stale source.
-            var liveSong = current
-            if requestedRemoving {
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled, vaultDialogs.isCurrentCapture(generation) else { return }
+                guard let retryCurrent = songs.first(where: { $0.id == songID }) else { return }
+                let retryCatalog = projectVaultSnapshot(for: retryCurrent)?.record.id
                 do {
                     authorization = try await runtime.captureArchiveAuthorization(
-                        for: liveSong,
-                        trigger: trigger,
-                        removingActiveCopy: true,
-                        catalogProjectID: catalogID
-                    )
-                } catch is CancellationError {
-                    return
-                } catch {
-                    guard !Task.isCancelled, self.projectVaultAuthCaptureGeneration == generation else { return }
-                    guard let retryCurrent = self.songs.first(where: { $0.id == songID }) else { return }
-                    let retryCatalog = self.projectVaultSnapshot(for: retryCurrent)?.record.id
-                    do {
-                        authorization = try await runtime.captureArchiveAuthorization(
-                            for: retryCurrent,
-                            trigger: trigger,
-                            removingActiveCopy: false,
-                            catalogProjectID: retryCatalog
-                        )
-                        liveSong = retryCurrent
-                    } catch is CancellationError {
-                        return
-                    } catch let copyError {
-                        guard !Task.isCancelled, self.projectVaultAuthCaptureGeneration == generation else { return }
-                        if self.boundArchiveCaptureSongID == songID {
-                            self.boundArchiveCaptureSongID = nil
-                        }
-                        self.setProjectVaultStatusMessage("\(copyError.localizedDescription)")
-                        self.diagnostics.log(.warning, "Archive authorization capture failed: \(copyError)")
-                        return
-                    }
-                }
-            } else {
-                do {
-                    authorization = try await runtime.captureArchiveAuthorization(
-                        for: liveSong,
+                        for: retryCurrent,
                         trigger: trigger,
                         removingActiveCopy: false,
-                        catalogProjectID: catalogID
+                        catalogProjectID: retryCatalog
                     )
                 } catch is CancellationError {
                     return
-                } catch {
-                    guard !Task.isCancelled, self.projectVaultAuthCaptureGeneration == generation else { return }
-                    if self.boundArchiveCaptureSongID == songID {
-                        self.boundArchiveCaptureSongID = nil
-                    }
-                    self.setProjectVaultStatusMessage("\(error.localizedDescription)")
-                    self.diagnostics.log(.warning, "Archive authorization capture failed: \(error)")
+                } catch let copyError {
+                    guard !Task.isCancelled, vaultDialogs.isCurrentCapture(generation) else { return }
+                    vaultDialogs.endCapture(songID: songID)
+                    setProjectVaultStatusMessage("\(copyError.localizedDescription)")
+                    diagnostics.log(.warning, "Archive authorization capture failed: \(copyError)")
                     return
                 }
             }
-            guard !Task.isCancelled, self.projectVaultAuthCaptureGeneration == generation else { return }
-            guard let live = self.songs.first(where: { $0.id == songID }),
-                  live.id == authorization.songID,
-                  authorization.trigger == trigger else {
-                if self.projectVaultAuthCaptureGeneration == generation,
-                   self.boundArchiveCaptureSongID == songID {
-                    self.boundArchiveCaptureSongID = nil
-                }
-                return
-            }
-            // The dialog must agree the captured token; a copy-only token can
-            // never escalate, however permissive live settings become.
-            let willRemove = authorization.permitsRemoval
-            let liveSettings: AppSettings
+        } else {
             do {
-                liveSettings = try self.library.loadSettingsForWrite()
+                authorization = try await runtime.captureArchiveAuthorization(
+                    for: current,
+                    trigger: trigger,
+                    removingActiveCopy: false,
+                    catalogProjectID: catalogID
+                )
+            } catch is CancellationError {
+                return
             } catch {
-                if self.boundArchiveCaptureSongID == songID {
-                    self.boundArchiveCaptureSongID = nil
-                }
-                self.setProjectVaultStatusMessage(error.localizedDescription)
+                guard !Task.isCancelled, vaultDialogs.isCurrentCapture(generation) else { return }
+                vaultDialogs.endCapture(songID: songID)
+                setProjectVaultStatusMessage("\(error.localizedDescription)")
+                diagnostics.log(.warning, "Archive authorization capture failed: \(error)")
                 return
             }
-            let backupConfirmed = liveSettings.vault.independentBackupConfirmed
-            // Bind the dialog title to the live song; the authorization itself
-            // carries no title and the runtime revalidates the bound source.
-            _ = liveSong
-            if self.projectVaultAuthCaptureGeneration != generation {
-                return
-            }
-            if self.boundArchiveCaptureSongID == songID {
-                self.boundArchiveCaptureSongID = nil
-            }
-            self.pendingArchiveConfirmation = ProjectVaultArchiveConfirmation(
+        }
+        guard !Task.isCancelled, vaultDialogs.isCurrentCapture(generation) else { return }
+        guard let live = songs.first(where: { $0.id == songID }),
+              live.id == authorization.songID,
+              authorization.trigger == trigger else {
+            vaultDialogs.endCurrentCapture(songID: songID, generation: generation)
+            return
+        }
+        // The dialog must agree the captured token; a copy-only token can
+        // never escalate, however permissive live settings become.
+        let willRemove = authorization.permitsRemoval
+        let liveSettings: AppSettings
+        do {
+            liveSettings = try library.loadSettingsForWrite()
+        } catch {
+            vaultDialogs.endCapture(songID: songID)
+            setProjectVaultStatusMessage(error.localizedDescription)
+            return
+        }
+        // Bind the dialog title to the live song; the authorization itself
+        // carries no title and the runtime revalidates the bound source.
+        vaultDialogs.presentConfirmation(
+            ProjectVaultArchiveConfirmation(
                 songID: live.id,
                 songTitle: live.effectiveDisplayTitle,
                 trigger: trigger,
                 willRemoveActiveCopy: willRemove,
-                independentBackupConfirmed: backupConfirmed,
+                independentBackupConfirmed: liveSettings.vault.independentBackupConfirmed,
                 authorization: authorization
-            )
-        }
+            ),
+            generation: generation
+        )
     }
 
     func confirmPendingArchive() {
-        guard let pending = pendingArchiveConfirmation,
+        guard let pending = vaultDialogs.pendingArchiveConfirmation,
               let song = songs.first(where: { $0.id == pending.songID }) else { return }
         // Fail closed on a dialog/token disagreement: a copy-only token can
         // never authorize removal, and a mismatched song/trigger queues nothing.
@@ -280,9 +222,7 @@ extension ArchiveBrowserViewModel {
         } else if pending.willRemoveActiveCopy {
             return
         }
-        pendingArchiveConfirmation = nil
-        projectVaultAuthCaptureTask = nil
-        boundArchiveCaptureSongID = nil
+        vaultDialogs.closeConfirmation()
         // An explicit user confirmation restarts the bounded Done-retry budget and
         // supersedes any timer-driven retry that is still waiting for this song.
         vaultOperations.cancelPendingRetry(for: song.id)
@@ -321,11 +261,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func cancelPendingArchive() {
-        projectVaultAuthCaptureGeneration &+= 1
-        projectVaultAuthCaptureTask?.cancel()
-        projectVaultAuthCaptureTask = nil
-        boundArchiveCaptureSongID = nil
-        pendingArchiveConfirmation = nil
+        vaultDialogs.cancelCapture()
     }
 
     /// Done choice: Archive and free up space. Offered only when the bound
@@ -333,7 +269,7 @@ extension ArchiveBrowserViewModel {
     /// removal token. Validates pending song/trigger/token and clears
     /// pending/retry state; registers a meaningful Undo.
     func confirmWorkflowDoneFreeSpace() {
-        guard let pending = pendingArchiveConfirmation,
+        guard let pending = vaultDialogs.pendingArchiveConfirmation,
               pending.trigger == .workflowDone,
               let song = songs.first(where: { $0.id == pending.songID }),
               let authorization = pending.authorization,
@@ -341,9 +277,7 @@ extension ArchiveBrowserViewModel {
               authorization.trigger == .workflowDone,
               pending.willRemoveActiveCopy == authorization.permitsRemoval,
               authorization.permitsRemoval else { return }
-        pendingArchiveConfirmation = nil
-        projectVaultAuthCaptureTask = nil
-        boundArchiveCaptureSongID = nil
+        vaultDialogs.closeConfirmation()
         vaultOperations.cancelPendingRetry(for: song.id)
         guard commitWorkflowDoneForConfirmation(song) else { return }
         let updated = songs.first(where: { $0.id == song.id }) ?? song
@@ -355,7 +289,7 @@ extension ArchiveBrowserViewModel {
     /// Validates pending song/trigger/token and clears pending/retry state;
     /// registers a meaningful Undo.
     func confirmWorkflowDoneKeepCopy() {
-        guard let pending = pendingArchiveConfirmation,
+        guard let pending = vaultDialogs.pendingArchiveConfirmation,
               pending.trigger == .workflowDone,
               let song = songs.first(where: { $0.id == pending.songID }) else { return }
         if let authorization = pending.authorization {
@@ -363,9 +297,7 @@ extension ArchiveBrowserViewModel {
                   authorization.trigger == pending.trigger,
                   pending.willRemoveActiveCopy == authorization.permitsRemoval else { return }
             let copyAuthorization = authorization.downgradedToCopyOnly()
-            pendingArchiveConfirmation = nil
-            projectVaultAuthCaptureTask = nil
-            boundArchiveCaptureSongID = nil
+            vaultDialogs.closeConfirmation()
             vaultOperations.cancelPendingRetry(for: song.id)
             guard commitWorkflowDoneForConfirmation(song) else { return }
             let updated = songs.first(where: { $0.id == song.id }) ?? song
@@ -376,9 +308,7 @@ extension ArchiveBrowserViewModel {
         // verified copy without removal. A removal request without a token
         // never proceeds.
         guard !pending.willRemoveActiveCopy else { return }
-        pendingArchiveConfirmation = nil
-        projectVaultAuthCaptureTask = nil
-        boundArchiveCaptureSongID = nil
+        vaultDialogs.closeConfirmation()
         vaultOperations.cancelPendingRetry(for: song.id)
         guard commitWorkflowDoneForConfirmation(song) else { return }
         let updated = songs.first(where: { $0.id == song.id }) ?? song
@@ -390,7 +320,7 @@ extension ArchiveBrowserViewModel {
     /// pending/retry state; registers a meaningful Undo. A Keep Local setting
     /// failure never silently triggers an archive.
     func confirmWorkflowDoneKeepLocal() {
-        guard let pending = pendingArchiveConfirmation,
+        guard let pending = vaultDialogs.pendingArchiveConfirmation,
               pending.trigger == .workflowDone,
               let song = songs.first(where: { $0.id == pending.songID }) else { return }
         if let authorization = pending.authorization {
@@ -400,9 +330,7 @@ extension ArchiveBrowserViewModel {
         } else if pending.willRemoveActiveCopy {
             return
         }
-        pendingArchiveConfirmation = nil
-        projectVaultAuthCaptureTask = nil
-        boundArchiveCaptureSongID = nil
+        vaultDialogs.closeConfirmation()
         vaultOperations.cancelPendingRetry(for: song.id)
         guard commitWorkflowDoneForConfirmation(song) else { return }
         do {

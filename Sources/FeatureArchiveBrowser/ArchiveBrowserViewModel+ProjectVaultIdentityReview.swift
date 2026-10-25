@@ -9,15 +9,15 @@ extension ArchiveBrowserViewModel {
     /// `trigger` stays nil here; only a current initiating song (see
     /// `beginIdentityReview`) may earn a fresh confirmation after stable re-resolution.
     func presentPendingIdentityReviewsIfNeeded() {
-        guard identityReviewPresentation == nil else { return }
+        guard vaultDialogs.identityReviewPresentation == nil else { return }
         identityReviewViewModel.reloadFromStore()
         guard let review = identityReviewViewModel.pendingReviews.first else { return }
-        identityReviewPresentation = ProjectIdentityReviewPresentation(
+        vaultDialogs.presentIdentityReview(ProjectIdentityReviewPresentation(
             review: review,
             title: titleForIdentityReview(review),
             song: stableSongForIdentityReview(review),
             trigger: nil
-        )
+        ))
     }
 
     func beginIdentityReview(
@@ -37,12 +37,12 @@ extension ArchiveBrowserViewModel {
             )
         }
         identityReviewViewModel.adopt(review)
-        identityReviewPresentation = ProjectIdentityReviewPresentation(
+        vaultDialogs.presentIdentityReview(ProjectIdentityReviewPresentation(
             review: review,
             title: title,
             song: song,
             trigger: trigger
-        )
+        ))
     }
 
     /// Safety invariant: identity resolution itself NEVER initiates archival.
@@ -51,9 +51,9 @@ extension ArchiveBrowserViewModel {
     /// a fresh explicit confirmation. Persistence failure keeps the sheet visible
     /// and retryable; anything else that fails to resolve queues/confirms nothing.
     func resolvePresentedIdentityReview(as resolution: ProjectIdentityReviewResolution) {
-        guard let presentation = identityReviewPresentation else { return }
+        guard let presentation = vaultDialogs.identityReviewPresentation else { return }
         guard identityReviewViewModel.resolve(presentation.review.id, as: resolution) else { return }
-        identityReviewPresentation = nil
+        vaultDialogs.closeIdentityReview()
         let stableInitiating: Song?
         do {
             stableInitiating = try stableInitiatingSong(of: presentation)
@@ -93,7 +93,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func cancelPresentedIdentityReview() {
-        identityReviewPresentation = nil
+        vaultDialogs.closeIdentityReview()
     }
 
     /// Stable title by catalog ProjectID only. Never falls back to a
