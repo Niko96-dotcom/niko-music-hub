@@ -1,6 +1,6 @@
 # Architecture map — Niko Music Hub
 
-Last verified: 2026-10-22 at `3ace650` (source read; `./script/ci.sh` green, see [Check baseline](#check-baseline-2026-10-22))
+Last verified: 2026-10-22 at `3ace650` (source read). Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
 
 Start here. This page names the entry points, modules, main flows, state owners, seams and gates, and
 links to the documents that hold the detail. It does not repeat them.
@@ -317,16 +317,17 @@ Documents that disagree with the code: none known. (Closed on 2026-10-25:
     historical archive folder of a restored project still reads Active while the Vault holds it; unit-tested, not
     reached in a running app.
 
-## Check baseline (2026-10-22)
+## Check baseline (2026-10-25)
 
-`./script/ci.sh` at `3ace650`, run from Terminal.app: **exit 0, no failures.**
+`./script/ci.sh` at `8332bdb` (the 1.9.0 release preparation), run from Terminal.app: **exit 0, no failures.**
 
-- XCTest: 2,800 tests run, 8 skipped (opt-in live and hardware tests), 0 failures. Swift Testing: 93 tests
-  in 9 suites passed. Recorder gate, UI-probe self-test, core self-test, CLI export and refusal smokes,
+- XCTest: 2,978 tests run, 8 skipped (opt-in live and hardware tests), 0 failures. Swift Testing: 89 tests
+  in 8 suites passed. Recorder gate, UI-probe self-test, core self-test, CLI export and refusal smokes,
   and the release and source-distribution script tests passed.
+- `NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh` passed on the same files; production preferences unchanged.
 - `ci.sh` skips the host-only CoreAudio capture tests by design.
-- Not run: `./script/e2e_user_smoke.sh` (drives the UI and needs Accessibility; this change is
-  documentation only).
+- The first `ci.sh` run on these files stopped at the clean build: SwiftPM printed a package-cache warning
+  (`'sparkle': skipping cache due to an error`), and `ci.sh` fails on any printed warning. The rerun was clean.
 - In an agent shell at utility QoS, four recorder probe tests can fail on unchanged code; run `ci.sh`
   from Terminal.app for a trustworthy result.
 
