@@ -1,98 +1,65 @@
 import XCTest
 
+/// Tool pages build on the shared surfaces (`hubCard`, `ToolHeaderBlock`, `HubJobProgressRow`, the
+/// shared handoff) and define no glass formula of their own.
+/// AGENTS.md row "Design contract"; docs/design-contract.md §4 and §6.
 final class ToolLiquidSurfaceSourceTests: XCTestCase {
-    func testBPMTapperUsesSharedLiquidSurfaces() throws {
-        let source = try featureSource("FeatureBPMTapper/BPMTapperView.swift")
+    static let rule = RepoRule(
+        name: "Shared tool surfaces",
+        why: "Local copies of a surface or a glass formula drift from the design contract one tool at a time",
+        see: "AGENTS.md row \"Design contract\"; docs/design-contract.md §4 and §6",
+        fix: "Use the shared component (hubCard, ToolHeaderBlock, HubWaveformSurface, HubJobProgressRow) instead of a local formula"
+    )
 
-        [
-            "hubCard",
-            "ToolHeaderBlock",
-            "tapSurfaceFocused",
-            "viewModel.recordTap()",
-            "viewModel.resetTaps()",
-            "viewModel.clearHistory()",
-        ].forEach { required in
-            XCTAssertTrue(source.contains(required), "Missing BPM Liquid source: \(required)")
-        }
+    private static let localGlassFormulas = [
+        ".thinMaterial",
+        "meterGradient",
+        "Color.primary.opacity(0.02)",
+        "Color.primary.opacity(0.03)",
+        "Color.primary.opacity(0.04)",
+        ".fill(isSelected ? HubDesignSystem.Colors.accentTint",
+    ]
 
-        assertNoLocalGlassFormulas(in: source, feature: "BPM Tapper")
+    func testBPMTapperUsesSharedLiquidSurfaces() {
+        Self.rule.expect(
+            "Sources/FeatureBPMTapper/BPMTapperView.swift",
+            contains: ["hubCard", "ToolHeaderBlock", "tapSurfaceFocused", "viewModel.recordTap()", "viewModel.resetTaps()", "viewModel.clearHistory()"],
+            lacks: Self.localGlassFormulas
+        )
     }
 
-    func testRecorderUsesSharedLiquidMeterAndStateSurfaces() throws {
-        let source = try featureSource("FeatureAudioRecorder/AudioRecorderView.swift")
-
-        [
-            "HubWaveformSurface",
-            "HubMediaSurfaceFixtures.meterPeaks",
-            "hubCard",
-            "ToolHeaderBlock",
-            "viewModel.startRecording()",
-            "viewModel.stopRecording()",
-            "HubStepSlider(",
-            "SystemPrivacySettings.openSystemAudioRecordingSettings()",
-        ].forEach { required in
-            XCTAssertTrue(source.contains(required), "Missing recorder Liquid source: \(required)")
-        }
-
-        XCTAssertFalse(source.contains("meterGradient"), "Recorder should use HubWaveformSurface instead of local meter gradients.")
-        assertNoLocalGlassFormulas(in: source, feature: "Recorder")
+    func testRecorderUsesSharedLiquidMeterAndStateSurfaces() {
+        Self.rule.expect(
+            "Sources/FeatureAudioRecorder/AudioRecorderView.swift",
+            contains: [
+                "HubWaveformSurface", "HubMediaSurfaceFixtures.meterPeaks", "hubCard", "ToolHeaderBlock",
+                "viewModel.startRecording()", "viewModel.stopRecording()", "HubStepSlider(",
+                "SystemPrivacySettings.openSystemAudioRecordingSettings()",
+            ],
+            lacks: Self.localGlassFormulas
+        )
     }
 
-    func testConverterUsesSharedLiquidDropBatchAndHandoffSurfaces() throws {
-        let source = try featureSource("FeatureAudioConverter/AudioConverterView.swift")
-
-        [
-            "hubCard",
-            "ToolHeaderBlock",
-            "onDrop",
-            "OutputHandoff.dragItemProvider(for:",
-            "viewModel.addFileURLs",
-            "viewModel.startConversion()",
-            "Reveal",
-            "hubDragAffordance",
-        ].forEach { required in
-            XCTAssertTrue(source.contains(required), "Missing converter Liquid source: \(required)")
-        }
-
-        assertNoLocalGlassFormulas(in: source, feature: "Converter")
+    func testConverterUsesSharedLiquidDropBatchAndHandoffSurfaces() {
+        Self.rule.expect(
+            "Sources/FeatureAudioConverter/AudioConverterView.swift",
+            contains: [
+                "hubCard", "ToolHeaderBlock", "onDrop", "OutputHandoff.dragItemProvider(for:", "viewModel.addFileURLs",
+                "viewModel.startConversion()", "Reveal", "hubDragAffordance",
+            ],
+            lacks: Self.localGlassFormulas
+        )
     }
 
-    func testDownloaderUsesSharedLiquidURLFormatProgressAndHandoffSurfaces() throws {
-        let source = try featureSource("FeatureDownloader/DownloaderView.swift")
-
-        [
-            "hubCard",
-            "ToolHeaderBlock",
-            "DownloaderCopy.trustNotice",
-            "viewModel.startDownload()",
-            "viewModel.retryAfterFailure()",
-            "Download as",
-            "HubJobProgressRow(",
-            "fraction: viewModel.showsDeterminateProgress ? viewModel.progress : nil",
-        ].forEach { required in
-            XCTAssertTrue(source.contains(required), "Missing downloader Liquid source: \(required)")
-        }
-
-        assertNoLocalGlassFormulas(in: source, feature: "Downloader")
-    }
-
-    private func assertNoLocalGlassFormulas(in source: String, feature: String) {
-        [
-            ".thinMaterial",
-            "meterGradient",
-            "Color.primary.opacity(0.02)",
-            "Color.primary.opacity(0.03)",
-            "Color.primary.opacity(0.04)",
-            ".fill(isSelected ? HubDesignSystem.Colors.accentTint",
-        ].forEach { forbidden in
-            XCTAssertFalse(source.contains(forbidden), "\(feature) still defines local glass formula: \(forbidden)")
-        }
-    }
-
-    private func featureSource(_ path: String) throws -> String {
-        try String(
-            contentsOfFile: "Sources/\(path)",
-            encoding: .utf8
+    func testDownloaderUsesSharedLiquidURLFormatProgressAndHandoffSurfaces() {
+        Self.rule.expect(
+            "Sources/FeatureDownloader/DownloaderView.swift",
+            contains: [
+                "hubCard", "ToolHeaderBlock", "DownloaderCopy.trustNotice", "viewModel.startDownload()",
+                "viewModel.retryAfterFailure()", "Download as", "HubJobProgressRow(",
+                "fraction: viewModel.showsDeterminateProgress ? viewModel.progress : nil",
+            ],
+            lacks: Self.localGlassFormulas
         )
     }
 }

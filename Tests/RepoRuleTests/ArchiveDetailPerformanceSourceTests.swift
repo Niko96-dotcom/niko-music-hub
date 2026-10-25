@@ -1,23 +1,31 @@
 import XCTest
 
+/// Opening a song detail allocates no playback and stats no cloud file on the main thread, and its
+/// preview candidates are paged. AGENTS.md row "Preview is output-only"; docs/architecture.md
+/// § Archive preview playback.
 final class ArchiveDetailPerformanceSourceTests: XCTestCase {
-    func testDetailMountDoesNotAllocatePlaybackResources() throws {
-        let detail = try String(contentsOfFile: "Sources/FeatureArchiveBrowser/SongDetailView.swift", encoding: .utf8)
-        XCTAssertFalse(detail.contains("ArchivePreviewPlayer()"))
-        XCTAssertFalse(detail.contains(".prepare(url:"))
-        XCTAssertFalse(detail.contains("resourceValues(forKeys:"), "Rendering versions must not stat cloud files on main")
+    static let rule = RepoRule(
+        name: "Song detail mounts cheaply",
+        why: "A player per detail, or a stat of every cloud version, made opening a song slow on large archives",
+        see: "AGENTS.md row \"Preview is output-only\"; docs/architecture.md § Archive preview playback",
+        fix: "Play through the one ArchivePreviewSession and page candidates with ArchivePreviewCandidatePagination"
+    )
+
+    private static let detail = "Sources/FeatureArchiveBrowser/SongDetailView.swift"
+
+    func testDetailMountDoesNotAllocatePlaybackResources() {
+        Self.rule.expect(Self.detail, lacks: ["ArchivePreviewPlayer()", ".prepare(url:"])
+        Self.rule.expect(Self.detail, lacks: ["resourceValues(forKeys:"], because: "rendering versions must not stat cloud files on main")
     }
 
-    func testDetailUsesBoundedCandidatePaging() throws {
-        let detail = try String(
-            contentsOfFile: "Sources/FeatureArchiveBrowser/SongDetailView.swift",
-            encoding: .utf8
+    func testDetailUsesBoundedCandidatePaging() {
+        Self.rule.expect(
+            Self.detail,
+            contains: [
+                "Text(\"Main project\")", "ArchivePreviewCandidatePagination.page", "LazyVStack",
+                "Page \\(page.index + 1) of \\(page.pageCount)",
+            ],
+            lacks: ["ForEach(alternates, id:"]
         )
-
-        XCTAssertTrue(detail.contains("Text(\"Main project\")"))
-        XCTAssertTrue(detail.contains("ArchivePreviewCandidatePagination.page"))
-        XCTAssertTrue(detail.contains("LazyVStack"))
-        XCTAssertTrue(detail.contains("Page \\(page.index + 1) of \\(page.pageCount)"))
-        XCTAssertFalse(detail.contains("ForEach(alternates, id:"))
     }
 }

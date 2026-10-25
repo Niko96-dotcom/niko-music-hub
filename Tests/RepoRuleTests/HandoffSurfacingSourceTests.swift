@@ -1,232 +1,88 @@
 import AppCore
 import XCTest
 
-/// Source-check and model regression tests proving that the handoff surfaces
-/// wired in Phases 46 and 47 are intact.
-///
-/// Covers: HAND-01, HAND-02, HAND-03, ROUT-06, HAND-04.
-/// All source reads resolve from `#filePath`; missing inputs are test failures.
+/// The handoff surfaces: the Output Inbox reveal, the converter's and Stem Separation's file intake,
+/// the shared shelf's drag gate, one stem entry in quick access, and recent outputs read only through
+/// `ToolRecentOutputs` (HAND-01…04, ROUT-06).
+/// AGENTS.md rows "Recent outputs" and "Design contract"; docs/architecture.md § Tool recent outputs.
 final class HandoffSurfacingSourceTests: XCTestCase {
+    static let handoff = RepoRule(
+        name: "Handoff surfaces",
+        why: "Drag, drop and reveal are how files reach the DAW; each lost hook or gate shipped once",
+        see: "AGENTS.md row \"Design contract\"; docs/design-contract.md §4 (ToolOutputShelf, HAND-03)",
+        fix: "Keep intake and drag on the shared paths: onDrop/fileImporter to the view model, drags through OutputHandoff"
+    )
+    static let recentOutputs = RepoRule(
+        name: "Recent outputs",
+        why: "Three tools copied the inbox read, its filter and its observation, each reading the inbox on the main actor",
+        see: "AGENTS.md row \"Recent outputs\"; docs/architecture.md § Tool recent outputs",
+        fix: "Read a tool page's outputs through ToolRecentOutputs (Sources/AppCore/OutputInbox/ToolRecentOutputs.swift)"
+    )
 
-    // MARK: - HAND-01: Output Inbox reveal seam (AppShellView)
+    private static let inbox = "Sources/NikoMusicHub/AppShell/OutputInboxInspectorView.swift"
 
-    func testAppShellViewRevealsOutputInboxOnRouterSignal() throws {
-        let source = try appShellViewSource()
-        XCTAssertTrue(
-            source.contains("onChange(of: router.revealOutputInbox)"),
-            "HAND-01: AppShellView must observe router.revealOutputInbox via onChange — live-transition drain"
-        )
-        XCTAssertTrue(
-            source.contains("if router.revealOutputInbox {"),
-            "HAND-01: AppShellView must drain revealOutputInbox on onAppear — fresh-launch / closed-window case"
-        )
-        XCTAssertTrue(
-            source.contains("setOutputInboxVisible(true)"),
-            "HAND-01: AppShellView must call setOutputInboxVisible(true) when the router flag is set"
-        )
-        XCTAssertTrue(
-            source.contains("clearRevealOutputInbox()"),
-            "HAND-01: AppShellView must call clearRevealOutputInbox() after consuming the flag to prevent stuck state"
-        )
-        XCTAssertTrue(
-            source.contains("OutputInboxInspectorView("),
-            "HAND-01: OutputInboxInspectorView must be present in the AppShellView body"
-        )
+    func testAppShellViewRevealsOutputInboxOnRouterSignal() {
+        Self.handoff.expect("Sources/NikoMusicHub/AppShell/AppShellView.swift", contains: [
+            "onChange(of: router.revealOutputInbox)", "if router.revealOutputInbox {", "setOutputInboxVisible(true)",
+            "clearRevealOutputInbox()", "OutputInboxInspectorView(",
+        ], because: "HAND-01: the shell shows the inbox on the router's signal, at launch too, and clears the flag")
     }
 
-    // MARK: - HAND-02: Converter drag/file intake (AudioConverterView)
-
-    func testAudioConverterViewRetainsDragAndFileIntake() throws {
-        let source = try audioConverterViewSource()
-        XCTAssertTrue(
-            source.contains("onDrop("),
-            "HAND-02: AudioConverterView must have an onDrop modifier for drag intake"
-        )
-        XCTAssertTrue(
-            source.contains("fileImporter("),
-            "HAND-02: AudioConverterView must have a fileImporter modifier for file-picker intake"
-        )
-        XCTAssertTrue(
-            source.contains("NSItemProvider"),
-            "HAND-02: AudioConverterView drop handler must use NSItemProvider for data reading"
-        )
-        XCTAssertTrue(
-            source.contains("viewModel.addFileURLs"),
-            "HAND-02: drop/picker results must be forwarded to viewModel.addFileURLs"
-        )
-        XCTAssertTrue(
-            source.contains("verifiedOutputURLForDrag()"),
-            "HAND-02: completed-batch drag must use verifiedOutputURLForDrag() as the safety gate"
-        )
+    func testAudioConverterViewRetainsDragAndFileIntake() {
+        Self.handoff.expect("Sources/FeatureAudioConverter/AudioConverterView.swift", contains: [
+            "onDrop(", "fileImporter(", "NSItemProvider", "viewModel.addFileURLs", "verifiedOutputURLForDrag()",
+        ], because: "HAND-02: drop and picker intake reach the view model; a finished batch drags only a verified URL")
     }
 
-    // MARK: - HAND-03: Stem drag/file intake + completed-stem reveal (StemSeparationView)
-
-    func testStemSeparationViewRetainsFileIntakeAndStemDrag() throws {
-        let source = try stemSeparationViewSource()
-        XCTAssertTrue(
-            source.contains("onDrop(of: [.fileURL]"),
-            "HAND-03: StemSeparationView must accept file drops via onDrop(of: [.fileURL])"
-        )
-        XCTAssertTrue(
-            source.contains("provider.loadItem(forTypeIdentifier:"),
-            "HAND-03: drop handler must use provider.loadItem(forTypeIdentifier:) for async NSItemProvider extraction"
-        )
-        XCTAssertTrue(
-            source.contains("viewModel.handleDrop(urls:"),
-            "HAND-03: drop result must be forwarded to viewModel.handleDrop(urls:)"
-        )
-        XCTAssertTrue(
-            source.contains("viewModel.selectFile()"),
-            "HAND-03: Choose File button must call viewModel.selectFile()"
-        )
-        XCTAssertTrue(
-            source.contains("ToolOutputShelf("),
-            "HAND-03: completed stem rows must render through the shared ToolOutputShelf"
-        )
-        XCTAssertTrue(
-            source.contains("viewModel.reveal(item:"),
-            "HAND-03: Reveal button must call viewModel.reveal(item:)"
-        )
-
-        // The shelf is the shared drag surface for stems, recordings, and downloads —
-        // the .onDrag + verified-URL gate invariant lives there now.
-        let shelf = try toolOutputShelfSource()
-        XCTAssertTrue(
-            shelf.contains(".onDrag {"),
-            "HAND-03: ToolOutputShelf rows must expose drag via .onDrag"
-        )
-        XCTAssertTrue(
-            shelf.contains("OutputHandoff.dragFileURL("),
-            "HAND-03: ToolOutputShelf drag must obtain its URL from OutputHandoff.dragFileURL — not a raw path"
-        )
+    func testStemSeparationViewRetainsFileIntakeAndStemDrag() {
+        Self.handoff.expect("Sources/FeatureStemSeparation/StemSeparationView.swift", contains: [
+            "onDrop(of: [.fileURL]", "provider.loadItem(forTypeIdentifier:", "viewModel.handleDrop(urls:", "viewModel.selectFile()",
+            "ToolOutputShelf(", "viewModel.reveal(item:",
+        ], because: "HAND-03: file intake, Choose File, and results through the shared ToolOutputShelf")
+        // The shelf is the shared drag surface for stems, recordings and downloads.
+        Self.handoff.expect("Sources/AppCore/OutputInbox/ToolOutputShelf.swift", contains: [".onDrag {", "OutputHandoff.dragFileURL("],
+                            because: "HAND-03: shelf rows drag a URL from OutputHandoff, never a raw path")
     }
-
-    // MARK: - ROUT-06: Exactly one stem entry, no duplicate stem-download feature
 
     func testAllowlistContainsExactlyOneStemEntry() {
         let stemEntries = QuickAccessEntry.allowlist.filter { $0.id.contains("stem") }
-        XCTAssertEqual(
-            stemEntries.count, 1,
-            "ROUT-06: exactly one stem-related entry must exist in the allowlist"
-        )
-        XCTAssertEqual(
-            stemEntries.first?.id, "stem-separation",
-            "ROUT-06: the single stem entry must have id 'stem-separation'"
-        )
+        Self.handoff.require(stemEntries.map(\.id) == ["stem-separation"], "ROUT-06: quick access lists \(stemEntries.map(\.id)) as stem entries, not exactly stem-separation")
     }
 
     func testAllowlistHasNoSeparateStemDownloaderEntry() {
-        let downloaderStemEntries = QuickAccessEntry.allowlist.filter {
-            $0.id.contains("download") && $0.id.contains("stem")
-        }
-        XCTAssertTrue(
-            downloaderStemEntries.isEmpty,
-            "ROUT-06: no separate stem-downloader entry may exist — download-to-stems routes through 'stem-separation'"
-        )
+        let entries = QuickAccessEntry.allowlist.filter { $0.id.contains("download") && $0.id.contains("stem") }
+        Self.handoff.require(entries.isEmpty, "ROUT-06: download-to-stems routes through stem-separation, but quick access lists \(entries.map(\.id))")
     }
 
-    func testStemSeparationToolIDEqualsExpected() throws {
+    func testStemSeparationToolIDEqualsExpected() {
         XCTAssertEqual(ToolFeatureID.stemSeparation.rawValue, "stem-separation")
         for path in [
             "Sources/AppCore/Features/BuiltInToolIDs.swift",
             "Sources/FeatureStemSeparation/StemSeparationService.swift",
             "Sources/FeatureStemSeparation/StemSeparationFeature.swift",
         ] {
-            XCTAssertFalse(
-                try SourceTestSupport.read(path).contains("stem-downloader"),
-                "ROUT-06: \(path) must not declare a separate stem-downloader ToolFeatureID"
-            )
+            Self.handoff.expect(path, lacks: ["stem-downloader"], because: "ROUT-06: no separate stem-downloader tool")
         }
     }
 
-    func testYouTubeStemWorkflowSourceHasNoToolFeatureConformance() throws {
-        // YouTubeStemSeparationWorkflow is an internal orchestrator constructed inside
-        // StemSeparationFeature.makeView(context:). It MUST NOT be a separately registered
-        // ToolFeature.
-        let path = "Sources/FeatureStemSeparation/YouTubeStemSeparationWorkflow.swift"
-        let source = try SourceTestSupport.read(path)
-        XCTAssertFalse(
-            source.contains(": ToolFeature"),
-            "ROUT-06: YouTubeStemSeparationWorkflow must not conform to ToolFeature — it is an internal orchestrator, not a separately registered tool"
+    /// YouTubeStemSeparationWorkflow is an internal orchestrator built inside
+    /// StemSeparationFeature.makeView(context:), not a separately registered tool.
+    func testYouTubeStemWorkflowSourceHasNoToolFeatureConformance() {
+        Self.handoff.expect("Sources/FeatureStemSeparation/YouTubeStemSeparationWorkflow.swift", lacks: [": ToolFeature"], because: "ROUT-06")
+    }
+
+    /// HubShellChromeSourceTests.testOutputInboxKeepsHandoffSafetyWhileUsingLiquidCards covers the same
+    /// panel; this claims HAND-04 on its own.
+    func testOutputInboxPanelUsesOutputHandoffForDragAndReveal() {
+        Self.handoff.expect(Self.inbox, contains: ["OutputHandoff.dragFileURL", "OutputHandoff.isRevealable"],
+                            because: "HAND-04: the panel gates drag and reveal through OutputHandoff")
+    }
+
+    /// A tool page lists its own outputs only through `ToolRecentOutputs`, which reads off the main actor.
+    func testFeatureModulesReadRecentOutputsOnlyThroughToolRecentOutputs() {
+        Self.recentOutputs.check(
+            SourceTree.matches(#"\blistItems\s*\(|\boutputInboxDidChange\b"#, in: SourceTree.swiftFiles(under: "Sources/Feature", atLeast: 21)),
+            "reads the inbox itself"
         )
-    }
-
-    // MARK: - HAND-04: OutputHandoff boundary (panel uses it, menu paths do not)
-
-    // See also: HubShellChromeSourceTests.testOutputInboxKeepsHandoffSafetyWhileUsingLiquidCards
-    // which already asserts OutputHandoff.isRevealable and OutputHandoff.dragFileURL in OutputInboxInspectorView.
-    // This section formally claims HAND-04 with a targeted re-assertion and documents the existing coverage.
-
-    func testOutputInboxPanelUsesOutputHandoffForDragAndReveal() throws {
-        let source = try outputInboxInspectorViewSource()
-        XCTAssertTrue(
-            source.contains("OutputHandoff.dragFileURL"),
-            "HAND-04: OutputInboxInspectorView must gate drag via OutputHandoff.dragFileURL — positive invariant (panel has NOT accidentally dropped the gate)"
-        )
-        XCTAssertTrue(
-            source.contains("OutputHandoff.isRevealable"),
-            "HAND-04: OutputInboxInspectorView must gate reveal via OutputHandoff.isRevealable — positive invariant (panel has NOT accidentally dropped the gate)"
-        )
-    }
-
-    // MARK: - A tool page's recent outputs
-
-    /// A tool page lists its own outputs only through `ToolRecentOutputs`, which reads off the
-    /// main actor. The read, its filter and its inbox observation were copied into the recorder,
-    /// Stem Separation and Downloader view models, each reading the inbox on the main actor.
-    func testFeatureModulesReadRecentOutputsOnlyThroughToolRecentOutputs() throws {
-        let inboxRead = try NSRegularExpression(pattern: #"\blistItems\s*\(|\boutputInboxDidChange\b"#)
-        let failures = try featureSourceFiles().flatMap { file in
-            OutputGuardSourceTests.lines(matching: inboxRead, in: SourceLex.stripped(try SourceTestSupport.read(file)))
-                .map { "\(file):\($0)" }
-        }
-        XCTAssertEqual(
-            failures,
-            [],
-            "A tool page reads its recent outputs through ToolRecentOutputs "
-                + "(Sources/AppCore/OutputInbox/ToolRecentOutputs.swift), never listItems() or "
-                + ".outputInboxDidChange itself:\n"
-                + failures.joined(separator: "\n")
-        )
-    }
-
-    // MARK: - Private helpers
-
-    /// Every Swift file in a `Sources/Feature*` module, relative to the package root.
-    private func featureSourceFiles() throws -> [String] {
-        let root = SourceTestSupport.packageRoot.standardizedFileURL.path
-        let sources = SourceTestSupport.packageRoot.appendingPathComponent("Sources")
-        let files = try FileManager.default.contentsOfDirectory(atPath: sources.path)
-            .filter { $0.hasPrefix("Feature") }
-            .flatMap { module in
-                (FileManager.default.enumerator(at: sources.appendingPathComponent(module), includingPropertiesForKeys: nil)?
-                    .compactMap { $0 as? URL } ?? [])
-                    .filter { $0.pathExtension == "swift" }
-                    .map { String($0.standardizedFileURL.path.dropFirst(root.count + 1)) }
-            }
-            .sorted()
-        XCTAssertGreaterThan(files.count, 20, "Sources/Feature* walk found too few files")
-        return files
-    }
-
-    private func appShellViewSource() throws -> String {
-        try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
-    }
-
-    private func audioConverterViewSource() throws -> String {
-        try SourceTestSupport.read("Sources/FeatureAudioConverter/AudioConverterView.swift")
-    }
-
-    private func stemSeparationViewSource() throws -> String {
-        try SourceTestSupport.read("Sources/FeatureStemSeparation/StemSeparationView.swift")
-    }
-
-    private func toolOutputShelfSource() throws -> String {
-        try SourceTestSupport.read("Sources/AppCore/OutputInbox/ToolOutputShelf.swift")
-    }
-
-    private func outputInboxInspectorViewSource() throws -> String {
-        try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/OutputInboxInspectorView.swift")
     }
 }

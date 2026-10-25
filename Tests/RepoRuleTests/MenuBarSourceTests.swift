@@ -1,187 +1,95 @@
 import XCTest
 
-/// Source-check tests for Phase 47 menu bar structural invariants.
-/// Uses `String(contentsOfFile:)` to assert properties of shell-layer source files
-/// that cannot be enforced at compile time (pattern from QuickAccessSourceTests,
-/// HubShellChromeSourceTests).
+/// The menu bar extra and the Dock menu: native rows from `QuickAccessEntry`, every action through the
+/// router, quit through `NSApp.terminate` so the quit alert still runs, and a Dock reveal that fronts
+/// or reopens only the main window (MBAR-01…04, ROUT-07, HAND-04).
+/// AGENTS.md row "Design contract"; docs/menu-bar-quick-access.md, docs/decisions/019-running-work-and-quit.md.
 final class MenuBarSourceTests: XCTestCase {
+    static let rule = RepoRule(
+        name: "Menu bar and Dock",
+        why: "The menu bar and the Dock are second entry points; one that builds views, styles rows or quits on its own bypasses the shell",
+        see: "AGENTS.md row \"Design contract\"; docs/menu-bar-quick-access.md; docs/decisions/019-running-work-and-quit.md",
+        fix: "Render QuickAccessEntry rows natively, dispatch through router.execute, quit with NSApp.terminate(nil)"
+    )
 
-    // MARK: - MenuBarMenuView structural invariants
+    private static let menu = "Sources/NikoMusicHub/MenuBar/MenuBarMenuView.swift"
+    private static let app = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
+    private static let dock = "Sources/NikoMusicHub/Dock/HubDockMenu.swift"
 
-    func testMenuBarMenuViewUsesEntryLabelsAndSymbols() throws {
-        let source = try menuBarMenuViewSource()
-        // Row labels and symbols come from QuickAccessEntry, not ToolMetadata (UI-SPEC)
-        XCTAssertTrue(source.contains("entry.label"), "Must render entry.label — not ToolMetadata.displayName")
-        XCTAssertTrue(source.contains("entry.systemImage"), "Must render entry.systemImage — not ToolMetadata.systemImage")
-        XCTAssertFalse(source.contains("displayName"), "Must not re-derive from ToolMetadata.displayName")
+    func testMenuBarMenuViewUsesEntryLabelsAndSymbols() {
+        Self.rule.expect(Self.menu, contains: ["entry.label", "entry.systemImage"], lacks: ["displayName"],
+                         because: "rows come from QuickAccessEntry, not ToolMetadata")
     }
 
-    func testMenuBarMenuViewCallsRouterExecute() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertTrue(
-            source.contains("router.execute"),
-            "Every button must dispatch via router.execute — ROUT-07 boundary"
-        )
+    func testMenuBarMenuViewCallsRouterExecute() {
+        Self.rule.expect(Self.menu, contains: ["router.execute"], because: "every button dispatches through the router (ROUT-07)")
     }
 
-    func testMenuBarMenuViewCallsNSAppActivate() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertTrue(
-            source.contains("NSApp.activate"),
-            "Button action must call NSApp.activate to bring app forward — MBAR-03"
-        )
+    func testMenuBarMenuViewCallsNSAppActivate() {
+        Self.rule.expect(Self.menu, contains: ["NSApp.activate"], because: "a button brings the app forward (MBAR-03)")
     }
 
-    func testMenuBarMenuViewReopensMainWindow() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertTrue(
-            source.contains("openWindow"),
-            "Button action must call openWindow(id:) to re-open a closed main window — window-reopen decision"
-        )
-        XCTAssertTrue(
-            source.contains("\"main\""),
-            "openWindow must target the main WindowGroup id \"main\""
-        )
+    func testMenuBarMenuViewReopensMainWindow() {
+        Self.rule.expect(Self.menu, contains: ["openWindow", "\"main\""], because: "a button reopens a closed main window (WindowGroup id \"main\")")
     }
 
-    func testMenuBarMenuViewQuitsViaTerminate() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertTrue(
-            source.contains("NSApp.terminate(nil)"),
-            "Quit must call NSApp.terminate so the vault quit alert still runs"
-        )
-        XCTAssertFalse(source.contains("NSApp.stop"))
-        XCTAssertFalse(source.contains("exit("))
+    func testMenuBarMenuViewQuitsViaTerminate() {
+        Self.rule.expect(Self.menu, contains: ["NSApp.terminate(nil)"], lacks: ["NSApp.stop", "exit("],
+                         because: "quit goes through NSApp.terminate so the quit alert still runs")
     }
 
-    func testMenuBarMenuViewUsesDividerConditionally() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertTrue(
-            source.contains("shouldShowDivider"),
-            "MenuBarMenuView must use MenuBarMenuModel.shouldShowDivider for conditional Divider — MBAR-04"
-        )
-        XCTAssertTrue(
-            source.contains("Divider()"),
-            "MenuBarMenuView must emit a Divider() — UI-SPEC separator contract"
-        )
+    func testMenuBarMenuViewUsesDividerConditionally() {
+        Self.rule.expect(Self.menu, contains: ["shouldShowDivider", "Divider()"], because: "MenuBarMenuModel decides the separator (MBAR-04)")
     }
 
-    func testMenuBarMenuViewDoesNotCallMakeView() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertFalse(
-            source.contains("makeView"),
-            "MenuBarMenuView must not call makeView — ROUT-07 architectural boundary"
-        )
+    func testMenuBarMenuViewDoesNotCallMakeView() {
+        Self.rule.expect(Self.menu, lacks: ["makeView"], because: "ROUT-07")
     }
 
-    func testMenuBarMenuViewDoesNotReferenceOutputHandoff() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertFalse(
-            source.contains("OutputHandoff"),
-            "MenuBarMenuView must not reference OutputHandoff — HAND-04 boundary"
-        )
+    func testMenuBarMenuViewDoesNotReferenceOutputHandoff() {
+        Self.rule.expect(Self.menu, lacks: ["OutputHandoff"], because: "HAND-04")
     }
 
-    func testMenuBarMenuViewDoesNotUseObservableMacro() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertFalse(
-            source.contains("@Observable"),
-            "Project convention: ObservableObject only, not @Observable macro"
-        )
+    func testMenuBarMenuViewDoesNotUseObservableMacro() {
+        Self.rule.expect(Self.menu, lacks: ["@Observable"], because: "the project uses ObservableObject")
     }
 
-    func testMenuBarMenuViewDoesNotApplyHubDesignSystemTokens() throws {
-        let source = try menuBarMenuViewSource()
-        XCTAssertFalse(
-            source.contains("HubDesignSystem"),
-            "Menu rows must not apply HubDesignSystem tokens — native system chrome owns row styling"
-        )
+    func testMenuBarMenuViewDoesNotApplyHubDesignSystemTokens() {
+        Self.rule.expect(Self.menu, lacks: ["HubDesignSystem"], because: "native system chrome styles menu rows")
     }
 
-    // MARK: - NikoMusicHubApp MenuBarExtra presence (MBAR-01, MBAR-02)
-
-    func testNikoMusicHubAppContainsMenuBarExtra() throws {
-        let path = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
-        let source = try SourceTestSupport.read(path)
-        XCTAssertTrue(
-            source.contains("MenuBarExtra"),
-            "NikoMusicHubApp.swift must contain MenuBarExtra — MBAR-01 acceptance gate"
-        )
-        XCTAssertTrue(
-            source.contains(".menuBarExtraStyle(.menu)"),
-            "NikoMusicHubApp.swift must apply .menuBarExtraStyle(.menu) — MBAR-02 compact native menu"
-        )
-        XCTAssertTrue(
-            source.contains("accessibilityLabel(\"Niko Music Hub\")"),
-            "Menu bar icon must have accessibility label 'Niko Music Hub'"
-        )
-        XCTAssertTrue(
-            source.contains("MenuBarExtra(isInserted:"),
-            "MenuBarExtra must use isInserted so the extra can hide without relaunch"
-        )
+    func testNikoMusicHubAppContainsMenuBarExtra() {
+        Self.rule.expect(Self.app, contains: [
+            "MenuBarExtra", ".menuBarExtraStyle(.menu)", "accessibilityLabel(\"Niko Music Hub\")", "MenuBarExtra(isInserted:",
+        ], because: "a compact native menu with a labelled icon that can hide without a relaunch (MBAR-01, MBAR-02)")
     }
 
-    func testNikoMusicHubAppUsesLabelClosureInitNotPrimarySceneForm() throws {
-        let path = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
-        let source = try SourceTestSupport.read(path)
-        // The label: { } closure form is required; the string "MenuBarExtra(" with an inline
-        // string title is the forbidden primary-scene form.
-        // Check for label closure pattern: "} label: {" appears in the scene block.
-        XCTAssertTrue(
-            source.contains("} label: {"),
-            "MenuBarExtra must use the custom label-closure init form — not the primary-scene string-title form (RESEARCH.md Pitfall 1)"
-        )
+    func testNikoMusicHubAppUsesLabelClosureInitNotPrimarySceneForm() {
+        Self.rule.expect(Self.app, contains: ["} label: {"], because: "the label-closure init, not the primary-scene string-title form")
     }
 
-    // MARK: - NikoMusicHubApp activation policy preserved (MBAR-03)
-
-    func testNikoMusicHubAppPreservesActivationPolicy() throws {
-        let path = "Sources/NikoMusicHub/NikoMusicHubApp.swift"
-        let source = try SourceTestSupport.read(path)
-        XCTAssertTrue(
-            source.contains("setActivationPolicy(.regular)"),
-            "NikoMusicHubApp.swift must keep setActivationPolicy(.regular) — MBAR-03: app remains a regular windowed app"
-        )
-        XCTAssertTrue(source.contains("applicationDockMenu"))
-        XCTAssertTrue(source.contains("HubDockMenu.make"))
+    func testNikoMusicHubAppPreservesActivationPolicy() {
+        Self.rule.expect(Self.app, contains: ["setActivationPolicy(.regular)", "applicationDockMenu", "HubDockMenu.make"],
+                         because: "the app stays a regular windowed app with a Dock menu (MBAR-03)")
     }
 
-    func testDockMenuOmitsSettingsAndQuit() throws {
-        let dock = try SourceTestSupport.read("Sources/NikoMusicHub/Dock/HubDockMenu.swift")
-        XCTAssertTrue(dock.contains("MenuBarMenuModel.dockEntries"))
-        XCTAssertTrue(dock.contains("No Settings, no Quit"))
-        XCTAssertFalse(dock.contains("NSApp.terminate"))
-        XCTAssertFalse(dock.contains("Quit Niko Music Hub"))
+    func testDockMenuOmitsSettingsAndQuit() {
+        Self.rule.expect(Self.dock, contains: ["MenuBarMenuModel.dockEntries", "No Settings, no Quit"],
+                         lacks: ["NSApp.terminate", "Quit Niko Music Hub"])
     }
 
-    func testDockRevealFrontsOnlyTheMainWindow() throws {
-        let dock = try SourceTestSupport.read("Sources/NikoMusicHub/Dock/HubDockMenu.swift")
-        XCTAssertTrue(dock.contains("HubMainWindowIdentity.identifierRawValue"))
-        XCTAssertFalse(dock.contains("first(where: { $0.canBecomeMain })"))
-        let app = try SourceTestSupport.read("Sources/NikoMusicHub/NikoMusicHubApp.swift")
-        let helpScene = try XCTUnwrap(app.range(of: "HubHelpWindow()"))
-        XCTAssertTrue(
-            app[helpScene.upperBound...].prefix(200).contains(".hubOpensMainWindowFromDock()"),
-            "The Help window must observe Dock reveals so a live openWindow exists when only Help is open"
-        )
+    func testDockRevealFrontsOnlyTheMainWindow() {
+        Self.rule.expect(Self.dock, contains: ["HubMainWindowIdentity.identifierRawValue"], lacks: ["first(where: { $0.canBecomeMain })"])
+        let app = SourceTree.read(Self.app)
+        guard let helpScene = app.range(of: "HubHelpWindow()") else { return Self.rule.check(["\(Self.app) has no Help window scene"]) }
+        Self.rule.require(app[helpScene.upperBound...].prefix(200).contains(".hubOpensMainWindowFromDock()"),
+                          "the Help window no longer observes Dock reveals, so no live openWindow exists when only Help is open")
     }
 
-    func testDockRevealOpensMainWindowWhenNoWindowIsOpen() throws {
-        let dock = try SourceTestSupport.read("Sources/NikoMusicHub/Dock/HubDockMenu.swift")
-        XCTAssertTrue(
-            dock.contains("commandsOpenWindow?(id: windowID)"),
-            "reveal() must call a live openWindow, not only post to observers in open windows"
-        )
-        let commands = try SourceTestSupport.read("Sources/NikoMusicHub/Commands/HubToolsCommands.swift")
-        XCTAssertTrue(
-            commands.contains("HubMainWindow.keepOpenWindow(openWindow)"),
-            "The always-present menu commands must hand their openWindow to the Dock reveal"
-        )
-    }
-
-    // MARK: - Private helpers
-
-    private func menuBarMenuViewSource() throws -> String {
-        try SourceTestSupport.read("Sources/NikoMusicHub/MenuBar/MenuBarMenuView.swift")
+    func testDockRevealOpensMainWindowWhenNoWindowIsOpen() {
+        Self.rule.expect(Self.dock, contains: ["commandsOpenWindow?(id: windowID)"],
+                         because: "reveal() calls a live openWindow, not only observers in open windows")
+        Self.rule.expect("Sources/NikoMusicHub/Commands/HubToolsCommands.swift", contains: ["HubMainWindow.keepOpenWindow(openWindow)"],
+                         because: "the always-present menu commands hand their openWindow to the Dock reveal")
     }
 }

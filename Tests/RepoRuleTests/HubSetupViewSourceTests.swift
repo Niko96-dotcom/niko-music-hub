@@ -1,23 +1,24 @@
 import XCTest
 
+/// Set Up installs every helper with one click, in the app's own words and controls: no Homebrew, no
+/// Terminal, no welcome line. AGENTS.md row "Design contract"; docs/design-contract.md §5 and §6.
 final class HubSetupViewSourceTests: XCTestCase {
-    func testHubSetupViewUsesOneClickCopyAndWarmProgress() throws {
-        let source = try SourceTestSupport.read("Sources/NikoMusicHub/Onboarding/HubSetupView.swift")
+    static let rule = RepoRule(
+        name: "Set Up is one click",
+        why: "Set Up exists so nobody needs Homebrew or Terminal; copy that sends them there undoes it",
+        see: "AGENTS.md row \"Design contract\"; docs/design-contract.md §5 (copy) and §6 (controls)",
+        fix: "Keep Install All, the warm indicator tint and the shared button styles; drop the banned words"
+    )
 
-        XCTAssertTrue(source.contains("Install All"))
-        XCTAssertTrue(source.contains("hub_setup_sheet"))
-        XCTAssertTrue(source.contains(".tint(HubDesignSystem.Colors.indicator)"))
-
-        XCTAssertFalse(source.contains("Welcome to"))
-        XCTAssertFalse(source.contains("brew"))
-        XCTAssertFalse(source.contains("Terminal"))
-        XCTAssertFalse(source.contains(".bordered"))
-        XCTAssertFalse(source.contains("Capsule("))
+    func testHubSetupViewUsesOneClickCopyAndWarmProgress() {
+        Self.rule.expect(
+            "Sources/NikoMusicHub/Onboarding/HubSetupView.swift",
+            contains: ["Install All", "hub_setup_sheet", ".tint(HubDesignSystem.Colors.indicator)"],
+            lacks: ["Welcome to", "brew", "Terminal", ".bordered", "Capsule("]
+        )
     }
 
-    func testHelperToolsHealthStripPointsToSetupSheet() throws {
-        let source = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/HelperToolsHealthStrip.swift")
-
-        XCTAssertFalse(source.contains("Homebrew"))
+    func testHelperToolsHealthStripPointsToSetupSheet() {
+        Self.rule.expect("Sources/NikoMusicHub/AppShell/HelperToolsHealthStrip.swift", lacks: ["Homebrew"])
     }
 }

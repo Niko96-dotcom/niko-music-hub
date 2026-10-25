@@ -1,39 +1,29 @@
-import Foundation
 import XCTest
 
-/// Helpers are injected: the composition builds the probe and the locator, the locator reads no
-/// process environment, and the probe runs helpers without a shell.
+/// Helpers are injected: the composition builds the probe and the locator, every tool and the shell read
+/// them from `ToolContext.helperHealth`, the locator reads no process environment (the two Tools switches
+/// are read only by the runtime), and the probe runs helpers without a shell.
+/// AGENTS.md row "Injected helpers"; docs/architecture.md § Helper tools.
 final class HelperToolSourceTests: XCTestCase {
-    /// The two Tools switches are read only by the runtime, and every helper
-    /// consumer gets its locator from `HelperToolHealth`.
-    func testTheLocatorReadsNoProcessEnvironment() throws {
-        let locator = SourceLex.stripped(try SourceTestSupport.read("Sources/AppCore/HelperTools/HelperToolLocator.swift"))
-        XCTAssertFalse(locator.contains("ProcessInfo"))
-        XCTAssertFalse(locator.contains("NIKO_MUSIC_HUB_"))
+    static let rule = RepoRule(
+        name: "Injected helpers",
+        why: "A second probe or locator disagrees about which helper is installed; a shell runs whatever the path names",
+        see: "AGENTS.md row \"Injected helpers\"; docs/architecture.md § Helper tools",
+        fix: "Build the probe and locator in AppComposition, read ToolContext.helperHealth, and run helpers with an argument list"
+    )
+
+    func testTheLocatorReadsNoProcessEnvironment() {
+        Self.rule.expect("Sources/AppCore/HelperTools/HelperToolLocator.swift", .code, lacks: ["ProcessInfo", "NIKO_MUSIC_HUB_"])
     }
 
-    /// Every tool and the shell get the probe and locator from
-    /// `ToolContext.helperHealth`; only the composition builds them.
-    func testOnlyTheCompositionBuildsAProbeOrALocator() throws {
-        let root = SourceTestSupport.packageRoot.appendingPathComponent("Sources")
-        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
-        var offenders: [String] = []
-        for case let url as URL in enumerator where url.pathExtension == "swift" {
-            let relative = url.path.replacingOccurrences(of: SourceTestSupport.packageRoot.path + "/", with: "")
-            guard relative.hasPrefix("Sources/Feature") || relative.hasPrefix("Sources/NikoMusicHub/") else { continue }
-            guard relative != "Sources/NikoMusicHub/AppComposition.swift" else { continue }
-            let code = SourceLex.stripped(try String(contentsOf: url, encoding: .utf8))
-            if code.contains("HelperToolProbe(") || code.contains("HelperToolLocator(") {
-                offenders.append(relative)
-            }
+    func testOnlyTheCompositionBuildsAProbeOrALocator() {
+        let files = SourceTree.swiftFiles(under: "Sources/").filter {
+            ($0.hasPrefix("Sources/Feature") || $0.hasPrefix("Sources/NikoMusicHub/")) && $0 != "Sources/NikoMusicHub/AppComposition.swift"
         }
-        XCTAssertEqual(offenders, [], "build them in AppComposition and read ToolContext.helperHealth")
+        Self.rule.check(SourceTree.matches(#"HelperToolProbe\(|HelperToolLocator\("#, in: files), "builds a helper probe or locator")
     }
 
-    func testTheProbeRunsHelpersWithoutAShell() throws {
-        let source = try SourceTestSupport.read("Sources/AppCore/HelperTools/HelperToolProbe.swift")
-        let code = SourceLex.stripped(source)
-        XCTAssertFalse(code.contains("/bin/sh"))
-        XCTAssertFalse(code.contains("\"-c\""))
+    func testTheProbeRunsHelpersWithoutAShell() {
+        Self.rule.expect("Sources/AppCore/HelperTools/HelperToolProbe.swift", .code, lacks: ["/bin/sh", "\"-c\""])
     }
 }

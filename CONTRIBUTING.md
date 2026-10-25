@@ -50,17 +50,22 @@ ApplicationServices AX).
 ## Rule tests
 
 The test target `RepoRuleTests` (`Tests/RepoRuleTests/`) reads the source text and checks the repository's
-rules that the compiler cannot: who may build a guard, which strings a view may show,
-which module may import which. They check rules, not behavior. Each one exists because the same mistake
-shipped more than once.
+rules that the compiler cannot: who may build a guard, which strings a view may show, which module may
+import which. They check rules, not behavior, and each exists because the same mistake shipped more than
+once. They stand on one helper, `SourceTree.swift` (files read once, matches with file and line), and
+every failure has one shape:
+
+```text
+Rule: Count copy. Sources/A.swift:3: `\(n) songs` counts without CountCopy. Why: … See: AGENTS.md row "Count copy"; … Fix: Use CountCopy.count(n, "song") …
+```
 
 When one fails:
 
-1. Read its message and the test's doc comment: it names the rule and the file and line it found.
-2. Follow the link to the [AGENTS.md](AGENTS.md#rules-and-what-enforces-them) row and its doc for the why.
-3. Fix the code, not the check. Change a check only when the rule itself changes, and then change its
-   doc in the same commit. Lists of allowed exceptions in a test carry a reason per entry; add one only
-   with a reason.
+1. Read the message: it names the rule, the file and line, and why the rule exists.
+2. Follow `See:` to the [AGENTS.md](AGENTS.md#rules-and-what-enforces-them) row and its doc.
+3. Fix the code, not the check (`Fix:` says how). Change a check only when the rule itself changes, and
+   then change its doc in the same commit. Lists of allowed exceptions in a test carry a reason per
+   entry; add one only with a reason. Tests with "Detector" or "Matcher" in their name prove a detector on planted lines.
 
 ## Where to look when something breaks
 

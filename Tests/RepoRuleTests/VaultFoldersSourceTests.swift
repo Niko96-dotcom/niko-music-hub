@@ -1,23 +1,22 @@
 import XCTest
 
-/// The Vault's folder names are an on-disk format with one owner,
-/// `VaultFolders` (NikoMusicCore). A site that spells a name itself can drift
-/// from it: a missed reserved folder shows phantom song cards, a differently
-/// formatted generation name loses a verified copy.
+/// The Vault's folder names are an on-disk format with one owner, `VaultFolders` (NikoMusicCore). A
+/// site that spells a name itself can drift from it: a missed reserved folder shows phantom song cards,
+/// a differently formatted generation name loses a verified copy.
+/// AGENTS.md row "Vault records"; docs/architecture.md § Vault folders.
 final class VaultFoldersSourceTests: XCTestCase {
+    static let rule = RepoRule(
+        name: "Vault folder names",
+        why: "A folder name spelled outside VaultFolders drifts from the on-disk format: phantom cards or a lost verified copy",
+        see: "AGENTS.md row \"Vault records\"; docs/architecture.md § Vault folders",
+        fix: "Build the folder with VaultFolders"
+    )
+
     private static let owner = "Sources/NikoMusicCore/Vault/VaultFolders.swift"
 
-    func testOnlyVaultFoldersSpellsTheFolderNames() throws {
-        let root = SourceTestSupport.packageRoot.appendingPathComponent("Sources")
-        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
-        var offenders: [String] = []
-        for case let url as URL in enumerator where url.pathExtension == "swift" {
-            let relative = url.path.replacingOccurrences(of: SourceTestSupport.packageRoot.path + "/", with: "")
-            guard relative != Self.owner else { continue }
-            let code = SourceLex.strippedCommentsOnly(try String(contentsOf: url, encoding: .utf8))
-            offenders += Self.spellings(in: code).map { "\(relative): \($0)" }
-        }
-        XCTAssertEqual(offenders, [], "build Vault folders with VaultFolders")
+    func testOnlyVaultFoldersSpellsTheFolderNames() {
+        let files = SourceTree.swiftFiles(under: "Sources/", atLeast: 300).filter { $0 != Self.owner }
+        Self.rule.check(files.flatMap { file in Self.spellings(in: SourceTree.read(file, .codeAndStrings)).map { "\(file) spells `\($0)`" } })
     }
 
     /// The detector must catch the shapes the code used before `VaultFolders`.

@@ -1,66 +1,41 @@
 import AppCore
-import Foundation
 import XCTest
 
-/// Each built-in tool ID is defined once, in `BuiltInToolIDs.swift`; every other
-/// file uses the constant. Before, "wav-converter" and "archive-browser" were spelled
-/// in eleven files each, and nothing checked that they agreed.
+/// Each built-in tool ID is defined once, in `BuiltInToolIDs.swift`; every other file uses the
+/// constant. Before, "wav-converter" and "archive-browser" were spelled in eleven files each, and
+/// nothing checked that they agreed. AGENTS.md row "Tool IDs"; docs/architecture.md § Tool
+/// self-description.
 final class ToolIDSourceTests: XCTestCase {
-    static let ownerPath = "Sources/AppCore/Features/BuiltInToolIDs.swift"
+    static let rule = RepoRule(
+        name: "Tool IDs",
+        why: "IDs spelled in many files drifted apart, and shell code that compares IDs breaks when a tool is added",
+        see: "AGENTS.md row \"Tool IDs\"; docs/architecture.md § Tool self-description",
+        fix: "Use the ToolFeatureID constant from BuiltInToolIDs.swift; check `metadata.section == .settings` for Settings"
+    )
 
-    func testBuiltInToolIDsAreSpelledOnlyInTheirCatalog() throws {
-        let ids: [ToolFeatureID] = [
-            .archiveBrowser, .bpmTapper, .wavConverter, .audioRecorder, .downloader, .stemSeparation,
-        ]
-        var failures: [String] = []
-        for file in try Self.swiftFiles() where file != Self.ownerPath {
-            let source = SourceLex.strippedCommentsOnly(try SourceTestSupport.read(file))
-            for id in ids where source.contains("\"\(id.rawValue)\"") {
-                failures.append("\(file): \"\(id.rawValue)\"")
-            }
-        }
-        XCTAssertEqual(
-            failures,
-            [],
-            "Use the ToolFeatureID constant from \(Self.ownerPath) instead of the literal:\n"
-                + failures.joined(separator: "\n")
-        )
+    static let ownerPath = "Sources/AppCore/Features/BuiltInToolIDs.swift"
+    static let ids: [ToolFeatureID] = [.archiveBrowser, .bpmTapper, .wavConverter, .audioRecorder, .downloader, .stemSeparation]
+
+    func testBuiltInToolIDsAreSpelledOnlyInTheirCatalog() {
+        let files = SourceTree.swiftFiles(under: "Sources/", atLeast: 100).filter { $0 != Self.ownerPath }
+        let literals = Self.ids.map { NSRegularExpression.escapedPattern(for: "\"\($0.rawValue)\"") }.joined(separator: "|")
+        Self.rule.check(SourceTree.matches(literals, in: files, .codeAndStrings), "spells a built-in tool ID")
     }
 
-    /// Settings is known by its section (`ToolSection.settings`), not by its ID: the
-    /// ID is spelled only where the Settings tool declares it.
-    func testSettingsToolIDIsSpelledOnlyInItsFeature() throws {
+    /// Settings is known by its section (`ToolSection.settings`), not by its ID: the ID is spelled
+    /// only where the Settings tool declares it.
+    func testSettingsToolIDIsSpelledOnlyInItsFeature() {
         let owner = "Sources/NikoMusicHub/Settings/SettingsFeature.swift"
-        var failures: [String] = []
-        for file in try Self.swiftFiles() where file != owner {
-            if SourceLex.strippedCommentsOnly(try SourceTestSupport.read(file)).contains("\"settings\"") {
-                failures.append(file)
-            }
-        }
-        XCTAssertEqual(failures, [], "Check `metadata.section == .settings` instead of the Settings ID")
-        XCTAssertTrue(try SourceTestSupport.read(owner).contains("section: .settings"))
+        let files = SourceTree.swiftFiles(under: "Sources/", atLeast: 100).filter { $0 != owner }
+        Self.rule.check(SourceTree.matches(#""settings""#, in: files, .codeAndStrings), "spells the Settings tool ID")
+        Self.rule.expect(owner, contains: ["section: .settings"])
     }
 
     /// The IDs are stored and typed (`-ui-tool`, the shell's selection, inbox items).
     func testBuiltInToolIDsKeepTheirStoredStrings() {
         XCTAssertEqual(
-            [ToolFeatureID.archiveBrowser, .bpmTapper, .wavConverter, .audioRecorder, .downloader, .stemSeparation]
-                .map(\.rawValue),
+            Self.ids.map(\.rawValue),
             ["archive-browser", "bpm-tapper", "wav-converter", "audio-recorder", "downloader", "stem-separation"]
         )
-    }
-
-    private static func swiftFiles() throws -> [String] {
-        let root = SourceTestSupport.packageRoot
-        let sources = root.appendingPathComponent("Sources")
-        guard let enumerator = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil) else {
-            return []
-        }
-        let files = enumerator.compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "swift" }
-            .map { String($0.standardizedFileURL.path.dropFirst(root.standardizedFileURL.path.count + 1)) }
-            .sorted()
-        XCTAssertGreaterThan(files.count, 100, "Sources/ walk found too few files")
-        return files
     }
 }

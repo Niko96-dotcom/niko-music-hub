@@ -1,50 +1,28 @@
 import XCTest
 
-/// Structural source-check tests asserting architectural invariants the
-/// Swift compiler cannot enforce for Phase 46 (ROUT-07).
+/// Quick access (menu bar, Dock, shortcuts) routes through `QuickAccessRouter`: it never builds a tool's
+/// view, never hands off output files, and stays an `ObservableObject` (ROUT-07, HAND-04).
+/// AGENTS.md row "Design contract"; docs/menu-bar-quick-access.md, docs/architecture.md § SwiftUI state
+/// ownership (one-shot router requests).
 final class QuickAccessSourceTests: XCTestCase {
+    static let rule = RepoRule(
+        name: "Quick access only routes",
+        why: "A second place that builds tool views or hands off files would bypass the shell's one pane cache and the inbox's safety gates",
+        see: "AGENTS.md row \"Design contract\"; docs/menu-bar-quick-access.md",
+        fix: "Ask the router for the tool (a one-shot QuickAccessToolRequest) and let the shell show it"
+    )
 
-    // MARK: - No makeView in QuickAccess sources (ROUT-07)
-
-    func testQuickAccessSourcesDoNotCallMakeView() throws {
-        let files = [
-            "Sources/AppCore/QuickAccess/QuickAccessCommand.swift",
-            "Sources/AppCore/QuickAccess/QuickAccessEntry.swift",
-            "Sources/AppCore/QuickAccess/QuickAccessResolver.swift",
-            "Sources/AppCore/QuickAccess/QuickAccessRouter.swift",
-        ]
-        for path in files {
-            let source = try SourceTestSupport.read(path)
-            XCTAssertFalse(
-                source.contains("makeView"),
-                "QuickAccess source must not call makeView — ROUT-07: \(path)"
-            )
+    func testQuickAccessSourcesDoNotCallMakeView() {
+        for name in ["QuickAccessCommand", "QuickAccessEntry", "QuickAccessResolver", "QuickAccessRouter"] {
+            Self.rule.expect("Sources/AppCore/QuickAccess/\(name).swift", lacks: ["makeView"], because: "ROUT-07")
         }
     }
 
-    // MARK: - No OutputHandoff reference in router (HAND-04)
-
-    func testQuickAccessRouterDoesNotReferenceOutputHandoff() throws {
-        let path = "Sources/AppCore/QuickAccess/QuickAccessRouter.swift"
-        let source = try SourceTestSupport.read(path)
-        XCTAssertFalse(
-            source.contains("OutputHandoff"),
-            "QuickAccessRouter must not reference OutputHandoff — HAND-04 boundary"
-        )
+    func testQuickAccessRouterDoesNotReferenceOutputHandoff() {
+        Self.rule.expect("Sources/AppCore/QuickAccess/QuickAccessRouter.swift", lacks: ["OutputHandoff"], because: "HAND-04")
     }
 
-    // MARK: - No @Observable macro in QuickAccess sources (project convention)
-
-    func testQuickAccessSourcesDoNotUseObservableMacro() throws {
-        let files = [
-            "Sources/AppCore/QuickAccess/QuickAccessRouter.swift",
-        ]
-        for path in files {
-            let source = try SourceTestSupport.read(path)
-            XCTAssertFalse(
-                source.contains("@Observable"),
-                "Project convention: use ObservableObject, not @Observable macro: \(path)"
-            )
-        }
+    func testQuickAccessSourcesDoNotUseObservableMacro() {
+        Self.rule.expect("Sources/AppCore/QuickAccess/QuickAccessRouter.swift", lacks: ["@Observable"], because: "the project uses ObservableObject")
     }
 }

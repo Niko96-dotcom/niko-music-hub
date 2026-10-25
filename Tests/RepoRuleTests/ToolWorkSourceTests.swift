@@ -1,78 +1,65 @@
 import AppCore
-import Foundation
 import XCTest
 
-/// How a tool runs its work (docs/architecture.md § How a tool runs its work). Work the person
-/// waits for runs as a `JobRunner` job: the runner puts it in the jobs strip, routes Esc and ⌘.
-/// by its cancel target and keeps quit waiting until the operation unwinds (ADR-019). A tool's
-/// own `Task` sees none of that unless it registers with `ShellJobStatusCenter.setExtraJob`
-/// by hand. Own tasks outside the registry shipped three times: recorder takes and helper
-/// installs (061ea81) and the download's title lookup (c69717f) were cut off by quit.
-///
-/// Types cannot see an unregistered `Task`, so this test lists every task a tool creates, keyed
-/// by the declaration it sits in, with its reason, and keeps the extra sources a closed list of
-/// named exceptions.
+/// How a tool runs its work. Work the person waits for runs as a `JobRunner` job: the runner puts it in
+/// the jobs strip, routes Esc and ⌘. by its cancel target and keeps quit waiting until the operation
+/// unwinds (ADR-019). A tool's own `Task` sees none of that unless it registers with
+/// `ShellJobStatusCenter.setExtraJob` by hand. Own tasks outside the registry shipped three times:
+/// recorder takes and helper installs (061ea81) and the download's title lookup (c69717f) were cut off
+/// by quit. Types cannot see an unregistered `Task`, so this test lists every task a tool creates, keyed
+/// by the declaration it sits in, with its reason, and keeps the extra sources a closed list of named
+/// exceptions. AGENTS.md row "Tool runs"; docs/architecture.md § How a tool runs its work.
 final class ToolWorkSourceTests: XCTestCase {
-    func testEveryTaskInAToolIsListedWithItsReason() throws {
-        var failures: [String] = []
+    static let rule = RepoRule(
+        name: "Tool runs",
+        why: "A tool's own Task is outside the jobs strip, Esc routing and the quit wait; three such runs were cut off by quit",
+        see: "AGENTS.md row \"Tool runs\"; docs/architecture.md § How a tool runs its work",
+        fix: "Run work the person waits for as a job (ToolContext.jobRunner.enqueue); list a Task in taskSites only for view-local async or a step its job or take awaits and cancels"
+    )
+
+    func testEveryTaskInAToolIsListedWithItsReason() {
+        var problems: [String] = []
         var seen: Set<String> = []
-        for file in try Self.toolSourceFiles() {
-            let found = Self.taskSites(in: SourceLex.stripped(try SourceTestSupport.read(file)))
+        for file in Self.toolSourceFiles {
+            let found = Self.taskSites(in: SourceTree.read(file, .code))
             let listed = (Self.taskSites[file] ?? []).map(\.declaration)
             if !found.isEmpty { seen.insert(file) }
-            let unlisted = Self.subtracting(listed, from: found.map(\.declaration))
-            let gone = Self.subtracting(found.map(\.declaration), from: listed)
-            for declaration in unlisted {
-                let lines = found.filter { $0.declaration == declaration }.map { "line \($0.line)" }
-                failures.append(
-                    "\(file): unlisted Task in \(declaration) (\(lines.joined(separator: ", "))). Run work the person "
-                        + "waits for as a job (ToolContext.jobRunner.enqueue); list a Task in taskSites only for "
-                        + "view-local async that may die with the view, or a step its job or take awaits and cancels."
-                )
+            for declaration in Self.subtracting(listed, from: found.map(\.declaration)) {
+                let lines = found.filter { $0.declaration == declaration }.map { "\(file):\($0.line)" }
+                problems.append("\(lines.joined(separator: ", ")): unlisted Task in \(declaration)")
             }
-            for declaration in gone {
-                failures.append("\(file): taskSites lists a Task in \(declaration) that is not there. Remove its entry.")
+            for declaration in Self.subtracting(found.map(\.declaration), from: listed) {
+                problems.append("\(file): taskSites lists a Task in \(declaration) that is not there; remove its entry")
             }
         }
-        for file in Set(Self.taskSites.keys).subtracting(seen) {
-            failures.append("\(file): no Task left. Remove it from taskSites.")
+        for file in Set(Self.taskSites.keys).subtracting(seen).sorted() {
+            problems.append("\(file): no Task left; remove it from taskSites")
         }
-        XCTAssertEqual(failures.sorted(), [], failures.sorted().joined(separator: "\n"))
+        Self.rule.check(problems.sorted())
     }
 
-    /// A new tool does not add an extra source: it enqueues a job. Each extra source is a
-    /// named exception with the reason it is not a job and the one place that registers it.
-    /// `setExtraJob(sourceID:)` takes only a `ShellJobExtraSourceID` case, so the compiler
-    /// refuses an unnamed source; this test keeps a reason and an owner for every case.
-    func testExtraSourcesAreTheNamedExceptions() throws {
+    /// A new tool does not add an extra source: it enqueues a job. Each extra source is a named exception
+    /// with the reason it is not a job and the one place that registers it. `setExtraJob(sourceID:)` takes
+    /// only a `ShellJobExtraSourceID` case, so the compiler refuses an unnamed source; this test keeps a
+    /// reason and an owner for every case.
+    func testExtraSourcesAreTheNamedExceptions() {
         let declared = Set(ShellJobExtraSourceID.allCases.map { String(describing: $0) })
-        XCTAssertEqual(
-            declared,
-            Set(Self.extraSources.keys),
-            "ShellJobExtraSourceID lists the work that runs outside JobRunner. A new tool runs its work as a "
-                + "JobRunner job; a real exception gets its reason in extraSources and in the docs."
-        )
-
-        let registration = try NSRegularExpression(pattern: #"(?<!func )\bsetExtraJob\s*\(\s*sourceID\s*:\s*([^,)]*)"#)
-        var failures: [String] = []
-        for file in try Self.appSourceFiles() {
-            let source = SourceLex.strippedCommentsOnly(try SourceTestSupport.read(file)) as NSString
+        Self.rule.require(declared == Set(Self.extraSources.keys),
+                          "ShellJobExtraSourceID has \(declared.sorted()) but extraSources lists \(Self.extraSources.keys.sorted()); a real exception gets its reason here and in the docs")
+        let registration = SourceTree.regex(#"(?<!func )\bsetExtraJob\s*\(\s*sourceID\s*:\s*([^,)]*)"#)
+        for file in SourceTree.swiftFiles(under: "Sources/") {
+            let source = SourceTree.read(file, .codeAndStrings) as NSString
             for match in registration.matches(in: source as String, range: NSRange(location: 0, length: source.length)) {
                 let argument = source.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
-                let unprefixed = argument.hasPrefix("ShellJobExtraSourceID")
-                    ? String(argument.dropFirst("ShellJobExtraSourceID".count))
-                    : argument
-                let name = unprefixed.hasPrefix(".") ? String(unprefixed.dropFirst()) : nil
-                guard let name, let owner = Self.extraSources[name]?.owner else {
-                    failures.append("\(file): setExtraJob(sourceID: \(argument)) does not name its case, so its owner cannot be checked")
+                let unprefixed = argument.hasPrefix("ShellJobExtraSourceID") ? String(argument.dropFirst("ShellJobExtraSourceID".count)) : argument
+                let at = "\(file):\(SourceTree.lineNumber(of: match.range.location, in: source))"
+                guard unprefixed.hasPrefix("."), let owner = Self.extraSources[String(unprefixed.dropFirst())]?.owner else {
+                    Self.rule.check(["\(at): setExtraJob(sourceID: \(argument)) does not name its case, so its owner cannot be checked"])
                     continue
                 }
-                if !file.hasPrefix(owner) {
-                    failures.append("\(file): registers ShellJobExtraSourceID.\(name), which belongs to \(owner)")
-                }
+                Self.rule.require(file.hasPrefix(owner), "\(at) registers ShellJobExtraSourceID\(unprefixed), which belongs to \(owner)")
             }
         }
-        XCTAssertEqual(failures, [], failures.joined(separator: "\n"))
     }
 
     /// The detector counts the ways this code base starts an unstructured `Task`, and no type
@@ -284,16 +271,16 @@ final class ToolWorkSourceTests: XCTestCase {
 
     /// `Task {`, `Task<…> {`, `Task(…)`; `Task.init`, `Task.immediate`, `Task.detached`; and
     /// `: Task<…> = .init/.immediate/.detached`.
-    private static let taskConstruction = try! NSRegularExpression(
-        pattern: #"\bTask\s*(?:"# + generic + #")?\s*[{(]|\bTask\s*\.\s*(?:init|immediate|detached)\b|:\s*Task\s*"#
+    private static let taskConstruction = SourceTree.regex(
+        #"\bTask\s*(?:"# + generic + #")?\s*[{(]|\bTask\s*\.\s*(?:init|immediate|detached)\b|:\s*Task\s*"#
             + generic + #"\s*\??\s*=\s*\.(?:init|immediate|detached)\b"#
     )
 
     /// `-> Task<…> {` and `var name: Task<…> {` are a return type and a computed property's type.
-    private static let typePosition = try! NSRegularExpression(pattern: #"(?:->|\bvar\s+\w+\s*:)\s*$"#)
+    private static let typePosition = SourceTree.regex(#"(?:->|\bvar\s+\w+\s*:)\s*$"#)
 
-    private static let declaration = try! NSRegularExpression(
-        pattern: #"^\s*(?:@[\w.]+(?:\([^)]*\))?\s+)*(?:(?:public|private|fileprivate|internal|open|static|class|override|final|nonisolated|convenience|mutating|required|lazy)(?:\([^)]*\))?\s+)*(?:func\s+(\w+)|(init)\b|(deinit)\b|var\s+(\w+)|subscript\b|(?:class|struct|actor|enum|extension)\s+(\w+))"#
+    private static let declaration = SourceTree.regex(
+        #"^\s*(?:@[\w.]+(?:\([^)]*\))?\s+)*(?:(?:public|private|fileprivate|internal|open|static|class|override|final|nonisolated|convenience|mutating|required|lazy)(?:\([^)]*\))?\s+)*(?:func\s+(\w+)|(init)\b|(deinit)\b|var\s+(\w+)|subscript\b|(?:class|struct|actor|enum|extension)\s+(\w+))"#
     )
 
     /// Every task construction in `strippedSource`, named by its enclosing declaration: the
@@ -355,11 +342,10 @@ final class ToolWorkSourceTests: XCTestCase {
         return Array(Set(remaining)).sorted()
     }
 
-    /// Every tool's sources: the `Feature*` targets but the archive browser (shell work, not a
-    /// tool run), the shell's helper installer, and the app target's two tool features (Settings,
-    /// the Dev Tool).
-    private static func toolSourceFiles() throws -> [String] {
-        let files = try appSourceFiles().filter { file in
+    /// Every tool's sources: the `Feature*` targets but the archive browser (shell work, not a tool run),
+    /// the shell's helper installer, and the app target's two tool features (Settings, the Dev Tool).
+    private static var toolSourceFiles: [String] {
+        let files = SourceTree.swiftFiles(under: "Sources/").filter { file in
             (file.hasPrefix("Sources/Feature") && !file.hasPrefix("Sources/FeatureArchiveBrowser/"))
                 || file.hasPrefix("Sources/AppCore/HelperTools/")
                 || file.hasPrefix("Sources/NikoMusicHub/DevTool/")
@@ -367,15 +353,5 @@ final class ToolWorkSourceTests: XCTestCase {
         }
         XCTAssertGreaterThan(files.count, 30, "Sources/ walk found too few tool files")
         return files
-    }
-
-    private static func appSourceFiles() throws -> [String] {
-        let root = SourceTestSupport.packageRoot.standardizedFileURL.path
-        let sources = SourceTestSupport.packageRoot.appendingPathComponent("Sources")
-        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
-        return enumerator.compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "swift" }
-            .map { String($0.standardizedFileURL.path.dropFirst(root.count + 1)) }
-            .sorted()
     }
 }

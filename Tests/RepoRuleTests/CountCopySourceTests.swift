@@ -1,23 +1,21 @@
-import Foundation
 import XCTest
 
-/// Every count in a string under Sources/ goes through `CountCopy` (NikoMusicCore).
-/// A raw `"\(count) songs"` reads "1 songs"; it shipped twice (8e25a80, e29eafd)
-/// because each fix covered only the files it touched.
+/// Every count in a string under Sources/ goes through `CountCopy` (NikoMusicCore). A raw
+/// `"\(count) songs"` reads "1 songs"; it shipped twice (8e25a80, e29eafd) because each fix covered only
+/// the files it touched. AGENTS.md row "Count copy"; Sources/NikoMusicCore/Domain/CountCopy.swift.
 final class CountCopySourceTests: XCTestCase {
-    func testNoRawCountBeforeAPluralNounUnderSources() throws {
-        var failures: [String] = []
-        for file in try Self.swiftFiles() where !file.hasSuffix(Self.ownerPath) {
-            let source = SourceLex.strippedCommentsOnly(try SourceTestSupport.read(file))
-            failures += Self.violations(in: source).map { "\(file):\($0)" }
-        }
-        XCTAssertEqual(
-            failures,
-            [],
-            "A count before a fixed plural reads \"1 songs\". Use CountCopy.count(n, \"song\") or "
-                + "CountCopy.noun(for: n, \"song\") from \(Self.ownerPath) instead:\n"
-                + failures.joined(separator: "\n")
-        )
+    static let rule = RepoRule(
+        name: "Count copy",
+        why: "A count before a fixed plural reads \"1 songs\"; it shipped twice",
+        see: "AGENTS.md row \"Count copy\"; \(ownerPath)",
+        fix: "Use CountCopy.count(n, \"song\") or CountCopy.noun(for: n, \"song\")"
+    )
+
+    static let ownerPath = "Sources/NikoMusicCore/Domain/CountCopy.swift"
+
+    func testNoRawCountBeforeAPluralNounUnderSources() {
+        let files = SourceTree.swiftFiles(under: "Sources/", atLeast: 100).filter { $0 != Self.ownerPath }
+        Self.rule.check(files.flatMap { Self.violations(in: SourceTree.read($0, .codeAndStrings), path: $0) }, "counts without CountCopy")
     }
 
     /// The detector must catch the shipped mistakes, or it guards nothing.
@@ -48,8 +46,6 @@ final class CountCopySourceTests: XCTestCase {
 
     // MARK: - Detector
 
-    static let ownerPath = "Sources/NikoMusicCore/Domain/CountCopy.swift"
-
     /// Words after an interpolation that end in "s" but are not plural nouns.
     private static let notPlural: Set<String> = [
         "across", "alias", "always", "as", "does", "focus", "has", "his", "is", "its",
@@ -57,44 +53,17 @@ final class CountCopySourceTests: XCTestCase {
     ]
 
     /// `\(expr) words` with up to two levels of nested parentheses in `expr`.
-    private static let interpolationThenWord = try! NSRegularExpression(
-        pattern: #"\\\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\) ([a-z]+)\b(?!=)"#
-    )
+    private static let interpolationThenWord = SourceTree.regex(#"\\\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\) ([a-z]+)\b(?!=)"#)
 
     /// A ternary on one that picks between two plain word literals:
     /// `n == 1 ? "song" : "songs"`, `version\(n == 1 ? "" : "s")`.
-    private static let handRolledNounChoice = try! NSRegularExpression(
-        pattern: #"(?:==|!=|>)\s*1\s*\?\s*"[^"\\]*"\s*:\s*"[^"\\]*""#
-    )
+    private static let handRolledNounChoice = SourceTree.regex(#"(?:==|!=|>)\s*1\s*\?\s*"[^"\\]*"\s*:\s*"[^"\\]*""#)
 
-    static func violations(in source: String) -> [String] {
-        var hits: [String] = []
-        let ns = source as NSString
-        func line(of location: Int) -> Int {
-            ns.substring(to: location).components(separatedBy: "\n").count
+    static func violations(in source: String, path: String = "") -> [SourceTree.Match] {
+        let plurals = SourceTree.matches(interpolationThenWord, in: source, path: path).filter { match in
+            let word = String(match.text.split(separator: " ").last ?? "")
+            return word.hasSuffix("s") && !word.hasSuffix("ss") && !notPlural.contains(word)
         }
-        for match in interpolationThenWord.matches(in: source, range: NSRange(location: 0, length: ns.length)) {
-            let word = ns.substring(with: match.range(at: 1))
-            guard word.hasSuffix("s"), !word.hasSuffix("ss"), !notPlural.contains(word) else { continue }
-            hits.append("\(line(of: match.range.location)): \(ns.substring(with: match.range))")
-        }
-        for match in handRolledNounChoice.matches(in: source, range: NSRange(location: 0, length: ns.length)) {
-            hits.append("\(line(of: match.range.location)): \(ns.substring(with: match.range))")
-        }
-        return hits
-    }
-
-    private static func swiftFiles() throws -> [String] {
-        let root = SourceTestSupport.packageRoot
-        let sources = root.appendingPathComponent("Sources")
-        guard let enumerator = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil) else {
-            return []
-        }
-        let files = enumerator.compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "swift" }
-            .map { String($0.standardizedFileURL.path.dropFirst(root.standardizedFileURL.path.count + 1)) }
-            .sorted()
-        XCTAssertGreaterThan(files.count, 100, "Sources/ walk found too few files")
-        return files
+        return plurals + SourceTree.matches(handRolledNounChoice, in: source, path: path)
     }
 }

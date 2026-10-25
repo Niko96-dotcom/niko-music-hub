@@ -1,16 +1,18 @@
-import Foundation
 import XCTest
 
-/// Archive previews are output-only. When the default output device also has input streams
-/// (a duplex interface or a virtual device such as "Jump Desktop Audio"), macOS coreaudiod
-/// still asks TCC for microphone access as soon as any client starts IO on that device, and it
-/// holds the IO start until the prompt is answered. That gate is outside the app; this guard
-/// keeps the preview path from adding a real input dependency on top of it.
+/// Archive previews are output-only. When the default output device also has input streams (a duplex
+/// interface or a virtual device such as "Jump Desktop Audio"), macOS coreaudiod still asks TCC for
+/// microphone access as soon as any client starts IO on that device, and it holds the IO start until
+/// the prompt is answered. That gate is outside the app; this guard keeps the preview path from adding
+/// a real input dependency on top of it.
+/// AGENTS.md row "Preview is output-only"; docs/architecture.md § Archive preview playback.
 final class ArchivePreviewOutputOnlySourceTests: XCTestCase {
-    private static let packageRoot = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
+    static let rule = RepoRule(
+        name: "Preview is output-only",
+        why: "An input API on the preview path asks for the microphone and can hold playback until the prompt is answered",
+        see: "AGENTS.md row \"Preview is output-only\"; docs/architecture.md § Archive preview playback",
+        fix: "Keep previews on AVPlayer; move capture work to FeatureAudioRecorder"
+    )
 
     /// Audio-input, capture and tap APIs. None of them belongs on the preview path.
     private static let inputAPIs = [
@@ -37,25 +39,16 @@ final class ArchivePreviewOutputOnlySourceTests: XCTestCase {
         "setActive(",
     ]
 
-    func testPreviewPlaybackSourcesNeverTouchAudioInput() throws {
-        var hits: [String] = []
-        for directory in ["Sources/FeatureArchiveBrowser", "Sources/NikoMusicCore/Preview"] {
-            for file in try swiftFiles(in: directory) {
-                let source = try String(contentsOf: file, encoding: .utf8)
-                for api in Self.inputAPIHits(in: source) {
-                    hits.append("\(directory)/\(file.lastPathComponent): \(api)")
-                }
-            }
+    /// The top-level files of the archive feature and of Core's Preview folder.
+    func testPreviewPlaybackSourcesNeverTouchAudioInput() {
+        let files = ["Sources/FeatureArchiveBrowser/", "Sources/NikoMusicCore/Preview/"].flatMap { folder in
+            SourceTree.swiftFiles(under: folder).filter { !$0.dropFirst(folder.count).contains("/") }
         }
-        XCTAssertEqual(hits, [], "Preview playback must stay output-only (AVPlayer); move capture work to FeatureAudioRecorder")
+        Self.rule.check(files.flatMap { file in Self.inputAPIHits(in: SourceTree.read(file)).map { "\(file) uses `\($0)`" } })
     }
 
-    func testPreviewPlaybackStaysOnAVPlayer() throws {
-        let player = try String(
-            contentsOf: Self.packageRoot.appendingPathComponent("Sources/FeatureArchiveBrowser/ArchivePreviewPlayer.swift"),
-            encoding: .utf8
-        )
-        XCTAssertTrue(player.contains("AVPlayer(playerItem: item)"))
+    func testPreviewPlaybackStaysOnAVPlayer() {
+        Self.rule.expect("Sources/FeatureArchiveBrowser/ArchivePreviewPlayer.swift", contains: ["AVPlayer(playerItem: item)"])
     }
 
     func testMatcherFindsInputAPIsAndIgnoresComments() {
@@ -67,6 +60,7 @@ final class ArchivePreviewOutputOnlySourceTests: XCTestCase {
         XCTAssertEqual(Self.inputAPIHits(in: sample), ["inputNode", "AVAudioEngine("])
     }
 
+    /// Line comments are dropped; string literals stay (a selector or a key path can name an API).
     private static func inputAPIHits(in source: String) -> [String] {
         let code = source
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -76,14 +70,5 @@ final class ArchivePreviewOutputOnlySourceTests: XCTestCase {
             }
             .joined(separator: "\n")
         return inputAPIs.filter { code.contains($0) }
-    }
-
-    private func swiftFiles(in relativeDirectory: String) throws -> [URL] {
-        let directory = Self.packageRoot.appendingPathComponent(relativeDirectory)
-        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "swift" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        XCTAssertFalse(files.isEmpty, "No Swift sources found in \(relativeDirectory)")
-        return files
     }
 }

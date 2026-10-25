@@ -1,108 +1,67 @@
 import XCTest
 
+/// The archive uses one persistent transport, the shared cards and fields, and keeps its read-only
+/// safety hooks where a reader can see them.
+/// AGENTS.md row "Design contract"; docs/design-contract.md, docs/architecture.md § Safety architecture.
 final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
-    func testArchiveBrowserUsesOnePersistentTransport() throws {
-        let player = try featureSource("ArchivePersistentPlayerView.swift")
-        let row = try featureSource("SongCardView.swift")
-        let detail = try featureSource("SongDetailView.swift")
-        XCTAssertTrue(player.contains("Persistent preview player"))
-        XCTAssertFalse(row.contains("ArchivePreviewPlayer()"))
-        XCTAssertFalse(detail.contains("ArchivePreviewPlayer()"))
-        XCTAssertFalse(detail.contains("ArchiveWaveformHeroView"))
+    static let rule = RepoRule(
+        name: "Archive surfaces and safety hooks",
+        why: "A second player, a local card formula or a missing open/reveal hook each shipped a regression in the archive",
+        see: "AGENTS.md row \"Design contract\"; docs/design-contract.md; docs/architecture.md § Safety architecture",
+        fix: "Play through ArchivePersistentPlayerView, build cards with hubCard/hubSurface, open and reveal through ArchiveFileAccessModel"
+    )
+
+    private static func feature(_ file: String) -> String { "Sources/FeatureArchiveBrowser/\(file)" }
+
+    /// The view model's files: `ArchiveBrowserViewModel.swift` and its `+…` extensions.
+    private static var viewModelFiles: [String] {
+        SourceTree.swiftFiles(under: feature("ArchiveBrowserViewModel")).filter { !$0.dropFirst(feature("").count).contains("/") }
     }
 
-    func testArchiveBrowserUsesLiquidCardsFieldsAndDiagnosticsChrome() throws {
-        let combined = try [
-            "ArchiveSidebarView.swift",
-            "SongCardView.swift",
-            "SongDetailView.swift",
-            "ArchiveDiagnosticsPanelView.swift",
-            "ArchiveFirstRunView.swift",
-        ]
-        .map(featureSource)
-        .joined(separator: "\n")
+    func testArchiveBrowserUsesOnePersistentTransport() {
+        Self.rule.expect(Self.feature("ArchivePersistentPlayerView.swift"), contains: ["Persistent preview player"])
+        Self.rule.expect(Self.feature("SongCardView.swift"), lacks: ["ArchivePreviewPlayer()"])
+        Self.rule.expect(Self.feature("SongDetailView.swift"), lacks: ["ArchivePreviewPlayer()", "ArchiveWaveformHeroView"])
+    }
 
-        // Reference-spec migration: archive surfaces use the semantic hubCard/hubSurface
-        // primitives and ControlState (`state:`) instead of the deleted Liquid adapters.
-        [
-            "hubCard",
-            "state: .warning",
-            "ArchiveDiagnosticsPanelAccessibility.rootHealthBadge",
-            "Music archive",
-        ].forEach { required in
-            XCTAssertTrue(combined.contains(required), "Missing archive Liquid surface source: \(required)")
+    func testArchiveBrowserUsesLiquidCardsFieldsAndDiagnosticsChrome() {
+        // Reference-spec migration: archive surfaces use the semantic hubCard/hubSurface primitives and
+        // ControlState (`state:`) instead of the deleted Liquid adapters.
+        let combined = ["ArchiveSidebarView.swift", "SongCardView.swift", "SongDetailView.swift", "ArchiveDiagnosticsPanelView.swift", "ArchiveFirstRunView.swift"]
+            .map { SourceTree.read(Self.feature($0)) }.joined(separator: "\n")
+        for fragment in ["hubCard", "state: .warning", "ArchiveDiagnosticsPanelAccessibility.rootHealthBadge", "Music archive"] {
+            Self.rule.require(combined.contains(fragment), "the archive's sidebar, cards, detail, diagnostics and first run no longer contain `\(fragment)`")
         }
-
-        let songCard = try featureSource("SongCardView.swift")
-        XCTAssertFalse(songCard.contains("variant: .rowStrip"), "Song rows must not host the thin waveform strip")
-
-        let detail = try featureSource("SongDetailView.swift")
-        XCTAssertTrue(detail.contains("hubSurface(.panel"), "Vault attention state must preserve its panel")
-        XCTAssertTrue(detail.contains("liveSong.openProjectLabel"), "Primary project action must identify the selected DAW")
-        XCTAssertTrue(detail.contains("Mixdown BPM"), "BPM fidelity must remain visible in essential info")
-        XCTAssertTrue(detail.contains("%.1f"), "BPM must keep one-decimal precision")
-        XCTAssertTrue(detail.contains("liveSong"), "Detail must resolve live catalog snapshots")
-
-
-        let miniPlayer = try featureSource("ArchivePreviewPlayer.swift")
-        XCTAssertTrue(miniPlayer.contains("func bind(url"), "Lazy bind must exist for list rows")
-        XCTAssertTrue(miniPlayer.contains("clearMetadataCaches"), "Hook/duration caches must be clearable")
-
-        let viewModel = try archiveBrowserViewModelSources()
-        let page = try featureSource("ArchivePageModel.swift")
-        XCTAssertTrue(page.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
-        XCTAssertTrue(page.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
-        XCTAssertTrue(viewModel.contains("reconcileSelectedSong"), "Browse/scan must reconcile selection")
-        XCTAssertTrue(viewModel.contains("previewSession.clear()"), "Explicit lifecycle reset must stop playback")
-        XCTAssertTrue(viewModel.contains("scheduleDebouncedIndexPersist"), "Metadata edits must debounce index writes")
-        let songAnalysis = try featureSource("ArchiveSongAnalysisModel.swift")
-        XCTAssertTrue(songAnalysis.contains("mixdownCacheKey"), "BPM/key must key off preview id")
-
-        let browser = try featureSource("ArchiveBrowserView.swift")
-        XCTAssertTrue(browser.contains("viewModel.songs.isEmpty"), "Archive remount must not unconditional full-scan")
-    }
-
-    func testArchiveReadOnlySafetyHooksRemainSourceVisible() throws {
-        let browser = try featureSource("ArchiveBrowserView.swift")
-        let viewModel = try archiveBrowserViewModelSources()
-        let onboarding = try featureSource("ArchiveFirstRunView.swift")
-        let smokeValidation = try featureSource("ArchiveUserFlowSmokeValidation.swift")
-
-        [
-            "openMainPreview",
-            "openLatestCPR",
-            "revealInFinder",
-        ].forEach { required in
-            XCTAssertTrue(browser.contains(required), "Missing archive keyboard safety hook: \(required)")
+        Self.rule.expect(Self.feature("SongCardView.swift"), lacks: ["variant: .rowStrip"], because: "song rows do not host the thin waveform strip")
+        let detail = Self.feature("SongDetailView.swift")
+        Self.rule.expect(detail, contains: ["hubSurface(.panel"], because: "the Vault attention state keeps its panel")
+        Self.rule.expect(detail, contains: ["liveSong.openProjectLabel"], because: "the primary project action names the selected DAW")
+        Self.rule.expect(detail, contains: ["Mixdown BPM", "%.1f"], because: "BPM stays visible with one decimal")
+        Self.rule.expect(detail, contains: ["liveSong"], because: "the detail resolves live catalog snapshots")
+        Self.rule.expect(Self.feature("ArchivePreviewPlayer.swift"), contains: ["func bind(url", "clearMetadataCaches"],
+                         because: "list rows bind lazily and hook/duration caches can be cleared")
+        Self.rule.expect(Self.feature("ArchivePageModel.swift"), contains: ["songDetailsExpanded = false", "pluginsSectionExpanded = false"],
+                         because: "selecting a song collapses Details and plug-ins")
+        let viewModel = Self.viewModelFiles.map { SourceTree.read($0) }.joined(separator: "\n")
+        for (fragment, meaning) in [
+            ("reconcileSelectedSong", "browse and scan reconcile the selection"),
+            ("previewSession.clear()", "an explicit lifecycle reset stops playback"),
+            ("scheduleDebouncedIndexPersist", "metadata edits debounce index writes"),
+        ] {
+            Self.rule.require(viewModel.contains(fragment), "ArchiveBrowserViewModel*.swift no longer contains `\(fragment)` (\(meaning))")
         }
-
-        let fileAccess = try featureSource("ArchiveFileAccessModel.swift")
-        [
-            "opener.openLatestCPR",
-            "fileActions.revealInFinder",
-            "preferredRevealURL",
-        ].forEach { required in
-            XCTAssertTrue(fileAccess.contains(required), "Missing archive open/reveal source: \(required)")
-        }
-        XCTAssertTrue(viewModel.contains("dryRunOpen: runtime.dryRunOpen"), "Opening follows the dry-run switch")
-
-        XCTAssertTrue(onboarding.contains("scans read-only"))
-        XCTAssertTrue(onboarding.contains("never renamed or moved"))
-        XCTAssertTrue(smokeValidation.contains("write_probe_denied"))
-        XCTAssertTrue(smokeValidation.contains("archive_unchanged"))
+        Self.rule.expect(Self.feature("ArchiveSongAnalysisModel.swift"), contains: ["mixdownCacheKey"], because: "BPM/key keys off the preview id")
+        Self.rule.expect(Self.feature("ArchiveBrowserView.swift"), contains: ["viewModel.songs.isEmpty"],
+                         because: "an archive remount does not run an unconditional full scan")
     }
 
-    private func featureSource(_ filename: String) throws -> String {
-        try String(
-            contentsOfFile: "Sources/FeatureArchiveBrowser/\(filename)",
-            encoding: .utf8
-        )
-    }
-
-    private func archiveBrowserViewModelSources() throws -> String {
-        let filenames = try FileManager.default.contentsOfDirectory(atPath: "Sources/FeatureArchiveBrowser")
-            .filter { $0.hasPrefix("ArchiveBrowserViewModel") && $0.hasSuffix(".swift") }
-            .sorted()
-        return try filenames.map(featureSource).joined(separator: "\n")
+    func testArchiveReadOnlySafetyHooksRemainSourceVisible() {
+        Self.rule.expect(Self.feature("ArchiveBrowserView.swift"), contains: ["openMainPreview", "openLatestCPR", "revealInFinder"],
+                         because: "the keyboard reaches the safe open and reveal paths")
+        Self.rule.expect(Self.feature("ArchiveFileAccessModel.swift"), contains: ["opener.openLatestCPR", "fileActions.revealInFinder", "preferredRevealURL"])
+        let viewModel = Self.viewModelFiles.map { SourceTree.read($0) }.joined(separator: "\n")
+        Self.rule.require(viewModel.contains("dryRunOpen: runtime.dryRunOpen"), "ArchiveBrowserViewModel*.swift no longer follows the dry-run open switch")
+        Self.rule.expect(Self.feature("ArchiveFirstRunView.swift"), contains: ["scans read-only", "never renamed or moved"])
+        Self.rule.expect(Self.feature("ArchiveUserFlowSmokeValidation.swift"), contains: ["write_probe_denied", "archive_unchanged"])
     }
 }

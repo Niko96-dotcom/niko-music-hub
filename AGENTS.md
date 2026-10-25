@@ -70,7 +70,8 @@ Each rule exists because agents broke it more than once. Prefer the enforcer ove
 trips one, fix the code, not the check. When the operator corrects a mistake, fix it and add its rule here.
 A rule that is already listed with "judgment" next to it is a repeat: enforce it in the same change
 (architecture, then types, then a test that names the right file or function). Drop a row once its mistake
-cannot compile. Rule tests live in `Tests/RepoRuleTests/`; a test in another target names it.
+cannot compile. Rule tests live in `Tests/RepoRuleTests/` (a test in another target names it) and fail as
+`Rule: … Why: … See: <row> Fix: …`; `RulebookSourceTests` checks that every test named below exists.
 
 | Rule | Enforced by | Doc |
 | --- | --- | --- |
@@ -114,9 +115,8 @@ For scoped implementation changes, run the checks relevant to the affected behav
 ./script/e2e_user_smoke.sh
 ```
 
-`./script/ci.sh` skips host-only CoreAudio recording tests that require a usable system-audio capture
-device. Those tests are still part of the source suite; they are just not a reliable always-on-Mac gate.
-Friendly wrappers: `./script/dev.sh run`, `./script/dev.sh doctor`, `./script/dev.sh check`.
+`./script/ci.sh` skips host-only CoreAudio recording tests that need a usable system-audio capture device;
+they stay in the source suite. Friendly wrappers: `./script/dev.sh run`, `doctor`, `check`.
 
 ## Release engineering
 
