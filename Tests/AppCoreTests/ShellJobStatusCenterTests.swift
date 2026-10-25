@@ -62,8 +62,8 @@ final class ShellJobStatusCenterTests: XCTestCase {
             cancel: { stopFlag.mark() }
         )
 
-        try await waitUntil { center.jobs.contains { $0.id == ShellJobExtraSourceID.converter } }
-        center.cancel(id: ShellJobExtraSourceID.converter)
+        try await waitUntil { center.jobs.contains { $0.id == ShellJobExtraSourceID.converter.rawValue } }
+        center.cancel(id: ShellJobExtraSourceID.converter.rawValue)
         XCTAssertTrue(stopFlag.isMarked)
     }
 
@@ -75,7 +75,7 @@ final class ShellJobStatusCenterTests: XCTestCase {
             sourceID: ShellJobExtraSourceID.converter,
             status: converterRow()
         )
-        XCTAssertTrue(center.jobs.contains { $0.id == ShellJobExtraSourceID.converter })
+        XCTAssertTrue(center.jobs.contains { $0.id == ShellJobExtraSourceID.converter.rawValue })
 
         // Main stays blocked, so the runner update read off main is queued
         // behind the main-thread removal of the converter row.
@@ -85,7 +85,7 @@ final class ShellJobStatusCenterTests: XCTestCase {
 
         try await waitUntil { center.jobs.contains { $0.title == job.title } }
         try await Task.sleep(for: .milliseconds(50))
-        XCTAssertFalse(center.jobs.contains { $0.id == ShellJobExtraSourceID.converter })
+        XCTAssertFalse(center.jobs.contains { $0.id == ShellJobExtraSourceID.converter.rawValue })
     }
 
     func testRealJobRunnerCancelRemovesShellStatus() async throws {
@@ -107,9 +107,9 @@ final class ShellJobStatusCenterTests: XCTestCase {
 
     private func converterRow() -> ShellJobStatus {
         ShellJobStatus(
-            id: ShellJobExtraSourceID.converter,
+            id: ShellJobExtraSourceID.converter.rawValue,
             title: "Loop.m4a",
-            cancelActionID: ShellJobExtraSourceID.converter,
+            cancelActionID: ShellJobExtraSourceID.converter.rawValue,
             activityVerb: "Converting"
         )
     }

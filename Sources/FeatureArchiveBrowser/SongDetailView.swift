@@ -121,10 +121,10 @@ struct SongDetailView: View {
         // Archive Now, Cancel transfer and the other Vault actions in "Manage
         // storage" ask for confirmation in a dialog the board presents. A sheet
         // cannot open over this one, so close it as soon as a dialog waits.
-        .onChange(of: viewModel.hasPendingProjectVaultDialog) { _, pending in
+        .onChange(of: viewModel.vaultDialogs.hasPendingDialog) { _, pending in
             if pending { storageExpanded = false }
         }
-        .onChange(of: viewModel.songDetailsExpanded) { _, expanded in
+        .onChange(of: viewModel.page.songDetailsExpanded) { _, expanded in
             if expanded { workspaceTab = .versions }
         }
         .onReceive(NotificationCenter.default.publisher(for: .archiveShowSongVersions)) { _ in
@@ -134,16 +134,16 @@ struct SongDetailView: View {
             if tab == .plugins {
                 // Already expanded means no false→true change below, so ask
                 // here: the main project may have changed since the last visit.
-                if viewModel.pluginsSectionExpanded {
-                    viewModel.refreshCPRPluginSummary(for: liveSong)
+                if viewModel.page.pluginsSectionExpanded {
+                    viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
                 } else {
-                    viewModel.pluginsSectionExpanded = true
+                    viewModel.page.pluginsSectionExpanded = true
                 }
             }
         }
         .onChange(of: liveSong.effectiveLatestCPR?.filePath) { _, _ in
-            if viewModel.pluginsSectionExpanded {
-                viewModel.refreshCPRPluginSummary(for: liveSong)
+            if viewModel.page.pluginsSectionExpanded {
+                viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
             }
         }
         // Identity is per song (`.id(song.id)` at the call sites), so a song
@@ -151,8 +151,8 @@ struct SongDetailView: View {
         // being reset by hand, and the outgoing view flushes its drafts below.
         .onAppear {
             syncDrafts(from: liveSong)
-            viewModel.songDetailsExpanded = false
-            viewModel.pluginsSectionExpanded = false
+            viewModel.page.songDetailsExpanded = false
+            viewModel.page.pluginsSectionExpanded = false
         }
         .onDisappear {
             flushMetadataDraftsIfEdited()
@@ -163,11 +163,11 @@ struct SongDetailView: View {
         }
         .onChange(of: liveSong.mainPreviewCandidateID) { _, _ in
             previewCandidatePage = 0
-            viewModel.refreshMixdownAnalysis(for: liveSong)
+            viewModel.songAnalysis.refreshMixdown(for: liveSong)
         }
-        .onChange(of: viewModel.pluginsSectionExpanded) { _, expanded in
+        .onChange(of: viewModel.page.pluginsSectionExpanded) { _, expanded in
             if expanded {
-                viewModel.refreshCPRPluginSummary(for: liveSong)
+                viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
             }
         }
     }
@@ -221,12 +221,12 @@ struct SongDetailView: View {
                 song: liveSong,
                 isPreviewPlaying: isMainPlaying,
                 captureActive: previewSession.captureActive,
-                canRevealInFinder: viewModel.preferredRevealURL(for: liveSong) != nil,
+                canRevealInFinder: viewModel.fileAccess.preferredRevealURL(for: liveSong) != nil,
                 allowsWorkflowMutation: false,
                 showsWorkflowStatus: false,
-                onOpenProject: { try? viewModel.openLatestCPR(for: liveSong) },
+                onOpenProject: { try? viewModel.fileAccess.openLatestCPR(for: liveSong) },
                 onPlayPreview: { viewModel.audition(liveSong) },
-                onRevealInFinder: { viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong)) },
+                onRevealInFinder: { viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: liveSong)) },
                 onWorkflowStatusChange: nil
             )
             Button("Convert main preview") { viewModel.convertMainPreview(for: liveSong) }
@@ -270,7 +270,7 @@ struct SongDetailView: View {
                 .hubCard()
                 // NMH-049: nearby open failure with recovery next to Open.
                 // The footer statusMessage keeps the technical line as a log.
-                if let openError = viewModel.openError {
+                if let openError = viewModel.fileAccess.openError {
                     Text(openError)
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.warning)
@@ -281,7 +281,7 @@ struct SongDetailView: View {
                         style: .secondary,
                         help: "Reveal the song folder in Finder"
                     ) {
-                        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong))
+                        viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: liveSong))
                     }
                 }
             }
@@ -366,14 +366,14 @@ struct SongDetailView: View {
 
     private var essentialInfo: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let estimate = viewModel.bpmEstimate(for: liveSong) {
+            if let estimate = viewModel.songAnalysis.bpmEstimate(for: liveSong) {
                 infoLine(
                     label: "Mixdown BPM",
                     value: "\(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))"
                 )
             }
 
-            if let key = viewModel.keyEstimate(for: liveSong) {
+            if let key = viewModel.songAnalysis.keyEstimate(for: liveSong) {
                 infoLine(
                     label: "Key",
                     value: "\(key.key) (\(key.confidence))"
@@ -427,7 +427,7 @@ struct SongDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if let message = viewModel.projectVaultQueueMessage(for: liveSong) {
                     if viewModel.projectVaultActiveOperation?.songID == liveSong.id {
-                        if let progress = viewModel.projectVaultRestoreProgress,
+                        if let progress = viewModel.vaultDialogs.projectVaultRestoreProgress,
                            let value = progress.fraction {
                             ProgressView(value: value).controlSize(.small)
                             Text(progress.title)
@@ -439,7 +439,7 @@ struct SongDetailView: View {
                             Text("\(Int((value * 100).rounded()))% copied")
                                 .font(HubDesignSystem.Typography.caption())
                                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                        } else if let progress = viewModel.projectVaultRestoreProgress {
+                        } else if let progress = viewModel.vaultDialogs.projectVaultRestoreProgress {
                             ProgressView(progress.title).controlSize(.small)
                             if let scope = progress.scopeDescription {
                                 Text(scope).font(HubDesignSystem.Typography.caption()).foregroundStyle(.secondary)
@@ -568,7 +568,7 @@ struct SongDetailView: View {
         SongProjectVersionsSection(
             song: liveSong,
             openBlockReason: viewModel.projectOpenBlockReason(for: liveSong),
-            onOpen: { try? viewModel.openProjectVersion($0, for: liveSong) },
+            onOpen: { try? viewModel.fileAccess.openProjectVersion($0, for: liveSong) },
             onSetMain: { viewModel.setManualMainCPR(for: liveSong, versionID: $0.id) },
             onHide: { viewModel.ignoreCPRVersion(for: liveSong, versionID: $0.id) },
             onShow: { viewModel.unignoreCPRVersion(for: liveSong, versionID: $0.id) },
@@ -676,7 +676,7 @@ struct SongDetailView: View {
                     || viewModel.metadataRepairSongIDs.contains(liveSong.id)
             )
             SongCollaboratorsSection(
-                collaborators: viewModel.collaborators,
+                collaborators: viewModel.addressBook.collaborators,
                 selectedIDs: liveSong.collaboratorIDs,
                 onToggle: setCollaborator
             )
@@ -701,7 +701,7 @@ struct SongDetailView: View {
     }
 
     private var pluginsSection: some View {
-        let summary = viewModel.cprPluginSummary(for: liveSong)
+        let summary = viewModel.songAnalysis.pluginSummary(for: liveSong)
         // Loading only when a read can still complete: a latest CPR exists but
         // its summary has not arrived. No-project stays on the quiet empty line
         // instead of a perpetual loading state; a finished empty read is also
@@ -711,7 +711,7 @@ struct SongDetailView: View {
         // can run.
         let isLoading = liveSong.effectiveLatestCPR != nil && summary == nil
         return SongPluginsSection(
-            isExpanded: viewModel.pluginsSectionExpanded,
+            isExpanded: viewModel.page.pluginsSectionExpanded,
             pluginNames: summary?.pluginNames,
             isLoading: isLoading
         )

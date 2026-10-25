@@ -4,42 +4,31 @@ import Foundation
 import NikoMusicCore
 import ProjectVaultRuntime
 
-/// Archive shell composition and browse/selection state. Metadata editing,
-/// Vault observation and operations, scanning, and audio/project analysis
-/// delegate to their owners; extensions integrate their results with the UI.
+/// The Archive Browser's composition for its views. Each set of state lives in
+/// one owner with its rules (the "State owners" section); this type wires them,
+/// holds the song catalog and its one writer, the footer and the root reset, and
+/// offers the intents that cross owners (the extension files). Views observe this
+/// object: every owner's publish is forwarded here at once.
 @MainActor
 public final class ArchiveBrowserViewModel: ObservableObject {
-    // MARK: - Types
-
-    /// Archive page layout: the board is home, opening a card goes to
-    /// fullscreen detail, and the classic sidebar+detail list stays reachable.
-    enum ArchiveViewMode {
-        case board
-        case boardDetail
-        case list
-        case analytics
-    }
+    /// Declared, not synthesized. The synthesized getter finds a publisher in the first
+    /// `@Published` property's storage, walking the stored properties on every access;
+    /// without one it returns a fresh publisher each time, so forwarding would depend on
+    /// `footer` staying `@Published` here. `@Published` sends through this one.
+    /// `nonisolated(unsafe)`: the protocol requirement is nonisolated and the publisher is
+    /// not `Sendable`; every send happens on the main actor, and the publisher guards its
+    /// own subscriber list.
+    public nonisolated(unsafe) let objectWillChange = ObservableObjectPublisher()
 
     // MARK: - Dependencies
 
-    let searchInput = ArchiveSearchInput()
-    let identityReviewViewModel: ProjectIdentityReviewViewModel
-    let catalog: ArchiveCatalogCoordinator
-    let browseRefreshDriver: ArchiveBrowseRefreshDriver
-    let mixdownAnalysis = ArchiveMixdownAnalysisCoordinator()
-    /// The archive's playback owner. Every write of `selectedSong` reaches it, and every
-    /// view that shows playback gets it from here. It pauses on the context's recording signal.
-    let previewSession: ArchivePreviewSession
-    let cprPlugins: ArchiveCPRPluginCoordinator
-    let opener: MusicItemOpener
-    let pathSafety = PathSafety()
-    let fileActions: any FileActions
     let settingsStore: SettingsStore
-    /// Display-only settings. Writes and Vault decisions use `loadSettingsForWrite()`.
+    /// Display-only settings. Writes and Vault decisions use `library.loadSettingsForWrite()`.
     let appSettings: AppSettingsObserver
     /// Settings-pane deep links (Vault status row → Settings → Vault).
     let router: QuickAccessRouter
     let diagnostics: Diagnostics
+    let fileActions: any FileActions
     let jobStatusCenter: ShellJobStatusCenter
     let collaboratorStore: (any CollaboratorStoring)?
     let archiveRootWatcher: (any ArchiveRootWatching)?
@@ -49,212 +38,104 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let bookmarkProvider: any SecurityScopedBookmarkProviding
     let projectVaultRuntime: (any ProjectVaultOperating)?
     let projectCatalogStore: SQLiteProjectCatalogStore?
+    let identityReviewViewModel: ProjectIdentityReviewViewModel
+    private let processRunner: any StreamingExternalProcessRunning
+    private let opener: MusicItemOpener
+    private let browseRefreshDriver: ArchiveBrowseRefreshDriver
+    public var requestConverterHandoff: ((URL) -> Void)?
 
-    // MARK: - Published state
+    // MARK: - State owners
 
-    @Published var roots: [URL] = [] {
-        didSet {
-            guard oldValue.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
-            invalidateActiveScanForRootChange()
-        }
-    }
-    /// The songs this browser holds: the scan baseline and the visible list,
-    /// with an id index. `applyCatalogEdit(_:)` is its only writer: the setter
-    /// is private to this file, so another writer does not compile.
-    private(set) var songCatalog = SongCatalog()
-
-    /// The visible list: the scan baseline plus archive-only Vault projections
-    /// when they are shown. Views read it.
-    var songs: [Song] { songCatalog.visible }
-
-    func liveSong(id: String, fallback: Song) -> Song {
-        songCatalog.song(id: id) ?? fallback
-    }
-
-    /// The catalog's song with this id, or nil when the catalog has none.
-    func heldSong(id: String) -> Song? {
-        songCatalog.song(id: id)
-    }
-
-    /// The songs of `incoming` that the catalog does not hold as they are (new or different).
-    func changedSongs(in incoming: [Song]) -> [Song] {
-        songCatalog.changedSongs(in: incoming)
-    }
-
-    /// The ways the catalog changes. `applyCatalogEdit(_:)` applies them.
-    enum SongCatalogEdit {
-        /// The cached index at launch.
-        case load([Song])
-        /// A scan result: unique by id and sharing the held values, then projected.
-        case rescan([Song])
-        /// The baseline again through the projection: Vault snapshots, "Show
-        /// archived", Vault settings or roots changed.
-        case reproject
-        /// New Song: added to the baseline by title, then projected.
-        case add(Song)
-        /// Metadata edits and collaborator removal: songs replaced by id, in one
-        /// batch, without a projection.
-        case replace([Song])
-        /// A root change: both lists empty.
-        case clear
-    }
-
-    /// The catalog's writer. Projects the edit through the Vault observation,
-    /// writes `songCatalog` and runs the follow-up work in one place:
-    ///
-    /// - a new visible list rebuilds the Vault card cache, then publishes;
-    /// - any change recomputes the browse results (they reconcile the
-    ///   selection), refreshes intelligence and open analytics, and updates
-    ///   the per-song caches;
-    /// - `.load`, `.rescan` and `.add` sync the repair state;
-    /// - `.rescan` and `.add` persist the index (a rescan even when the songs are
-    ///   equal, because the index carries the scan date), `.reproject` when the
-    ///   baseline changed (the index persist writes the baseline).
-    ///
-    /// Returns the change, so a writer can do the work only it knows about.
-    @discardableResult
-    func applyCatalogEdit(_ edit: SongCatalogEdit) -> SongCatalogChange {
-        var next = songCatalog
-        func project(_ baseline: [Song]) -> SongCatalogChange {
-            let projected = projectVaultCatalog(from: baseline)
-            return next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
-        }
-        let change: SongCatalogChange
-        switch edit {
-        case .load(let songs):
-            change = project(songs)
-        case .rescan(let songs):
-            // Share before projecting, so the visible list shares the held values too.
-            change = project(next.sharingHeldValues(songs))
-        case .reproject:
-            change = project(next.scanned)
-        case .add(let song):
-            change = project(next.scannedAdding(song))
-        case .replace(let songs):
-            // An archive-only projection is replaced in the visible list but never joins the baseline.
-            change = next.replace(songs, isArchiveOnly: isArchivedProject)
-        case .clear:
-            change = next.removeAll()
-        }
-        if !change.isEmpty {
-            if change.visibleChanged {
-                // Cards ask for their Project Vault state while SwiftUI reconciles a
-                // selection change: the lookup is built before the publish.
-                rebuildProjectVaultPresentationCache(for: next.visible, notifyWhenChanged: false)
-                objectWillChange.send()
-            }
-            songCatalog = next
-            refreshAfterCatalogChange()
-            updatePerSongCaches(for: change)
-        }
-        switch edit {
-        case .load:
-            syncMetadataRepairState()
-        case .rescan, .add:
-            syncMetadataRepairState()
-            scheduleIndexPersist(afterNanoseconds: 0)
-        case .reproject:
-            if change.scannedChanged {
-                scheduleIndexPersist(afterNanoseconds: 0)
-            }
-        case .replace:
-            // `ArchiveMetadataEditingCoordinator` owns the delayed index persist of edits.
-            break
-        case .clear:
-            // The root reset cancels pending persists and clears the repair state itself.
-            break
-        }
-        return change
-    }
-    @Published var filteredSongs: [Song] = []
-    @Published var searchMatchSummaries: [String: String] = [:]
-    @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []
-    @Published var selectedShelf: ArchiveSmartShelf = .allSongs
-    @Published var selectedCollaboratorID: String?
-    @Published var selectedSong: Song? {
-        didSet {
-            synchronizePreviewSelection()
-            // NMH-049: a song change dismisses the nearby open error.
-            // Guarded so an already-clear error adds no extra publish.
-            if oldValue?.id != selectedSong?.id, openError != nil {
-                openError = nil
-            }
-        }
-    }
-    /// Song-detail "Details" disclosure state — hoisted so the browser-level "d"
-    /// keyboard shortcut can toggle it.
-    @Published var songDetailsExpanded = false
-    @Published var isScanning = false {
-        didSet {
-            // NMH-049: a new scan dismisses the nearby scan error.
-            // Guarded so an already-clear error adds no extra publish.
-            if isScanning, scanError != nil {
-                scanError = nil
-            }
-            publishShellJobStatus()
-        }
-    }
-    /// What the archive footer shows. `ArchiveFooterStatus` owns the rules; the
-    /// footer methods at the end of this file are the only writers.
-    @Published private(set) var footer = ArchiveFooterStatus()
-    var statusMessage: String? { footer.text }
-    var statusBaseMessage: String? { footer.message }
-    var persistenceWarningMessage: String? { footer.warning?.text }
-    /// NMH-049: nearby open failure recovery (footer `statusMessage` stays the log).
-    @Published var openError: String?
-    /// NMH-049: nearby scan failure body (footer keeps `Scan failed: …`).
-    @Published var scanError: String?
-    @Published var scanDiagnostics: ArchiveScanDiagnostics?
-    @Published var lastDryRunLog: String?
-    @Published var lastDiagnosticsExportPath: String?
-    @Published var lastIndexExportPath: String?
-    @Published var needsFirstRunOnboarding = false {
-        didSet {
-            // NMH-042: first-run overlay appear/dismiss changes layout.
-            if oldValue != needsFirstRunOnboarding {
-                HubAccessibilityAnnouncer.layoutChanged()
-            }
-        }
-    }
-    @Published var archiveAccessFailure: ArchiveAccessFailure?
-    @Published var collaborators: [Collaborator] = []
-    @Published var showHiddenSongs = false
-    @Published var sortMode: ArchiveBrowseSortMode = .recentCPR
-    @Published var browseFilter: ArchiveBrowseFilter = []
-    @Published var pendingCollaboratorSuggestions: [CollaboratorSuggestion] = []
-    /// Dismissed suggestion identities (`CollaboratorSuggestion.id` =
-    /// songID + collaboratorID) for the current scan. Dismissal hides a row
-    /// "until the next scan": immediate and debounced/async intelligence
-    /// refreshes filter these out at apply time, so a held older refresh can
-    /// never reinsert one. Cleared when a fresh scan starts or scan results
-    /// are cleared. Never persisted; per-instance only.
-    var dismissedCollaboratorSuggestionIDs: Set<String> = []
-    @Published var pendingCollaboratorRemoval: Collaborator?
-    @Published var duplicateSongHints: [DuplicateSongHint] = []
-    @Published var missingAudioReport: MissingAudioReport?
-    /// Archived Project Vault generations are opt-in in the browse projection so the
-    /// active workspace stays calm. Turning this on exposes verified archive-only
-    /// projects in their persisted workflow stage.
-    @Published var showArchivedProjects = false
-    /// Archived count is owned by `ArchiveVaultObservation`; this read-only
-    /// peer preserves the existing view/test API with no duplicate storage.
-    /// SwiftUI updates flow through the observation bridge in
-    /// `wireVaultObservation()`.
-    var archivedProjectCount: Int { vaultObservation.archivedCount }
-    @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
-    @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
-    @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
-    @Published var pluginsSectionExpanded = false
-    /// Single metadata-editing owner for mutation/gate/persistence ordering,
-    /// notes/status undo, repair IDs, and delayed index persistence. All
-    /// mutations go through the coordinator's intentional methods; these
-    /// computed peers preserve read access for existing views/tests with no
-    /// duplicate stored state. The view model re-emits the coordinator's
-    /// publishes for SwiftUI via `wireMetadataEditing()` with a weak capture;
-    /// the coordinator never retains this view model. The host contract is
-    /// required and immutable: built once here with weak captures, fail-closed
-    /// when the host is gone (blocked gates, nil snapshots no-op, no fake
-    /// generation).
+    /// The loaded roots, their access, the first-run state and the scan state
+    /// (scanning flag, scan error, diagnostics, root generation).
+    private(set) lazy var library = ArchiveLibraryModel(
+        settingsStore: settingsStore,
+        appSettings: appSettings,
+        diagnostics: diagnostics,
+        runtime: runtime,
+        bookmarkProvider: bookmarkProvider,
+        host: ArchiveLibraryHost(
+            raiseWarning: { [weak self] warning in self?.recordPersistenceWarning(warning) },
+            resolveWarning: { [weak self] kind in self?.resolveFooterWarning(kind) },
+            rootsDidChange: { [weak self] in self?.scanOrchestrator.invalidateForRootChange() },
+            scanningDidChange: { [weak self] in self?.publishShellJobStatus() }
+        )
+    )
+    /// Runs full and incremental scans off the main actor; this view model is its host.
+    lazy var scanOrchestrator = ArchiveScanOrchestrator(host: self)
+    /// Scan reconciliation with stored metadata, the index snapshot and per-song integrity.
+    let catalog: ArchiveCatalogCoordinator
+    /// Browse inputs (search text, shelf, collaborator, filters, sort, hidden
+    /// songs), the list they produce and the reusable search index. It reads the
+    /// visible catalog and the scan's skipped entries; applied results reconcile
+    /// the selection.
+    private(set) lazy var browse = ArchiveBrowseModel(
+        refreshDriver: browseRefreshDriver,
+        source: ArchiveBrowseSource(
+            songs: { [weak self] in self?.songs ?? [] },
+            skippedEntries: { [weak self] in self?.scanDiagnostics?.skippedEntries ?? [] },
+            didApplyResults: { [weak self] in self?.reconcileSelectedSong(requireVisibleInFilteredList: true) }
+        )
+    )
+    /// The page (board, detail, list, analytics), the selected song, the detail's
+    /// disclosures and the analytics snapshot. Every write of the selection
+    /// reaches `selectionDidChange(previousSongID:)`.
+    private(set) lazy var page = ArchivePageModel(selectionDidChange: { [weak self] previousSongID in
+        self?.selectionDidChange(previousSongID: previousSongID)
+    })
+    /// The archive's playback owner. Every write of the selection reaches it, and every
+    /// view that shows playback gets it from here. It pauses on the context's recording signal.
+    let previewSession: ArchivePreviewSession
+    /// BPM/key of the main preview and the project's plug-ins, with the rules
+    /// that keep those caches true to the catalog. Reads only the selection.
+    private(set) lazy var songAnalysis = ArchiveSongAnalysisModel(
+        plugins: ArchiveCPRPluginCoordinator(processRunner: processRunner),
+        selectedSong: { [weak self] in self?.page.selectedSong }
+    )
+    /// Collaborator suggestions, duplicate hints, the missing-audio summary and
+    /// the "until the next scan" dismissals. `refreshIntelligence()` feeds it.
+    let intelligence = ArchiveIntelligenceModel()
+    /// The collaborator address book and a removal waiting for confirmation.
+    private(set) lazy var addressBook = ArchiveAddressBookModel(
+        store: collaboratorStore,
+        diagnostics: diagnostics,
+        reportWarning: { [weak self] warning in self?.recordPersistenceWarning(warning) }
+    )
+    /// Opening a project or preview, revealing files and writing the exports,
+    /// inside the archive's allowed roots and the Vault block; the nearby open
+    /// error, the dry-run path and the export paths.
+    private(set) lazy var fileAccess = ArchiveFileAccessModel(
+        opener: opener,
+        fileActions: fileActions,
+        diagnostics: diagnostics,
+        dryRunOpen: runtime.dryRunOpen,
+        host: ArchiveFileAccessHost(
+            songs: { [weak self] in self?.songs ?? [] },
+            roots: { [weak self] in self?.roots ?? [] },
+            outputFolder: { [weak self] in
+                self?.appSettings.settings.outputFolder.url ?? AppSettings.default.outputFolder.url
+            },
+            writeProtectedRoots: { [weak self] in
+                guard let self else { throw ArchiveWriteGuardError.settingsUnreadable }
+                return try self.library.writeProtectedRoots()
+            },
+            isVaultBlocked: { [weak self] song in self?.blocksGenericProjectVaultFileActions(for: song) ?? true },
+            vaultBlockReason: { [weak self] song in self?.projectOpenBlockReason(for: song) },
+            scanDiagnostics: { [weak self] in self?.scanDiagnostics },
+            exportContexts: { [weak self] in
+                ArchiveDiagnosticsExportContexts(
+                    search: self?.browse.searchExportContext(),
+                    skippedSearch: self?.browse.skippedSearchExportContext(),
+                    selectedSong: self?.page.selectedSongExportContext()
+                )
+            },
+            reportStatus: { [weak self] message in self?.setStatusMessage(message) }
+        )
+    )
+    /// Metadata edits: mutation, gate and persistence ordering, notes/status undo,
+    /// repair IDs and delayed index persistence. The host contract is built once
+    /// here with weak captures and fails closed when this view model is gone
+    /// (blocked gates, nil snapshots no-op, no fake generation).
     private(set) lazy var metadataEditing: ArchiveMetadataEditingCoordinator = {
         ArchiveMetadataEditingCoordinator(
             catalog: self.catalog,
@@ -301,35 +182,211 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             )
         )
     }()
-    /// Songs whose stored details are corrupt: edits are paused and Repair
-    /// Song Details is offered. Owned by `ArchiveMetadataEditingCoordinator`;
-    /// this read-only peer preserves the existing view/test API with no
-    /// duplicate storage.
-    var metadataRepairSongIDs: Set<String> { metadataEditing.repairSongIDs }
-    /// Delayed index-persist handle. Owned by the metadata coordinator;
-    /// read-only peer for existing tests.
-    var indexPersistTask: Task<Void, Never>? { metadataEditing.indexPersistTask }
-    /// Single observation owner for Vault settings context, health, snapshots,
-    /// path index, card cache, archived count, catalog projection inputs, and
-    /// recovery timer lifecycle. All mutations go through the observation's
-    /// intentional methods; these computed peers preserve read access for
-    /// existing views/tests with no duplicate stored state. The view model
-    /// re-emits the observation's publishes for SwiftUI via
-    /// `wireVaultObservation()` with weak captures; the observation never
-    /// retains this view model.
+    /// Vault settings context, health, snapshots and their path index, the card
+    /// cache, the archived count, the "Show archived" choice and the automatic
+    /// recovery timer.
     let vaultObservation = ArchiveVaultObservation()
-    /// Read-only peers for the observation owner. All Vault observation writes
-    /// go through `ArchiveVaultObservation` intentional operations.
+    /// The Vault transfer queue, retries, stop and capacity accounting.
+    let vaultOperations = ProjectVaultOperationCoordinator()
+    /// The Vault dialogs the page presents (archive/Done confirmation, restore,
+    /// identity review, stop transfer), the bound-authorization capture before the
+    /// archive dialog, restore progress, and whether quit stopped the Vault.
+    let vaultDialogs = ArchiveVaultDialogsModel()
+
+    /// Each owner's publishes, forwarded to this object (`forwardChanges(of:)`).
+    private var ownerChangeForwarding: [AnyCancellable] = []
+    var storedSettingsCancellable: AnyCancellable?
+
+    // MARK: - Song catalog
+
+    /// The songs this browser holds: the scan baseline and the visible list,
+    /// with an id index. `applyCatalogEdit(_:)` is its only writer: the setter
+    /// is private to this file, so another writer does not compile.
+    private(set) var songCatalog = SongCatalog()
+
+    /// The visible list: the scan baseline plus archive-only Vault projections
+    /// when they are shown. Views read it.
+    var songs: [Song] { songCatalog.visible }
+
+    /// Songs discovered by the configured active/scan roots. Project Vault archive
+    /// generations are projected into `songs` only when the user opts into them, so
+    /// toggling that view never loses the clean scan baseline.
+    var scannedSongs: [Song] { songCatalog.scanned }
+
+    func liveSong(id: String, fallback: Song) -> Song {
+        songCatalog.song(id: id) ?? fallback
+    }
+
+    /// The catalog's song with this id, or nil when the catalog has none.
+    func heldSong(id: String) -> Song? {
+        songCatalog.song(id: id)
+    }
+
+    /// The songs of `incoming` that the catalog does not hold as they are (new or different).
+    func changedSongs(in incoming: [Song]) -> [Song] {
+        songCatalog.changedSongs(in: incoming)
+    }
+
+    /// The ways the catalog changes. `applyCatalogEdit(_:)` applies them.
+    enum SongCatalogEdit {
+        /// The cached index at launch.
+        case load([Song])
+        /// A scan result: unique by id and sharing the held values, then projected.
+        case rescan([Song])
+        /// The baseline again through the projection: Vault snapshots, "Show
+        /// archived", Vault settings or roots changed.
+        case reproject
+        /// New Song: added to the baseline by title, then projected.
+        case add(Song)
+        /// Metadata edits and collaborator removal: songs replaced by id, in one
+        /// batch, without a projection.
+        case replace([Song])
+        /// A root change: both lists empty.
+        case clear
+    }
+
+    /// The catalog's writer. Projects the edit through the Vault observation,
+    /// writes `songCatalog` and runs the follow-up work in one place:
+    ///
+    /// - a new visible list rebuilds the Vault card cache, then publishes;
+    /// - any change recomputes the browse results (they reconcile the
+    ///   selection), refreshes intelligence and open analytics, and lets the
+    ///   song analysis follow it (`ArchiveSongAnalysisModel.follow`);
+    /// - `.load`, `.rescan` and `.add` sync the repair state;
+    /// - `.rescan` and `.add` persist the index (a rescan even when the songs are
+    ///   equal, because the index carries the scan date), `.reproject` when the
+    ///   baseline changed (the index persist writes the baseline).
+    ///
+    /// Returns the change, so a writer can do the work only it knows about.
+    @discardableResult
+    func applyCatalogEdit(_ edit: SongCatalogEdit) -> SongCatalogChange {
+        var next = songCatalog
+        func project(_ baseline: [Song]) -> SongCatalogChange {
+            let projected = projectVaultCatalog(from: baseline)
+            return next.replaceAll(scanned: projected.scannedSongs, visible: projected.visibleSongs)
+        }
+        let change: SongCatalogChange
+        switch edit {
+        case .load(let songs):
+            change = project(songs)
+        case .rescan(let songs):
+            // Share before projecting, so the visible list shares the held values too.
+            change = project(next.sharingHeldValues(songs))
+        case .reproject:
+            change = project(next.scanned)
+        case .add(let song):
+            change = project(next.scannedAdding(song))
+        case .replace(let songs):
+            // An archive-only projection is replaced in the visible list but never joins the baseline.
+            change = next.replace(songs, isArchiveOnly: isArchivedProject)
+        case .clear:
+            change = next.removeAll()
+        }
+        if !change.isEmpty {
+            if change.visibleChanged {
+                // Cards ask for their Project Vault state while SwiftUI reconciles a
+                // selection change: the lookup is built before the publish.
+                rebuildProjectVaultPresentationCache(for: next.visible, notifyWhenChanged: false)
+                objectWillChange.send()
+            }
+            songCatalog = next
+            refreshAfterCatalogChange()
+            songAnalysis.follow(
+                change,
+                remainingSongIDs: { Set(songs.map(\.id)) },
+                pluginsSectionExpanded: page.pluginsSectionExpanded
+            )
+        }
+        switch edit {
+        case .load:
+            syncMetadataRepairState()
+        case .rescan, .add:
+            syncMetadataRepairState()
+            scheduleIndexPersist(afterNanoseconds: 0)
+        case .reproject:
+            if change.scannedChanged {
+                scheduleIndexPersist(afterNanoseconds: 0)
+            }
+        case .replace:
+            // `ArchiveMetadataEditingCoordinator` owns the delayed index persist of edits.
+            break
+        case .clear:
+            // The root reset cancels pending persists and clears the repair state itself.
+            break
+        }
+        return change
+    }
+
+    /// The browse follow-up of a catalog change (and of new scan diagnostics,
+    /// whose skipped entries the browse list shows): recompute the browse results
+    /// (they reconcile the selection) and refresh intelligence.
+    func refreshAfterCatalogChange() {
+        browse.recompute()
+        refreshIntelligence()
+        // Analytics stays on screen (a `switch` case, no re-appear), so a scan
+        // or status edit that lands while it is open must refresh the snapshot.
+        // Browse inputs (keystrokes, filters, sort) and selection go through
+        // other paths and stay cheap: no history read there. Outside analytics
+        // the snapshot stays lazy and is rebuilt on entry.
+        if page.viewMode == .analytics {
+            refreshAnalytics()
+        }
+    }
+
+    // MARK: - Root reset
+
+    /// A root change (or Clear Scan Results): every owner drops what it holds for
+    /// the old roots, in this order:
+    ///
+    /// 1. Vault work and dialogs stop first, so nothing queued for the old roots
+    ///    runs while the rest resets.
+    /// 2. The owners reset their own state; the order among them does not matter.
+    /// 3. `applyCatalogEdit(.clear)` comes last: its browse recompute must see the
+    ///    reset browse inputs and the cleared scan diagnostics, and its per-song
+    ///    step drops every BPM/key result and plug-in summary.
+    /// 4. The status line, after the edit, so it is the one that shows.
+    func clearRootBoundArchiveState(statusMessage nextStatusMessage: String?) {
+        cancelPendingProjectVaultOperations()
+        vaultOperations.clearAllOperationMessages()
+        intelligence.clearForRootChange()
+        metadataEditing.clearForRootChange()
+        songAnalysis.clearForRootChange()
+        clearFooterWarning()
+        scanOrchestrator.clearPendingPaths()
+        previewSession.clear()
+        ArchivePreviewPlayer.clearMetadataCaches()
+        browse.clearForRootChange()
+        page.clearForRootChange()
+        vaultObservation.clearForRootChange(notifyWhenChanged: false)
+        library.clearForRootChange()
+        applyCatalogEdit(.clear)
+        setStatusMessage(nextStatusMessage)
+    }
+
+    // MARK: - Footer
+
+    /// What the archive footer shows. `ArchiveFooterStatus` owns the rules; the
+    /// footer methods at the end of this file are the only writers.
+    @Published private(set) var footer = ArchiveFooterStatus()
+    var statusMessage: String? { footer.text }
+    var statusBaseMessage: String? { footer.message }
+    var persistenceWarningMessage: String? { footer.warning?.text }
+
+    // MARK: - Read-only peers of the owners
+    //
+    // Kept for the scan host, the edit host and the existing views and tests;
+    // none stores state of its own.
+
+    /// The address book's list: the projections, the scan and the metadata
+    /// edits resolve collaborator names against it.
+    var collaborators: [Collaborator] { addressBook.collaborators }
+    var archivedProjectCount: Int { vaultObservation.archivedCount }
+    /// Sidebar Project Vault provider status (NMH-057).
+    var projectVaultHealth: ProjectVaultHealth { vaultObservation.health }
     var projectVaultPresentationContext: ProjectVaultPresentationContext? { vaultObservation.context }
     var projectVaultPresentationsBySongID: [String: ProjectVaultCardPresentation] { vaultObservation.presentationsBySongID }
     var projectVaultSnapshots: [ProjectVaultRuntimeSnapshot] { vaultObservation.snapshots }
     var projectVaultRecoveryDeadline: Date? { vaultObservation.recoveryDeadline }
-    /// Single owner for Vault transfer queue/retry accounting. All mutations
-    /// go through `vaultOperations`; these computed peers preserve read access
-    /// for existing views/tests with no duplicate stored state. The view model
-    /// re-emits `objectWillChange` when the coordinator publishes so SwiftUI
-    /// updates with no UI edits.
-    let vaultOperations = ProjectVaultOperationCoordinator()
     var projectVaultBusySongIDs: Set<String> { vaultOperations.busySongIDs }
     var projectVaultPendingOperations: [ProjectVaultOperationCoordinator.QueuedOperation] { vaultOperations.pendingOperations }
     var projectVaultActiveOperation: ProjectVaultOperationCoordinator.QueuedOperation? { vaultOperations.activeOperation }
@@ -344,51 +401,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var projectVaultRetryAttemptCounts: [String: Int] { vaultOperations.retryAttemptCounts }
     var projectVaultCapacityPostponedSongIDs: Set<String> { vaultOperations.capacityPostponedSongIDs }
     var projectVaultQueueTask: Task<Void, Never>? { vaultOperations.queueTask }
-    @Published var projectVaultRestoreRequest: ProjectVaultRestoreRequest?
-    @Published var projectVaultRestoreProgress: ProjectVaultRestoreProgress?
-    var boundArchiveCaptureSongID: String?
-    @Published var pendingArchiveConfirmation: ProjectVaultArchiveConfirmation?
-    @Published var pendingStopTransferConfirmation = false
-    /// Set once quit has stopped the Vault queue (ADR-019): no new operation is
-    /// queued and no recovery is scheduled for the exiting app to cut off.
-    var projectVaultStoppedForQuit = false
-    @Published var identityReviewPresentation: ProjectIdentityReviewPresentation?
-    /// A Vault dialog that `ArchiveBrowserView` presents is waiting. SwiftUI
-    /// shows it only once no other sheet is open, so the song detail closes
-    /// "Manage storage" for it instead of hiding it until the user does.
-    var hasPendingProjectVaultDialog: Bool {
-        pendingArchiveConfirmation != nil
-            || projectVaultRestoreRequest != nil
-            || identityReviewPresentation != nil
-            || pendingStopTransferConfirmation
-    }
-    /// Sidebar Project Vault provider status (NMH-057). Owned by
-    /// `ArchiveVaultObservation`; this read-only peer preserves the existing
-    /// view API with no duplicate storage.
-    var projectVaultHealth: ProjectVaultHealth { vaultObservation.health }
-    @Published var viewMode: ArchiveViewMode = .board {
-        didSet {
-            // NMH-042: board ↔ list ↔ boardDetail ↔ analytics changes layout.
-            if oldValue != viewMode {
-                HubAccessibilityAnnouncer.layoutChanged()
-            }
-        }
-    }
-    /// Compact list shows the detail page only after an explicit open (double-click / Return).
-    @Published var listShowsDetail = false
-    @Published var analyticsSnapshot: ArchiveAnalyticsSnapshot?
-
-    // MARK: - Stored state
-
-    var rootGeneration: UInt64 = 0
-    lazy var scanOrchestrator = ArchiveScanOrchestrator(host: self)
-    /// Songs discovered by the configured active/scan roots. Project Vault archive
-    /// generations are projected into `songs` only when the user opts into them, so
-    /// toggling that view never loses the clean scan baseline.
-    var scannedSongs: [Song] { songCatalog.scanned }
-    // Updated before filteredSongs publishes, so Board uses the applied query mode.
-    var isSearching = false
-    var projectVaultRestoreOptionsLoading = false
+    /// Songs whose stored details are corrupt: edits are paused and Repair
+    /// Song Details is offered.
+    var metadataRepairSongIDs: Set<String> { metadataEditing.repairSongIDs }
+    /// Delayed index-persist handle (tests).
+    var indexPersistTask: Task<Void, Never>? { metadataEditing.indexPersistTask }
     /// Undo stack for workflow-status and metadata edits. Owned by
     /// `ArchiveMetadataEditingCoordinator` (owned/injected/weak window-bound
     /// managers plus the weak undo target). SwiftUI's main window
@@ -420,49 +437,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// `workflowUndoManager` alias.
     func bindInjectedUndoManager(_ manager: UndoManager?) {
         metadataEditing.bindInjectedUndoManager(manager)
-    }
-    var vaultOperationsCancellable: AnyCancellable?
-    var vaultObservationCancellable: AnyCancellable?
-    var metadataEditingCancellable: AnyCancellable?
-    /// V3 bound-authorization capture state. Every confirmation request bumps
-    /// `projectVaultAuthCaptureGeneration` and replaces
-    /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
-    /// its generation is still current and the task was not cancelled, so a
-    /// stale or superseded capture can never produce a surprise late modal.
-    var projectVaultAuthCaptureGeneration: UInt64 = 0
-    var projectVaultAuthCaptureTask: Task<Void, Never>?
-    /// Deterministic seam for behavioral tests: awaited at the start of every
-    /// bound-authorization capture so settings/roots/source changes can be
-    /// applied while a confirmation is still in flight.
-    var projectVaultAuthCaptureProbe: (@Sendable () async -> Void)?
-    // Vault observation storage moved to `ArchiveVaultObservation`
-    // (context, health, snapshots, path index, card cache, archived count,
-    // recovery timer). Read-only peers above preserve the view API; writes
-    // go through the observation's intentional methods.
-    var navigationCancellable: AnyCancellable?
-    var intelligenceRefreshTask: Task<Void, Never>?
-    /// Reused search index rebuilt from the current shelf on each browse recompute.
-    /// Avoids allocating a fresh `MusicSearchIndex` on every keystroke while still
-    /// reflecting live metadata (titles/aliases) after catalog edits.
-    var cachedSearchIndex = MusicSearchIndex()
-    /// Keeps security-scoped access alive for bookmarked roots while the model lives.
-    var securityScopedRootAccesses: [SecurityScopedRootAccess] = []
-    /// The stored roots and Vault settings the archive last loaded; nil while
-    /// settings are unreadable. `followStoredSettings()` compares against it.
-    var followedSettings: ArchiveFollowedSettings?
-    var storedSettingsCancellable: AnyCancellable?
-    public var requestConverterHandoff: ((URL) -> Void)?
-
-    // MARK: - Computed
-
-    var searchResultCountText: String? {
-        guard isSearching else { return nil }
-        return CountCopy.count(filteredSongs.count, "result")
-    }
-
-    var searchQuery: String {
-        get { searchInput.query }
-        set { searchInput.query = newValue }
     }
 
     var showsSidebarMorePanel: Bool {
@@ -545,7 +519,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.fileActions = context.fileActions
         self.jobStatusCenter = context.jobStatusCenter
         self.previewSession = ArchivePreviewSession(capture: context.audioCaptureActivity)
-        self.cprPlugins = ArchiveCPRPluginCoordinator(processRunner: context.processRunner)
+        self.processRunner = context.processRunner
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime
@@ -572,14 +546,25 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
         )
         wireVaultOperationCoordinator()
-        wireVaultObservation()
-        wireMetadataEditing()
-        loadRootsFromSettings()
+        forwardChanges(of: vaultOperations)
+        forwardChanges(of: vaultObservation)
+        forwardChanges(of: metadataEditing)
+        forwardChanges(of: library)
+        forwardChanges(of: browse)
+        forwardChanges(of: page)
+        forwardChanges(of: intelligence)
+        forwardChanges(of: songAnalysis)
+        forwardChanges(of: addressBook)
+        forwardChanges(of: fileAccess)
+        forwardChanges(of: vaultDialogs)
+        library.loadRootsFromSettings()
         followStoredSettingsChanges()
-        attachNavigationHistory(context.navigationHistory)
+        page.attach(context.navigationHistory) { [weak self] route in
+            self?.restoreNavigationRoute(route)
+        }
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)
-        loadCollaborators()
-        refreshFirstRunState()
+        addressBook.load()
+        library.refreshFirstRunState()
         restartArchiveRootWatching()
         loadCachedIndexIfAvailable()
         Task {
@@ -604,22 +589,18 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
     }
 
-    /// Wire the single observation owner: forward its publishes into this
-    /// observable object (views keep reading the view-model peers with no UI
-    /// edits). The capture is weak; the observation never retains this view
-    /// model. Recovery timer lifetime is owned by the observation's `deinit`.
-    private func wireVaultObservation() {
-        vaultObservationCancellable = vaultObservation.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+    /// Views observe this object, so each owner's publish is sent here at once, at the
+    /// same moment as the owner's own (willSet). The sink holds the declared publisher,
+    /// not this view model, and the subscriptions end with it.
+    private func forwardChanges<Owner: ObservableObject>(of owner: Owner)
+        where Owner.ObjectWillChangePublisher == ObservableObjectPublisher {
+        let publisher = objectWillChange
+        ownerChangeForwarding.append(owner.objectWillChange.sink { _ in publisher.send() })
     }
 
-    /// Wire the single operation owner: forward its publishes into this
-    /// observable object (views keep reading the view-model peers with no UI
-    /// edits) and inject the narrow vault callbacks. All captures are weak;
+    /// Injects the operation owner's narrow callbacks. All captures are weak;
     /// the coordinator never retains this view model.
     private func wireVaultOperationCoordinator() {
-        vaultOperationsCancellable = vaultOperations.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
         vaultOperations.onStatus = { [weak self] message in
             self?.setProjectVaultStatusMessage(message)
         }
@@ -649,36 +630,26 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
-    /// Wire the single metadata-editing owner: forward its publishes into this
-    /// observable object (views keep reading the view-model peers with no UI
-    /// edits). The host contract is built once in the lazy owner factory above;
-    /// this only subscribes. The capture is weak; the coordinator never retains
-    /// this view model.
-    private func wireMetadataEditing() {
-        metadataEditingCancellable = metadataEditing.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-    }
-
     deinit {
-        // Lifetime retry/queue cancellation is owned by
-        // `ProjectVaultOperationCoordinator.deinit`, which cancels its own
-        // Sendable task handles directly (`Task.cancel()` is thread-safe, so
-        // no actor-isolated call is needed here). Releasing this view model
-        // releases the coordinator, which cancels any sleeping retry and the
-        // running queue task so no callback fires after the owner is gone.
-        // Recovery timer lifetime is owned by `ArchiveVaultObservation.deinit`.
-        // Delayed index persistence is owned by
-        // `ArchiveMetadataEditingCoordinator.deinit`.
-        projectVaultAuthCaptureTask?.cancel()
+        // Each owner cancels its own work when it is released with this view
+        // model: the Vault queue and retries (`ProjectVaultOperationCoordinator`),
+        // the recovery timer (`ArchiveVaultObservation`), the delayed index
+        // persist (`ArchiveMetadataEditingCoordinator`), the authorization capture
+        // (`ArchiveVaultDialogsModel`) and the intelligence refresh.
     }
 
-    // MARK: - Helpers
+    // MARK: - Intents across owners
+
+    /// The By Collaborator shelf starts on the address book's first collaborator.
+    func selectShelf(_ shelf: ArchiveSmartShelf) {
+        browse.selectShelf(shelf, defaultCollaboratorID: collaborators.first?.id)
+    }
 
     /// Mirrors scan and Vault-transfer activity into the shell job status center;
-    /// driven by the `isScanning` observer and the operation owner's
+    /// driven by the library's `isScanning` observer and the operation owner's
     /// `onActiveChanged` hook (same timing as the former active-operation didSet).
     func publishShellJobStatus() {
-        if isScanning {
+        if library.isScanning {
             jobStatusCenter.setExtraJob(
                 sourceID: ShellJobExtraSourceID.archiveScan,
                 status: ShellJobStatusCopy.archiveScanStatus,
@@ -710,6 +681,27 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         } else {
             jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.vaultTransfer, status: nil)
         }
+    }
+
+    /// Recomputes the intelligence hints from the catalog and the address book,
+    /// after the debounce. `refreshIntelligenceNow()` skips it.
+    func refreshIntelligence() {
+        intelligence.refresh(songs: songs, collaborators: collaborators, immediate: false)
+    }
+
+    func refreshIntelligenceNow() {
+        intelligence.refresh(songs: songs, collaborators: collaborators, immediate: true)
+    }
+
+    var sidebarHealthContext: ArchiveSidebarHealthContext {
+        ArchiveSidebarHealthContext.make(
+            report: healthReport(),
+            skippedEntryCount: scanDiagnostics?.skippedEntries.count ?? 0
+        )
+    }
+
+    func healthReport() -> ArchiveHealthReport {
+        ArchiveHealthReport(songs: songs, includeHidden: browse.showHiddenSongs)
     }
 
     func convertMainPreview(for song: Song) {

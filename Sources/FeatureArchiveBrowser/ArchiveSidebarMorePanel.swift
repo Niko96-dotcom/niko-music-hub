@@ -72,7 +72,7 @@ struct ArchiveSidebarMorePanel: View {
                     ArchiveIntelligencePanelView(viewModel: viewModel)
                 }
 
-                if let diagnostics = viewModel.scanDiagnostics {
+                if let diagnostics = viewModel.library.scanDiagnostics {
                     libraryRow(
                         title: "Diagnostics",
                         systemImage: "stethoscope",
@@ -107,9 +107,9 @@ struct ArchiveSidebarMorePanel: View {
                                     ArchiveDiagnosticsPanelView(
                                         viewModel: viewModel,
                                         diagnostics: diagnostics,
-                                        selectedSong: viewModel.selectedSong,
-                                        searchContext: viewModel.activeSearchExportContext(),
-                                        skippedSearchContext: viewModel.activeSkippedSearchExportContext()
+                                        selectedSong: viewModel.page.selectedSong,
+                                        searchContext: viewModel.browse.searchExportContext(),
+                                        skippedSearchContext: viewModel.browse.skippedSearchExportContext()
                                     )
                                 }
                             }

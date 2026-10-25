@@ -179,10 +179,10 @@ final class InAppJobCancelRoutingTests: XCTestCase {
 
     private func converterJob() -> ShellJobStatus {
         ShellJobStatus(
-            id: ShellJobExtraSourceID.converter,
+            id: ShellJobExtraSourceID.converter.rawValue,
             title: "a.mp3",
             percent: 0.4,
-            cancelActionID: ShellJobExtraSourceID.converter,
+            cancelActionID: ShellJobExtraSourceID.converter.rawValue,
             activityVerb: "Converting",
             sourceToolID: .wavConverter,
             cancelTarget: .conversion

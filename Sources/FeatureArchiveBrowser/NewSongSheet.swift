@@ -40,11 +40,11 @@ struct NewSongSheet: View {
                 }
                 .pickerStyle(.menu)
 
-                if !viewModel.collaborators.isEmpty {
+                if !viewModel.addressBook.collaborators.isEmpty {
                     Text("Collaborators")
                         .font(HubDesignSystem.Typography.caption().weight(.semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textSecondary)
-                    ForEach(viewModel.collaborators) { collaborator in
+                    ForEach(viewModel.addressBook.collaborators) { collaborator in
                         Toggle(collaborator.displayName, isOn: Binding(
                             get: { selectedCollaboratorIDs.contains(collaborator.id) },
                             set: { on in
@@ -105,7 +105,7 @@ struct NewSongSheet: View {
         do {
             let request = NewSongRequest(
                 name: name,
-                root: try viewModel.newSongDraftRoot(),
+                root: try viewModel.library.newSongDraftRoot(),
                 collaboratorIDs: Array(selectedCollaboratorIDs),
                 appNote: note.isEmpty ? nil : note,
                 workflowStatus: workflowStatus,

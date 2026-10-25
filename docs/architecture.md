@@ -136,9 +136,10 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 ### `FeatureArchiveBrowser` (SwiftUI feature)
 
 - [`ArchiveBrowserFeature.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserFeature.swift): `ToolFeature` conformance (`archive-browser`).
-- [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): loaded roots (it follows the stored scan list, see [Archive scan list](#archive-scan-list)), browse, selection, scan host, and integration with metadata/Vault owners.
-- Vault operation extensions: `+ProjectVaultQueue.swift`, `+ProjectVaultArchive.swift`, `+ProjectVault.swift`, `+ProjectVaultActions.swift`, `+ProjectVaultRestore.swift`, `+ProjectVaultRecovery.swift`, `+Metadata.swift` (Done revoke), `+Scan.swift` (root-bound clears).
+- [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): the composition of the owners below for the views (init wiring, the song catalog writer `applyCatalogEdit(_:)`, the root reset, the footer methods, the jobs-strip rows), with the intents that cross owners in `+Scan.swift` (scan, roots, stored-settings reactions, scan host), `+Selection.swift`, `+Collaborators.swift`, `+Metadata.swift` and the Vault files.
+- Vault intent extensions: `+ProjectVault.swift` (snapshot refresh, recovery scheduling, gates, Keep Local, the observation lookups and the catalog projection), `+ProjectVaultArchive.swift` (archive, Done and the authorization capture), `+ProjectVaultActions.swift` (the card's primary action, retry, reveal, restore, recover), `+ProjectVaultQueue.swift` (queue messages, stop, the operation wrapper), `+ProjectVaultIdentityReview.swift`, and `+Metadata.swift` (Done revoke).
 - Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift), [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) (song-metadata mutation ordering), [`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) (Vault observation/presentation).
+- State owners the view model composes (each an `ObservableObject` whose publishes the view model forwards, so views keep observing the view model): [`ArchiveSongAnalysisModel`](../Sources/FeatureArchiveBrowser/ArchiveSongAnalysisModel.swift) (BPM/key of the main preview and the project's plug-ins, and the rules that keep those caches true to the catalog), [`ArchiveIntelligenceModel`](../Sources/FeatureArchiveBrowser/ArchiveIntelligenceModel.swift) (collaborator suggestions, duplicate hints, the missing-audio summary, and the "until the next scan" dismissals), [`ArchiveBrowseModel`](../Sources/FeatureArchiveBrowser/ArchiveBrowseModel.swift) (browse inputs, the filtered list, the search index and debounce), [`ArchivePageModel`](../Sources/FeatureArchiveBrowser/ArchivePageModel.swift) (the page, the selected song, the route), [`ArchiveAddressBookModel`](../Sources/FeatureArchiveBrowser/ArchiveAddressBookModel.swift) (the collaborator list and a removal waiting for confirmation), [`ArchiveFileAccessModel`](../Sources/FeatureArchiveBrowser/ArchiveFileAccessModel.swift) (opening, revealing and the exports, with the open error and the last paths), [`ArchiveLibraryModel`](../Sources/FeatureArchiveBrowser/ArchiveLibraryModel.swift) (the loaded roots, their access, first run, the scan state and the write guard), [`ArchiveVaultDialogsModel`](../Sources/FeatureArchiveBrowser/ArchiveVaultDialogsModel.swift) (the Vault dialogs the page presents and the bound-authorization capture before the archive dialog).
 - Playback: [`ArchivePreviewSession`](../Sources/FeatureArchiveBrowser/ArchivePreviewSession.swift), held by the view model (see [Archive preview playback](#archive-preview-playback)).
 - Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
 - A board lane is an `NSTableView` (`ArchiveBoardNativeSongList`) with reusable rows; each row hosts the unchanged
@@ -153,7 +154,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
   Motion); lane/row motion remains 0.16 seconds. Live scroll end restores hover synchronously; one board-local
   pointer tracking area clears unphased-wheel suppression on the first move, without waiting for the idle timer.
   See `docs/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
-- The board stays mounted under the song detail page (`ArchiveBrowserViewModel.showsBoardPage`): going back must not
+- The board stays mounted under the song detail page (`ArchivePageModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
   hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.
 - Applying a rescan (`applyCatalogScanUpdate`) reacts to the changed songs only, keeps the held catalog arrays when
@@ -174,7 +175,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 
 - [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift) is the single MainActor owner for queue state, the running task/stop flag, per-request batch accounting, delayed retry tasks/attempts, and capacity postponement. It exposes intentional operations (`enqueue`, `cancelQueued`, `cancelAllPending`, `confirmStopActiveTransfer`, `revokeDoneWork`, `cancelDoneRetry`/`cancelPendingRetry`, `scheduleRetry`, `noteSuccessfulTransfer`, capacity note/release) and read-only state.
 - [`ArchiveBrowserViewModel`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift) forwards queue/retry/accounting reads for existing views/tests with no duplicate stored state, re-emits the coordinator's publishes for SwiftUI, and injects narrow callbacks (status setter/base, root IDs, presentation refresh, shell-job publish, vault logging, drain-to-recovery). All coordinator captures of the view model are weak.
-- The Done revocation bridge (`revokeBoundDoneWork` in [`ArchiveBrowserViewModel+Metadata.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Metadata.swift)) owns only capture/dialog presentation and delegates queue/retry/stop mutations to `revokeDoneWork`.
+- The Done revocation bridge (`revokeBoundDoneWork` in [`ArchiveBrowserViewModel+Metadata.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Metadata.swift)) cancels the song's capture and dialog in `ArchiveVaultDialogsModel` and delegates queue/retry/stop mutations to `revokeDoneWork`.
 - Successful Undo from Done refreshes the footer even when archiving was paused and no queued request exists. Refused metadata commits retain their warning and do not report success.
 - Queue execution stays serial with duplicate prevention by song and canonical project identity, captured root revalidation before dispatch, truthful per-request stop/cancel counts, bounded Done retries (at most 3, same token downgraded copy-only), postponed non-retryable capacity until explicit reset, and shell-job publication/lifetime cancellation preserved.
 
@@ -186,7 +187,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 - Normal refresh uses `stageSnapshots(_:)`, projects the catalog, then refreshes cards. A changed catalog also prebuilds cards in `applyCatalogEdit(_:)` before publishing songs. The operation-scoped phase poller uses `applyPolledSnapshots(_:songs:)`, which reuses staging and publishes a changed snapshot once; unchanged snapshots are a no-op.
 - Snapshot/path validation, Keep Local pins, and generic-action blocking live beside their inputs. Archive projection may inspect filesystem paths and load metadata; it reports metadata-read failures through the supplied warning callback. It does not initiate scans or reload settings.
 - `scheduleRecovery` / `cancelRecovery` own deadline deduplication, busy checks, the 30-second backoff, and cancellation on deinitialization. Runtime execution and subsequent refresh enter through callbacks with weak view-model captures.
-- The view model retains runtime refresh orchestration, status composition, archived-visibility choice, and Done enqueue decisions. An unavailable runtime clears snapshots; an unreadable journal preserves the last presentation and reports a warning. Read-only peers and a weak `objectWillChange` subscription connect the owner to existing views.
+- The "Show archived songs" choice (`showsArchivedProjects`) lives here too, as the catalog projection's input; a root change turns it off. The view model retains runtime refresh orchestration, status composition, and Done enqueue decisions. An unavailable runtime clears snapshots; an unreadable journal preserves the last presentation and reports a warning. Read-only peers and the view model's change forwarding (a sink that sends on the view model's declared `objectWillChange`) connect the owner to existing views.
 
 ## Archive metadata editing ownership
 
@@ -213,10 +214,18 @@ The remaining ownership is intentional:
 
 | Owner | Retained responsibility and boundary |
 | --- | --- |
-| View model: catalog/browse | The song catalog through `applyCatalogEdit(_:)` (see [Archive song catalog](#archive-song-catalog)), selected shelf/filter/search state, prepared search index and selection reconciliation. Owners read current inputs and return results rather than keeping a second catalog. |
-| View model: roots/scan host | Roots, bookmarks, root generation and scan-result application; `ArchiveScanOrchestrator` owns scan execution. |
-| View model: UI integration | Selection/navigation (see [Archive page state](#archive-page-state)), playback and preview-analysis invalidation, collaborator/intelligence projections, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
-| View model: Vault authorization | Capture/confirmation/restore presentation, runtime dispatch, and the Done revocation bridge. Metadata commands request Done capture or revocation through callbacks; they do not create or reuse authorization. |
+| View model: catalog | The song catalog through `applyCatalogEdit(_:)` (see [Archive song catalog](#archive-song-catalog)) and selection reconciliation after each browse apply. Owners read current inputs and return results rather than keeping a second catalog. |
+| `ArchiveBrowseModel` | Browse inputs (search text in its own `ArchiveSearchInput`, shelf, collaborator, filters, sort, hidden songs), the filtered list and match summaries, the one reusable `MusicSearchIndex` and the search debounce. It reads the visible catalog and the scan's skipped entries through `ArchiveBrowseSource` and reports each apply back so the view model reconciles the selection. An empty query never touches the index. |
+| `ArchiveLibraryModel` | Roots from the stored scan list, bookmarks and security-scoped access, the access failure, first run, the root generation, the scanning flag, the nearby scan error and the last diagnostics, what a stored-settings change means (`noteStoredSettings()`), `loadSettingsForWrite()` and `writeProtectedRoots()`. |
+| View model: scan host | Scan-result application and the reactions to a settings change (`+Scan.swift`); `ArchiveScanOrchestrator` owns scan execution. |
+| View model: UI integration | Page intents that cross owners (selection with analysis and playback, reconciliation with the catalog and browse list), playback, collaborator edits, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
+| `ArchivePageModel` | The page (`viewMode`, `listShowsDetail`), the selected song, the detail's disclosures, the analytics snapshot, the route recorded in `HubNavigationHistory` and its restore (see [Archive page state](#archive-page-state)). Every selection write reaches the view model's `selectionDidChange(previousSongID:)` (preview session, open error). |
+| `ArchiveFileAccessModel` | Opening a project or preview, revealing a file and writing the index and diagnostics exports: the allowed roots (archive roots, output folder, the song's folder unless the Vault holds it), `PathSafety`, the Vault block, dry-run opening, the nearby open error and the last dry-run and export paths. Exports refuse a write-protected destination (`writeProtectedRoots()`). |
+| `ArchiveAddressBookModel` | The collaborator list (a failed load keeps the last list and warns), adding a name, and a staged removal. The view model's `confirmRemoveCollaborator()` unassigns the collaborator from every song through the edit gates before the owner deletes the row. |
+| `ArchiveIntelligenceModel` | The intelligence panel's hints, computed off the main actor from the catalog and address book the view model passes (`refreshIntelligence()`), and the dismissals that every apply filters against; a scan or root change ends them. |
+| `ArchiveSongAnalysisModel` | BPM/key and plug-in caches, their two loaders, and the rule that a result lands only for the selected song. The catalog writer hands it each `SongCatalogChange`; a metadata edit that changes the main preview invalidates through it. |
+| `ArchiveVaultDialogsModel` | The archive/Done confirmation and its bound-authorization capture (generation, task, test probe; only the current capture presents, a per-song cancel keeps other songs' dialogs), the restore sheet, restore-options loading and restore progress, the identity review, the stop-transfer alert and the stopped-for-quit flag. |
+| View model: Vault actions | The capture body, runtime dispatch and the Done revocation bridge. Metadata commands request Done capture or revocation through callbacks; they do not create or reuse authorization. |
 | `ProjectVaultOperationCoordinator` | Queue, active/busy state, cancellation, retry and capacity accounting. The observation and editing owners do not mutate its storage. |
 | `ArchiveCatalogCoordinator` | Scan reconciliation, persistence and per-song metadata integrity. The editing owner controls transaction ordering above this layer. |
 
@@ -225,10 +234,11 @@ The metadata extension retains the user-created-folder flow, plus preview/playba
 ## Archive page state
 
 The Archive Browser's page (`viewMode`: board, board detail, list, analytics; `listShowsDetail` for the compact list's
-detail) belongs to `ArchiveBrowserViewModel`. Views state intent and never write it: `openSongDetail(_:)`,
-`showBoard()` (back from the detail or analytics, keeping the selection), `setBrowseLayout(list:)`, `showAnalytics()`,
-`clearSelection(stopPlayback:)` and `restoreNavigationRoute(_:)`. `ArchiveViewIntentSourceTests` fails on a write
-outside `ArchiveBrowserViewModel*.swift`. When the page changes, `ArchiveBrowserView` gives the archive the keyboard
+detail) and the selected song belong to [`ArchivePageModel`](../Sources/FeatureArchiveBrowser/ArchivePageModel.swift),
+held as `ArchiveBrowserViewModel.page`. Views read the page through it and state intent on the view model, never
+writing it: `openSongDetail(_:)`, `showBoard()` (back from the detail or analytics, keeping the selection),
+`setBrowseLayout(list:)`, `showAnalytics()`, `clearSelection(stopPlayback:)` and `restoreNavigationRoute(_:)`. The
+setters are `private(set)`, and `ArchiveViewIntentSourceTests` fails on a write outside `ArchivePageModel.swift`. When the page changes, `ArchiveBrowserView` gives the archive the keyboard
 (unless the search field has it), so Esc and the song shortcuts work after a page change that did not come from a
 click: VoiceOver's "Open song detail", the Song menu, Back/Forward (`ArchiveKeyboardFocusTests`).
 
@@ -254,8 +264,8 @@ reports a `SongCatalogChange`: the changed songs with their old values and the r
   batch) and `clear` (a root change). All but `replace` and `clear` run the Vault projection.
 - The follow-up work of a change lives in that function. A new visible list rebuilds the Vault card cache before it
   publishes. Every change recomputes the browse results (they reconcile the selection), refreshes intelligence and
-  open analytics, and updates the per-song caches (`updatePerSongCaches(for:)`: changed and removed songs only, never
-  new ones). `load`, `rescan` and `add` sync the repair state; `rescan` and `add` persist the index, and `reproject`
+  open analytics, and lets the song analysis follow it (`ArchiveSongAnalysisModel.follow`: changed and removed songs
+  only, never new ones). `load`, `rescan` and `add` sync the repair state; `rescan` and `add` persist the index, and `reproject`
   does when it changed the baseline. Edits leave the index persist to `ArchiveMetadataEditingCoordinator`.
 - Equal lists stay as held: an unchanged 10,000-song rescan keeps one copy of the catalog and reports an empty
   change. The scan shares unchanged song values with the held baseline before it projects.
@@ -271,7 +281,7 @@ the headphone-unplug pause. Its `ArchivePreviewPlayer` is the only AVFoundation 
 plays at a time by construction; no coordinator sits between players.
 
 - `ArchiveBrowserViewModel.previewSession` holds it. The view model creates it with its other owners; production
-  builds one view model, so the app has one session for its lifetime. Every write of `selectedSong` reaches it
+  builds one view model, so the app has one session for its lifetime. Every write of `ArchivePageModel.selectedSong` reaches it
   (`synchronizePreviewSelection()`, also for restored routes and catalog reconciliation), and the lifecycle resets (a
   root change; the loaded song hidden or gone from the catalog) call `clear()`.
 - Views get it by initializer, never by a global: `ArchiveBrowserView` and `SongDetailView` from the view model,
@@ -306,13 +316,13 @@ values and never a file.
   banner), and the board's Add Folder and Grant Access and Set Up's Choose Folder (through
   `ArchiveBrowserViewModel.addRoots`, failures in the archive footer). A failed save changes nothing.
 - The archive follows the store. It subscribes to `ToolContext.appSettings` and answers every save, whoever made it,
-  with `followStoredSettings()`. The reaction reads the store, so a late publish cannot roll it back, and compares
-  with what it last loaded (`ArchiveFollowedSettings`). A Keep Local pin or another Vault choice only refreshes the
+  with `followStoredSettings()`. `ArchiveLibraryModel.noteStoredSettings()` reads the store, so a late publish cannot
+  roll it back, and compares with what it last loaded (`ArchiveFollowedSettings`). A Keep Local pin or another Vault choice only refreshes the
   cards. Changed roots load again: added folders keep the catalog and scan; a removal or a new Vault binding resets
   the root-bound state, keeps an unrelated footer warning and scans what is left; a Vault binding change also runs
   Vault recovery. The archive's own add runs the reaction at once, and the later publish finds nothing new. A
   settings repair calls it too, after clearing the settings warning.
-- The archive keeps the read side: resolving bookmarks, holding security-scoped access, the access failure,
+- `ArchiveLibraryModel` keeps the read side: resolving bookmarks, holding security-scoped access, the access failure,
   `writeProtectedRoots()`.
 - Limits: fixture runs (`NIKO_MUSIC_HUB_FIXTURE_ROOT`) pin the loaded roots to the fixture, so an edit is saved but
   the board keeps the fixture. A writer in another process (the CLI) is not followed.
@@ -597,8 +607,9 @@ and `updates(for:)`. The Downloader and Stem Separation run this way.
   helper probe, an animation), observing a job or a stream, or a step that a job or a take awaits and cancels. An
   unstructured `Task` does not inherit the job's cancellation, so the step forwards it by hand
   (`DemucsMLXBackend`'s separation inside the stem job); otherwise Esc leaves it running and quit waits the full 5 s.
-- Work that cannot be a job registers with `ShellJobStatusCenter.setExtraJob` by hand, under a named
-  `ShellJobExtraSourceID`, and clears its entry only after it has unwound. Tasks outside the registry shipped three
+- Work that cannot be a job registers with `ShellJobStatusCenter.setExtraJob` by hand, under a
+  `ShellJobExtraSourceID` case (a closed enum: the compiler refuses any other source), and clears its entry only
+  after it has unwound. Tasks outside the registry shipped three
   times: recorder takes and helper installs (061ea81) and the download's title lookup (c69717f) were cut off by quit.
   The named exceptions:
 
@@ -612,8 +623,8 @@ and `updates(for:)`. The Downloader and Stem Separation run this way.
 
 - `ToolWorkSourceTests` enforces it: every `Task` that a tool creates (`Sources/Feature*` except the archive browser,
   `AppCore/HelperTools`, and the app target's Settings and Dev Tool features) is listed by file and enclosing
-  declaration with its reason, `ShellJobExtraSourceID` is the closed list above, and only the owner's files register
-  each source. The detector does not see SwiftUI's `.task {}`, structured child tasks or `DispatchQueue.async`.
+  declaration with its reason, every `ShellJobExtraSourceID` case has its reason above, and only the owner's files
+  register each source. The detector does not see SwiftUI's `.task {}`, structured child tasks or `DispatchQueue.async`.
 - Known gap: the Settings recovery bundle export and import (`ProjectVaultRecoverySection`) and the test restore
   (`ProjectVaultSettingsView.runRestoreDrill`) run in unregistered tasks, so quit does not wait for them. They are
   listed as such in the check; making them jobs would add rows to the jobs strip, a product change.
@@ -656,7 +667,7 @@ use `writeProtectedRoots()`. `OutputGuardSourceTests` enforces both owners.
 
 Settings that gate a write or a Project Vault decision are loaded with `try`, and the action is
 refused when they cannot be read (`ToolOutputDestination.load(from:)`,
-`ArchiveBrowserViewModel.loadSettingsForWrite()`); display-only code reads
+`ArchiveLibraryModel.loadSettingsForWrite()`); display-only code reads
 `ToolContext.appSettings`. The few `try? …loadSettings()` reads that stay are listed with their
 reasons in `OutputGuardSourceTests`.
 

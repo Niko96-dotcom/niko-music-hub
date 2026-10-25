@@ -26,7 +26,7 @@ final class AudioConverterFeatureTests: XCTestCase {
         )
         XCTAssertEqual(converting.title, "Loop.m4a")
         XCTAssertEqual(converting.displayLine, "Converting “Loop.m4a” · 50%")
-        XCTAssertEqual(converting.cancelActionID, ShellJobExtraSourceID.converter)
+        XCTAssertEqual(converting.cancelActionID, ShellJobExtraSourceID.converter.rawValue)
         XCTAssertEqual(converting.sourceToolID, AudioConverterFeature().metadata.id)
         XCTAssertEqual(converting.cancelTarget, .conversion)
         XCTAssertEqual(converting.cancelHelp, "Stops converting now and skips the rest. Verified WAV files are kept.")

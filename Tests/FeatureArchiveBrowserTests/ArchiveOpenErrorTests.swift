@@ -36,8 +36,8 @@ final class ArchiveOpenErrorTests: XCTestCase {
         )
         model.applyCatalogEdit(.load([song]))
 
-        XCTAssertThrowsError(try model.openLatestCPR(for: song))
-        XCTAssertEqual(model.openError, ArchiveOpenErrorCopy.missingProject)
+        XCTAssertThrowsError(try model.fileAccess.openLatestCPR(for: song))
+        XCTAssertEqual(model.fileAccess.openError, ArchiveOpenErrorCopy.missingProject)
         XCTAssertNotNil(model.statusMessage)
     }
 
@@ -50,7 +50,7 @@ final class ArchiveOpenErrorTests: XCTestCase {
                 userInfo: [NSLocalizedDescriptionKey: "unreadable fixture root"]
             )
         )
-        XCTAssertEqual(model.scanError, ArchiveOpenErrorCopy.scanBody)
+        XCTAssertEqual(model.library.scanError, ArchiveOpenErrorCopy.scanBody)
         XCTAssertTrue(model.statusMessage?.contains("Scan failed") == true)
     }
 }

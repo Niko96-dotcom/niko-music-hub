@@ -75,10 +75,10 @@ extension ShellJobStatusCopy {
         progress: ProjectVaultRestoreProgress?
     ) -> ShellJobStatus {
         ShellJobStatus(
-            id: ShellJobExtraSourceID.vaultTransfer,
+            id: ShellJobExtraSourceID.vaultTransfer.rawValue,
             title: songName.isEmpty ? vaultTransferFallback : songName,
             percent: progress?.fraction,
-            cancelActionID: ShellJobExtraSourceID.vaultTransfer,
+            cancelActionID: ShellJobExtraSourceID.vaultTransfer.rawValue,
             activityVerb: "Transferring",
             cancelTarget: .vaultTransfer
         )

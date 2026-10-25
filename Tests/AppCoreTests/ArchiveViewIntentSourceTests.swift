@@ -1,13 +1,15 @@
 import Foundation
 import XCTest
 
-/// Archive views state intent; the view model owns the page. Views that wrote
+/// Archive views state intent; `ArchivePageModel` owns the page. Views that wrote
 /// `viewMode` themselves drifted from the model's own rules before (477f9ae fixed
-/// four view copies of `showsBoardPage`).
+/// four view copies of `showsBoardPage`). The setters are `private(set)` in
+/// `ArchivePageModel`, so the compiler refuses a write elsewhere; this test keeps
+/// that file the one writer if the setters ever open up.
 final class ArchiveViewIntentSourceTests: XCTestCase {
-    func testOnlyTheViewModelWritesThePage() throws {
+    func testOnlyThePageModelWritesThePage() throws {
         let failures = try Self.archiveSourceFiles()
-            .filter { !Self.isViewModelFile($0) }
+            .filter { !Self.isPageOwnerFile($0) }
             .flatMap { file in
                 Self.lines(matching: Self.pageWrite, in: SourceLex.stripped(try SourceTestSupport.read(file)))
                     .map { "\(file):\($0)" }
@@ -26,14 +28,14 @@ final class ArchiveViewIntentSourceTests: XCTestCase {
         func hits(_ line: String) -> Int {
             Self.lines(matching: Self.pageWrite, in: SourceLex.stripped(line)).count
         }
-        XCTAssertEqual(hits("viewModel.viewMode = .board"), 1)
-        XCTAssertEqual(hits("viewModel.listShowsDetail = false"), 1)
-        XCTAssertEqual(hits("onOpenListView: { viewModel.viewMode = .list }"), 1)
-        XCTAssertEqual(hits("if viewModel.viewMode == .board {"), 0)
+        XCTAssertEqual(hits("viewModel.page.viewMode = .board"), 1)
+        XCTAssertEqual(hits("viewModel.page.listShowsDetail = false"), 1)
+        XCTAssertEqual(hits("onOpenListView: { viewModel.page.viewMode = .list }"), 1)
+        XCTAssertEqual(hits("if viewModel.page.viewMode == .board {"), 0)
         XCTAssertEqual(hits("guard viewMode != .list else { return }"), 0)
-        XCTAssertEqual(hits("@Published var viewMode: ArchiveViewMode = .board {"), 0)
+        XCTAssertEqual(hits("@Published private(set) var viewMode: ArchiveViewMode = .board {"), 0)
         XCTAssertEqual(hits("Self.navigationRoute(viewMode: viewMode, songID: nil)"), 0)
-        XCTAssertEqual(hits("// viewModel.viewMode = .board"), 0)
+        XCTAssertEqual(hits("// viewModel.page.viewMode = .board"), 0)
     }
 
     /// The song detail's status menu offers a change only when the board and the
@@ -69,8 +71,8 @@ final class ArchiveViewIntentSourceTests: XCTestCase {
 
     private static let pageWrite = try! NSRegularExpression(pattern: #"\b(?:viewMode|listShowsDetail)\s*=(?!=)"#)
 
-    private static func isViewModelFile(_ path: String) -> Bool {
-        (path as NSString).lastPathComponent.hasPrefix("ArchiveBrowserViewModel")
+    private static func isPageOwnerFile(_ path: String) -> Bool {
+        (path as NSString).lastPathComponent == "ArchivePageModel.swift"
     }
 
     private static func lines(matching pattern: NSRegularExpression, in strippedSource: String) -> [String] {

@@ -13,18 +13,18 @@ struct ArchiveCollaboratorAddressBookView: View {
                 .font(HubDesignSystem.Typography.caption().weight(.semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
 
-            if viewModel.collaborators.isEmpty {
+            if viewModel.addressBook.collaborators.isEmpty {
                 Text("No collaborators yet.")
                     .font(HubDesignSystem.Typography.micro())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
             } else {
-                ForEach(viewModel.collaborators) { collaborator in
+                ForEach(viewModel.addressBook.collaborators) { collaborator in
                     HStack(spacing: 6) {
                         Text(collaborator.displayName)
                             .font(HubDesignSystem.Typography.micro())
                         Spacer(minLength: 0)
                         HubLabeledButton(icon: "trash", label: "Remove", style: .ghost, role: .destructive) {
-                            viewModel.requestRemoveCollaborator(collaborator)
+                            viewModel.addressBook.requestRemoval(collaborator)
                         }
                     }
                 }
@@ -38,11 +38,11 @@ struct ArchiveCollaboratorAddressBookView: View {
         .alert(
             "Remove this name?",
             isPresented: Binding(
-                get: { viewModel.pendingCollaboratorRemoval != nil },
-                set: { if !$0 { viewModel.cancelRemoveCollaborator() } }
+                get: { viewModel.addressBook.pendingCollaboratorRemoval != nil },
+                set: { if !$0 { viewModel.addressBook.cancelRemoval() } }
             )
         ) {
-            Button("Cancel", role: .cancel) { viewModel.cancelRemoveCollaborator() }
+            Button("Cancel", role: .cancel) { viewModel.addressBook.cancelRemoval() }
                 .keyboardShortcut(.defaultAction)
             Button("Remove", role: .destructive) { viewModel.confirmRemoveCollaborator() }
         } message: {
@@ -51,7 +51,7 @@ struct ArchiveCollaboratorAddressBookView: View {
     }
 
     private var collaboratorRemovalMessage: String {
-        let name = viewModel.pendingCollaboratorRemoval?.displayName ?? ""
+        let name = viewModel.addressBook.pendingCollaboratorRemoval?.displayName ?? ""
         return "Removes “\(name)” from the address book. Songs that used this name keep their other metadata. Music files are not changed."
     }
 }

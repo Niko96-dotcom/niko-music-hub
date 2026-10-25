@@ -90,7 +90,7 @@ final class ArchiveStoredRootsFollowTests: XCTestCase {
         let store = try makeStore(scanning: [first])
         let gate = ScanGate(holdsScans: false)
         let viewModel = makeViewModel(store: store, gate: gate)
-        let rootLoads = PublishCounter(viewModel.$roots.dropFirst())
+        let rootLoads = PublishCounter(viewModel.library.$roots.dropFirst())
 
         try store.updateSettings { $0.vault.keepLocalPins.pin(KeepLocalPins.Project(songIDs: ["pinned-song"])) }
         // Publishes arrive in save order: once the add is followed, the pin was too.
@@ -108,7 +108,7 @@ final class ArchiveStoredRootsFollowTests: XCTestCase {
         defer { remove(first, second, third) }
         let store = try makeStore(scanning: [first])
         let viewModel = makeViewModel(store: store, gate: ScanGate(holdsScans: false))
-        let rootLoads = PublishCounter(viewModel.$roots.dropFirst())
+        let rootLoads = PublishCounter(viewModel.library.$roots.dropFirst())
 
         viewModel.addRoots([second])
         XCTAssertTrue(viewModel.roots.map(canonical).contains(canonical(second)), "the board shows its add at once")

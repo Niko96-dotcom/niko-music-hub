@@ -426,7 +426,7 @@ final class AudioRecorderViewModelTests: XCTestCase {
         let work = center.quitBlockingWork
         XCTAssertEqual(work.count, 1)
         let take = try XCTUnwrap(work.first)
-        XCTAssertEqual(take.id, ShellJobExtraSourceID.audioRecorder)
+        XCTAssertEqual(take.id, ShellJobExtraSourceID.audioRecorder.rawValue)
         XCTAssertTrue(take.blocksQuit)
         XCTAssertFalse(take.listed)
         XCTAssertTrue(center.jobs.isEmpty, "A take is not shown in the jobs strip")

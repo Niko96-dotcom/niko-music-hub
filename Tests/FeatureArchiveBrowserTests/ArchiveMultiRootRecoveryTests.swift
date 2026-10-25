@@ -63,9 +63,9 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         )
 
         XCTAssertTrue(viewModel.roots.isEmpty)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, firstID)
-        XCTAssertTrue(viewModel.showsArchiveAccessRecovery)
-        XCTAssertFalse(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, firstID)
+        XCTAssertTrue(viewModel.library.showsArchiveAccessRecovery)
+        XCTAssertFalse(viewModel.library.showsInlineArchiveAccessRecovery)
 
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
@@ -75,17 +75,17 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
             "second root remains absent after recovering only the first"
         )
         XCTAssertNotNil(
-            viewModel.archiveAccessFailure,
+            viewModel.library.archiveAccessFailure,
             "recovering the first root cleared the failure while the second root remains absent"
         )
         XCTAssertEqual(
-            viewModel.archiveAccessFailure?.storedRootID, secondID,
+            viewModel.library.archiveAccessFailure?.storedRootID, secondID,
             "remaining failure must identify the still-absent second root"
         )
         // Populated library must not use the empty overlay; inline strip stays actionable.
-        XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
-        XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
-        XCTAssertEqual(viewModel.storedArchiveAccessDirectory()?.path, secondDir.standardizedFileURL.path)
+        XCTAssertFalse(viewModel.library.showsArchiveAccessRecovery)
+        XCTAssertTrue(viewModel.library.showsInlineArchiveAccessRecovery)
+        XCTAssertEqual(viewModel.library.storedArchiveAccessDirectory()?.path, secondDir.standardizedFileURL.path)
     }
 
     func testPartialSuccessPreservesAccessibleRootsAndBookmarkTokens() throws {
@@ -125,7 +125,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         )
         // Healthy resolves via fallback; two bookmark failures collapse to first failure.
         XCTAssertEqual(viewModel.roots.map(\.path), [ArchiveScanList.canonicalPath(for: healthyDir)])
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, firstID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, firstID)
 
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
@@ -134,8 +134,8 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: healthyDir)))
         XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: firstDir)))
         XCTAssertFalse(keys.contains(ArchiveScanList.canonicalPath(for: secondDir)))
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
-        XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertTrue(viewModel.library.showsInlineArchiveAccessRecovery)
         // Persisted unresolved roots (with tokens) must survive the partial recovery.
         let persisted = try fixture.store.loadSettings()
         XCTAssertEqual(persisted.effectiveScanRoots.count, 3)
@@ -175,13 +175,13 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         )
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
 
         provider.secondURL = secondDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertNil(viewModel.archiveAccessFailure)
-        XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
-        XCTAssertFalse(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
+        XCTAssertFalse(viewModel.library.showsArchiveAccessRecovery)
+        XCTAssertFalse(viewModel.library.showsInlineArchiveAccessRecovery)
         let keys = Set(viewModel.roots.map { ArchiveScanList.canonicalPath(for: $0) })
         XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: firstDir)))
         XCTAssertTrue(keys.contains(ArchiveScanList.canonicalPath(for: secondDir)))
@@ -223,12 +223,12 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         )
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
 
         // User reselects an additional folder; unresolved second root must survive.
         viewModel.addRoots([reselectDir], bookmarksByURL: [reselectDir: Data([0xA9])])
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
-        XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertTrue(viewModel.library.showsInlineArchiveAccessRecovery)
         let persisted = try fixture.store.loadSettings()
         XCTAssertNotNil(persisted.effectiveScanRoots.first(where: { $0.id == secondID }))
         XCTAssertEqual(persisted.effectiveScanRoots.first(where: { $0.id == secondID })?.securityScopedBookmark, Data([0xA2]))
@@ -274,7 +274,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         )
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
 
         // Remove the recovered first root; healthy stays, second unresolved stays persisted.
         let recoveredURL = viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) })
@@ -283,7 +283,7 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
 
         XCTAssertFalse(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) }))
         XCTAssertTrue(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: healthyDir) }))
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
         let persisted = try fixture.store.loadSettings()
         XCTAssertNotNil(persisted.effectiveScanRoots.first(where: { $0.id == secondID }))
         XCTAssertEqual(persisted.effectiveScanRoots.first(where: { $0.id == secondID })?.securityScopedBookmark, Data([0xA2]))
@@ -325,19 +325,19 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
             bookmarkProvider: provider,
             scanOverride: { _ in ScanResult() }
         )
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, firstID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, firstID)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive root access could not be restored: Missing A.")
 
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive root access could not be restored: Missing B.")
-        XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertTrue(viewModel.library.showsInlineArchiveAccessRecovery)
 
         provider.secondURL = secondDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertNil(viewModel.archiveAccessFailure)
-        XCTAssertFalse(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
+        XCTAssertFalse(viewModel.library.showsInlineArchiveAccessRecovery)
         XCTAssertNil(viewModel.persistenceWarningMessage, "stale root-access footer must clear once the last failed root recovers")
         XCTAssertEqual(viewModel.statusMessage, "Scanning archive...")
         let keys = Set(viewModel.roots.map { ArchiveScanList.canonicalPath(for: $0) })
@@ -382,13 +382,13 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         )
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive root access could not be restored: Second.")
 
         viewModel.recordPersistenceWarning("Archive settings could not be saved: disk full.")
         provider.secondURL = secondDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertNil(viewModel.archiveAccessFailure)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive settings could not be saved: disk full.", "repair must not clear an unrelated warning")
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive settings could not be saved") == true)
         XCTAssertFalse(viewModel.statusMessage?.contains("could not be restored") ?? false)
@@ -431,23 +431,23 @@ final class ArchiveMultiRootRecoveryTests: XCTestCase {
         )
         provider.firstURL = firstDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
 
         // Removing the recovered root keeps the remaining warning truthful.
         let recoveredURL = try XCTUnwrap(viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: firstDir) }))
         try viewModel.removeFolderAsSettingsDoes(recoveredURL)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive root access could not be restored: Second.")
 
         // Recover the last root, then verify removal retains an unrelated warning.
         provider.secondURL = secondDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertNil(viewModel.archiveAccessFailure)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
         XCTAssertNil(viewModel.persistenceWarningMessage)
         viewModel.recordPersistenceWarning("Archive settings could not be saved: disk full.")
         let healthyURL = try XCTUnwrap(viewModel.roots.first(where: { ArchiveScanList.canonicalPath(for: $0) == ArchiveScanList.canonicalPath(for: healthyDir) }))
         try viewModel.removeFolderAsSettingsDoes(healthyURL)
-        XCTAssertNil(viewModel.archiveAccessFailure)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
         XCTAssertEqual(viewModel.persistenceWarningMessage, "Archive settings could not be saved: disk full.", "removal must not clear an unrelated warning")
         XCTAssertTrue(viewModel.statusMessage?.contains("Archive settings could not be saved") == true)
     }

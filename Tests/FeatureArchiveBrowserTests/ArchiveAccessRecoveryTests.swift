@@ -26,13 +26,13 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
 
         XCTAssertTrue(viewModel.roots.isEmpty)
         XCTAssertTrue(viewModel.songs.isEmpty)
-        XCTAssertFalse(viewModel.needsFirstRunOnboarding)
-        XCTAssertNotNil(viewModel.archiveAccessFailure)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.displayName, "Fixture Archive")
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, rootID)
-        XCTAssertFalse(viewModel.archiveAccessFailure?.reason.isEmpty ?? true)
-        XCTAssertTrue(viewModel.showsArchiveAccessRecovery)
-        let recoveryMessage = try XCTUnwrap(viewModel.archiveAccessFailure?.recoveryMessage)
+        XCTAssertFalse(viewModel.library.needsFirstRunOnboarding)
+        XCTAssertNotNil(viewModel.library.archiveAccessFailure)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.displayName, "Fixture Archive")
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, rootID)
+        XCTAssertFalse(viewModel.library.archiveAccessFailure?.reason.isEmpty ?? true)
+        XCTAssertTrue(viewModel.library.showsArchiveAccessRecovery)
+        let recoveryMessage = try XCTUnwrap(viewModel.library.archiveAccessFailure?.recoveryMessage)
         XCTAssertTrue(recoveryMessage.hasPrefix("Niko Music Hub could not open “Fixture Archive”."))
         XCTAssertTrue(recoveryMessage.contains("Grant access again to scan this folder."))
         XCTAssertTrue(recoveryMessage.contains("Songs already in the catalog stay on disk; they are hidden until access is restored."))
@@ -41,8 +41,8 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
             "Archive root access could not be restored: Fixture Archive."
         )
         XCTAssertFalse(viewModel.retryStoredArchiveAccess())
-        XCTAssertTrue(viewModel.showsArchiveAccessRecovery)
-        XCTAssertEqual(viewModel.storedArchiveAccessDirectory()?.path, fixture.nonMusicVaultPath)
+        XCTAssertTrue(viewModel.library.showsArchiveAccessRecovery)
+        XCTAssertEqual(viewModel.library.storedArchiveAccessDirectory()?.path, fixture.nonMusicVaultPath)
     }
 
     func testRetryKeepsHealthyRootsAndBookmarkForRecoveredRoot() throws {
@@ -65,12 +65,12 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
         let provider = SwitchableBookmarkProvider()
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
         XCTAssertEqual(viewModel.roots.map(\.path), [ArchiveScanList.canonicalPath(for: URL(fileURLWithPath: healthyPath))])
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, recoveredID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, recoveredID)
 
         provider.resolvesTo = recoveredURL
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
 
-        XCTAssertNil(viewModel.archiveAccessFailure)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
         XCTAssertEqual(
             viewModel.roots.map(\.path),
             [URL(fileURLWithPath: healthyPath), recoveredURL].map { ArchiveScanList.canonicalPath(for: $0) }
@@ -104,9 +104,9 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
 
         XCTAssertTrue(viewModel.roots.isEmpty)
         XCTAssertTrue(viewModel.songs.isEmpty)
-        XCTAssertFalse(viewModel.needsFirstRunOnboarding)
-        XCTAssertNil(viewModel.archiveAccessFailure)
-        XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
+        XCTAssertFalse(viewModel.library.needsFirstRunOnboarding)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
+        XCTAssertFalse(viewModel.library.showsArchiveAccessRecovery)
     }
 
     func testFirstRunRemainsWhenNoStoredRoot() throws {
@@ -115,9 +115,9 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
 
         let viewModel = fixture.makeViewModel()
         XCTAssertTrue(viewModel.roots.isEmpty)
-        XCTAssertNil(viewModel.archiveAccessFailure)
-        XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
-        XCTAssertTrue(viewModel.needsFirstRunOnboarding)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
+        XCTAssertFalse(viewModel.library.showsArchiveAccessRecovery)
+        XCTAssertTrue(viewModel.library.needsFirstRunOnboarding)
     }
 
     func testChooseFolderClearsAccessFailureAndLeavesRecoveryPath() throws {
@@ -143,17 +143,17 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: restoredRoot) }
 
         let viewModel = fixture.makeViewModel()
-        XCTAssertTrue(viewModel.showsArchiveAccessRecovery)
+        XCTAssertTrue(viewModel.library.showsArchiveAccessRecovery)
 
         viewModel.addRoot(restoredRoot)
 
         // A1: adding a different folder must not drop the still-unresolved
         // persisted root. The populated library stays visible with an inline
         // actionable strip instead of the empty overlay.
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, storedID)
-        XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
-        XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
-        XCTAssertFalse(viewModel.needsFirstRunOnboarding)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, storedID)
+        XCTAssertFalse(viewModel.library.showsArchiveAccessRecovery)
+        XCTAssertTrue(viewModel.library.showsInlineArchiveAccessRecovery)
+        XCTAssertFalse(viewModel.library.needsFirstRunOnboarding)
         XCTAssertEqual(viewModel.roots.map(\.path), [restoredRoot.standardizedFileURL.path])
         let persisted = try fixture.store.loadSettings()
         XCTAssertNotNil(persisted.effectiveScanRoots.first(where: { $0.id == storedID }))
@@ -161,11 +161,11 @@ final class ArchiveAccessRecoveryTests: XCTestCase {
 
     func testUserFacingReasonForStaleAndMissingBookmarks() {
         XCTAssertEqual(
-            ArchiveBrowserViewModel.userFacingArchiveAccessReason(from: SecurityScopedBookmarkError.staleBookmark),
+            ArchiveLibraryModel.userFacingArchiveAccessReason(from: SecurityScopedBookmarkError.staleBookmark),
             "Saved folder access is out of date."
         )
         XCTAssertEqual(
-            ArchiveBrowserViewModel.userFacingArchiveAccessReason(from: SecurityScopedBookmarkError.missingBookmark),
+            ArchiveLibraryModel.userFacingArchiveAccessReason(from: SecurityScopedBookmarkError.missingBookmark),
             "Saved folder access is missing."
         )
     }

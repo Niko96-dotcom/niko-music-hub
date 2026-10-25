@@ -45,17 +45,17 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let sentinel = fixture.project.appendingPathComponent("keep.txt")
         try Data("keep".utf8).write(to: sentinel)
         model.performProjectVaultPrimaryAction(for: archived)
-        try await waitUntil { model.projectVaultRestoreRequest != nil }
-        let request = try XCTUnwrap(model.projectVaultRestoreRequest)
+        try await waitUntil { model.vaultDialogs.projectVaultRestoreRequest != nil }
+        let request = try XCTUnwrap(model.vaultDialogs.projectVaultRestoreRequest)
         XCTAssertTrue(request.options.versions.contains { $0.relativePath == "Chosen.als" })
         XCTAssertNotNil(request.options.destinationIssue(for: request.options.destinationRelativePath))
         model.confirmProjectVaultRestore(selectedPath: "Chosen.als")
-        XCTAssertNotNil(model.projectVaultRestoreRequest)
+        XCTAssertNotNil(model.vaultDialogs.projectVaultRestoreRequest)
         XCTAssertTrue(try fixture.transferStore().recoverableRestoreRecords().isEmpty)
         XCTAssertEqual(try Data(contentsOf: sentinel), Data("keep".utf8))
         model.confirmProjectVaultRestore(selectedPath: "Chosen.als", destinationRelativePath: "Restored separately")
         try await waitUntil { model.projectVaultBusySongIDs.isEmpty }
-        XCTAssertNil(model.projectVaultRestoreRequest)
+        XCTAssertNil(model.vaultDialogs.projectVaultRestoreRequest)
         XCTAssertTrue(model.projectVaultQueueFailures.isEmpty)
         XCTAssertEqual(try Data(contentsOf: sentinel), Data("keep".utf8))
         let destination = fixture.active.appendingPathComponent("Restored separately")
@@ -90,18 +90,18 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         model.setShowArchivedProjects(true)
         let archivedSong = try XCTUnwrap(model.songs.first { $0.folderPath.lastPathComponent == "Historical" })
         model.performProjectVaultPrimaryAction(for: archivedSong)
-        try await waitUntil { model.projectVaultRestoreRequest != nil }
+        try await waitUntil { model.vaultDialogs.projectVaultRestoreRequest != nil }
         model.confirmProjectVaultRestore()
         try await provider.waitForDownloadStart()
-        try await waitUntil { model.projectVaultRestoreProgress != nil }
-        let progress = model.projectVaultRestoreProgress
+        try await waitUntil { model.vaultDialogs.projectVaultRestoreProgress != nil }
+        let progress = model.vaultDialogs.projectVaultRestoreProgress
         XCTAssertEqual(model.projectVaultActivityMessages[archivedSong.id], progress?.title)
         XCTAssertEqual(progress?.phase, .materializingArchive)
         XCTAssertEqual(progress?.fileCount, 2)
         XCTAssertEqual(progress?.totalBytes, fixture.sourceManifest.totalBytes)
         await provider.releaseDownload()
         try await waitUntil { !model.projectVaultBusySongIDs.contains(archivedSong.id) }
-        XCTAssertNil(model.projectVaultRestoreProgress)
+        XCTAssertNil(model.vaultDialogs.projectVaultRestoreProgress)
         XCTAssertTrue(model.projectVaultActivityMessages.isEmpty)
         let pendingSnapshots = try await runtime.snapshots()
         let pending = try XCTUnwrap(pendingSnapshots.first { $0.record.id == entry.record.id }?.restore)
@@ -192,9 +192,9 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertTrue(viewModel.blocksGenericProjectVaultFileActions(for: song))
         let openBlockReason = try XCTUnwrap(viewModel.projectOpenBlockReason(for: song))
         XCTAssertTrue(openBlockReason.contains("Restore & Open"))
-        XCTAssertThrowsError(try viewModel.openLatestCPR(for: song))
+        XCTAssertThrowsError(try viewModel.fileAccess.openLatestCPR(for: song))
         XCTAssertEqual(viewModel.statusMessage, openBlockReason)
-        XCTAssertNil(viewModel.lastDryRunLog)
+        XCTAssertNil(viewModel.fileAccess.lastDryRunLog)
         XCTAssertFalse(viewModel.canArchiveInProjectVault(song))
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: song))
         XCTAssertTrue(revealed.urls.isEmpty)
@@ -266,7 +266,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         for song in archived {
             model.performProjectVaultPrimaryAction(for: song)
             model.performProjectVaultPrimaryAction(for: song)
-            try await waitUntil { model.projectVaultRestoreRequest != nil }
+            try await waitUntil { model.vaultDialogs.projectVaultRestoreRequest != nil }
             model.confirmProjectVaultRestore()
         }
         XCTAssertLessThanOrEqual(model.projectVaultPendingOperations.count, 1)
@@ -335,9 +335,9 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(model.projectVaultActiveOperation?.songID, song.id)
 
         model.requestStopActiveProjectVaultTransfer()
-        XCTAssertTrue(model.pendingStopTransferConfirmation)
+        XCTAssertTrue(model.vaultDialogs.pendingStopTransferConfirmation)
         model.keepActiveProjectVaultTransfer()
-        XCTAssertFalse(model.pendingStopTransferConfirmation)
+        XCTAssertFalse(model.vaultDialogs.pendingStopTransferConfirmation)
         XCTAssertEqual(model.projectVaultActiveOperation?.songID, song.id)
 
         model.requestStopActiveProjectVaultTransfer()
@@ -477,7 +477,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let archived = try XCTUnwrap(viewModel.songs.first)
         XCTAssertEqual(viewModel.projectVaultPresentation(for: archived)?.primaryAction, .restoreAndOpen)
         viewModel.performProjectVaultPrimaryAction(for: archived)
-        try await waitUntil { viewModel.projectVaultRestoreRequest != nil }
+        try await waitUntil { viewModel.vaultDialogs.projectVaultRestoreRequest != nil }
         viewModel.confirmProjectVaultRestore()
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
         viewModel.setShowArchivedProjects(false)
@@ -500,7 +500,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first)
         viewModel.updateWorkflowStatus(for: song, status: .done)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         let store = try fixture.transferStore()
         try await waitUntil {
@@ -552,7 +552,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first)
         viewModel.updateWorkflowStatus(for: song, status: .done)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         let store = try fixture.transferStore()
         try await waitUntil {
@@ -591,7 +591,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let viewModel = fixture.viewModel(runtime: runtime)
         await viewModel.scan()
         viewModel.updateWorkflowStatus(for: try XCTUnwrap(viewModel.songs.first), status: .done)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultRecoveryDeadline != nil }
         try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
@@ -622,7 +622,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         _ = try await runtime.archive(song: active, trigger: .backupCopy)
         await viewModel.refreshProjectVaultSnapshots()
         viewModel.updateWorkflowStatus(for: active, status: .done)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
         try await waitUntil {
@@ -644,7 +644,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         corrupted[0] ^= 0xff
         try corrupted.write(to: archiveAudio)
         viewModel.performProjectVaultPrimaryAction(for: archived)
-        try await waitUntil { viewModel.projectVaultRestoreRequest != nil }
+        try await waitUntil { viewModel.vaultDialogs.projectVaultRestoreRequest != nil }
         viewModel.confirmProjectVaultRestore()
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
         let failed = try XCTUnwrap(viewModel.projectVaultPresentation(for: archived))
@@ -689,7 +689,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
 
@@ -710,7 +710,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
         XCTAssertEqual(viewModel.projectVaultPresentation(for: archivedSong)?.allowsWorkflowMutation, false)
 
-        viewModel.selectedSong = archivedSong
+        viewModel.selectSongOnBoard(archivedSong)
         viewModel.applyCatalogScanUpdate(
             ArchiveCatalogCoordinator.CatalogScanApplyResult(
                 songs: viewModel.scannedSongs,
@@ -721,7 +721,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
             ),
             roots: viewModel.roots
         )
-        XCTAssertEqual(viewModel.selectedSong?.id, archivedSong.id)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, archivedSong.id)
         XCTAssertTrue(
             viewModel.songs.contains { $0.folderPath.standardizedFileURL.path == archivePath },
             "A scan apply must synchronously retain the opt-in archive projection."
@@ -773,7 +773,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         viewModel.setShowArchivedProjects(true)
 
@@ -806,9 +806,9 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let activeSong = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: activeSong, status: .done)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
-        XCTAssertFalse(viewModel.showArchivedProjects)
+        XCTAssertFalse(viewModel.vaultObservation.showsArchivedProjects)
         viewModel.setShowArchivedProjects(true)
 
         try await waitUntil {
@@ -840,7 +840,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(pinnedArchivedPresentation.primaryAction, .restoreAndOpen)
 
         viewModel.performProjectVaultPrimaryAction(for: reShownArchivedSong)
-        try await waitUntil { viewModel.projectVaultRestoreRequest != nil }
+        try await waitUntil { viewModel.vaultDialogs.projectVaultRestoreRequest != nil }
         viewModel.confirmProjectVaultRestore()
         try await waitUntil {
             FileManager.default.fileExists(atPath: fixture.project.path)
@@ -952,7 +952,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Friends Workflow Song" })
         viewModel.updateWorkflowStatus(for: song, status: .done)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         let store = try fixture.transferStore()
         try await waitUntil {
@@ -1097,8 +1097,8 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertEqual(stale.trigger, .workflowDone)
 
         viewModel.performProjectVaultPrimaryAction(for: readySong)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.trigger, .manual)
         XCTAssertEqual(pending.songID, readySong.id)
         let fresh = try XCTUnwrap(pending.authorization)
@@ -1111,7 +1111,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         XCTAssertEqual(try fixture.transferStore().allTransferRecords().count, 1)
         viewModel.cancelPendingArchive()
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
     }
 
     private func waitUntil(

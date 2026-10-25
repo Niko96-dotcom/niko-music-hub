@@ -49,12 +49,14 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(miniPlayer.contains("clearMetadataCaches"), "Hook/duration caches must be clearable")
 
         let viewModel = try archiveBrowserViewModelSources()
-        XCTAssertTrue(viewModel.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
-        XCTAssertTrue(viewModel.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
+        let page = try featureSource("ArchivePageModel.swift")
+        XCTAssertTrue(page.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
+        XCTAssertTrue(page.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
         XCTAssertTrue(viewModel.contains("reconcileSelectedSong"), "Browse/scan must reconcile selection")
         XCTAssertTrue(viewModel.contains("previewSession.clear()"), "Explicit lifecycle reset must stop playback")
         XCTAssertTrue(viewModel.contains("scheduleDebouncedIndexPersist"), "Metadata edits must debounce index writes")
-        XCTAssertTrue(viewModel.contains("mixdownAnalysisCacheKey"), "BPM/key must key off preview id")
+        let songAnalysis = try featureSource("ArchiveSongAnalysisModel.swift")
+        XCTAssertTrue(songAnalysis.contains("mixdownCacheKey"), "BPM/key must key off preview id")
 
         let browser = try featureSource("ArchiveBrowserView.swift")
         XCTAssertTrue(browser.contains("viewModel.songs.isEmpty"), "Archive remount must not unconditional full-scan")
@@ -74,14 +76,15 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
             XCTAssertTrue(browser.contains(required), "Missing archive keyboard safety hook: \(required)")
         }
 
+        let fileAccess = try featureSource("ArchiveFileAccessModel.swift")
         [
             "opener.openLatestCPR",
-            "runtime.dryRunOpen",
             "fileActions.revealInFinder",
             "preferredRevealURL",
         ].forEach { required in
-            XCTAssertTrue(viewModel.contains(required), "Missing archive open/reveal source: \(required)")
+            XCTAssertTrue(fileAccess.contains(required), "Missing archive open/reveal source: \(required)")
         }
+        XCTAssertTrue(viewModel.contains("dryRunOpen: runtime.dryRunOpen"), "Opening follows the dry-run switch")
 
         XCTAssertTrue(onboarding.contains("scans read-only"))
         XCTAssertTrue(onboarding.contains("never renamed or moved"))

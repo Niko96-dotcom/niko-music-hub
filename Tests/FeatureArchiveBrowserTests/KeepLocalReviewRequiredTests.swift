@@ -18,9 +18,9 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.trigger, .manual)
         XCTAssertFalse(pending.willRemoveActiveCopy, "no removal prompt while review is required")
         let bound = try XCTUnwrap(pending.authorization)
@@ -53,7 +53,7 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         viewModel.requestArchiveNow(for: song)
         try await waitUntil { viewModel.statusBaseMessage == refusal }
 
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
@@ -66,9 +66,9 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.trigger, .workflowDone)
         XCTAssertFalse(pending.willRemoveActiveCopy, "no free-space removal while review is required")
         viewModel.cancelPendingArchive()
@@ -86,9 +86,9 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         try fixture.settingsStore.updateSettings { $0.vault.keepLocalReviewRequired = false }
 
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(pending.willRemoveActiveCopy, "normal removal rules return after Done Reviewing")
         XCTAssertEqual(pending.authorization?.maximumDestructiveness, .mayRemoveActiveCopy)
         viewModel.cancelPendingArchive()

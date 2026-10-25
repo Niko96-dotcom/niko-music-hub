@@ -62,13 +62,13 @@ final class ArchiveWorkflowUndoWiringTests: XCTestCase {
 
         // Occupy the transfer slot so the Done request stays queued.
         viewModel.requestArchiveNow(for: first)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultActiveOperation?.songID == first.id }
 
         // Production path: Done registers on the owned stack (no injection).
         viewModel.requestWorkflowDoneArchive(for: second)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
         try await waitUntil { viewModel.projectVaultPendingOperations.contains(where: { $0.songID == second.id }) }
         XCTAssertEqual(viewModel.songs.first(where: { $0.id == second.id })?.workflowStatus, .done)

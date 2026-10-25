@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 
 /// Where a write may land is decided by two owners: `ToolOutputGuard(settings:)` for tool
-/// output and `ArchiveBrowserViewModel.writeProtectedRoots()` for the archive browser's
+/// output and `ArchiveLibraryModel.writeProtectedRoots()` for the archive browser's
 /// exports and New Song. Writers that chose their own roots shipped five times: the
 /// browse list as protection (604025d, e26f73c, fda0cb9) and defaults after an unreadable
 /// settings load (e2135e6, 89ff277).
@@ -94,6 +94,10 @@ final class OutputGuardSourceTests: XCTestCase {
         // fda0cb9^: exports and New Song protected only the browsed roots.
         XCTAssertEqual(hits(Self.browseListAsProtection, "try policy.enforceNoWrite(at: destination, archiveRoots: roots)"), 1)
         XCTAssertEqual(hits(Self.browseListAsProtection, "var created = try NewSongFolderCreator.create(request: request, protectedRoots: roots)"), 1)
+        // The archive owners (2026-10-25) hold the browse list behind a receiver or a host closure.
+        XCTAssertEqual(hits(Self.browseListAsProtection, "try policy.enforceNoWrite(at: destination, archiveRoots: host.roots())"), 1)
+        XCTAssertEqual(hits(Self.browseListAsProtection, "NewSongFolderCreator.create(request: request, protectedRoots: library.roots)"), 1)
+        XCTAssertEqual(hits(Self.browseListAsProtection, "NewSongFolderCreator.create(request: request, protectedRoots: viewModel.library.roots)"), 1)
         // e2135e6^: the recorder took its destination and roots from defaults on a failed load.
         XCTAssertEqual(hits(Self.tryOptionalSettingsLoad, "let settings = (try? context.settingsStore.loadSettings()) ?? .default"), 1)
 
@@ -109,6 +113,8 @@ final class OutputGuardSourceTests: XCTestCase {
 
         XCTAssertEqual(hits(Self.outputWriteGuardUse, "try ToolOutputGuard(settings: settings).validate(folder)"), 0)
         XCTAssertEqual(hits(Self.browseListAsProtection, "archiveRoots: try writeProtectedRoots(),"), 0)
+        XCTAssertEqual(hits(Self.browseListAsProtection, "archiveRoots: try host.writeProtectedRoots(),"), 0)
+        XCTAssertEqual(hits(Self.browseListAsProtection, "protectedRoots: try library.writeProtectedRoots())"), 0)
         XCTAssertEqual(hits(Self.browseListAsProtection, "public init(folder: URL, protectedRoots: [URL]) {"), 0)
         XCTAssertEqual(hits(Self.tryOptionalSettingsLoad, "let settings = try settingsStore.loadSettings()"), 0)
     }
@@ -131,7 +137,7 @@ final class OutputGuardSourceTests: XCTestCase {
     private static let toolOutputGuardConstruction = try! NSRegularExpression(pattern: #"\bToolOutputGuard\s*\("#)
 
     private static let browseListAsProtection = try! NSRegularExpression(
-        pattern: #"\b(?:archiveRoots|protectedRoots)\s*:\s*(?:try\s+)?(?:self\.)?(?:roots\b|\[\]|[A-Za-z_][\w.]*\.(?:archiveRoots|effectiveScanRoots)\b)"#
+        pattern: #"\b(?:archiveRoots|protectedRoots)\s*:\s*(?:try\s+)?(?:(?:[A-Za-z_][\w.]*\.)?roots\b(?:\(\))?|\[\]|[A-Za-z_][\w.]*\.(?:archiveRoots|effectiveScanRoots)\b)"#
     )
 
     private static let tryOptionalSettingsLoad = try! NSRegularExpression(
@@ -148,13 +154,13 @@ final class OutputGuardSourceTests: XCTestCase {
         "Sources/AppCore/Settings/AppSettingsObserver.swift": 1,
         // First-launch probe: a damaged blob belongs to a returning user, who gets no Set Up sheet.
         "Sources/AppCore/Shell/HubFirstLaunchSetupPolicy.swift": 1,
-        // Probe: while settings are unreadable the repair notice already explains a Vault read failure.
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVault.swift": 1,
-        // nil keeps the last Vault health and hides cards; the observer lags the model's own saves.
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
+        // Probe: while settings are unreadable the repair notice already explains a Vault read failure;
+        // and the card context: nil keeps the last Vault health and hides cards, the observer lags the
+        // model's own saves.
+        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVault.swift": 2,
         // First-run probe (no new-user sheet for damaged settings), and the access-failure
         // check after a retry, which only presents the next failed root.
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 2,
+        "Sources/FeatureArchiveBrowser/ArchiveLibraryModel.swift": 2,
         // Exclusions only hide folders from a read-only scan; refusing it would hide the library.
         "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,
     ]

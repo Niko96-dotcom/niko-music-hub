@@ -51,7 +51,7 @@ final class WorkflowDoneMetadataRefusalTests: XCTestCase {
         let undoManager = UndoManager()
         viewModel.bindInjectedUndoManager(undoManager)
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         return Harness(
             fixture: fixture,
             runtime: runtime,
@@ -72,7 +72,7 @@ final class WorkflowDoneMetadataRefusalTests: XCTestCase {
         line: UInt = #line
     ) async throws {
         let viewModel = harness.viewModel
-        XCTAssertNil(viewModel.pendingArchiveConfirmation, "the dialog is consumed", file: file, line: line)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation, "the dialog is consumed", file: file, line: line)
         XCTAssertNil(
             viewModel.songs.first { $0.id == harness.song.id }?.workflowStatus,
             "a refused Done must leave the visible status alone", file: file, line: line
@@ -107,7 +107,7 @@ final class WorkflowDoneMetadataRefusalTests: XCTestCase {
 
     func testConfirmWorkflowDoneFreeSpaceStopsWhenDoneCommitIsRefused() async throws {
         let harness = try await makeHarnessWithPendingDone()
-        XCTAssertEqual(harness.viewModel.pendingArchiveConfirmation?.willRemoveActiveCopy, true)
+        XCTAssertEqual(harness.viewModel.vaultDialogs.pendingArchiveConfirmation?.willRemoveActiveCopy, true)
         injectLateCorruption(harness)
 
         harness.viewModel.confirmWorkflowDoneFreeSpace()
@@ -117,7 +117,7 @@ final class WorkflowDoneMetadataRefusalTests: XCTestCase {
 
     func testConfirmWorkflowDoneKeepCopyWithTokenStopsWhenDoneCommitIsRefused() async throws {
         let harness = try await makeHarnessWithPendingDone()
-        XCTAssertNotNil(harness.viewModel.pendingArchiveConfirmation?.authorization)
+        XCTAssertNotNil(harness.viewModel.vaultDialogs.pendingArchiveConfirmation?.authorization)
         injectLateCorruption(harness)
 
         harness.viewModel.confirmWorkflowDoneKeepCopy()
@@ -127,13 +127,17 @@ final class WorkflowDoneMetadataRefusalTests: XCTestCase {
 
     func testConfirmWorkflowDoneKeepCopyWithoutTokenStopsWhenDoneCommitIsRefused() async throws {
         let harness = try await makeHarnessWithPendingDone()
-        harness.viewModel.pendingArchiveConfirmation = ProjectVaultArchiveConfirmation(
-            songID: harness.song.id,
-            songTitle: harness.song.effectiveDisplayTitle,
-            trigger: .workflowDone,
-            willRemoveActiveCopy: false,
-            independentBackupConfirmed: true,
-            authorization: nil
+        let dialogs = harness.viewModel.vaultDialogs
+        dialogs.presentConfirmation(
+            ProjectVaultArchiveConfirmation(
+                songID: harness.song.id,
+                songTitle: harness.song.effectiveDisplayTitle,
+                trigger: .workflowDone,
+                willRemoveActiveCopy: false,
+                independentBackupConfirmed: true,
+                authorization: nil
+            ),
+            generation: dialogs.captureGeneration
         )
         injectLateCorruption(harness)
 

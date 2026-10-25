@@ -62,7 +62,7 @@ final class WorkflowDoneVaultOffTests: XCTestCase {
         XCTAssertTrue(viewModel.canArchiveInProjectVault(song))
 
         viewModel.applyWorkflowStatus(.done, for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
         XCTAssertNil(viewModel.songs.first { $0.id == song.id }?.workflowStatus)
         viewModel.cancelPendingArchive()
@@ -85,10 +85,10 @@ final class WorkflowDoneVaultOffTests: XCTestCase {
         line: UInt = #line
     ) async throws {
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done, file: file, line: line)
-        XCTAssertNil(viewModel.boundArchiveCaptureSongID, file: file, line: line)
+        XCTAssertNil(viewModel.vaultDialogs.captureSongID, file: file, line: line)
         // A capture would report asynchronously; give it the time to show.
         try await Task.sleep(for: .milliseconds(200))
-        XCTAssertNil(viewModel.pendingArchiveConfirmation, file: file, line: line)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation, file: file, line: line)
         XCTAssertNotEqual(
             viewModel.statusMessage,
             ProjectVaultRuntimeError.unavailable.localizedDescription,

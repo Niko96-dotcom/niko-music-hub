@@ -55,7 +55,7 @@ final class AudioConverterCancelTests: XCTestCase {
             selectedTool: AudioConverterFeature().metadata,
             in: context.jobStatusCenter.jobs
         )
-        XCTAssertEqual(routed.map(\.id), [ShellJobExtraSourceID.converter])
+        XCTAssertEqual(routed.map(\.id), [ShellJobExtraSourceID.converter.rawValue])
         XCTAssertTrue(routed.first?.cancelHelp?.hasPrefix("Stops converting now") == true)
 
         for status in routed {

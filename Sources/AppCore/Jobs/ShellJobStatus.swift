@@ -76,14 +76,15 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
 
 /// Work that runs outside `JobRunner` and registers with `ShellJobStatusCenter.setExtraJob` by
 /// hand. Each one is a named exception with its reason (docs/architecture.md § How a tool runs its
-/// work, `ToolWorkSourceTests`); a new tool enqueues a job instead.
-public enum ShellJobExtraSourceID: Sendable {
-    public static let converter = "wav-conversion"
-    public static let archiveScan = "archive-scan"
-    public static let vaultTransfer = "vault-transfer"
-    public static let audioRecorder = "recorder-take"
-    public static let helperInstall = "helper-install"
-    public static let downloadStart = "download-start"
+/// work, `ToolWorkSourceTests`); a new tool enqueues a job instead. A closed enum, so
+/// `setExtraJob(sourceID:)` takes nothing else. The raw value is the jobs-strip row's id.
+public enum ShellJobExtraSourceID: String, CaseIterable, Sendable {
+    case converter = "wav-conversion"
+    case archiveScan = "archive-scan"
+    case vaultTransfer = "vault-transfer"
+    case audioRecorder = "recorder-take"
+    case helperInstall = "helper-install"
+    case downloadStart = "download-start"
 }
 
 public enum ShellJobStatusCopy: Sendable {
@@ -99,9 +100,9 @@ public enum ShellJobStatusCopy: Sendable {
     /// The archive scan row: shell work, stopped by Esc on a pane that does not
     /// handle Esc, after a Vault transfer.
     public static let archiveScanStatus = ShellJobStatus(
-        id: ShellJobExtraSourceID.archiveScan,
+        id: ShellJobExtraSourceID.archiveScan.rawValue,
         title: scanningArchive,
-        cancelActionID: ShellJobExtraSourceID.archiveScan,
+        cancelActionID: ShellJobExtraSourceID.archiveScan.rawValue,
         cancelTarget: .scan,
         blocksQuit: false
     )

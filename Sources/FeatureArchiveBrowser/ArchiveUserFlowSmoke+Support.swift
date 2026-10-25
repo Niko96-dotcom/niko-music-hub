@@ -16,8 +16,8 @@ extension ArchiveUserFlowSmoke {
     static func exportDiagnosticsText(
         from viewModel: ArchiveBrowserViewModel
     ) throws -> (path: String, text: String) {
-        try viewModel.exportDiagnostics()
-        guard let path = viewModel.lastDiagnosticsExportPath, !path.isEmpty else {
+        try viewModel.fileAccess.exportDiagnostics()
+        guard let path = viewModel.fileAccess.lastDiagnosticsExportPath, !path.isEmpty else {
             throw ArchiveUserFlowSmokeError.diagnosticsExportFailed
         }
         let text = try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
@@ -94,7 +94,7 @@ extension ArchiveUserFlowSmoke {
     ) -> SearchPanelParity {
         switch kind {
         case .songs:
-            guard let context = viewModel.activeSearchExportContext() else {
+            guard let context = viewModel.browse.searchExportContext() else {
                 return .empty
             }
             return buildSearchPanelParity(
@@ -127,7 +127,7 @@ extension ArchiveUserFlowSmoke {
             )
 
         case .skipped:
-            guard let context = viewModel.activeSkippedSearchExportContext() else {
+            guard let context = viewModel.browse.skippedSearchExportContext() else {
                 return .empty
             }
             return buildSearchPanelParity(
@@ -211,10 +211,10 @@ extension ArchiveUserFlowSmoke {
         // Seeded like the truncation check: the smoke checks diagnostics for a
         // missing root, so it must not store either folder in the run's settings.
         let invalidViewModel = ArchiveBrowserViewModel(context: context, runtime: runtime)
-        invalidViewModel.roots = [fixtureRoot.standardizedFileURL, missingRoot.standardizedFileURL]
+        invalidViewModel.library.roots = [fixtureRoot.standardizedFileURL, missingRoot.standardizedFileURL]
         invalidViewModel.scanSync()
 
-        guard let invalidDiagnostics = invalidViewModel.scanDiagnostics else {
+        guard let invalidDiagnostics = invalidViewModel.library.scanDiagnostics else {
             throw ArchiveUserFlowSmokeError.invalidRootDiagnosticsExportFailed
         }
 
@@ -260,10 +260,10 @@ extension ArchiveUserFlowSmoke {
         }
 
         let truncationViewModel = ArchiveBrowserViewModel(context: context, runtime: runtime)
-        truncationViewModel.roots = [truncationRoot.standardizedFileURL]
+        truncationViewModel.library.roots = [truncationRoot.standardizedFileURL]
         truncationViewModel.scanSync()
 
-        guard let diagnostics = truncationViewModel.scanDiagnostics else {
+        guard let diagnostics = truncationViewModel.library.scanDiagnostics else {
             throw ArchiveUserFlowSmokeError.summaryTruncationDiagnosticsExportMissingTruncation
         }
 

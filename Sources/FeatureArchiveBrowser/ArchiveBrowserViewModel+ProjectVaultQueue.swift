@@ -14,7 +14,7 @@ extension ArchiveBrowserViewModel {
             messages[operation.songID] = "Queued · \(index + 1) ahead"
         }
         if let operation = projectVaultActiveOperation {
-            messages[operation.songID] = projectVaultRestoreProgress?.title
+            messages[operation.songID] = vaultDialogs.projectVaultRestoreProgress?.title
                 ?? projectVaultLiveArchivePhaseMessage(for: operation.songID)
                 ?? operation.startMessage
         }
@@ -26,7 +26,7 @@ extension ArchiveBrowserViewModel {
             return "Queued: \(projectVaultPendingOperations[position].label) — \(position + 1) ahead."
         }
         if let operation = projectVaultActiveOperation, operation.songID == song.id {
-            return projectVaultRestoreProgress?.title
+            return vaultDialogs.projectVaultRestoreProgress?.title
                 ?? projectVaultLiveArchivePhaseMessage(for: song.id)
                 ?? operation.startMessage
         }
@@ -56,10 +56,8 @@ extension ArchiveBrowserViewModel {
     }
 
     func cancelQueuedProjectVaultOperation(for song: Song) {
-        cancelBoundArchiveCapture(for: song.id)
-        if pendingArchiveConfirmation?.songID == song.id {
-            pendingArchiveConfirmation = nil
-        }
+        vaultDialogs.cancelCapture(for: song.id)
+        vaultDialogs.dismissConfirmation(for: song.id)
         // Single cancellation owner: `cancelQueued` already cancels this
         // song's Done retry budget and capacity postponement.
         vaultOperations.cancelQueued(songID: song.id, songTitle: song.effectiveDisplayTitle)
@@ -67,32 +65,32 @@ extension ArchiveBrowserViewModel {
 
     public func requestStopActiveProjectVaultTransfer() {
         guard projectVaultActiveOperation != nil else { return }
-        pendingStopTransferConfirmation = true
+        vaultDialogs.askToStopTransfer()
     }
 
     public func keepActiveProjectVaultTransfer() {
-        pendingStopTransferConfirmation = false
+        vaultDialogs.closeStopTransferQuestion()
     }
 
     public func confirmStopActiveProjectVaultTransfer() {
-        pendingStopTransferConfirmation = false
+        vaultDialogs.closeStopTransferQuestion()
         vaultOperations.confirmStopActiveTransfer()
     }
 
     /// Confirmed quit (ADR-019): the quit alert already asked, so cancel every
     /// waiting request and stop the running transfer without the stop sheet.
     func stopProjectVaultWorkForQuit() {
-        projectVaultStoppedForQuit = true
+        vaultDialogs.markStoppedForQuit()
         vaultObservation.cancelRecovery()
         cancelPendingProjectVaultOperations()
-        pendingStopTransferConfirmation = false
+        vaultDialogs.closeStopTransferQuestion()
         vaultOperations.confirmStopActiveTransfer()
     }
 
     func cancelPendingProjectVaultOperations() {
-        cancelBoundArchiveCapture()
+        vaultDialogs.cancelCapture()
         vaultOperations.cancelAllPending()
-        pendingArchiveConfirmation = nil
+        vaultDialogs.dismissConfirmation()
     }
 
     /// P2 batch-stop truth lives in the single operation owner
@@ -108,7 +106,7 @@ extension ArchiveBrowserViewModel {
     ) {
         // After quit stopped the Vault, a refresh from the stopped operation
         // must not queue new work (a Done auto-archive) that the exit cuts off.
-        guard !projectVaultStoppedForQuit else { return }
+        guard !vaultDialogs.stoppedForQuit else { return }
         // Refresh the narrow settings context so the captured rootIDs match
         // live settings. A stale capture (e.g. from init before songs were
         // assigned) would otherwise abort the poll/dispatch below even though
@@ -143,7 +141,7 @@ extension ArchiveBrowserViewModel {
                     let progress = await self?.projectVaultRuntime?.restoreProgress(for: ProjectID(rawValue: projectID))
                     guard !Task.isCancelled,
                           self?.projectVaultActiveOperation?.projectKey == projectKey else { return }
-                    if self?.projectVaultRestoreProgress != progress { self?.projectVaultRestoreProgress = progress }
+                    self?.vaultDialogs.updateRestoreProgress(progress)
                     self?.refreshVaultTransferJobStatus(songName: songName, progress: progress)
                     do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
                 }
@@ -184,7 +182,7 @@ extension ArchiveBrowserViewModel {
                     }
                 }
             }
-            defer { progressTask.cancel(); archivePhaseTask.cancel(); self.projectVaultRestoreProgress = nil }
+            defer { progressTask.cancel(); archivePhaseTask.cancel(); self.vaultDialogs.clearRestoreProgress() }
             return await body(self)
         }
     }

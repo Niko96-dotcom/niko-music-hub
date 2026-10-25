@@ -12,7 +12,7 @@ struct ProjectVaultDoneChoiceSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let pending = viewModel.pendingArchiveConfirmation {
+            if let pending = viewModel.vaultDialogs.pendingArchiveConfirmation {
                 if pending.trigger == .manual {
                     manualContent(pending)
                 } else if pending.trigger == .workflowDone {
@@ -23,12 +23,12 @@ struct ProjectVaultDoneChoiceSheet: View {
         .padding(20)
         .frame(minWidth: 420, idealWidth: 460, maxWidth: 520)
         .onKeyPress(.return) {
-            guard viewModel.pendingArchiveConfirmation != nil else { return .ignored }
+            guard viewModel.vaultDialogs.pendingArchiveConfirmation != nil else { return .ignored }
             viewModel.cancelPendingArchive()
             return .handled
         }
         .onKeyPress(.escape) {
-            guard viewModel.pendingArchiveConfirmation != nil else { return .ignored }
+            guard viewModel.vaultDialogs.pendingArchiveConfirmation != nil else { return .ignored }
             viewModel.cancelPendingArchive()
             return .handled
         }

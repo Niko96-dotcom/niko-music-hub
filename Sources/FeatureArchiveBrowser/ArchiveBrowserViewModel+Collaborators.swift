@@ -2,7 +2,11 @@ import AppCore
 import Foundation
 import NikoMusicCore
 
-// MARK: - Collaborator address book and suggestions
+// MARK: - Collaborator intents that cross owners
+//
+// `ArchiveAddressBookModel` owns the address book and a staged removal;
+// `ArchiveIntelligenceModel` owns the suggestions. Accepting a suggestion and
+// confirming a removal also edit song metadata, so they live with the composition.
 
 extension ArchiveBrowserViewModel {
     func acceptCollaboratorSuggestion(_ suggestion: CollaboratorSuggestion) {
@@ -10,7 +14,7 @@ extension ArchiveBrowserViewModel {
         if song.collaboratorIDs.contains(suggestion.suggestedCollaboratorID) {
             // Already assigned: the suggestion row is stale. Drop it without
             // touching the song.
-            pendingCollaboratorSuggestions.removeAll { $0.id == suggestion.id }
+            intelligence.removeSuggestion(suggestion)
             return
         }
         var ids = song.collaboratorIDs
@@ -34,52 +38,14 @@ extension ArchiveBrowserViewModel {
             }
             return
         }
-        pendingCollaboratorSuggestions.removeAll { $0.id == suggestion.id }
+        intelligence.removeSuggestion(suggestion)
     }
 
-    func dismissCollaboratorSuggestion(_ suggestion: CollaboratorSuggestion) {
-        dismissedCollaboratorSuggestionIDs.insert(suggestion.id)
-        pendingCollaboratorSuggestions.removeAll { $0.id == suggestion.id }
-    }
-
-    func loadCollaborators() {
-        guard let collaboratorStore else { return }
-        do {
-            collaborators = try collaboratorStore.loadAll()
-        } catch {
-            diagnostics.log(.error, "Collaborator load failed: \(error)")
-            // Keep the last loaded list so names stay resolvable, and surface
-            // the failure: a silent empty address book invites re-adding a
-            // name under a new ID that songs do not reference.
-            recordPersistenceWarning(
-                "Collaborators could not be loaded: \(error.localizedDescription). Collaborator names may be missing until the address book can be read again."
-            )
-        }
-    }
-
+    /// Adds a collaborator to the address book; the suggestions follow at once.
     func upsertCollaborator(name: String) -> Collaborator? {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let collaboratorStore else { return nil }
-        let collaborator = Collaborator(displayName: trimmed)
-        do {
-            try collaboratorStore.upsert(collaborator)
-            loadCollaborators()
-            refreshIntelligenceNow()
-            return collaborator
-        } catch {
-            diagnostics.log(.error, "Collaborator save failed: \(error)")
-            return nil
-        }
-    }
-
-    /// NMH-090: stage a confirmed address-book removal. The row stays until
-    /// `confirmRemoveCollaborator()` runs; cancel leaves store and songs alone.
-    func requestRemoveCollaborator(_ collaborator: Collaborator) {
-        pendingCollaboratorRemoval = collaborator
-    }
-
-    func cancelRemoveCollaborator() {
-        pendingCollaboratorRemoval = nil
+        guard let collaborator = addressBook.add(name: name) else { return nil }
+        refreshIntelligenceNow()
+        return collaborator
     }
 
     /// NMH-090: unassign the collaborator from every song it can leave, then
@@ -99,15 +65,15 @@ extension ArchiveBrowserViewModel {
     /// schedules the index, and deletes the row. No stale-metadata rollback
     /// runs, and no warning-string comparison is used as a success signal.
     func confirmRemoveCollaborator() {
-        guard let pending = pendingCollaboratorRemoval else { return }
-        guard let collaboratorStore else {
-            pendingCollaboratorRemoval = nil
+        guard let pending = addressBook.pendingCollaboratorRemoval else { return }
+        guard addressBook.canWrite else {
+            addressBook.cancelRemoval()
             return
         }
         let affected = songs.filter { $0.collaboratorIDs.contains(pending.id) }
         for song in affected {
             if blocksGenericProjectVaultFileActions(for: song) {
-                pendingCollaboratorRemoval = nil
+                addressBook.cancelRemoval()
                 recordPersistenceWarning(
                     projectOpenBlockReason(for: song)
                         ?? "This collaborator could not be removed because a Project Vault transfer owns one of its songs. Nothing was changed."
@@ -115,7 +81,7 @@ extension ArchiveBrowserViewModel {
                 return
             }
             if let blockWarning = catalog.metadataEditBlockWarning(for: song.id) {
-                pendingCollaboratorRemoval = nil
+                addressBook.cancelRemoval()
                 recordPersistenceWarning(blockWarning)
                 return
             }
@@ -137,7 +103,7 @@ extension ArchiveBrowserViewModel {
                 if let reporting = metadataStore as? any SongUserMetadataLoadReporting {
                     let report = try reporting.loadAllWithReport()
                     guard report.corruptSongIDs.isEmpty else {
-                        pendingCollaboratorRemoval = nil
+                        addressBook.cancelRemoval()
                         recordPersistenceWarning(
                             "This collaborator could not be removed because some stored project details could not be read. Nothing was changed."
                         )
@@ -148,7 +114,7 @@ extension ArchiveBrowserViewModel {
                     stored = try metadataStore.loadAll()
                 }
             } catch {
-                pendingCollaboratorRemoval = nil
+                addressBook.cancelRemoval()
                 recordPersistenceWarning(
                     "This collaborator could not be removed because stored project details could not be read. Nothing was changed."
                 )
@@ -159,7 +125,7 @@ extension ArchiveBrowserViewModel {
                 $0.collaboratorIDs.contains(pending.id) && !liveAffectedIDs.contains($0.songID)
             }
             if hasOutsideReference {
-                pendingCollaboratorRemoval = nil
+                addressBook.cancelRemoval()
                 recordPersistenceWarning(
                     "This collaborator could not be removed because some projects that use it are not loaded. Load those projects first, then try again. Nothing was changed."
                 )
@@ -191,7 +157,7 @@ extension ArchiveBrowserViewModel {
         // the address-book store from partial-write divergence.
         if !updatedSongs.isEmpty {
             if let warning = catalog.persistUserMetadata(for: updatedSongs) {
-                pendingCollaboratorRemoval = nil
+                addressBook.cancelRemoval()
                 recordPersistenceWarning(warning)
                 syncMetadataRepairState()
                 return
@@ -203,9 +169,8 @@ extension ArchiveBrowserViewModel {
             scheduleDebouncedIndexPersist()
         }
         do {
-            try collaboratorStore.delete(id: pending.id)
+            try addressBook.deletePendingCollaborator()
         } catch {
-            pendingCollaboratorRemoval = nil
             diagnostics.log(.error, "Collaborator remove failed: \(error)")
             // The batch persist already succeeded, so live and stored
             // assignments are removed while the address-book row remains.
@@ -216,8 +181,6 @@ extension ArchiveBrowserViewModel {
             )
             return
         }
-        pendingCollaboratorRemoval = nil
-        loadCollaborators()
         refreshIntelligenceNow()
     }
 }

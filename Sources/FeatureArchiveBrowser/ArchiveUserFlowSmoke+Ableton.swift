@@ -49,24 +49,24 @@ extension ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }
         viewModel.selectSong(mixed)
-        try viewModel.openProjectVersion(ableton, for: mixed)
-        let openedAbleton = viewModel.lastDryRunLog?.hasSuffix("/Song.als") == true
-        try viewModel.openProjectVersion(cubase, for: mixed)
-        let openedCubase = viewModel.lastDryRunLog?.hasSuffix("/Song.cpr") == true
+        try viewModel.fileAccess.openProjectVersion(ableton, for: mixed)
+        let openedAbleton = viewModel.fileAccess.lastDryRunLog?.hasSuffix("/Song.als") == true
+        try viewModel.fileAccess.openProjectVersion(cubase, for: mixed)
+        let openedCubase = viewModel.fileAccess.lastDryRunLog?.hasSuffix("/Song.cpr") == true
         viewModel.setManualMainCPR(for: mixed, versionID: cubase.id)
         viewModel.scanSync()
         let main = viewModel.songs.first { $0.id == mixed.id }?.effectiveLatestProject
         let cubaseOnly = viewModel.songs.first { $0.originalFolderName == "CubaseOnly" }
-        viewModel.setSearchQuery("ableton", immediate: true)
-        let filteredIDs = Set(viewModel.filteredSongs.map(\.id))
+        viewModel.browse.setSearchQuery("ableton", immediate: true)
+        let filteredIDs = Set(viewModel.browse.filteredSongs.map(\.id))
         let abletonIDs = Set(viewModel.songs.filter { $0.projectVersions.contains(where: { $0.format == .abletonLive }) }.map(\.id))
         let searchFindsAbleton = filteredIDs == abletonIDs && abletonIDs.count == 2
         let searchExcludesCubaseOnly = cubaseOnly.map { !filteredIDs.contains($0.id) } ?? false
             && (cubaseOnly?.projectVersions.contains(where: { $0.format == .abletonLive }) != true)
-        viewModel.setSearchQuery("zzzqxjqqq", immediate: true)
-        let nonMatchingQueryEmpty = viewModel.filteredSongs.isEmpty
-        viewModel.setSearchQuery("ableton", immediate: true)
-        let restoredIDs = Set(viewModel.filteredSongs.map(\.id))
+        viewModel.browse.setSearchQuery("zzzqxjqqq", immediate: true)
+        let nonMatchingQueryEmpty = viewModel.browse.filteredSongs.isEmpty
+        viewModel.browse.setSearchQuery("ableton", immediate: true)
+        let restoredIDs = Set(viewModel.browse.filteredSongs.map(\.id))
         let restoredFinalState = restoredIDs == abletonIDs && abletonIDs.count == 2
         return SmokeRun(id: .abletonFlow, evidence: .abletonFlow(AbletonFlowEvidence(
             groupsCorrect: viewModel.songs.count == 3 && mixed.projectVersions.count == 2 && cubaseOnly != nil,

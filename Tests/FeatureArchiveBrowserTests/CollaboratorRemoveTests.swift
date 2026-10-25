@@ -27,15 +27,15 @@ final class CollaboratorRemoveTests: XCTestCase {
         viewModel.assignCollaborators(to: song, collaboratorIDs: [jamie.id])
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
 
-        viewModel.requestRemoveCollaborator(jamie)
-        XCTAssertEqual(viewModel.pendingCollaboratorRemoval?.id, jamie.id)
+        viewModel.addressBook.requestRemoval(jamie)
+        XCTAssertEqual(viewModel.addressBook.pendingCollaboratorRemoval?.id, jamie.id)
         // Request alone must not delete: row and assignment stay.
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
 
         viewModel.confirmRemoveCollaborator()
 
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertTrue(viewModel.collaborators.isEmpty)
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [])
         XCTAssertTrue(try collaboratorStore.loadAll().isEmpty)
@@ -61,10 +61,10 @@ final class CollaboratorRemoveTests: XCTestCase {
         viewModel.applyCatalogEdit(.load([song]))
         viewModel.assignCollaborators(to: song, collaboratorIDs: [jamie.id])
 
-        viewModel.requestRemoveCollaborator(jamie)
-        viewModel.cancelRemoveCollaborator()
+        viewModel.addressBook.requestRemoval(jamie)
+        viewModel.addressBook.cancelRemoval()
 
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
         XCTAssertEqual(try collaboratorStore.loadAll().map(\.id), [jamie.id])

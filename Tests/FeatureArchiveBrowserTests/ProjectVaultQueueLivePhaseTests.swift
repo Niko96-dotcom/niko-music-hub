@@ -205,7 +205,6 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
             scanOverride: { _ in ScanResult(songs: songs) }
         )
         viewModel.applyCatalogEdit(.load(songs))
-        viewModel.filteredSongs = songs
         // Enqueue captures rootIDs from the live presentation context. The
         // init built the context before songs were assigned, so refresh here.
         viewModel.refreshProjectVaultPresentationContext()
@@ -501,10 +500,10 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
 
         viewModel.setProjectKeepLocal(true, for: song)
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         // The removal capture is refused for Keep Local, so the dialog agrees
         // a copy-only token instead of presenting a stale removal approval.
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(pending.trigger, .workflowDone)
         XCTAssertEqual(try XCTUnwrap(pending.authorization).maximumDestructiveness, .copyOnly)
         XCTAssertFalse(pending.willRemoveActiveCopy)

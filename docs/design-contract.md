@@ -43,7 +43,7 @@ across pages. Do not eyeball alignment — measure it (see §7).
   at ~16pt; an 18pt icon frame in a 12-inset row bottoms out at a 21pt center).
 - Back/forward = `HubNavigationHistory` (AppCore), created once in
   `AppComposition` and shared by BOTH `ToolContext`s. Tools with inner pages
-  register a restorer (see `ArchiveBrowserViewModel+Navigation.swift`).
+  register a restorer (see `ArchivePageModel.attach`).
 - The board⇄list switch is ONE flipping icon in the title bar
   (`ToolFeature.makeTitleBarAccessory`), never inside a page header.
 - Output Inbox collapse threshold is derived: `540 + 2 × chromeRailWidth`.

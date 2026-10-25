@@ -11,7 +11,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.archiveScan,
             status: ShellJobStatus(
-                id: ShellJobExtraSourceID.archiveScan,
+                id: ShellJobExtraSourceID.archiveScan.rawValue,
                 title: ShellJobStatusCopy.scanningArchive,
                 blocksQuit: false
             )
@@ -44,7 +44,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.vaultTransfer,
             status: ShellJobStatus(
-                id: ShellJobExtraSourceID.vaultTransfer,
+                id: ShellJobExtraSourceID.vaultTransfer.rawValue,
                 title: "Summer Song",
                 activityVerb: "Transferring"
             )
@@ -86,7 +86,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let converterStopped = Flag()
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.converter,
-            status: ShellJobStatus(id: ShellJobExtraSourceID.converter, title: "Loop.m4a", activityVerb: "Converting"),
+            status: ShellJobStatus(id: ShellJobExtraSourceID.converter.rawValue, title: "Loop.m4a", activityVerb: "Converting"),
             cancel: { [weak center] in
                 converterStopped.mark()
                 center?.setExtraJob(sourceID: ShellJobExtraSourceID.converter, status: nil)
@@ -96,7 +96,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let vaultSheetRequested = Flag()
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.vaultTransfer,
-            status: ShellJobStatus(id: ShellJobExtraSourceID.vaultTransfer, title: "Summer Song"),
+            status: ShellJobStatus(id: ShellJobExtraSourceID.vaultTransfer.rawValue, title: "Summer Song"),
             cancel: { vaultSheetRequested.mark() },
             quitCancel: { [weak center] in
                 Task { @MainActor in
@@ -177,7 +177,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let cancelled = Flag()
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.vaultTransfer,
-            status: ShellJobStatus(id: ShellJobExtraSourceID.vaultTransfer, title: "Hung Transfer"),
+            status: ShellJobStatus(id: ShellJobExtraSourceID.vaultTransfer.rawValue, title: "Hung Transfer"),
             cancel: { cancelled.mark() } // never unregisters (a hung stop, ENG-14)
         )
         let ticks = Counter()
@@ -204,7 +204,7 @@ final class HubTerminationCoordinatorTests: XCTestCase {
         let center = ShellJobStatusCenter(jobRunner: JobRunner())
         center.setExtraJob(
             sourceID: ShellJobExtraSourceID.converter,
-            status: ShellJobStatus(id: ShellJobExtraSourceID.converter, title: "Loop.m4a"),
+            status: ShellJobStatus(id: ShellJobExtraSourceID.converter.rawValue, title: "Loop.m4a"),
             cancel: { [weak center] in
                 center?.setExtraJob(sourceID: ShellJobExtraSourceID.converter, status: nil)
             }

@@ -17,16 +17,16 @@ extension ArchiveUserFlowSmoke {
         viewModel.scanSync()
 
         let searchQuery = ArchiveUserFlowSmokeScenarios.coreSearchQuery
-        viewModel.setSearchQuery(searchQuery, immediate: true)
-        let searchMatchCount = viewModel.filteredSongs.count
+        viewModel.browse.setSearchQuery(searchQuery, immediate: true)
+        let searchMatchCount = viewModel.browse.filteredSongs.count
 
-        guard let neon = viewModel.filteredSongs.first else {
+        guard let neon = viewModel.browse.filteredSongs.first else {
             throw ArchiveUserFlowSmokeError.neonHookNotFound
         }
         viewModel.selectSong(neon)
-        try viewModel.openLatestCPR(for: neon)
+        try viewModel.fileAccess.openLatestCPR(for: neon)
 
-        guard let dryRunPath = viewModel.lastDryRunLog else {
+        guard let dryRunPath = viewModel.fileAccess.lastDryRunLog else {
             throw ArchiveUserFlowSmokeError.missingDryRunPath
         }
 
@@ -38,7 +38,7 @@ extension ArchiveUserFlowSmoke {
             context: context,
             homeDirectory: homeDirectory
         )
-        let searchMatchSummary = viewModel.searchMatchSummaries[neon.id, default: ""]
+        let searchMatchSummary = viewModel.browse.searchMatchSummaries[neon.id, default: ""]
 
         let coreEvidence = CoreFlowEvidence(
             userFlow: ArchiveUserFlowSmokeScenarios.coreFlow.userFlow,
@@ -96,7 +96,7 @@ extension ArchiveUserFlowSmoke {
         homeDirectory: String
     ) throws -> SmokeRun {
         let scenario = ArchiveUserFlowSmokeScenarios.fixtureDiagnostics
-        guard let diagnostics = viewModel.scanDiagnostics else {
+        guard let diagnostics = viewModel.library.scanDiagnostics else {
             throw ArchiveUserFlowSmokeError.fixtureScanHealthBadgeMissing
         }
 
@@ -332,7 +332,7 @@ extension ArchiveUserFlowSmoke {
         let exportContainsRequiredSections =
             scenario.exportMustContain.allSatisfy { exportText.contains($0) }
 
-        let panelContext = viewModel.selectedSongExportContext()
+        let panelContext = viewModel.page.selectedSongExportContext()
         let panelTitleLine = panelContext?.displayTitle ?? ""
         let panelCprLine = panelContext.map {
             ArchiveDiagnosticsSelectedSongPanelContext.panelCprLine(cprSummary: $0.cprSummary)
@@ -389,12 +389,12 @@ extension ArchiveUserFlowSmoke {
         viewModel: ArchiveBrowserViewModel,
         scenario: SongSearchScenario
     ) throws -> SmokeRun {
-        viewModel.setSearchQuery(scenario.query, immediate: true)
-        guard let match = viewModel.filteredSongs.first(where: { $0.displayTitle == scenario.expectedDisplayTitle }) else {
+        viewModel.browse.setSearchQuery(scenario.query, immediate: true)
+        guard let match = viewModel.browse.filteredSongs.first(where: { $0.displayTitle == scenario.expectedDisplayTitle }) else {
             throw ArchiveUserFlowSmokeError.songSearchNoMatch(scenario.logPrefix)
         }
-        let matchCount = viewModel.filteredSongs.count
-        let matchSummary = viewModel.searchMatchSummaries[match.id, default: ""]
+        let matchCount = viewModel.browse.filteredSongs.count
+        let matchSummary = viewModel.browse.searchMatchSummaries[match.id, default: ""]
 
         let (exportPath, exportText) = try exportDiagnosticsText(from: viewModel)
         let exportContainsMatch = scenario.exportMustContain.allSatisfy { exportText.contains($0) }
@@ -427,14 +427,14 @@ extension ArchiveUserFlowSmoke {
         viewModel: ArchiveBrowserViewModel,
         scenario: SkippedSearchScenario
     ) throws -> SmokeRun {
-        viewModel.setSearchQuery(scenario.query, immediate: true)
-        guard let match = viewModel.skippedSearchMatches.first else {
+        viewModel.browse.setSearchQuery(scenario.query, immediate: true)
+        guard let match = viewModel.browse.skippedSearchMatches.first else {
             throw ArchiveUserFlowSmokeError.skippedSearchNoMatch
         }
 
         let (exportPath, exportText) = try exportDiagnosticsText(from: viewModel)
         let exportContainsMatch = scenario.exportMustContain.allSatisfy { exportText.contains($0) }
-        let matchCount = viewModel.skippedSearchMatches.count
+        let matchCount = viewModel.browse.skippedSearchMatches.count
 
         let panel = collectSearchPanelParity(
             kind: .skipped,

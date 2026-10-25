@@ -88,9 +88,10 @@ private final class EscapeFixture {
 
     init() {
         let cancels = cancels
+        let jobID = ShellJobExtraSourceID.converter.rawValue
         center.setExtraJob(
-            sourceID: "escape-fixture-job",
-            status: ShellJobStatus(id: "escape-fixture-job", title: "Song.wav", cancelActionID: "escape-fixture-job",
+            sourceID: .converter,
+            status: ShellJobStatus(id: jobID, title: "Song.wav", cancelActionID: jobID,
                                    sourceToolID: tool.id, cancelTarget: .conversion),
             cancel: { cancels.increment() }
         )

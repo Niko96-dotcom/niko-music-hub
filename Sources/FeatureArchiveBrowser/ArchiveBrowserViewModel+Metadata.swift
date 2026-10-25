@@ -125,10 +125,8 @@ extension ArchiveBrowserViewModel {
     /// model: Done authorization capture and revoke belong to VM/Vault; the
     /// metadata owner requests this through its `revokeDoneWork` callback.
     func revokeBoundDoneWork(for songID: String) {
-        cancelBoundArchiveCapture(for: songID)
-        if pendingArchiveConfirmation?.songID == songID {
-            pendingArchiveConfirmation = nil
-        }
+        vaultDialogs.cancelCapture(for: songID)
+        vaultDialogs.dismissConfirmation(for: songID)
         vaultOperations.revokeDoneWork(songID: songID)
     }
 
@@ -138,7 +136,7 @@ extension ArchiveBrowserViewModel {
         guard songs.first(where: { $0.id == song.id })?.previewCandidates.contains(where: { $0.id == candidateID }) == true else {
             return
         }
-        invalidateMixdownAnalysis(for: song.id)
+        songAnalysis.invalidateMixdown(for: song.id)
         if let path = songs.first(where: { $0.id == song.id })?
             .previewCandidates.first(where: { $0.id == candidateID })?.filePath {
             ArchivePreviewPlayer.invalidateMetadataCaches(for: path)
@@ -148,19 +146,19 @@ extension ArchiveBrowserViewModel {
             metadata.manualMainPreviewID = candidateID
         }
         if let updated = songs.first(where: { $0.id == song.id }) {
-            refreshMixdownAnalysis(for: updated)
+            songAnalysis.refreshMixdown(for: updated)
         }
     }
 
     func revertPreviewToAuto(for song: Song) {
-        invalidateMixdownAnalysis(for: song.id)
+        songAnalysis.invalidateMixdown(for: song.id)
         _ = applyMetadataMerge(for: song, rankingRefresh: .previewAuto) { metadata, scanned in
             metadata.previewSelectionMode = .auto
             metadata.manualMainPreviewID = nil
             scanned.previewSelectionMode = .auto
         }
         if let updated = songs.first(where: { $0.id == song.id }) {
-            refreshMixdownAnalysis(for: updated)
+            songAnalysis.refreshMixdown(for: updated)
         }
     }
 
@@ -220,7 +218,7 @@ extension ArchiveBrowserViewModel {
         _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.isIgnored = hidden
         }
-        if hidden, selectedSong?.id == song.id {
+        if hidden, page.selectedSong?.id == song.id {
             clearSelection(stopPlayback: previewSession.songID == song.id)
         }
     }
@@ -232,7 +230,7 @@ extension ArchiveBrowserViewModel {
     // MARK: - Retained user-created folder operation
 
     func createNewSong(request: NewSongRequest) throws -> Song {
-        var created = try NewSongFolderCreator.create(request: request, protectedRoots: try writeProtectedRoots())
+        var created = try NewSongFolderCreator.create(request: request, protectedRoots: try library.writeProtectedRoots())
         // D3: this merge adds one song and never replaces the catalog, so a
         // failed read must not pause every song's edits — only the new one's.
         let newSongMerge = catalog.mergeUserMetadataForNewSong(created, collaborators: collaborators)
@@ -251,7 +249,7 @@ extension ArchiveBrowserViewModel {
             // reported by openLatestCPR (status line and openError) and must not
             // make the caller treat the creation as failed.
             do {
-                try openLatestCPR(for: created)
+                try fileAccess.openLatestCPR(for: created)
             } catch {
                 diagnostics.scoped(to: .archive).log(.error, "Created song, but opening its project failed")
             }

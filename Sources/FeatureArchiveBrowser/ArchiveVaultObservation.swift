@@ -47,6 +47,10 @@ final class ArchiveVaultObservation: ObservableObject {
     private(set) var presentationsBySongID: [String: ProjectVaultCardPresentation] = [:]
     /// Archive-only generations for the sidebar/board toggle.
     private(set) var archivedCount = 0
+    /// "Show archived songs": verified archive-only projects join the visible
+    /// catalog in their persisted workflow stage. Off by default so the active
+    /// workspace stays calm; a root change turns it off.
+    private(set) var showsArchivedProjects = false
     /// Automatic-recovery timer deadline. Plain observation state: tests poll
     /// it; changes do not publish (matches the former plain view-model var).
     private(set) var recoveryDeadline: Date?
@@ -165,17 +169,29 @@ final class ArchiveVaultObservation: ObservableObject {
         return listChanged
     }
 
+    /// Turns "Show archived songs" on or off. Returns false (and publishes
+    /// nothing) when it already was; the caller then projects the catalog again.
+    @discardableResult
+    func setShowsArchivedProjects(_ isShown: Bool) -> Bool {
+        guard showsArchivedProjects != isShown else { return false }
+        objectWillChange.send()
+        showsArchivedProjects = isShown
+        return true
+    }
+
     /// Root-change path (`clearRootBoundArchiveState`): clears the list,
-    /// index, and count. Cards are rebuilt by the subsequent `songs = []`
-    /// assignment's prebuild; no card work here to avoid double rebuild.
+    /// index, count and the "Show archived" choice. Cards are rebuilt by the
+    /// catalog's `.clear` edit; no card work here to avoid a double rebuild.
     func clearForRootChange(notifyWhenChanged: Bool = true) {
         let hadSnapshots = !snapshots.isEmpty
         let hadIndex = !snapshotsByPath.isEmpty
         let hadCount = archivedCount != 0
+        let wasShowingArchived = showsArchivedProjects
         snapshots = []
         snapshotsByPath.removeAll()
         archivedCount = 0
-        if notifyWhenChanged, hadSnapshots || hadIndex || hadCount {
+        showsArchivedProjects = false
+        if notifyWhenChanged, hadSnapshots || hadIndex || hadCount || wasShowingArchived {
             objectWillChange.send()
         }
     }
@@ -285,14 +301,14 @@ final class ArchiveVaultObservation: ObservableObject {
 
     // MARK: - Catalog projection (archive-only, pure)
 
-    /// Projects archive-only generations onto the scan baseline. Pure:
+    /// Projects archive-only generations onto the scan baseline; they join the
+    /// visible list only while `showsArchivedProjects` is on. Pure:
     /// reads `snapshots`/`context`, never mutates observation state, never
     /// scans, never touches settings. `metadataStore` supplies persisted
     /// per-song metadata; load failures report through `onMetadataWarning`
     /// (archived-only metadata load failure warning preserved).
     func projectCatalog(
         from baselineSongs: [Song],
-        showArchived: Bool,
         collaborators: [Collaborator],
         metadataStore: (any SongUserMetadataStoring)?,
         onMetadataWarning: (String) -> Void
@@ -320,7 +336,7 @@ final class ArchiveVaultObservation: ObservableObject {
             }
         }
         var archivedSongs: [Song] = []
-        if showArchived, !archivedSnapshots.isEmpty {
+        if showsArchivedProjects, !archivedSnapshots.isEmpty {
             var metadata = Dictionary(uniqueKeysWithValues: baselineSongs.map {
                 ($0.id, SongUserMetadata.from(song: $0))
             })

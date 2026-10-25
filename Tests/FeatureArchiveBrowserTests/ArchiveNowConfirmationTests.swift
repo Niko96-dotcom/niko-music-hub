@@ -14,11 +14,11 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        XCTAssertEqual(viewModel.pendingArchiveConfirmation?.trigger, .manual)
+        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.trigger, .manual)
         // V3: the dialog carries the exact captured token and agrees it.
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         let bound = try XCTUnwrap(pending.authorization)
         XCTAssertEqual(bound.songID, song.id)
         XCTAssertEqual(bound.trigger, .manual)
@@ -32,7 +32,7 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         let enqueued = [viewModel.projectVaultActiveOperation].compactMap { $0 }
             + viewModel.projectVaultPendingOperations
         XCTAssertEqual(enqueued.map(\.trigger), [.manual])
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
 
         try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
     }
@@ -45,11 +45,11 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        XCTAssertNotNil(viewModel.pendingArchiveConfirmation)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        XCTAssertNotNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         viewModel.cancelPendingArchive()
 
-        XCTAssertNil(viewModel.pendingArchiveConfirmation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertTrue(viewModel.projectVaultPendingOperations.isEmpty)
         XCTAssertNil(viewModel.projectVaultActiveOperation)
         XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
@@ -74,7 +74,7 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         defer { staleRetry.cancel() }
 
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
         viewModel.confirmPendingArchive()
 
         XCTAssertNil(viewModel.projectVaultRetryTasks[song.id])
@@ -93,23 +93,23 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         let viewModel = fixture.viewModel(runtime: try fixture.runtime())
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
-        XCTAssertFalse(viewModel.hasPendingProjectVaultDialog)
+        XCTAssertFalse(viewModel.vaultDialogs.hasPendingDialog)
 
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
-        XCTAssertTrue(viewModel.hasPendingProjectVaultDialog)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        XCTAssertTrue(viewModel.vaultDialogs.hasPendingDialog)
 
         viewModel.cancelPendingArchive()
-        XCTAssertFalse(viewModel.hasPendingProjectVaultDialog)
+        XCTAssertFalse(viewModel.vaultDialogs.hasPendingDialog)
 
         // Cancel transfer in the same sheet asks through the board's alert.
-        viewModel.pendingStopTransferConfirmation = true
-        XCTAssertTrue(viewModel.hasPendingProjectVaultDialog)
-        viewModel.pendingStopTransferConfirmation = false
+        viewModel.vaultDialogs.askToStopTransfer()
+        XCTAssertTrue(viewModel.vaultDialogs.hasPendingDialog)
+        viewModel.vaultDialogs.closeStopTransferQuestion()
 
         let source = try String(contentsOfFile: "Sources/FeatureArchiveBrowser/SongDetailView.swift", encoding: .utf8)
         XCTAssertTrue(source.contains(".sheet(isPresented: $storageExpanded)"))
-        XCTAssertTrue(source.contains(".onChange(of: viewModel.hasPendingProjectVaultDialog)"))
+        XCTAssertTrue(source.contains(".onChange(of: viewModel.vaultDialogs.hasPendingDialog)"))
         XCTAssertTrue(source.contains("if pending { storageExpanded = false }"))
     }
 
@@ -124,9 +124,9 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         viewModel.setProjectKeepLocal(true, for: song)
 
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         let bound = try XCTUnwrap(pending.authorization)
         XCTAssertEqual(pending.trigger, .manual)
         XCTAssertEqual(pending.willRemoveActiveCopy, false)
@@ -165,9 +165,9 @@ final class ArchiveNowConfirmationTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestArchiveNow(for: song)
-        try await waitUntil { viewModel.pendingArchiveConfirmation != nil }
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
 
-        let pending = try XCTUnwrap(viewModel.pendingArchiveConfirmation)
+        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
         let bound = try XCTUnwrap(pending.authorization)
         XCTAssertEqual(pending.willRemoveActiveCopy, true)
         XCTAssertEqual(pending.willRemoveActiveCopy, bound.permitsRemoval)

@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 import XCTest
 
@@ -41,8 +42,10 @@ final class ToolWorkSourceTests: XCTestCase {
 
     /// A new tool does not add an extra source: it enqueues a job. Each extra source is a
     /// named exception with the reason it is not a job and the one place that registers it.
+    /// `setExtraJob(sourceID:)` takes only a `ShellJobExtraSourceID` case, so the compiler
+    /// refuses an unnamed source; this test keeps a reason and an owner for every case.
     func testExtraSourcesAreTheNamedExceptions() throws {
-        let declared = try Self.declaredExtraSources()
+        let declared = Set(ShellJobExtraSourceID.allCases.map { String(describing: $0) })
         XCTAssertEqual(
             declared,
             Set(Self.extraSources.keys),
@@ -56,11 +59,12 @@ final class ToolWorkSourceTests: XCTestCase {
             let source = SourceLex.strippedCommentsOnly(try SourceTestSupport.read(file)) as NSString
             for match in registration.matches(in: source as String, range: NSRange(location: 0, length: source.length)) {
                 let argument = source.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
-                let name = argument.hasPrefix("ShellJobExtraSourceID.")
-                    ? String(argument.dropFirst("ShellJobExtraSourceID.".count))
-                    : nil
+                let unprefixed = argument.hasPrefix("ShellJobExtraSourceID")
+                    ? String(argument.dropFirst("ShellJobExtraSourceID".count))
+                    : argument
+                let name = unprefixed.hasPrefix(".") ? String(unprefixed.dropFirst()) : nil
                 guard let name, let owner = Self.extraSources[name]?.owner else {
-                    failures.append("\(file): setExtraJob(sourceID: \(argument)) is not a named ShellJobExtraSourceID")
+                    failures.append("\(file): setExtraJob(sourceID: \(argument)) does not name its case, so its owner cannot be checked")
                     continue
                 }
                 if !file.hasPrefix(owner) {
@@ -349,17 +353,6 @@ final class ToolWorkSourceTests: XCTestCase {
             if let index = remaining.firstIndex(of: value) { remaining.remove(at: index) }
         }
         return Array(Set(remaining)).sorted()
-    }
-
-    private static func declaredExtraSources() throws -> Set<String> {
-        let source = SourceLex.strippedCommentsOnly(try SourceTestSupport.read("Sources/AppCore/Jobs/ShellJobStatus.swift"))
-        let start = try XCTUnwrap(source.range(of: "public enum ShellJobExtraSourceID"))
-        let body = try XCTUnwrap(source[start.upperBound...].split(separator: "}", maxSplits: 1).first)
-        let name = try NSRegularExpression(pattern: #"static\s+let\s+(\w+)\s*="#)
-        let ns = String(body) as NSString
-        return Set(name.matches(in: String(body), range: NSRange(location: 0, length: ns.length)).map {
-            ns.substring(with: $0.range(at: 1))
-        })
     }
 
     /// Every tool's sources: the `Feature*` targets but the archive browser (shell work, not a

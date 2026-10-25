@@ -1,7 +1,8 @@
 # Architecture map — Niko Music Hub
 
 Last verified: 2026-10-22 at `3ace650` (source read); modules, dependencies and the Vault flow re-checked on
-2026-10-25 at the commit that adds `ProjectVaultRuntime` (parent `1b2caea`). Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
+2026-10-25 at the commit that adds `ProjectVaultRuntime` (parent `1b2caea`); the archive state owners, flows and
+gap 6 re-checked on 2026-10-25 at `d55a7a3`. Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
 
 Start here. This page names the entry points, modules, main flows, state owners, seams and gates, and
 links to the documents that hold the detail. It does not repeat them.
@@ -41,7 +42,7 @@ were recounted on 2026-10-25, when the runtime moved out of `AppCore`.
 | `NikoMusicCore` (18.7k) | Archive domain: scan, preview ranking, search, browse rules, path safety, opening, SQLite stores, Project Vault engines. No UI. | `Scanning/CubaseArchiveScanner.swift` (`MusicArchiveScanner`), `Domain/Song.swift`, `Safety/PathSafety.swift`, `Persistence/SQLiteArchiveDatabase.swift` | `NikoMusicCoreTests` |
 | `AppCore` (11.8k) | Shell kit only (tool seam, `ToolContext`, settings, jobs and quit, Output Inbox, helper tools, router, design system); [ADR 022](decisions/022-appcore-scope-and-vault-runtime-target.md) says what belongs here | `Features/ToolFeature.swift`, `Services/ToolContext.swift`, `Shell/HubShellSession.swift` | `AppCoreTests` |
 | `ProjectVaultRuntime` (5.0k) | Project Vault runtime: the runtime actor, admissions, bound archive token, capacity, recovery bundle, presentation, Vault root pairing. No UI frameworks. | `LiveProjectVaultRuntime.swift`, `ProjectVaultOperating.swift`, `ProjectVaultArchiveAuthorization.swift` | `ProjectVaultRuntimeTests` |
-| `FeatureArchiveBrowser` (19.2k) | Board, list, song detail, preview player, metadata edits, Project Vault UI and queue | `ArchiveBrowserFeature.swift`, `ArchiveBrowserViewModel.swift`, the four coordinators in [architecture.md](architecture.md#featurearchivebrowser-swiftui-feature) | `FeatureArchiveBrowserTests` |
+| `FeatureArchiveBrowser` (19.2k) | Board, list, song detail, preview player, metadata edits, Project Vault UI and queue | `ArchiveBrowserFeature.swift`, `ArchiveBrowserViewModel.swift` (the composition), its state owners and coordinators in [architecture.md](architecture.md#featurearchivebrowser-swiftui-feature) | `FeatureArchiveBrowserTests` |
 | `FeatureAudioConverter` (2.7k) | Batch WAV conversion: AVFoundation first, FFmpeg fallback | `BatchAudioConversionUseCase.swift`, `AudioConversionPipeline.swift` | `FeatureAudioConverterTests` |
 | `FeatureAudioRecorder` (4.4k) | System-audio capture to WAV | `AudioCapturePort.swift`, `CoreAudioTapAdapter.swift` | `FeatureAudioRecorderTests` |
 | `FeatureDownloader` (3.1k) | yt-dlp downloads | `DownloaderUseCase.swift`, `YtDlpDownloader.swift` | `FeatureDownloaderTests` |
@@ -81,7 +82,7 @@ Hops in call order. Ownership detail is in [architecture.md](architecture.md).
 
 ### Find a song and open its project
 
-1. `ArchiveBrowserViewModel.init` loads roots (`+Roots.swift`), then the cached snapshot
+1. `ArchiveBrowserViewModel.init` loads roots (`ArchiveLibraryModel.loadRootsFromSettings`), then the cached snapshot
    (`loadCachedIndexIfAvailable` → `ArchiveCatalogCoordinator.loadCachedSongsReportDetached` →
    `SQLiteArchiveIndexStore.loadLatest`), then starts a background scan when it has a root watcher and no
    fixture root.
@@ -90,11 +91,11 @@ Hops in call order. Ownership detail is in [architecture.md](architecture.md).
    is dropped.
 3. `ArchiveCatalogCoordinator` merges stored user metadata (`ArchiveMetadataMerger`). Scans never write
    metadata.
-4. `applyCatalogScanUpdate` (`+ScanHost.swift`) applies `.rescan` through `applyCatalogEdit(_:)`
-   (`ArchiveBrowserViewModel.swift`), which projects the result, writes `SongCatalog` and runs
-   `ArchiveBrowseProjection` and `MusicSearchIndex`; `ArchiveMetadataEditingCoordinator.scheduleIndexPersist`
+4. `applyCatalogScanUpdate` (`+Scan.swift`) applies `.rescan` through `applyCatalogEdit(_:)`
+   (`ArchiveBrowserViewModel.swift`), which projects the result, writes `SongCatalog` and has `ArchiveBrowseModel`
+   run `ArchiveBrowseProjection` and `MusicSearchIndex`; `ArchiveMetadataEditingCoordinator.scheduleIndexPersist`
    saves the snapshot.
-5. Open: `openLatestCPR(for:)` (`+Exports.swift`) checks the Vault block, then
+5. Open: `ArchiveFileAccessModel.openLatestCPR(for:)` checks the Vault block, then
    `MusicItemOpener.openLatestCPR(for:dryRun:allowedRoots:)` resolves the file with `PathSafety` and calls
    the injected `WorkspaceOpening` (nothing in dry-run).
 
@@ -118,7 +119,7 @@ exceptions with their reasons ([architecture.md § How a tool runs its work](arc
 
 1. A Done drop, the Done command or Archive Now calls `startBoundArchiveCapture`
    (`+ProjectVaultArchive.swift`). It captures a `ProjectVaultArchiveAuthorization` from the runtime
-   **before** `ProjectVaultDoneChoiceSheet` opens. "Keep a verified copy" downgrades that same token to
+   **before** `ProjectVaultDoneChoiceSheet` opens; `ArchiveVaultDialogsModel` lets only the current capture present. "Keep a verified copy" downgrades that same token to
    copy-only.
 2. `ProjectVaultOperationCoordinator.enqueue` runs one operation at a time, rejects duplicates and retries
    a failed Done at most 3 times, copy-only.
@@ -169,15 +170,21 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Durable settings (music roots, output folder, Vault, helpers) | `SettingsStore` → `UserDefaultsSettingsStore`; display mirror `AppSettingsObserver` | UserDefaults key `nikoMusicHub.settings` (JSON) |
 | Archive song catalog (scan baseline, visible list, id index) | `SongCatalog`, written only by `ArchiveBrowserViewModel.applyCatalogEdit(_:)` | snapshot in `SQLiteArchiveIndexStore` |
 | Archive scan list (the folders the archive scans) | the settings store; edited only through `ArchiveScanList` (AppCore); the archive follows `appSettings` ([architecture.md § Archive scan list](architecture.md#archive-scan-list)) | settings JSON in UserDefaults |
-| Loaded roots, selection, browse inputs | `ArchiveBrowserViewModel` | memory |
-| Archive page (`viewMode`, `listShowsDetail`) | `ArchiveBrowserViewModel`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
+| Loaded roots, their access, first-run state, scan state (scanning, scan error, diagnostics, root generation) | `ArchiveLibraryModel`, held as `ArchiveBrowserViewModel.library` | memory |
+| Archive browse inputs and results (search text, shelf, filters, sort, filtered list, search index) | `ArchiveBrowseModel`, held as `ArchiveBrowserViewModel.browse` | memory |
+| Archive page (`viewMode`, `listShowsDetail`) and the selected song | `ArchivePageModel`, held as `ArchiveBrowserViewModel.page`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
 | Keep Local pins | `KeepLocalPins` over `VaultSettings.keepLocalProjectIDs` ([ADR 021](decisions/021-keep-local-pin-format.md)) | settings JSON in UserDefaults |
 | Vault queue, retries, capacity | `ProjectVaultOperationCoordinator` | memory; the journal is authoritative |
-| Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
+| Vault presentation, automatic recovery and the "Show archived" choice | `ArchiveVaultObservation` | derived; the choice in memory |
+| Archive Vault dialogs (archive/Done confirmation and its authorization capture, restore sheet and progress, identity review, stop transfer, stopped for quit) | `ArchiveVaultDialogsModel`, held as `ArchiveBrowserViewModel.vaultDialogs` | memory |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
 | Vault transfer state, restore phase | the tables `ProjectVaultStateMachine` and `VaultRestorePhase.allowedNextPhases`; written only by each engine's `checkAndSave` and the restore reconcile ([architecture.md § Vault state changes](architecture.md#vault-state-changes)) | `vault_transfers`, `vault_restores` in `archive-index.sqlite` |
+| Archive file access results (nearby open error, last dry-run path, last export paths) | `ArchiveFileAccessModel`, held as `ArchiveBrowserViewModel.fileAccess` | memory |
+| Collaborator address book as the archive shows it, and a staged removal | `ArchiveAddressBookModel`, held as `ArchiveBrowserViewModel.addressBook`, over `SQLiteCollaboratorStore` | `archive-index.sqlite` |
+| Archive intelligence (collaborator suggestions and their dismissals, duplicate hints, missing audio) | `ArchiveIntelligenceModel`, held as `ArchiveBrowserViewModel.intelligence` | memory |
+| Archive song analysis (BPM/key of the main preview, the project's plug-ins) | `ArchiveSongAnalysisModel`, held as `ArchiveBrowserViewModel.songAnalysis`; follows each catalog change | memory |
 | Preview playback | `ArchivePreviewSession`, held by `ArchiveBrowserViewModel.previewSession`; views get it by initializer ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
 | Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter`; each row's verb, Cancel help and cancel target come from its tool | memory |
 | A tool page's Return and Esc keys | `HubInspectorPage` (`primaryKey`, `cancelKey`, otherwise the shell's Esc from `HubShellEscape`), bound only on the visible page; the Archive Browser, no `HubInspectorPage`, owns its keys in `ArchiveBrowserView` under the same rule ([architecture.md § Tool page keys](architecture.md#tool-page-keys)) | code |
@@ -248,7 +255,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Each built-in tool ID is defined once; shell code orders, routes and labels tools from their metadata and job rows, never by ID | [architecture.md § Tool self-description](architecture.md#tool-self-description) | `ToolIDSourceTests`, `ToolSectionTests`, `InAppJobCancelRoutingTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
 | A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
-| Archive views state intent; only the view model writes the archive page, and the song detail and the cards use the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `ArchiveViewIntentSourceTests`; `ArchiveVaultObservationTests` (each card offers a status change exactly when the gate accepts it) |
+| Archive views state intent; only `ArchivePageModel` writes the archive page, and the song detail and the cards use the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `private(set)` setters, `ArchiveViewIntentSourceTests`; `ArchiveVaultObservationTests` (each card offers a status change exactly when the gate accepts it) |
 | The archive song catalog is written only through `applyCatalogEdit(_:)` | [architecture.md § Archive song catalog](architecture.md#archive-song-catalog) | the compiler (`songCatalog`'s setter is private to its file), `SongCatalogTests`, `ArchiveCatalogEditTests` |
 | A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
@@ -282,11 +289,13 @@ These rules are documented and, where named, enforced. The full table is in
    consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to
    the archive view model, and the recorder and the archive share one recording signal through `ToolContext`, since
    2026-10-24.)
-6. **`ArchiveBrowserViewModel` is one type in 22 files** (the main file plus 21 `+*.swift` extensions,
-   4,615 lines; the footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog`
-   on 2026-10-23). Four owners were extracted (scan orchestrator, catalog, metadata editing, Vault queue and
-   observation); the extensions still share one set of state. The song catalog has one writer since 2026-10-23,
-   but the root reset still resets about 35 other properties by hand.
+6. Closed on 2026-10-25: `ArchiveBrowserViewModel` is the composition of state owners. Each owner holds one set of
+   state with its rules and its own tests: `ArchiveBrowseModel`, `ArchivePageModel`, `ArchiveLibraryModel`,
+   `ArchiveIntelligenceModel`, `ArchiveSongAnalysisModel`, `ArchiveAddressBookModel`, `ArchiveFileAccessModel`,
+   `ArchiveVaultDialogsModel`, beside the earlier `ArchiveScanOrchestrator`, `ArchiveCatalogCoordinator`,
+   `ArchiveMetadataEditingCoordinator`, `ProjectVaultOperationCoordinator` and `ArchiveVaultObservation`. The view
+   model keeps the song catalog writer, the footer, the root reset (one call per owner, in a documented order) and
+   the intents that cross owners, in 10 files (it was 22).
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
    2026-10-25. `DevToolFeature` always compiles and is shown

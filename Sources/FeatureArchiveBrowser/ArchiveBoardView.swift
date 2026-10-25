@@ -39,11 +39,11 @@ struct ArchiveBoardView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            if viewModel.showsArchiveAccessRecovery {
+            if viewModel.library.showsArchiveAccessRecovery {
                 EmptyView()
             } else if viewModel.songs.isEmpty {
                 ArchiveBoardEmptyState(
-                    isScanning: viewModel.isScanning,
+                    isScanning: viewModel.library.isScanning,
                     onChooseRoot: onChooseRoot,
                     onOpenListView: { viewModel.setBrowseLayout(list: true) }
                 )
@@ -65,19 +65,19 @@ struct ArchiveBoardView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
-            guard viewModel.showsBoardPage else { return }
+            guard viewModel.page.showsBoardPage else { return }
             keyboardFocus = .search
         }
         // Selection publishes on the same view model but never emits on this
         // property publisher, so it cannot trigger a full board re-projection.
-        .onReceive(viewModel.$filteredSongs) { songs in
-            projectionCache.refresh(with: songs, preservingOrder: viewModel.isSearching)
+        .onReceive(viewModel.browse.$filteredSongs) { songs in
+            projectionCache.refresh(with: songs, preservingOrder: viewModel.browse.isSearching)
         }
     }
 
     private var header: some View {
         HubPageHeader("Board") {
-            if viewModel.isScanning {
+            if viewModel.library.isScanning {
                 HStack(spacing: 5) {
                     ProgressView()
                         .controlSize(.mini)
@@ -96,7 +96,7 @@ struct ArchiveBoardView: View {
             }
         } trailing: {
             ArchiveBoardSearchField(
-                input: viewModel.searchInput,
+                input: viewModel.browse.searchInput,
                 onEdit: { query in handleSearchEdit(query) },
                 isDisabled: viewModel.songs.isEmpty,
                 keyboardFocus: $keyboardFocus
@@ -106,14 +106,14 @@ struct ArchiveBoardView: View {
             if viewModel.canBrowseArchivedProjects {
                 HubIconButton(
                     systemImage: "archivebox",
-                    accessibilityLabel: viewModel.showArchivedProjects ? "Hide archived songs" : "Show archived songs",
-                    help: viewModel.showArchivedProjects
+                    accessibilityLabel: viewModel.vaultObservation.showsArchivedProjects ? "Hide archived songs" : "Show archived songs",
+                    help: viewModel.vaultObservation.showsArchivedProjects
                         ? "Hide archived songs"
                         : "Show \(viewModel.archivedProjectCount) archived \(CountCopy.noun(for: viewModel.archivedProjectCount, "song"))",
-                    isSelected: viewModel.showArchivedProjects,
+                    isSelected: viewModel.vaultObservation.showsArchivedProjects,
                     isToggle: true
                 ) {
-                    viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
+                    viewModel.setShowArchivedProjects(!viewModel.vaultObservation.showsArchivedProjects)
                 }
             }
 
@@ -146,9 +146,9 @@ struct ArchiveBoardView: View {
 
     private func handleSearchEdit(_ query: String) {
         if query.isEmpty {
-            viewModel.clearSearch()
+            viewModel.browse.clearSearch()
         } else {
-            viewModel.setSearchQuery(query)
+            viewModel.browse.setSearchQuery(query)
         }
     }
 }
