@@ -6,12 +6,12 @@ import ProjectVaultRuntime
 extension ArchiveBrowserViewModel {
     func performProjectVaultPrimaryAction(for song: Song) {
         guard let presentation = projectVaultPresentation(for: song) else {
-            try? openLatestCPR(for: song)
+            try? fileAccess.openLatestCPR(for: song)
             return
         }
         switch presentation.primaryAction {
         case .openInCubase:
-            try? openLatestCPR(for: song)
+            try? fileAccess.openLatestCPR(for: song)
         case .restoreAndOpen:
             restoreAndOpenFromProjectVault(song)
         case .revealArchive:
@@ -117,7 +117,7 @@ extension ArchiveBrowserViewModel {
             }
             fileActions.revealInFinder(resolved)
         } catch let error as MusicItemOpenerError {
-            setProjectVaultStatusMessage(musicItemOpenerStatusMessage(error))
+            setProjectVaultStatusMessage(ArchiveFileAccessModel.statusMessage(for: error))
             diagnostics.log(.warning, "Project Vault generation reveal refused: \(error)")
         } catch {
             setProjectVaultStatusMessage(

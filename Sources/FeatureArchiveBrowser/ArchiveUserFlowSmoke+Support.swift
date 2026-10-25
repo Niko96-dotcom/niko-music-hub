@@ -16,8 +16,8 @@ extension ArchiveUserFlowSmoke {
     static func exportDiagnosticsText(
         from viewModel: ArchiveBrowserViewModel
     ) throws -> (path: String, text: String) {
-        try viewModel.exportDiagnostics()
-        guard let path = viewModel.lastDiagnosticsExportPath, !path.isEmpty else {
+        try viewModel.fileAccess.exportDiagnostics()
+        guard let path = viewModel.fileAccess.lastDiagnosticsExportPath, !path.isEmpty else {
             throw ArchiveUserFlowSmokeError.diagnosticsExportFailed
         }
         let text = try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
@@ -94,7 +94,7 @@ extension ArchiveUserFlowSmoke {
     ) -> SearchPanelParity {
         switch kind {
         case .songs:
-            guard let context = viewModel.activeSearchExportContext() else {
+            guard let context = viewModel.browse.searchExportContext() else {
                 return .empty
             }
             return buildSearchPanelParity(
@@ -127,7 +127,7 @@ extension ArchiveUserFlowSmoke {
             )
 
         case .skipped:
-            guard let context = viewModel.activeSkippedSearchExportContext() else {
+            guard let context = viewModel.browse.skippedSearchExportContext() else {
                 return .empty
             }
             return buildSearchPanelParity(

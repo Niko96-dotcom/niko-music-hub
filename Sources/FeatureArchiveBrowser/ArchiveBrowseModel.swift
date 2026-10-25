@@ -66,6 +66,23 @@ final class ArchiveBrowseModel: ObservableObject {
         return CountCopy.count(filteredSongs.count, "result")
     }
 
+    /// The active search a diagnostics export describes, nil without a query.
+    func searchExportContext() -> ArchiveDiagnosticsSearchContext? {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let matches = filteredSongs.map { song in
+            ArchiveDiagnosticsSearchMatch(
+                displayTitle: song.effectiveDisplayTitle,
+                summary: searchMatchSummaries[song.id, default: ""]
+            )
+        }
+        return ArchiveDiagnosticsSearchContext(query: trimmed, matches: matches)
+    }
+
+    func skippedSearchExportContext() -> ArchiveDiagnosticsSkippedSearchContext? {
+        ArchiveDiagnosticsSkippedSearchContext.from(query: searchQuery, results: skippedSearchMatches)
+    }
+
     // MARK: - Inputs
 
     /// Typed search. Recomputes after the debounce, or at once when `immediate`

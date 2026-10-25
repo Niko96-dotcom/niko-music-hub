@@ -251,7 +251,7 @@ extension ArchiveBrowserViewModel {
             // reported by openLatestCPR (status line and openError) and must not
             // make the caller treat the creation as failed.
             do {
-                try openLatestCPR(for: created)
+                try fileAccess.openLatestCPR(for: created)
             } catch {
                 diagnostics.scoped(to: .archive).log(.error, "Created song, but opening its project failed")
             }

@@ -30,8 +30,8 @@ final class OpenLatestCPRTests: XCTestCase {
         model.applyCatalogEdit(.load([song]))
         XCTAssertNil(model.projectOpenBlockReason(for: song))
         for version in versions.prefix(2) {
-            try model.openProjectVersion(version, for: song)
-            XCTAssertEqual(model.lastDryRunLog, version.filePath.resolvingSymlinksInPath().path)
+            try model.fileAccess.openProjectVersion(version, for: song)
+            XCTAssertEqual(model.fileAccess.lastDryRunLog, version.filePath.resolvingSymlinksInPath().path)
             XCTAssertEqual(model.songs.first?.effectiveLatestCPR?.id, versions[2].id)
         }
     }
@@ -51,8 +51,8 @@ final class OpenLatestCPRTests: XCTestCase {
         await viewModel.scan()
 
         let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
-        try viewModel.openLatestCPR(for: neon)
-        let path = try XCTUnwrap(viewModel.lastDryRunLog)
+        try viewModel.fileAccess.openLatestCPR(for: neon)
+        let path = try XCTUnwrap(viewModel.fileAccess.lastDryRunLog)
         XCTAssertTrue(path.contains("Neon Hook"))
         XCTAssertTrue(path.hasSuffix(".cpr"))
     }

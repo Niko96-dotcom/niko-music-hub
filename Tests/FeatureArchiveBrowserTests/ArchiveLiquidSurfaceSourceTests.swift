@@ -76,14 +76,15 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
             XCTAssertTrue(browser.contains(required), "Missing archive keyboard safety hook: \(required)")
         }
 
+        let fileAccess = try featureSource("ArchiveFileAccessModel.swift")
         [
             "opener.openLatestCPR",
-            "runtime.dryRunOpen",
             "fileActions.revealInFinder",
             "preferredRevealURL",
         ].forEach { required in
-            XCTAssertTrue(viewModel.contains(required), "Missing archive open/reveal source: \(required)")
+            XCTAssertTrue(fileAccess.contains(required), "Missing archive open/reveal source: \(required)")
         }
+        XCTAssertTrue(viewModel.contains("dryRunOpen: runtime.dryRunOpen"), "Opening follows the dry-run switch")
 
         XCTAssertTrue(onboarding.contains("scans read-only"))
         XCTAssertTrue(onboarding.contains("never renamed or moved"))

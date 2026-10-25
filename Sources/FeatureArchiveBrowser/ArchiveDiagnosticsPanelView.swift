@@ -53,7 +53,7 @@ struct ArchiveDiagnosticsPanelView: View {
                 )
             }
 
-            if let lastExportPath = viewModel.lastDiagnosticsExportPath {
+            if let lastExportPath = viewModel.fileAccess.lastDiagnosticsExportPath {
                 HStack(spacing: 8) {
                     Text("Last export: \(lastExportPath)")
                         .font(HubDesignSystem.Typography.micro())
@@ -62,7 +62,7 @@ struct ArchiveDiagnosticsPanelView: View {
                         .textSelection(.enabled)
                     Spacer(minLength: 4)
                     HubLabeledButton(icon: "folder", label: "Reveal", style: .ghost) {
-                        viewModel.revealInFinder(url: URL(fileURLWithPath: lastExportPath))
+                        viewModel.fileAccess.revealInFinder(url: URL(fileURLWithPath: lastExportPath))
                     }
                 }
             }
@@ -285,9 +285,9 @@ struct ArchiveDiagnosticsPanelView: View {
     private func exportDiagnosticsViaSavePanel() {
         guard let destination = ArchiveExportPaths.runSavePanel(
             for: .scanDiagnostics,
-            directoryURL: viewModel.exportDefaultDirectory()
+            directoryURL: viewModel.fileAccess.exportDefaultDirectory()
         ) else { return }
-        viewModel.performExport { try viewModel.exportDiagnostics(to: destination) }
+        viewModel.fileAccess.performExport { try viewModel.fileAccess.exportDiagnostics(to: destination) }
     }
 
     private func diagnosticRow(_ label: String, value: String) -> some View {

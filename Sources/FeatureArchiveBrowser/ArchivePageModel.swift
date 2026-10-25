@@ -124,6 +124,11 @@ final class ArchivePageModel: ObservableObject {
         }
     }
 
+    /// The selected song a diagnostics export describes.
+    func selectedSongExportContext() -> ArchiveDiagnosticsSelectedSongContext? {
+        selectedSong.map(ArchiveDiagnosticsSelectedSongContext.from(song:))
+    }
+
     // MARK: - Pages
 
     /// Opens the selected song's detail: the board goes to fullscreen detail, the

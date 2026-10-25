@@ -331,9 +331,9 @@ struct ArchiveSidebarView: View {
                             },
                             onOpenDetail: { viewModel.openSongDetail(song) },
                             onPlay: { viewModel.audition(song) },
-                            onOpenProject: { try? viewModel.openLatestCPR(for: song) },
-                            onRevealInFinder: { viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song)) },
-                            canRevealInFinder: viewModel.preferredRevealURL(for: song) != nil,
+                            onOpenProject: { try? viewModel.fileAccess.openLatestCPR(for: song) },
+                            onRevealInFinder: { viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: song)) },
+                            canRevealInFinder: viewModel.fileAccess.preferredRevealURL(for: song) != nil,
                             onWorkflowStatusChange: { status in
                                 viewModel.applyWorkflowStatus(status, for: song)
                             },

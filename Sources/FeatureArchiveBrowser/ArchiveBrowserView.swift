@@ -120,7 +120,7 @@ struct ArchiveBrowserView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
-                if viewModel.openError != nil {
+                if viewModel.fileAccess.openError != nil {
                     openFailureStrip
                 }
                 if !viewModel.metadataRepairSongIDs.isEmpty {
@@ -521,20 +521,20 @@ struct ArchiveBrowserView: View {
     /// while detail is hidden (board). Detail shows the same text near Open.
     private var openFailureStrip: some View {
         HStack(spacing: 10) {
-            Text(viewModel.openError ?? "")
+            Text(viewModel.fileAccess.openError ?? "")
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.warning)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             if let song = viewModel.page.selectedSong,
-               viewModel.preferredRevealURL(for: song) != nil {
+               viewModel.fileAccess.preferredRevealURL(for: song) != nil {
                 HubLabeledButton(
                     icon: "folder",
                     label: ArchiveOpenErrorCopy.revealSongFolder,
                     style: .secondary,
                     help: "Reveal the song folder in Finder"
                 ) {
-                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+                    viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: song))
                 }
             }
         }
@@ -586,13 +586,13 @@ struct ArchiveBrowserView: View {
 
     private func performOpenPreview() {
         guard let song = viewModel.page.selectedSong else { return }
-        try? viewModel.openMainPreview(for: song)
+        try? viewModel.fileAccess.openMainPreview(for: song)
     }
 
     private func performOpenProject() {
         guard let song = viewModel.page.selectedSong else { return }
         do {
-            try viewModel.openLatestCPR(for: song)
+            try viewModel.fileAccess.openLatestCPR(for: song)
         } catch {
             // openError already set inside openLatestCPR
         }
@@ -600,7 +600,7 @@ struct ArchiveBrowserView: View {
 
     private func performRevealInFinder() {
         guard let song = viewModel.page.selectedSong else { return }
-        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
+        viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: song))
     }
 
     private func performShowVersions() {

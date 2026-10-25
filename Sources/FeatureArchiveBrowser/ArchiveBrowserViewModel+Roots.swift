@@ -209,34 +209,6 @@ extension ArchiveBrowserViewModel {
         recordPersistenceWarning(.settingsSaveFailed(error))
     }
 
-    /// Archive roots plus the configured output folder (new-song drafts live there).
-    func allowedOpenRoots(for song: Song? = nil, includingURL url: URL? = nil) -> [URL] {
-        var allowed = roots.map(\.standardizedFileURL)
-        let standardizedOutput = appSettings.settings.outputFolder.url.standardizedFileURL
-        if !allowed.contains(where: { $0.path == standardizedOutput.path }) {
-            allowed.append(standardizedOutput)
-        }
-        if let song, !blocksGenericProjectVaultFileActions(for: song) {
-            appendSongFolderRoot(song.folderPath, to: &allowed)
-        } else if let url,
-                  let song = songs.first(where: { catalogSong in
-                      let folderPath = catalogSong.folderPath.standardizedFileURL.path
-                      let candidatePath = url.standardizedFileURL.path
-                      return candidatePath == folderPath || candidatePath.hasPrefix(folderPath + "/")
-                  }),
-                  !blocksGenericProjectVaultFileActions(for: song) {
-            appendSongFolderRoot(song.folderPath, to: &allowed)
-        }
-        return allowed
-    }
-
-    func appendSongFolderRoot(_ folderPath: URL, to allowed: inout [URL]) {
-        let songFolder = folderPath.standardizedFileURL
-        if !allowed.contains(where: { songFolder.path == $0.path || songFolder.path.hasPrefix($0.path + "/") }) {
-            allowed.append(songFolder)
-        }
-    }
-
     func applyBootstrapRootWhenEmpty() {
         if runtime.usesIsolatedSettingsSuite {
             return

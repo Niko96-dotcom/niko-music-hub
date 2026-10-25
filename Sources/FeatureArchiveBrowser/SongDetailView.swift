@@ -221,12 +221,12 @@ struct SongDetailView: View {
                 song: liveSong,
                 isPreviewPlaying: isMainPlaying,
                 captureActive: previewSession.captureActive,
-                canRevealInFinder: viewModel.preferredRevealURL(for: liveSong) != nil,
+                canRevealInFinder: viewModel.fileAccess.preferredRevealURL(for: liveSong) != nil,
                 allowsWorkflowMutation: false,
                 showsWorkflowStatus: false,
-                onOpenProject: { try? viewModel.openLatestCPR(for: liveSong) },
+                onOpenProject: { try? viewModel.fileAccess.openLatestCPR(for: liveSong) },
                 onPlayPreview: { viewModel.audition(liveSong) },
-                onRevealInFinder: { viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong)) },
+                onRevealInFinder: { viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: liveSong)) },
                 onWorkflowStatusChange: nil
             )
             Button("Convert main preview") { viewModel.convertMainPreview(for: liveSong) }
@@ -270,7 +270,7 @@ struct SongDetailView: View {
                 .hubCard()
                 // NMH-049: nearby open failure with recovery next to Open.
                 // The footer statusMessage keeps the technical line as a log.
-                if let openError = viewModel.openError {
+                if let openError = viewModel.fileAccess.openError {
                     Text(openError)
                         .font(HubDesignSystem.Typography.caption())
                         .foregroundStyle(HubDesignSystem.Palette.warning)
@@ -281,7 +281,7 @@ struct SongDetailView: View {
                         style: .secondary,
                         help: "Reveal the song folder in Finder"
                     ) {
-                        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: liveSong))
+                        viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: liveSong))
                     }
                 }
             }
@@ -568,7 +568,7 @@ struct SongDetailView: View {
         SongProjectVersionsSection(
             song: liveSong,
             openBlockReason: viewModel.projectOpenBlockReason(for: liveSong),
-            onOpen: { try? viewModel.openProjectVersion($0, for: liveSong) },
+            onOpen: { try? viewModel.fileAccess.openProjectVersion($0, for: liveSong) },
             onSetMain: { viewModel.setManualMainCPR(for: liveSong, versionID: $0.id) },
             onHide: { viewModel.ignoreCPRVersion(for: liveSong, versionID: $0.id) },
             onShow: { viewModel.unignoreCPRVersion(for: liveSong, versionID: $0.id) },

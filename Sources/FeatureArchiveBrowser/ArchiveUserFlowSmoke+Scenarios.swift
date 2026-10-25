@@ -24,9 +24,9 @@ extension ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeError.neonHookNotFound
         }
         viewModel.selectSong(neon)
-        try viewModel.openLatestCPR(for: neon)
+        try viewModel.fileAccess.openLatestCPR(for: neon)
 
-        guard let dryRunPath = viewModel.lastDryRunLog else {
+        guard let dryRunPath = viewModel.fileAccess.lastDryRunLog else {
             throw ArchiveUserFlowSmokeError.missingDryRunPath
         }
 
@@ -332,7 +332,7 @@ extension ArchiveUserFlowSmoke {
         let exportContainsRequiredSections =
             scenario.exportMustContain.allSatisfy { exportText.contains($0) }
 
-        let panelContext = viewModel.selectedSongExportContext()
+        let panelContext = viewModel.page.selectedSongExportContext()
         let panelTitleLine = panelContext?.displayTitle ?? ""
         let panelCprLine = panelContext.map {
             ArchiveDiagnosticsSelectedSongPanelContext.panelCprLine(cprSummary: $0.cprSummary)

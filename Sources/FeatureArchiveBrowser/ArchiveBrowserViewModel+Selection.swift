@@ -120,8 +120,8 @@ extension ArchiveBrowserViewModel {
     /// there is none.
     func selectionDidChange(previousSongID: String?) {
         synchronizePreviewSelection()
-        if previousSongID != page.selectedSong?.id, openError != nil {
-            openError = nil
+        if previousSongID != page.selectedSong?.id {
+            fileAccess.dismissOpenError()
         }
     }
 }

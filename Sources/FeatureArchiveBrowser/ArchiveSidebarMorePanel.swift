@@ -108,8 +108,8 @@ struct ArchiveSidebarMorePanel: View {
                                         viewModel: viewModel,
                                         diagnostics: diagnostics,
                                         selectedSong: viewModel.page.selectedSong,
-                                        searchContext: viewModel.activeSearchExportContext(),
-                                        skippedSearchContext: viewModel.activeSkippedSearchExportContext()
+                                        searchContext: viewModel.browse.searchExportContext(),
+                                        skippedSearchContext: viewModel.browse.skippedSearchExportContext()
                                     )
                                 }
                             }

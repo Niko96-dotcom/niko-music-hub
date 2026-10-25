@@ -42,8 +42,38 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         selectedSong: { [weak self] in self?.page.selectedSong }
     )
     private let processRunner: any StreamingExternalProcessRunning
-    let opener: MusicItemOpener
-    let pathSafety = PathSafety()
+    private let opener: MusicItemOpener
+    /// Opening a project or preview, revealing files and writing the exports,
+    /// inside the archive's allowed roots and the Vault block; the nearby open
+    /// error, the dry-run path and the export paths.
+    private(set) lazy var fileAccess = ArchiveFileAccessModel(
+        opener: opener,
+        fileActions: fileActions,
+        diagnostics: diagnostics,
+        dryRunOpen: runtime.dryRunOpen,
+        host: ArchiveFileAccessHost(
+            songs: { [weak self] in self?.songs ?? [] },
+            roots: { [weak self] in self?.roots ?? [] },
+            outputFolder: { [weak self] in
+                self?.appSettings.settings.outputFolder.url ?? AppSettings.default.outputFolder.url
+            },
+            writeProtectedRoots: { [weak self] in
+                guard let self else { throw ArchiveWriteGuardError.settingsUnreadable }
+                return try self.writeProtectedRoots()
+            },
+            isVaultBlocked: { [weak self] song in self?.blocksGenericProjectVaultFileActions(for: song) ?? true },
+            vaultBlockReason: { [weak self] song in self?.projectOpenBlockReason(for: song) },
+            scanDiagnostics: { [weak self] in self?.scanDiagnostics },
+            exportContexts: { [weak self] in
+                ArchiveDiagnosticsExportContexts(
+                    search: self?.browse.searchExportContext(),
+                    skippedSearch: self?.browse.skippedSearchExportContext(),
+                    selectedSong: self?.page.selectedSongExportContext()
+                )
+            },
+            reportStatus: { [weak self] message in self?.setStatusMessage(message) }
+        )
+    )
     let fileActions: any FileActions
     let settingsStore: SettingsStore
     /// Display-only settings. Writes and Vault decisions use `loadSettingsForWrite()`.
@@ -218,14 +248,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var statusMessage: String? { footer.text }
     var statusBaseMessage: String? { footer.message }
     var persistenceWarningMessage: String? { footer.warning?.text }
-    /// NMH-049: nearby open failure recovery (footer `statusMessage` stays the log).
-    @Published var openError: String?
     /// NMH-049: nearby scan failure body (footer keeps `Scan failed: …`).
     @Published var scanError: String?
     @Published var scanDiagnostics: ArchiveScanDiagnostics?
-    @Published var lastDryRunLog: String?
-    @Published var lastDiagnosticsExportPath: String?
-    @Published var lastIndexExportPath: String?
     @Published var needsFirstRunOnboarding = false {
         didSet {
             // NMH-042: first-run overlay appear/dismiss changes layout.
@@ -427,6 +452,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var browseCancellable: AnyCancellable?
     var pageCancellable: AnyCancellable?
     var addressBookCancellable: AnyCancellable?
+    var fileAccessCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -570,6 +596,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         pageCancellable = page.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
         addressBookCancellable = addressBook.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+        fileAccessCancellable = fileAccess.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
         loadRootsFromSettings()
         followStoredSettingsChanges()

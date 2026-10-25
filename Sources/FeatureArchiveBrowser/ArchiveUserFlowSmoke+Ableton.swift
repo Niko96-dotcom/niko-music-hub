@@ -49,10 +49,10 @@ extension ArchiveUserFlowSmoke {
             throw ArchiveUserFlowSmokeValidationError.evidenceIncomplete
         }
         viewModel.selectSong(mixed)
-        try viewModel.openProjectVersion(ableton, for: mixed)
-        let openedAbleton = viewModel.lastDryRunLog?.hasSuffix("/Song.als") == true
-        try viewModel.openProjectVersion(cubase, for: mixed)
-        let openedCubase = viewModel.lastDryRunLog?.hasSuffix("/Song.cpr") == true
+        try viewModel.fileAccess.openProjectVersion(ableton, for: mixed)
+        let openedAbleton = viewModel.fileAccess.lastDryRunLog?.hasSuffix("/Song.als") == true
+        try viewModel.fileAccess.openProjectVersion(cubase, for: mixed)
+        let openedCubase = viewModel.fileAccess.lastDryRunLog?.hasSuffix("/Song.cpr") == true
         viewModel.setManualMainCPR(for: mixed, versionID: cubase.id)
         viewModel.scanSync()
         let main = viewModel.songs.first { $0.id == mixed.id }?.effectiveLatestProject

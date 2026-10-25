@@ -354,7 +354,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         struct SampleError: LocalizedError {
             var errorDescription: String? { "sample failure" }
         }
-        viewModel.performExport { throw SampleError() }
+        viewModel.fileAccess.performExport { throw SampleError() }
         XCTAssertEqual(viewModel.statusMessage, "Export failed: sample failure")
     }
 
@@ -1309,8 +1309,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let lab = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == "Preview Ranking Lab" })
         viewModel.selectSong(lab)
 
-        try viewModel.exportDiagnostics()
-        let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        try viewModel.fileAccess.exportDiagnostics()
+        let exportPath = try XCTUnwrap(viewModel.fileAccess.lastDiagnosticsExportPath)
         let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
         XCTAssertTrue(text.contains("selected_song_title=Lab Song"))
         XCTAssertTrue(text.contains("selected_song_cpr=1 version"))
@@ -1339,8 +1339,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
         viewModel.selectSong(neon)
-        try viewModel.exportDiagnostics()
-        let neonPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        try viewModel.fileAccess.exportDiagnostics()
+        let neonPath = try XCTUnwrap(viewModel.fileAccess.lastDiagnosticsExportPath)
         let neonText = try String(contentsOf: URL(fileURLWithPath: neonPath), encoding: .utf8)
         XCTAssertTrue(neonText.contains("selected_song_cpr=2 versions"))
         XCTAssertTrue(neonText.contains("latest Neon Hook.cpr"))
@@ -1348,8 +1348,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         let broken = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Broken Folder Example" })
         viewModel.selectSong(broken)
-        try viewModel.exportDiagnostics()
-        let brokenPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        try viewModel.fileAccess.exportDiagnostics()
+        let brokenPath = try XCTUnwrap(viewModel.fileAccess.lastDiagnosticsExportPath)
         let brokenText = try String(contentsOf: URL(fileURLWithPath: brokenPath), encoding: .utf8)
         XCTAssertTrue(brokenText.contains("selected_song_title=Broken Folder Example"))
         XCTAssertTrue(brokenText.contains("selected_song_cpr=no project versions"))
@@ -1432,8 +1432,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.browse.setSearchQuery("LOOSE_FILE.txt", immediate: true)
         XCTAssertEqual(viewModel.browse.skippedSearchMatches.count, 1)
 
-        try viewModel.exportDiagnostics()
-        let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        try viewModel.fileAccess.exportDiagnostics()
+        let exportPath = try XCTUnwrap(viewModel.fileAccess.lastDiagnosticsExportPath)
         let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
         XCTAssertTrue(text.contains("skipped_search_query=LOOSE_FILE.txt"))
         XCTAssertTrue(text.contains("skipped_search_match label=LOOSE_FILE.txt"))
@@ -1451,8 +1451,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.browse.setSearchQuery("project", immediate: true)
         XCTAssertEqual(viewModel.browse.filteredSongs.count, 1)
 
-        try viewModel.exportDiagnostics()
-        let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        try viewModel.fileAccess.exportDiagnostics()
+        let exportPath = try XCTUnwrap(viewModel.fileAccess.lastDiagnosticsExportPath)
         let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
         XCTAssertTrue(text.contains("search_query=project"))
         XCTAssertTrue(text.contains("search_match title=Broken Folder Example"))
@@ -1469,8 +1469,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.browse.setSearchQuery("nts nly", immediate: true)
         XCTAssertEqual(viewModel.browse.filteredSongs.count, 1)
 
-        try viewModel.exportDiagnostics()
-        let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        try viewModel.fileAccess.exportDiagnostics()
+        let exportPath = try XCTUnwrap(viewModel.fileAccess.lastDiagnosticsExportPath)
         let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
         XCTAssertTrue(text.contains("search_query=nts nly"))
         XCTAssertTrue(text.contains("search_match title=Broken Folder Example"))
@@ -1487,8 +1487,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.browse.setSearchQuery("neon hk", immediate: true)
         XCTAssertEqual(viewModel.browse.filteredSongs.count, 1)
 
-        try viewModel.exportDiagnostics()
-        let exportPath = try XCTUnwrap(viewModel.lastDiagnosticsExportPath)
+        try viewModel.fileAccess.exportDiagnostics()
+        let exportPath = try XCTUnwrap(viewModel.fileAccess.lastDiagnosticsExportPath)
         let text = try String(contentsOf: URL(fileURLWithPath: exportPath), encoding: .utf8)
         XCTAssertTrue(text.contains("search_query=neon hk"))
         XCTAssertTrue(text.contains("search_match title=Neon Hook"))
@@ -2155,12 +2155,12 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertFalse(presentation.explanation.contains("every known copy"))
         XCTAssertNil(presentation.reviewAction)
         XCTAssertNil(presentation.retryRestoreID)
-        XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong))
+        XCTAssertNil(viewModel.fileAccess.preferredRevealURL(for: sourceSong))
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong))
         XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong))
 
-        viewModel.revealInFinder(url: sourceSong.folderPath)
-        try? viewModel.openLatestCPR(for: sourceSong)
+        viewModel.fileAccess.revealInFinder(url: sourceSong.folderPath)
+        try? viewModel.fileAccess.openLatestCPR(for: sourceSong)
         viewModel.updateWorkflowStatus(for: sourceSong, status: .done)
         viewModel.archiveInProjectVault(sourceSong)
         viewModel.performProjectVaultPrimaryAction(for: sourceSong)
@@ -2169,7 +2169,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         XCTAssertEqual(metadataStore.upsertCallCount, 0)
         XCTAssertTrue(revealed.urls.isEmpty)
-        XCTAssertNil(viewModel.lastDryRunLog)
+        XCTAssertNil(viewModel.fileAccess.lastDryRunLog)
         let archiveCalls = await runtime.archiveCallCount()
         let retryCalls = await runtime.retryCallCount()
         let restoreCalls = await runtime.restoreCallCount()
@@ -2248,16 +2248,16 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertFalse(presentation.explanation.contains("every known copy"))
         XCTAssertNil(presentation.reviewAction)
         XCTAssertNil(presentation.retryRestoreID)
-        XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong))
+        XCTAssertNil(viewModel.fileAccess.preferredRevealURL(for: sourceSong))
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong))
         XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong))
 
-        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: sourceSong))
-        viewModel.revealInFinder(url: sourceSong.folderPath)
-        try? viewModel.openLatestCPR(for: sourceSong)
+        viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: sourceSong))
+        viewModel.fileAccess.revealInFinder(url: sourceSong.folderPath)
+        try? viewModel.fileAccess.openLatestCPR(for: sourceSong)
         if let selectedSong = viewModel.page.selectedSong {
-            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
-            try? viewModel.openLatestCPR(for: selectedSong)
+            viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: selectedSong))
+            try? viewModel.fileAccess.openLatestCPR(for: selectedSong)
         }
         viewModel.updateWorkflowStatus(for: sourceSong, status: .done)
         viewModel.archiveInProjectVault(sourceSong)
@@ -2278,7 +2278,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(restoreCalls, 0)
         XCTAssertTrue(restoreRetryIDs.isEmpty)
         XCTAssertTrue(revealed.urls.isEmpty)
-        XCTAssertNil(viewModel.lastDryRunLog)
+        XCTAssertNil(viewModel.fileAccess.lastDryRunLog)
     }
 
     func testIncompletePostPromotionRestoreDeniesGenericActionsWithOrWithoutIntegrityFailure() async throws {
@@ -2363,15 +2363,15 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 XCTAssertNil(presentation.reviewAction, label)
                 XCTAssertEqual(presentation.retryRestoreID,
                     failureReason == nil ? restore.id : nil, label)
-                XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong), label)
+                XCTAssertNil(viewModel.fileAccess.preferredRevealURL(for: sourceSong), label)
                 XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong), label)
                 XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong), label)
 
-                viewModel.revealInFinder(url: sourceSong.folderPath)
-                try? viewModel.openLatestCPR(for: sourceSong)
+                viewModel.fileAccess.revealInFinder(url: sourceSong.folderPath)
+                try? viewModel.fileAccess.openLatestCPR(for: sourceSong)
                 if let selectedSong = viewModel.page.selectedSong {
-                    viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
-                    try? viewModel.openLatestCPR(for: selectedSong)
+                    viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: selectedSong))
+                    try? viewModel.fileAccess.openLatestCPR(for: selectedSong)
                 }
                 viewModel.updateWorkflowStatus(for: sourceSong, status: .waitingFeedback)
                 viewModel.updateWorkflowStatus(for: sourceSong, status: .done)
@@ -2384,7 +2384,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
                 XCTAssertEqual(metadataStore.upsertCallCount, 0, label)
                 XCTAssertTrue(revealed.urls.isEmpty, label)
-                XCTAssertNil(viewModel.lastDryRunLog, label)
+                XCTAssertNil(viewModel.fileAccess.lastDryRunLog, label)
                 let archiveCalls = await runtime.archiveCallCount()
                 let retryCalls = await runtime.retryCallCount()
                 let restoreCalls = await runtime.restoreCallCount()
@@ -2443,15 +2443,15 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNil(presentation.reviewAction)
         XCTAssertNil(presentation.retryRestoreID)
         XCTAssertEqual(viewModel.projectOpenBlockReason(for: archivedSong), presentation.explanation)
-        XCTAssertNil(viewModel.preferredRevealURL(for: archivedSong))
+        XCTAssertNil(viewModel.fileAccess.preferredRevealURL(for: archivedSong))
 
         viewModel.performProjectVaultPrimaryAction(for: archivedSong)
         viewModel.retryReviewedProjectVaultRestore(for: archivedSong)
-        viewModel.revealInFinder(url: archivedSong.folderPath)
-        try? viewModel.openLatestCPR(for: archivedSong)
+        viewModel.fileAccess.revealInFinder(url: archivedSong.folderPath)
+        try? viewModel.fileAccess.openLatestCPR(for: archivedSong)
         if let selectedSong = viewModel.page.selectedSong {
-            viewModel.revealInFinder(url: selectedSong.folderPath)
-            try? viewModel.openLatestCPR(for: selectedSong)
+            viewModel.fileAccess.revealInFinder(url: selectedSong.folderPath)
+            try? viewModel.fileAccess.openLatestCPR(for: selectedSong)
         }
         try await Task.sleep(for: .milliseconds(20))
 
@@ -2460,7 +2460,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(retryIDs.isEmpty)
         XCTAssertEqual(archiveCalls, 0)
         XCTAssertTrue(revealed.urls.isEmpty)
-        XCTAssertNil(viewModel.lastDryRunLog)
+        XCTAssertNil(viewModel.fileAccess.lastDryRunLog)
     }
 
     func testDestructiveCrashArchiveOnlyProjectStaysVisibleAndDeniesEveryAction() async throws {
@@ -2518,18 +2518,18 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
         XCTAssertNil(presentation.reviewAction)
         XCTAssertNil(presentation.retryRestoreID)
-        XCTAssertNil(viewModel.preferredRevealURL(for: archivedSong))
+        XCTAssertNil(viewModel.fileAccess.preferredRevealURL(for: archivedSong))
 
         // Sidebar menu and board drag/drop both converge on this ViewModel entry.
         viewModel.updateWorkflowStatus(for: archivedSong, status: .waitingFeedback)
         viewModel.updateWorkflowStatus(for: archivedSong, status: .done)
         viewModel.performProjectVaultPrimaryAction(for: archivedSong)
         viewModel.retryReviewedProjectVaultRestore(for: archivedSong)
-        viewModel.revealInFinder(url: archivedSong.folderPath)
-        try? viewModel.openLatestCPR(for: archivedSong)
+        viewModel.fileAccess.revealInFinder(url: archivedSong.folderPath)
+        try? viewModel.fileAccess.openLatestCPR(for: archivedSong)
         if let selectedSong = viewModel.page.selectedSong {
-            viewModel.revealInFinder(url: selectedSong.folderPath)
-            try? viewModel.openLatestCPR(for: selectedSong)
+            viewModel.fileAccess.revealInFinder(url: selectedSong.folderPath)
+            try? viewModel.fileAccess.openLatestCPR(for: selectedSong)
         }
         try await Task.sleep(for: .milliseconds(20))
 
@@ -2544,7 +2544,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(restoreCalls, 0)
         XCTAssertEqual(archiveCalls, 0)
         XCTAssertTrue(revealed.urls.isEmpty)
-        XCTAssertNil(viewModel.lastDryRunLog)
+        XCTAssertNil(viewModel.fileAccess.lastDryRunLog)
     }
 
     func testBindingBlockedArchivedOnlySongDeniesGenericRevealOpenAndGlobalShortcuts() async throws {
@@ -2603,24 +2603,24 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertNil(presentation.reviewAction)
         XCTAssertNil(presentation.retryRestoreID)
         XCTAssertNil(
-            viewModel.preferredRevealURL(for: archivedSong),
+            viewModel.fileAccess.preferredRevealURL(for: archivedSong),
             "archived-only Project Vault cards must route through Restore & Open, not generic Reveal"
         )
 
         // Song Detail controls.
-        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: archivedSong))
-        try? viewModel.openLatestCPR(for: archivedSong)
+        viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: archivedSong))
+        try? viewModel.fileAccess.openLatestCPR(for: archivedSong)
         // Global F/O shortcuts use these same selected-song entry points.
         if let selectedSong = viewModel.page.selectedSong {
-            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
-            try? viewModel.openLatestCPR(for: selectedSong)
+            viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: selectedSong))
+            try? viewModel.fileAccess.openLatestCPR(for: selectedSong)
         }
         viewModel.performProjectVaultPrimaryAction(for: archivedSong)
 
         let restoreRetryIDs = await runtime.restoreRetryIDs()
         let archiveCalls = await runtime.archiveCallCount()
         XCTAssertTrue(revealed.urls.isEmpty, "generic Finder actions must stay disabled")
-        XCTAssertNil(viewModel.lastDryRunLog, "generic Open must not reach even the dry-run opener")
+        XCTAssertNil(viewModel.fileAccess.lastDryRunLog, "generic Open must not reach even the dry-run opener")
         XCTAssertTrue(restoreRetryIDs.isEmpty)
         XCTAssertEqual(archiveCalls, 0)
     }
@@ -2698,7 +2698,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             XCTAssertNil(presentation.retryRestoreID, "\(blocker)")
             XCTAssertFalse(viewModel.canArchiveInProjectVault(sourceSong), "\(blocker)")
             XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: sourceSong), "\(blocker)")
-            XCTAssertNil(viewModel.preferredRevealURL(for: sourceSong), "\(blocker)")
+            XCTAssertNil(viewModel.fileAccess.preferredRevealURL(for: sourceSong), "\(blocker)")
 
             // Sidebar menu and board drag/drop converge here. Direct calls also
             // exercise the last authority boundary behind hidden UI controls.
@@ -2707,12 +2707,12 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             viewModel.archiveInProjectVault(sourceSong)
             viewModel.performProjectVaultPrimaryAction(for: sourceSong)
             viewModel.retryReviewedProjectVaultRestore(for: sourceSong)
-            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: sourceSong))
-            viewModel.revealInFinder(url: sourceSong.folderPath)
-            try? viewModel.openLatestCPR(for: sourceSong)
+            viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: sourceSong))
+            viewModel.fileAccess.revealInFinder(url: sourceSong.folderPath)
+            try? viewModel.fileAccess.openLatestCPR(for: sourceSong)
             if let selectedSong = viewModel.page.selectedSong {
-                viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
-                try? viewModel.openLatestCPR(for: selectedSong)
+                viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: selectedSong))
+                try? viewModel.fileAccess.openLatestCPR(for: selectedSong)
             }
             for _ in 0..<100 where viewModel.projectVaultBusySongIDs.contains(sourceSong.id) {
                 try await Task.sleep(for: .milliseconds(10))
@@ -2729,7 +2729,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             XCTAssertEqual(restoreCalls, 0, "\(blocker)")
             XCTAssertTrue(restoreRetryIDs.isEmpty, "\(blocker)")
             XCTAssertTrue(revealed.urls.isEmpty, "\(blocker)")
-            XCTAssertNil(viewModel.lastDryRunLog, "\(blocker)")
+            XCTAssertNil(viewModel.fileAccess.lastDryRunLog, "\(blocker)")
         }
     }
 
@@ -2802,21 +2802,21 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let openBlockReason = try XCTUnwrap(viewModel.projectOpenBlockReason(for: archivedSong))
         XCTAssertTrue(openBlockReason.contains("Restore & Open"))
         let archivedVersion = try XCTUnwrap(archivedSong.visibleProjectVersions.first)
-        XCTAssertThrowsError(try viewModel.openProjectVersion(archivedVersion, for: archivedSong))
+        XCTAssertThrowsError(try viewModel.fileAccess.openProjectVersion(archivedVersion, for: archivedSong))
         XCTAssertEqual(viewModel.statusMessage, openBlockReason)
         XCTAssertFalse(try XCTUnwrap(viewModel.statusMessage).contains(transfer.destinationURL.path))
         XCTAssertNil(
-            viewModel.preferredRevealURL(for: archivedSong),
+            viewModel.fileAccess.preferredRevealURL(for: archivedSong),
             "archive-only virtual songs must not acquire generic filesystem authority"
         )
 
         // Direct detail and selected/global Open/Finder entry points are inert.
-        viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: archivedSong))
-        viewModel.revealInFinder(url: archivedSong.folderPath)
-        try? viewModel.openLatestCPR(for: archivedSong)
+        viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: archivedSong))
+        viewModel.fileAccess.revealInFinder(url: archivedSong.folderPath)
+        try? viewModel.fileAccess.openLatestCPR(for: archivedSong)
         if let selectedSong = viewModel.page.selectedSong {
-            viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
-            try? viewModel.openLatestCPR(for: selectedSong)
+            viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: selectedSong))
+            try? viewModel.fileAccess.openLatestCPR(for: selectedSong)
         }
         viewModel.updateWorkflowStatus(for: archivedSong, status: .done)
         viewModel.archiveInProjectVault(archivedSong)
@@ -2836,7 +2836,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(preRestoreRestoreCalls, 0)
         XCTAssertTrue(preRestoreRetryIDs.isEmpty)
         XCTAssertTrue(revealed.urls.isEmpty)
-        XCTAssertNil(viewModel.lastDryRunLog)
+        XCTAssertNil(viewModel.fileAccess.lastDryRunLog)
 
         // The dedicated Restore & Open action is the sole mutating authority.
         viewModel.performProjectVaultPrimaryAction(for: archivedSong)
@@ -2971,8 +2971,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 $0.folderPath.standardizedFileURL.path == destinationPath
             }
             if let unsafeSong = unsafeVirtualSongs.first {
-                viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: unsafeSong))
-                try? viewModel.openLatestCPR(for: unsafeSong)
+                viewModel.fileAccess.revealInFinder(url: viewModel.fileAccess.preferredRevealURL(for: unsafeSong))
+                try? viewModel.fileAccess.openLatestCPR(for: unsafeSong)
             }
 
             XCTAssertTrue(
@@ -2980,7 +2980,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 "\(invalidDestination) must not become a virtual Song with raw folder authority"
             )
             XCTAssertTrue(revealed.urls.isEmpty, "\(invalidDestination) must not authorize generic Reveal")
-            XCTAssertNil(viewModel.lastDryRunLog, "\(invalidDestination) must not authorize generic Open")
+            XCTAssertNil(viewModel.fileAccess.lastDryRunLog, "\(invalidDestination) must not authorize generic Open")
         }
     }
 
@@ -3262,7 +3262,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
 
         XCTAssertEqual(created.effectiveLatestCPR?.fileName, "Starter.cpr")
-        XCTAssertTrue(viewModel.lastDryRunLog?.hasSuffix("Template Song/Starter.cpr") == true)
+        XCTAssertTrue(viewModel.fileAccess.lastDryRunLog?.hasSuffix("Template Song/Starter.cpr") == true)
     }
 
     func testCreateNewSongReturnsCreatedSongWhenTemplateOpenFails() throws {
@@ -3301,7 +3301,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(workspace.openCount, 1)
         XCTAssertEqual(created.effectiveLatestCPR?.fileName, "Starter.cpr")
         XCTAssertTrue(viewModel.songs.contains(where: { $0.id == created.id }))
-        XCTAssertTrue(viewModel.openError?.contains("Could not open Starter.cpr") == true)
+        XCTAssertTrue(viewModel.fileAccess.openError?.contains("Could not open Starter.cpr") == true)
     }
 
     func testCreateNewSongWithoutCPRExplainsCreatedDraft() throws {
@@ -3328,7 +3328,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
 
         XCTAssertNil(created.effectiveLatestCPR)
-        XCTAssertNil(viewModel.lastDryRunLog)
+        XCTAssertNil(viewModel.fileAccess.lastDryRunLog)
         XCTAssertTrue(viewModel.statusMessage?.contains("Created draft No CPR Yet") == true)
         XCTAssertTrue(viewModel.statusMessage?.contains("No project file (.cpr or .als) yet") == true)
     }
@@ -3809,8 +3809,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
         await viewModel.scan()
-        try viewModel.exportIndexJSON()
-        let path = try XCTUnwrap(viewModel.lastIndexExportPath)
+        try viewModel.fileAccess.exportIndexJSON()
+        let path = try XCTUnwrap(viewModel.fileAccess.lastIndexExportPath)
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -4198,7 +4198,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
         let cpr = try XCTUnwrap(neon.effectiveLatestCPR?.filePath ?? neon.latestCPR?.filePath)
-        viewModel.revealInFinder(url: cpr)
+        viewModel.fileAccess.revealInFinder(url: cpr)
 
         XCTAssertFalse(viewModel.statusMessage?.contains("outside allowed archive roots") ?? false)
         XCTAssertEqual(revealed.urls.count, 1)
@@ -4218,7 +4218,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         var noPreview = neon
         noPreview.mainPreviewCandidateID = nil
-        try viewModel.openMainPreview(for: noPreview)
+        try viewModel.fileAccess.openMainPreview(for: noPreview)
         XCTAssertTrue(viewModel.statusMessage?.contains("No main preview was found for this song.") ?? false)
 
         let missingURL = neon.folderPath.appendingPathComponent("Mixdown/deleted-after-scan.wav")
@@ -4232,9 +4232,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         var deletedPreview = neon
         deletedPreview.previewCandidates = [missing]
         deletedPreview.mainPreviewCandidateID = missing.id
-        XCTAssertThrowsError(try viewModel.openMainPreview(for: deletedPreview))
+        XCTAssertThrowsError(try viewModel.fileAccess.openMainPreview(for: deletedPreview))
         XCTAssertTrue(viewModel.statusMessage?.contains("Path does not exist:") ?? false)
-        XCTAssertNotNil(viewModel.openError)
+        XCTAssertNotNil(viewModel.fileAccess.openError)
         XCTAssertTrue(revealed.urls.isEmpty)
     }
 
@@ -4251,7 +4251,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let outside = parent.appendingPathComponent("niko-reveal-outside.txt")
         try "outside".write(to: outside, atomically: true, encoding: .utf8)
 
-        viewModel.revealInFinder(url: outside)
+        viewModel.fileAccess.revealInFinder(url: outside)
         XCTAssertEqual(
             viewModel.statusMessage,
             "Path is outside allowed archive roots: \(outside.standardizedFileURL.path)"
@@ -4451,10 +4451,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             "precondition: the enabled Vault archive root is filtered out of the browser roots"
         )
 
-        XCTAssertThrowsError(try viewModel.exportIndexJSON(to: fixture.vaultArchive.appendingPathComponent("index.json"))) { error in
+        XCTAssertThrowsError(try viewModel.fileAccess.exportIndexJSON(to: fixture.vaultArchive.appendingPathComponent("index.json"))) { error in
             XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
         }
-        XCTAssertThrowsError(try viewModel.exportDiagnostics(to: fixture.vaultArchive.appendingPathComponent("scan.txt"))) { error in
+        XCTAssertThrowsError(try viewModel.fileAccess.exportDiagnostics(to: fixture.vaultArchive.appendingPathComponent("scan.txt"))) { error in
             XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
         }
         XCTAssertThrowsError(
@@ -4467,12 +4467,12 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             ["Existing Song"],
             "a refused write leaves the Vault archive folder untouched"
         )
-        XCTAssertNil(viewModel.lastIndexExportPath)
-        XCTAssertNil(viewModel.lastDiagnosticsExportPath)
+        XCTAssertNil(viewModel.fileAccess.lastIndexExportPath)
+        XCTAssertNil(viewModel.fileAccess.lastDiagnosticsExportPath)
 
         // Control: the same calls into a plain folder still write.
-        try viewModel.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
-        try viewModel.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
+        try viewModel.fileAccess.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
+        try viewModel.fileAccess.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
         _ = try viewModel.createNewSong(request: NewSongRequest(name: "Plain Draft", root: fixture.plain))
         XCTAssertEqual(
             Set(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path)),
@@ -4487,7 +4487,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             let viewModel = fixture.makeViewModel(staleBookmark: stale)
 
             XCTAssertThrowsError(
-                try viewModel.exportIndexJSON(to: fixture.bookmarkTarget.appendingPathComponent("index.json")),
+                try viewModel.fileAccess.exportIndexJSON(to: fixture.bookmarkTarget.appendingPathComponent("index.json")),
                 "stale bookmark: \(stale)"
             ) { error in
                 XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
@@ -4516,13 +4516,13 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         // The archive itself, a generation-like subfolder and a symlink alias of the archive.
         for folder in [fixture.vaultArchive, fixture.generation, fixture.archiveAlias] {
             XCTAssertThrowsError(
-                try viewModel.exportIndexJSON(to: folder.appendingPathComponent("index.json")),
+                try viewModel.fileAccess.exportIndexJSON(to: folder.appendingPathComponent("index.json")),
                 "index export into \(folder.lastPathComponent)"
             ) { error in
                 XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
             }
             XCTAssertThrowsError(
-                try viewModel.exportDiagnostics(to: folder.appendingPathComponent("scan.txt")),
+                try viewModel.fileAccess.exportDiagnostics(to: folder.appendingPathComponent("scan.txt")),
                 "diagnostics export into \(folder.lastPathComponent)"
             ) { error in
                 XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
@@ -4535,8 +4535,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             }
         }
         XCTAssertEqual(try Self.snapshot(of: fixture.vaultArchive), before, "a refused write leaves the archive untouched")
-        XCTAssertNil(viewModel.lastIndexExportPath)
-        XCTAssertNil(viewModel.lastDiagnosticsExportPath)
+        XCTAssertNil(viewModel.fileAccess.lastIndexExportPath)
+        XCTAssertNil(viewModel.fileAccess.lastDiagnosticsExportPath)
     }
 
     /// T-001 positive control: Active and plain folders stay writable with Vault off.
@@ -4548,8 +4548,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let activeSong = try viewModel.createNewSong(request: NewSongRequest(name: "Active Draft", root: fixture.active))
         XCTAssertTrue(FileManager.default.fileExists(atPath: activeSong.folderPath.path))
         _ = try viewModel.createNewSong(request: NewSongRequest(name: "Plain Draft", root: fixture.plain))
-        try viewModel.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
-        try viewModel.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
+        try viewModel.fileAccess.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
+        try viewModel.fileAccess.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
         XCTAssertEqual(
             Set(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path)),
             ["index.json", "scan.txt", "Plain Draft"]
@@ -4567,13 +4567,13 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             let viewModel = fixture.makeViewModel(staleBookmark: stale)
 
             XCTAssertThrowsError(
-                try viewModel.exportIndexJSON(to: fixture.bookmarkTarget.appendingPathComponent("index.json")),
+                try viewModel.fileAccess.exportIndexJSON(to: fixture.bookmarkTarget.appendingPathComponent("index.json")),
                 "stale bookmark: \(stale)"
             ) { error in
                 XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
             }
             XCTAssertThrowsError(
-                try viewModel.exportDiagnostics(to: fixture.bookmarkTarget.appendingPathComponent("scan.txt")),
+                try viewModel.fileAccess.exportDiagnostics(to: fixture.bookmarkTarget.appendingPathComponent("scan.txt")),
                 "stale bookmark: \(stale)"
             ) { error in
                 XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
@@ -4599,13 +4599,13 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         for folder in [fixture.generation, fixture.plain] {
             XCTAssertThrowsError(
-                try viewModel.exportIndexJSON(to: folder.appendingPathComponent("index.json")),
+                try viewModel.fileAccess.exportIndexJSON(to: folder.appendingPathComponent("index.json")),
                 "index export into \(folder.lastPathComponent)"
             ) { error in
                 XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
             }
             XCTAssertThrowsError(
-                try viewModel.exportDiagnostics(to: folder.appendingPathComponent("scan.txt")),
+                try viewModel.fileAccess.exportDiagnostics(to: folder.appendingPathComponent("scan.txt")),
                 "diagnostics export into \(folder.lastPathComponent)"
             ) { error in
                 XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
@@ -4622,11 +4622,11 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
         XCTAssertEqual(try Self.snapshot(of: fixture.vaultArchive), archiveBefore, "nothing written into the archive")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path), [])
-        XCTAssertNil(viewModel.lastIndexExportPath)
-        XCTAssertNil(viewModel.lastDiagnosticsExportPath)
+        XCTAssertNil(viewModel.fileAccess.lastIndexExportPath)
+        XCTAssertNil(viewModel.fileAccess.lastDiagnosticsExportPath)
         XCTAssertFalse(viewModel.songs.contains { $0.originalFolderName == "Draft" })
 
-        viewModel.performExport { try viewModel.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json")) }
+        viewModel.fileAccess.performExport { try viewModel.fileAccess.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json")) }
         XCTAssertEqual(
             viewModel.statusMessage,
             "Export failed: Settings couldn't be read, so nothing was written. Repair them in Settings, then try again."
@@ -4634,8 +4634,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         // Control: once settings read again, plain writes go through and the archive stays refused.
         try fixture.restoreSavedSettings(savedSettings)
-        try viewModel.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
-        try viewModel.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
+        try viewModel.fileAccess.exportIndexJSON(to: fixture.plain.appendingPathComponent("index.json"))
+        try viewModel.fileAccess.exportDiagnostics(to: fixture.plain.appendingPathComponent("scan.txt"))
         _ = try viewModel.createNewSong(request: NewSongRequest(name: "Plain Draft", root: fixture.plain))
         XCTAssertEqual(
             Set(try FileManager.default.contentsOfDirectory(atPath: fixture.plain.path)),
@@ -4672,11 +4672,11 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
         viewModel.roots = [root]
 
-        XCTAssertThrowsError(try viewModel.exportIndexJSON(to: root.appendingPathComponent("Song/index.json"))) { error in
+        XCTAssertThrowsError(try viewModel.fileAccess.exportIndexJSON(to: root.appendingPathComponent("Song/index.json"))) { error in
             XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
         }
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [])
-        XCTAssertNil(viewModel.lastIndexExportPath)
+        XCTAssertNil(viewModel.fileAccess.lastIndexExportPath)
     }
 }
 

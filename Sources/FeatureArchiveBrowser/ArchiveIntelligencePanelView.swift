@@ -69,14 +69,14 @@ struct ArchiveIntelligencePanelView: View {
                 exportIndexViaSavePanel()
             }
 
-            if let lastExportPath = viewModel.lastIndexExportPath {
+            if let lastExportPath = viewModel.fileAccess.lastIndexExportPath {
                 Text("Last export: \(lastExportPath)")
                     .font(HubDesignSystem.Typography.micro())
                     .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                     .lineLimit(2)
                     .textSelection(.enabled)
                 HubLabeledButton(icon: "folder", label: "Reveal", style: .ghost) {
-                    viewModel.revealInFinder(url: URL(fileURLWithPath: lastExportPath))
+                    viewModel.fileAccess.revealInFinder(url: URL(fileURLWithPath: lastExportPath))
                 }
             }
         }
@@ -87,8 +87,8 @@ struct ArchiveIntelligencePanelView: View {
     private func exportIndexViaSavePanel() {
         guard let destination = ArchiveExportPaths.runSavePanel(
             for: .index,
-            directoryURL: viewModel.exportDefaultDirectory()
+            directoryURL: viewModel.fileAccess.exportDefaultDirectory()
         ) else { return }
-        viewModel.performExport { try viewModel.exportIndexJSON(to: destination) }
+        viewModel.fileAccess.performExport { try viewModel.fileAccess.exportIndexJSON(to: destination) }
     }
 }
