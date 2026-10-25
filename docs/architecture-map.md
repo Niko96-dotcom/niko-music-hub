@@ -260,7 +260,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Archive views state intent; only `ArchivePageModel` writes the archive page, and the song detail and the cards use the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `private(set)` setters, `ArchiveViewIntentSourceTests`; `ArchiveVaultObservationTests` (each card offers a status change exactly when the gate accepts it) |
 | The archive song catalog is written only through `applyCatalogEdit(_:)` | [architecture.md § Archive song catalog](architecture.md#archive-song-catalog) | the compiler (`songCatalog`'s setter is private to its file), `SongCatalogTests`, `ArchiveCatalogEditTests` |
 | A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
-| The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
+| The `App` observes only scene-structural state; one owner for selection | [architecture.md § SwiftUI state ownership](architecture.md#swiftui-state-ownership) | `SwiftUIStateOwnershipSourceTests` |
 | One UI scaffold, header and chrome material | [design-contract.md](design-contract.md) | `HubDesignContractSourceTests` |
 
 ## Where the code differs from the intent (observed)

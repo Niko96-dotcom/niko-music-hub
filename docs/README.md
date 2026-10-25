@@ -20,6 +20,7 @@ New to the code? Read [CONTRIBUTING.md](../CONTRIBUTING.md) first: it gives the 
 - [architecture-map.md](architecture-map.md): read it before a structural change. Entry points, modules, main flows, state owners, seams, gates, gaps, open questions.
 - [architecture.md](architecture.md): read it when you change an owner the map names; it holds the ownership detail and the safety rules.
 - [../AGENTS.md](../AGENTS.md): read it before any change. The rules and what enforces each one.
+- [de-slop.md](de-slop.md): read it only when someone asks for the Ultimate De-Slop loop.
 
 ## UI contract
 
