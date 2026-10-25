@@ -74,6 +74,9 @@ public struct ShellJobStatus: Equatable, Identifiable, Sendable {
     }
 }
 
+/// Work that runs outside `JobRunner` and registers with `ShellJobStatusCenter.setExtraJob` by
+/// hand. Each one is a named exception with its reason (docs/architecture.md § How a tool runs its
+/// work, `ToolWorkSourceTests`); a new tool enqueues a job instead.
 public enum ShellJobExtraSourceID: Sendable {
     public static let converter = "wav-conversion"
     public static let archiveScan = "archive-scan"

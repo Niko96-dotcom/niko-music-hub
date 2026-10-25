@@ -563,13 +563,51 @@ through the view model.
   slice, and the snapshot's availability refresh would write the inbox while the panel is hidden. Revisit it only if
   profiling shows the extra reads matter.
 
+## How a tool runs its work
+
+Settled on 2026-10-25 (open question 2 of the [architecture map](architecture-map.md#open-questions)). Work the
+person starts in a tool and waits for runs as a `JobRunner` job (`ToolContext.jobRunner.enqueue`). The runner gives
+it everything the shell reads: the jobs strip row (title, verb, percent), Esc and ⌘. through the `cancelTarget` passed
+to `enqueue` ([Tool self-description](#tool-self-description)), and quit, which asks, cancels and waits until the
+operation has unwound (`JobRunning.hasUnfinishedWork`, [Running work and quit](#running-work-and-quit)). The job runs
+whether or not its page is visible; its progress, log and output files reach the view model through `JobProgress`
+and `updates(for:)`. The Downloader and Stem Separation run this way.
+
+- A tool's own `Task` is only for async that may die with its owner: view-local work (a debounce, drop intake, a
+  helper probe, an animation), observing a job or a stream, or a step that a job or a take awaits and cancels. An
+  unstructured `Task` does not inherit the job's cancellation, so the step forwards it by hand
+  (`DemucsMLXBackend`'s separation inside the stem job); otherwise Esc leaves it running and quit waits the full 5 s.
+- Work that cannot be a job registers with `ShellJobStatusCenter.setExtraJob` by hand, under a named
+  `ShellJobExtraSourceID`, and clears its entry only after it has unwound. Tasks outside the registry shipped three
+  times: recorder takes and helper installs (061ea81) and the download's title lookup (c69717f) were cut off by quit.
+  The named exceptions:
+
+  | Extra source | Owner | Why it is not a job |
+  | --- | --- | --- |
+  | `converter` | WAV Converter | The jobs strip names the file in flight and has its own Cancel help; the view model awaits the batch's outcomes and offers Stop After This File. A job's title is fixed at `enqueue` and a job has no Cancel help. To conform, a job would need title updates and a Cancel help, and the view model would observe the job as Stem Separation does. |
+  | `audioRecorder` | Audio Recorder | A live take runs until the person stops it and has its own Stop control, so it registers unlisted; quit stops the take, which saves it. |
+  | `downloadStart` | Downloader | The yt-dlp check and the title lookup name the job, so they run before `enqueue`; the job covers the download. |
+  | `helperInstall` | Set Up (`HelperToolSetupModel`) | Shell work of no tool; its progress stays in Set Up, so it registers unlisted, and a runner job is always listed. |
+  | `archiveScan`, `vaultTransfer` | Archive Browser | Shell work, not a tool run: the read-only scan does not block quit, and the Project Vault queue (`ProjectVaultOperationCoordinator`) owns its order, retries and stop sheet. |
+
+- `ToolWorkSourceTests` enforces it: every `Task` that a tool creates (`Sources/Feature*` except the archive browser,
+  `AppCore/HelperTools`, and the app target's Settings and Dev Tool features) is listed by file and enclosing
+  declaration with its reason, `ShellJobExtraSourceID` is the closed list above, and only the owner's files register
+  each source. The detector does not see SwiftUI's `.task {}`, structured child tasks or `DispatchQueue.async`.
+- Known gap: the Settings recovery bundle export and import (`ProjectVaultRecoverySection`) and the test restore
+  (`ProjectVaultSettingsView.runRestoreDrill`) run in unregistered tasks, so quit does not wait for them. They are
+  listed as such in the check; making them jobs would add rows to the jobs strip, a product change.
+- The inbox handoff stays in each tool ([Tool output destination](#tool-output-destination)). A new job writes it
+  inside its operation, as Stem Separation does; the Downloader's write depends on its view model observing the job.
+
 ## Running work and quit
 
 [ADR 019](decisions/019-running-work-and-quit.md) has the full contract.
 
-- Every tool registers work that must not be cut off with `ShellJobStatusCenter` (runner jobs, plus extra sources
-  with `blocksQuit`; recorder takes, helper installs and a download's title lookup register unlisted).
-  `quitBlockingWork` is the one list quit reads.
+- Every tool registers work that must not be cut off with `ShellJobStatusCenter`: runner jobs register themselves,
+  the named extra sources ([How a tool runs its work](#how-a-tool-runs-its-work)) by hand. Every extra source blocks
+  quit except the read-only archive scan (`blocksQuit: false`); recorder takes, helper installs and a download's title
+  lookup register unlisted. `quitBlockingWork` is the one list quit reads.
 - `applicationShouldTerminate` maps `HubTerminationCoordinator.answerTerminateRequest`: nothing running quits at once;
   otherwise the delegate's `confirmQuit` shows one alert naming the work, and on confirm every cancel runs and the
   delegate returns `.terminateLater`. The coordinator replies once the work has unwound or after 5 s.

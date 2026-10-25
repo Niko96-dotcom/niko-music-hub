@@ -25,12 +25,11 @@ behavior into Swift modules instead.
   engines. No SwiftUI, no AppKit UI.
 - `AppCore`: the shared shell kit (tool registry, context, settings, jobs and quit, output inbox, diagnostics,
   shared components, helper tools) and, until it gets its own target, the Project Vault runtime.
-- `FeatureArchiveBrowser`: SwiftUI feature registered through the same `ToolFeature` boundary as the
-  other tools.
-- Feature modules stay independent: `FeatureBPMTapper`, `FeatureAudioConverter`,
-  `FeatureAudioRecorder`, `FeatureDownloader`, `FeatureStemSeparation`. The one documented exception is
-  Stem Separation → Downloader; `ModuleBoundarySourceTests` and the strict import check in `./script/ci.sh`
-  enforce the edges (`docs/decisions/020-module-boundary-checks.md`).
+- `FeatureArchiveBrowser`: SwiftUI feature registered through the same `ToolFeature` boundary as the other tools.
+- Feature modules stay independent: `FeatureBPMTapper`, `FeatureAudioConverter`, `FeatureAudioRecorder`,
+  `FeatureDownloader`, `FeatureStemSeparation`. The one documented exception is Stem Separation → Downloader;
+  `ModuleBoundarySourceTests` and the strict import check in `./script/ci.sh` enforce the edges
+  (`docs/decisions/020-module-boundary-checks.md`). A tool runs work the person waits for as a `JobRunner` job.
 - App target is `NikoMusicHub`; bundle identity is fixed in `BUNDLE_ID`.
 
 Start with `docs/architecture-map.md`: entry points, main flows, state owners, seams, gates, where the code
@@ -142,6 +141,7 @@ row once its mistake cannot compile.
 | Settings that gate a write or a Project Vault decision are loaded with `try`, and the action is refused when it throws; display-only code reads `ToolContext.appSettings` | `OutputGuardSourceTests` (per-file list of the few `try? …loadSettings()` sites that must stay, each with its reason) |
 | Keep Local pins are checked, written and removed only through `VaultSettings.keepLocalPins` (`KeepLocalPins`, ADR 021); never build a key set of IDs and path spellings | `keepLocalProjectIDs` is internal to AppCore; `KeepLocalPinsSourceTests` |
 | A tool page reads its recent outputs only through `ToolRecentOutputs` (AppCore); feature modules never call `listItems()` or observe `.outputInboxDidChange` | `HandoffSurfacingSourceTests.testFeatureModulesReadRecentOutputsOnlyThroughToolRecentOutputs` |
+| A tool runs work the person waits for as a `JobRunner` job (`ToolContext.jobRunner.enqueue`); its own `Task` is only for view-local async or a step its job or take awaits and cancels; work outside the runner registers by hand as a named `ShellJobExtraSourceID` exception (`docs/architecture.md` § How a tool runs its work) | `ToolWorkSourceTests` (every `Task` a tool creates listed by file and enclosing declaration with its reason; the extra sources are a closed list, each registered only by its owner) |
 | Archive views state intent (`openSongDetail`, `showBoard`, `setBrowseLayout(list:)`, `showAnalytics`, `clearSelection`, …); only `ArchiveBrowserViewModel*.swift` writes `viewMode` and `listShowsDetail` | `ArchiveViewIntentSourceTests` |
 | Each built-in tool ID is defined once (`BuiltInToolIDs.swift`); shell code orders, routes and labels tools from `ToolMetadata` (`section`, `handlesEscape`) and `ShellJobStatus` (`cancelTarget`, `cancelHelp`), never by comparing IDs | `ToolIDSourceTests`, `ToolSectionTests`, `InAppJobCancelRoutingTests` |
 | Module boundaries: Core imports, feature→feature edges | `ModuleBoundarySourceTests`; `--explicit-target-dependency-import-check error` in every build script |

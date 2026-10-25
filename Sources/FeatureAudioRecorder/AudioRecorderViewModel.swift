@@ -311,11 +311,18 @@ public final class AudioRecorderViewModel: ObservableObject {
                 error = nil
             }
         } catch let recorderError as RecorderError {
+            // The take stays registered for quit until its task has unwound (ADR-019).
             taskToAwait?.cancel()
+            if awaitingCurrentTask {
+                await taskToAwait?.value
+            }
             recordingTask = nil
             presentFailure(recorderError)
         } catch {
             taskToAwait?.cancel()
+            if awaitingCurrentTask {
+                await taskToAwait?.value
+            }
             recordingTask = nil
             presentFailure(RecorderError.verificationFailed(error.localizedDescription))
         }
