@@ -1,7 +1,8 @@
 # Architecture map — Niko Music Hub
 
 Last verified: 2026-10-22 at `3ace650` (source read); modules, dependencies and the Vault flow re-checked on
-2026-10-25 at the commit that adds `ProjectVaultRuntime` (parent `1b2caea`). Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
+2026-10-25 at the commit that adds `ProjectVaultRuntime` (parent `1b2caea`); the archive state owners, flows and
+gap 6 re-checked on 2026-10-25 at `aef05ad`. Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
 
 Start here. This page names the entry points, modules, main flows, state owners, seams and gates, and
 links to the documents that hold the detail. It does not repeat them.
@@ -41,7 +42,7 @@ were recounted on 2026-10-25, when the runtime moved out of `AppCore`.
 | `NikoMusicCore` (18.7k) | Archive domain: scan, preview ranking, search, browse rules, path safety, opening, SQLite stores, Project Vault engines. No UI. | `Scanning/CubaseArchiveScanner.swift` (`MusicArchiveScanner`), `Domain/Song.swift`, `Safety/PathSafety.swift`, `Persistence/SQLiteArchiveDatabase.swift` | `NikoMusicCoreTests` |
 | `AppCore` (11.8k) | Shell kit only (tool seam, `ToolContext`, settings, jobs and quit, Output Inbox, helper tools, router, design system); [ADR 022](decisions/022-appcore-scope-and-vault-runtime-target.md) says what belongs here | `Features/ToolFeature.swift`, `Services/ToolContext.swift`, `Shell/HubShellSession.swift` | `AppCoreTests` |
 | `ProjectVaultRuntime` (5.0k) | Project Vault runtime: the runtime actor, admissions, bound archive token, capacity, recovery bundle, presentation, Vault root pairing. No UI frameworks. | `LiveProjectVaultRuntime.swift`, `ProjectVaultOperating.swift`, `ProjectVaultArchiveAuthorization.swift` | `ProjectVaultRuntimeTests` |
-| `FeatureArchiveBrowser` (19.2k) | Board, list, song detail, preview player, metadata edits, Project Vault UI and queue | `ArchiveBrowserFeature.swift`, `ArchiveBrowserViewModel.swift`, the four coordinators in [architecture.md](architecture.md#featurearchivebrowser-swiftui-feature) | `FeatureArchiveBrowserTests` |
+| `FeatureArchiveBrowser` (19.2k) | Board, list, song detail, preview player, metadata edits, Project Vault UI and queue | `ArchiveBrowserFeature.swift`, `ArchiveBrowserViewModel.swift` (the composition), its state owners and coordinators in [architecture.md](architecture.md#featurearchivebrowser-swiftui-feature) | `FeatureArchiveBrowserTests` |
 | `FeatureAudioConverter` (2.7k) | Batch WAV conversion: AVFoundation first, FFmpeg fallback | `BatchAudioConversionUseCase.swift`, `AudioConversionPipeline.swift` | `FeatureAudioConverterTests` |
 | `FeatureAudioRecorder` (4.4k) | System-audio capture to WAV | `AudioCapturePort.swift`, `CoreAudioTapAdapter.swift` | `FeatureAudioRecorderTests` |
 | `FeatureDownloader` (3.1k) | yt-dlp downloads | `DownloaderUseCase.swift`, `YtDlpDownloader.swift` | `FeatureDownloaderTests` |
