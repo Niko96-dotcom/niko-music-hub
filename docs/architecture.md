@@ -316,6 +316,10 @@ The outside programs the tools run (yt-dlp, FFmpeg, ffprobe, demucs-mlx) are fou
   probe or a locator (`HelperToolHealthTests` source test).
 - Set Up's Installed / Not Installed rows stay a file check (`HelperToolSetupModel`): a bundle can be installed while
   one of its helpers is broken.
+- Every helper process starts through `ToolContext.processRunner`, the one `FoundationExternalProcessRunner` that
+  `AppComposition` builds on the app's `LiveProcessGroupRegistry`, so quit reaches it
+  ([Running work and quit](#running-work-and-quit)). No other file builds a runner or a registry
+  (`HubTerminationSourceTests`; the DEBUG E2E smoke builds its own and ends with `exit()`).
 
 ## Archive footer ownership
 
@@ -569,8 +573,8 @@ through the view model.
 - `applicationShouldTerminate` maps `HubTerminationCoordinator.answerTerminateRequest`: nothing running quits at once;
   otherwise the delegate's `confirmQuit` shows one alert naming the work, and on confirm every cancel runs and the
   delegate returns `.terminateLater`. The coordinator replies once the work has unwound or after 5 s.
-- `applicationWillTerminate` reaps helper process groups that are still alive (`LiveProcessGroupRegistry`: SIGTERM,
-  up to 1 s, then SIGKILL).
+- `applicationWillTerminate` reaps helper process groups that are still alive (the app's one
+  `LiveProcessGroupRegistry`: SIGTERM, up to 1 s, then SIGKILL).
 
 ## Safety architecture
 

@@ -20,7 +20,7 @@ final class HelperToolInstallerLiveTests: XCTestCase {
             .appendingPathComponent("nmh-live-tools-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let locator = HelperToolLocator(managedRoot: root, systemDirectories: [])
-        let installer = HelperToolInstaller(locator: locator)
+        let installer = HelperToolInstaller(locator: locator, processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()))
         let phases = PhaseLog()
 
         try await installer.install(bundle) { phases.append($0) }

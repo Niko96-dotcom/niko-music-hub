@@ -84,8 +84,8 @@ App-owned workflow sheets use `hubAllowsApplicationQuit()` so menu Quit and ⌘Q
      busy with that block, the reply never runs and quit hangs.
    - The delegate no longer reads the Vault queue count; the Vault reaches quit
      through the center like every other tool.
-3. **Process-group backstop (implemented).** `LiveProcessGroupRegistry.shared`
-   holds the process-group IDs of helpers that are running right now:
+3. **Process-group backstop (implemented).** The app's one `LiveProcessGroupRegistry`,
+   built by `AppComposition`, holds the process-group IDs of helpers that are running right now:
    - The runner records the group right after `posix_spawn` succeeds and forgets
      it as soon as `waitpid` returns for the leader, so a later reap never picks
      up a group whose leader PID may already be reused. The one exception is the
@@ -95,8 +95,11 @@ App-owned workflow sheets use `hubAllowsApplicationQuit()` so menu Quit and ⌘Q
      then SIGKILL to any group that still has members. The SIGKILL uses the
      snapshot taken before the SIGTERM, so a descendant that ignores TERM does not
      survive a leader that exited during the grace period.
-   - The registry is injectable (`FoundationExternalProcessRunner(processGroups:)`),
-     so tests use a private instance.
+   - Every runner names its registry (`FoundationExternalProcessRunner(processGroups:)` has no
+     default). The composition builds the one production runner on the app's registry and hands it
+     out as `ToolContext.processRunner`; the delegate reaps the same registry through
+     `HubAppDelegateServices.processGroups`. Tests use a private registry, and
+     `HubTerminationSourceTests` fails when another source file builds a runner or a registry.
    - The bounded `Process` probes in `VaultAutomation` stay outside it.
 
 ## Options

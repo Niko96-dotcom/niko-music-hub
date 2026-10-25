@@ -37,6 +37,9 @@ public struct ToolContext: Sendable {
     public let helperHealth: HelperToolHealth
     /// Whether a take is capturing system audio: the Audio Recorder sets it, archive preview playback pauses on it.
     public let audioCaptureActivity: AudioCaptureActivity
+    /// Starts every helper process (yt-dlp, FFmpeg, demucs-mlx, the CPR plugin reader). It records each one
+    /// in the app's `LiveProcessGroupRegistry`, which quit reaps (ADR-019).
+    public let processRunner: any StreamingExternalProcessRunning
 
     public init(
         settingsStore: any SettingsStore,
@@ -46,6 +49,7 @@ public struct ToolContext: Sendable {
         fileActions: any FileActions,
         launchAtLogin: any LaunchAtLoginControlling = NoopLaunchAtLoginController(),
         diagnostics: any Diagnostics,
+        processRunner: any StreamingExternalProcessRunning,
         jobStatusCenter: ShellJobStatusCenter? = nil,
         navigationHistory: HubNavigationHistory = HubNavigationHistory(),
         appSettings: AppSettingsObserver? = nil,
@@ -62,6 +66,7 @@ public struct ToolContext: Sendable {
         self.fileActions = fileActions
         self.launchAtLogin = launchAtLogin
         self.diagnostics = diagnostics
+        self.processRunner = processRunner
         self.jobStatusCenter = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
         self.navigationHistory = navigationHistory
         self.appSettings = appSettings ?? AppSettingsObserver(store: settingsStore)
@@ -69,7 +74,7 @@ public struct ToolContext: Sendable {
         self.recoveryService = recoveryService
         self.settingsRepair = settingsRepair ?? SettingsRepairModel(store: settingsStore, backupDirectory: nil)
         self.helperHealth = helperHealth ?? HelperToolHealth(
-            probe: HelperToolProbe(locator: HelperToolLocator(runtime: .current)),
+            probe: HelperToolProbe(runner: processRunner, locator: HelperToolLocator(runtime: .current)),
             appSettings: self.appSettings
         )
         self.audioCaptureActivity = audioCaptureActivity ?? AudioCaptureActivity()

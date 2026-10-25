@@ -4,7 +4,7 @@ import Foundation
 import NikoMusicCore
 
 @MainActor
-public final class AudioConverterViewModel: ObservableObject, @unchecked Sendable {
+public final class AudioConverterViewModel: ObservableObject {
     @Published public private(set) var rows: [AudioConverterRow] = []
     @Published public private(set) var notices: [String] = []
     @Published public private(set) var isConverting = false
@@ -34,13 +34,18 @@ public final class AudioConverterViewModel: ObservableObject, @unchecked Sendabl
         outputFileNamer: OutputFileNamer = OutputFileNamer()
     ) {
         let helperProbe = context.helperHealth.probe
+        let processRunner = context.processRunner
         self.context = context
         self.scanner = scanner
         self.batchUseCase = batchUseCase ?? BatchAudioConversionUseCase(
             settingsStore: context.settingsStore,
             outputInboxStore: context.outputInboxStore,
             converterFactory: { settings in
-                AudioConversionPipeline(helperSettings: settings.helperTools, helperProbe: helperProbe)
+                AudioConversionPipeline(
+                    helperSettings: settings.helperTools,
+                    ffmpegConverterFactory: { FFmpegAudioConverter(ffmpegURL: $0, runner: processRunner) },
+                    helperProbe: helperProbe
+                )
             }
         )
         self.outputFileNamer = outputFileNamer

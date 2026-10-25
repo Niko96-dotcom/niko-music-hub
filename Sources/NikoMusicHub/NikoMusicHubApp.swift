@@ -53,7 +53,8 @@ struct NikoMusicHubApp: App {
         appDelegate.services = HubAppDelegateServices(
             registry: composition.registry,
             router: composition.router,
-            termination: composition.termination
+            termination: composition.termination,
+            processGroups: composition.processGroups
         )
     }
 
@@ -143,6 +144,8 @@ struct HubAppDelegateServices {
     let registry: ToolRegistry
     let router: QuickAccessRouter
     let termination: HubTerminationCoordinator
+    /// Every helper the app started is recorded here; quit reaps it.
+    let processGroups: LiveProcessGroupRegistry
 }
 
 @MainActor
@@ -178,7 +181,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Helpers run in their own process groups and would outlive the app (ADR-019).
     func applicationWillTerminate(_ notification: Notification) {
-        LiveProcessGroupRegistry.shared.reapLiveProcessGroups()
+        services?.processGroups.reapLiveProcessGroups()
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {

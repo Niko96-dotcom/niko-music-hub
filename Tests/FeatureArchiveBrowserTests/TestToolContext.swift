@@ -26,7 +26,8 @@ enum TestToolContext {
             ),
             jobRunner: JobRunner(),
             fileActions: fileActions ?? NoopTestFileActions(),
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
     }
 

@@ -100,7 +100,7 @@ final class AudioConverterCancelTests: XCTestCase {
         """.write(to: fakeFFmpeg, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeFFmpeg.path)
 
-        let converter = FFmpegAudioConverter(ffmpegURL: fakeFFmpeg)
+        let converter = FFmpegAudioConverter(ffmpegURL: fakeFFmpeg, runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()))
         let request = ConversionRequest(
             sourceURL: source,
             outputDirectory: outputFolder,
@@ -168,10 +168,13 @@ final class AudioConverterCancelTests: XCTestCase {
                 factoryCalls.set()
                 return ThrowingConverter(error: AudioConversionError.conversionFailed("unused"))
             },
-            helperProbe: HelperToolProbe(locator: HelperToolLocator(
-                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
-                systemDirectories: []
-            ))
+            helperProbe: HelperToolProbe(
+                runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
+                locator: HelperToolLocator(
+                    managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                    systemDirectories: []
+                )
+            )
         )
         let request = ConversionRequest(
             sourceURL: URL(fileURLWithPath: "/tmp/Canceled.flac"),
@@ -198,7 +201,8 @@ final class AudioConverterCancelTests: XCTestCase {
             outputInboxStore: inbox,
             jobRunner: IdleJobRunner(),
             fileActions: NoFileActions(),
-            diagnostics: SilentDiagnostics()
+            diagnostics: SilentDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
     }
 

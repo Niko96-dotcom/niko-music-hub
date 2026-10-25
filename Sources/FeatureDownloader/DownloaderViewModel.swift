@@ -30,7 +30,7 @@ public enum DownloadState: Equatable {
 }
 
 @MainActor
-public final class DownloaderViewModel: ObservableObject, @unchecked Sendable {
+public final class DownloaderViewModel: ObservableObject {
     @Published public var urlText: String = ""
     @Published public var formatSelection: DownloadFormatSelection
     @Published public var playlistMode: DownloadPlaylistMode = .single

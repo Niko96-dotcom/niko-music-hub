@@ -172,6 +172,7 @@ final class DownloaderMixedPlaylistIntegrationTests: XCTestCase {
             jobRunner: jobRunner,
             fileActions: FixtureIntegrationFileActions(),
             diagnostics: FixtureIntegrationDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             appSettings: appSettings,
             helperHealth: HelperToolHealth(probe: helperProbe, appSettings: appSettings)
         )

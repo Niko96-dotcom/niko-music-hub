@@ -6,8 +6,10 @@ import XCTest
 @MainActor
 final class HelperToolSetupModelTests: XCTestCase {
     func testInitialStatesAreChecking() {
+        let locator = HelperToolLocator(managedRoot: URL(fileURLWithPath: "/nonexistent-managed"), systemDirectories: [])
         let model = HelperToolSetupModel(
-            locator: HelperToolLocator(managedRoot: URL(fileURLWithPath: "/nonexistent-managed"), systemDirectories: []),
+            locator: locator,
+            installer: HelperToolInstaller(locator: locator, processRunner: ExtractingSetupRunner()),
             settingsProvider: { HelperToolSettings() }
         )
 
@@ -27,7 +29,11 @@ final class HelperToolSetupModelTests: XCTestCase {
             systemDirectories: [],
             isExecutable: { executables.contains($0) }
         )
-        let model = HelperToolSetupModel(locator: locator, settingsProvider: { HelperToolSettings() })
+        let model = HelperToolSetupModel(
+            locator: locator,
+            installer: HelperToolInstaller(locator: locator, processRunner: ExtractingSetupRunner()),
+            settingsProvider: { HelperToolSettings() }
+        )
 
         model.refresh()
         XCTAssertEqual(model.states[.downloadAndConvert], .notInstalled)

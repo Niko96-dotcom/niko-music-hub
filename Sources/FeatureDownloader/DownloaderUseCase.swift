@@ -99,7 +99,7 @@ public final class DownloaderUseCase: DownloaderUseCaseRunning, @unchecked Senda
         helperProbe: HelperToolProbe,
         jobRunner: any JobRunning,
         settingsStore: any SettingsStore,
-        simulateRunner: any ExternalProcessRunning = FoundationExternalProcessRunner()
+        simulateRunner: any ExternalProcessRunning
     ) {
         self.downloader = downloader
         self.helperProbe = helperProbe

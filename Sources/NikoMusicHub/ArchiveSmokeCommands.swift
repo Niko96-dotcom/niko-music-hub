@@ -55,7 +55,9 @@ enum ArchiveSmokeCommands {
             ),
             jobRunner: JobRunner(),
             fileActions: SmokeNoopFileActions(),
-            diagnostics: ConsoleDiagnostics()
+            diagnostics: ConsoleDiagnostics(),
+            // The smoke ends with exit(), which skips applicationWillTerminate, so nothing reaps this registry.
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
 
         let result = try ArchiveUserFlowSmoke.run(fixtureRoot: fixtureRoot, context: context)

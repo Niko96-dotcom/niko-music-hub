@@ -13,9 +13,7 @@ public struct AudioConversionPipeline: AudioConverting, @unchecked Sendable {
     public init(
         native: any AudioConverting = NativeAudioConverter(),
         helperSettings: HelperToolSettings,
-        ffmpegConverterFactory: FFmpegConverterFactory? = {
-            FFmpegAudioConverter(ffmpegURL: $0)
-        },
+        ffmpegConverterFactory: FFmpegConverterFactory?,
         helperProbe: HelperToolProbe
     ) {
         self.native = native

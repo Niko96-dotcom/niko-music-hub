@@ -728,7 +728,8 @@ final class DownloaderViewModelTests: XCTestCase {
             outputInboxStore: inbox,
             jobRunner: StaticJobRunner(job: job),
             fileActions: FixtureFileActions(),
-            diagnostics: FixtureDiagnostics()
+            diagnostics: FixtureDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let viewModel = DownloaderViewModel(context: context, useCase: useCase)
         viewModel.urlText = "https://example.com/audio"
@@ -1291,10 +1292,13 @@ final class DownloaderViewModelTests: XCTestCase {
         outputInboxStore: any OutputInboxStore,
         jobStatusCenter: ShellJobStatusCenter? = nil,
         preferences: any PreferenceStore = InMemoryPreferenceStore(),
-        helperProbe: HelperToolProbe = HelperToolProbe(locator: HelperToolLocator(
-            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
-            systemDirectories: []
-        )),
+        helperProbe: HelperToolProbe = HelperToolProbe(
+            runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: []
+            )
+        ),
         debounceDuration: Duration = .milliseconds(500)
     ) -> DownloaderViewModel {
         let center = jobStatusCenter ?? ShellJobStatusCenter(jobRunner: jobRunner)
@@ -1310,6 +1314,7 @@ final class DownloaderViewModelTests: XCTestCase {
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
             diagnostics: FixtureDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             jobStatusCenter: center,
             appSettings: appSettings,
             helperHealth: HelperToolHealth(probe: helperProbe, appSettings: appSettings)

@@ -11,7 +11,7 @@ public enum StemPrimaryIntake: Equatable, Sendable {
 }
 
 @MainActor
-public final class StemSeparationViewModel: ObservableObject, @unchecked Sendable {
+public final class StemSeparationViewModel: ObservableObject {
     @Published public var selectedPreset: StemSeparationPreset = StemSeparationPreset.defaultPreset
     @Published public var outputFolderURL: URL = StoredFolderLocation.defaultOutputFolder
     @Published public var droppedFileURL: URL?

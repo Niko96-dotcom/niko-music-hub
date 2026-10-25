@@ -178,7 +178,8 @@ struct DemucsMLXBackendTests {
         )
         let backend = DemucsMLXBackend(
             settings: settings,
-            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator)
+            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator),
+            runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
 
         let result = await backend.separate(request: request) { _, _ in }
@@ -205,7 +206,8 @@ struct DemucsMLXBackendTests {
         )
         let backend = DemucsMLXBackend(
             settings: settings,
-            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator)
+            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator),
+            runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
 
         let result = await backend.separate(request: request) { _, _ in }
@@ -230,6 +232,7 @@ struct DemucsMLXBackendTests {
                 managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
                 systemDirectories: []
             )),
+            runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             settingsProvider: { throw Unreadable() }
         )
 

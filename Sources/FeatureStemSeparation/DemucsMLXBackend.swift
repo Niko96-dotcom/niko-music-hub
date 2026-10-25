@@ -18,7 +18,7 @@ public final class DemucsMLXBackend: StemSeparationBackend, @unchecked Sendable 
     public init(
         settings: HelperToolSettings = HelperToolSettings(),
         commandBuilder: DemucsMLXCommandBuilder,
-        runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
+        runner: any ExternalProcessRunning,
         progressParser: DemucsMLXProgressParser = DemucsMLXProgressParser(),
         scanner: StemOutputScanner = StemOutputScanner(),
         settingsProvider: (@Sendable () throws -> HelperToolSettings)? = nil

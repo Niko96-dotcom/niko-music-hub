@@ -150,7 +150,8 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
    `setExtraJob` (converter, recorder take, helper install, download start, archive scan, Vault queue).
 2. `applicationShouldTerminate` asks `HubTerminationCoordinator`, which reads `quitBlockingWork`, shows one
    alert, cancels on confirm and replies when the work has unwound or after 5 s.
-3. `applicationWillTerminate` reaps leftover helper process groups (`LiveProcessGroupRegistry`).
+3. `applicationWillTerminate` reaps leftover helper process groups in the app's one `LiveProcessGroupRegistry`,
+   where every helper started through `ToolContext.processRunner` is recorded.
 
 ## State owners (observed)
 
@@ -178,6 +179,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | A tool page's list of its own outputs | `ToolRecentOutputs` (AppCore), held by the tool's view model | derived from `output-inbox.json` |
 | Cross-tool requests | `QuickAccessRouter` (one-shot values) | memory |
 | Helper status (yt-dlp, FFmpeg, demucs-mlx) | `HelperToolHealth`, one per app in `ToolContext` ([architecture.md § Helper tools](architecture.md#helper-tools)) | memory; helper paths in the settings JSON |
+| Running helper process groups | one `LiveProcessGroupRegistry` from `AppComposition`, recorded by its one runner `ToolContext.processRunner`; the app delegate reaps it at quit ([ADR 019](decisions/019-running-work-and-quit.md)) | memory |
 | Recording signal (a take pauses archive preview) | one `AudioCaptureActivity` from `AppComposition`, in `ToolContext.audioCaptureActivity`; the recorder sets it, the preview session observes it ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
 
 App data lives in `~/Library/Application Support/Niko Music Hub/`, or in `Isolated/<suite>/` below it when
@@ -262,17 +264,20 @@ These rules are documented and, where named, enforced. The full table is in
    2026-10-22: every run admits through one `ToolOutputDestination`. The handoff differences are mostly
    intended ([architecture.md § Tool output destination](architecture.md#tool-output-destination)). The
    Downloader's inbox write depends on the view model observing the job.
-5. **One dependency is global, not injected:** `LiveProcessGroupRegistry.shared`. (Helper consumers share one
-   `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to the archive view
-   model, and the recorder and the archive share one recording signal through `ToolContext`, since 2026-10-24.)
+5. Closed on 2026-10-25: no dependency is global. `AppComposition` builds the one `LiveProcessGroupRegistry` and
+   its runner, `ToolContext.processRunner` carries the runner to every helper, and the app delegate reaps that
+   registry; no runner initializer has a default runner or registry (`HubTerminationSourceTests`). (Helper
+   consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to
+   the archive view model, and the recorder and the archive share one recording signal through `ToolContext`, since
+   2026-10-24.)
 6. **`ArchiveBrowserViewModel` is one type in 22 files** (the main file plus 21 `+*.swift` extensions,
    4,615 lines; the footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog`
    on 2026-10-23). Four owners were extracted (scan orchestrator, catalog, metadata editing, Vault queue and
    observation); the extensions still share one set of state. The song catalog has one writer since 2026-10-23,
    but the root reset still resets about 35 other properties by hand.
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
-   and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, except the scenario structs after
-   the `#endif` in `ArchiveUserFlowSmokeScenarios.swift`. `DevToolFeature` always compiles and is shown
+   and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
+   2026-10-25. `DevToolFeature` always compiles and is shown
    only with `NIKO_MUSIC_HUB_SHOW_DEV_TOOL=1`.
 8. Closed on 2026-10-24: the "Archive automatically" switch, its steppers, the Vault login-item row and
    the unused background-scheduling code are gone. The only automatic archiving is the copy-only Done

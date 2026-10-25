@@ -1145,10 +1145,13 @@ final class AudioConverterViewModelTests: XCTestCase {
         },
         settingsStore: (any SettingsStore)? = nil,
         outputInboxStore: any OutputInboxStore = FixtureOutputInboxStore(),
-        helperProbe: HelperToolProbe = HelperToolProbe(locator: HelperToolLocator(
-            managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
-            systemDirectories: []
-        )),
+        helperProbe: HelperToolProbe = HelperToolProbe(
+            runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
+            locator: HelperToolLocator(
+                managedRoot: URL(fileURLWithPath: "/nonexistent-managed"),
+                systemDirectories: []
+            )
+        ),
         diagnostics: any Diagnostics = FixtureDiagnostics()
     ) -> AudioConverterViewModel {
         let settingsStore = settingsStore ?? FixtureSettingsStore(
@@ -1162,6 +1165,7 @@ final class AudioConverterViewModelTests: XCTestCase {
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),
             diagnostics: diagnostics,
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             appSettings: appSettings,
             helperHealth: HelperToolHealth(probe: helperProbe, appSettings: appSettings)
         )

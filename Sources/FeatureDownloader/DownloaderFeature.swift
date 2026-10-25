@@ -31,10 +31,11 @@ public struct DownloaderFeature: ToolFeature {
         }
         let helperProbe = context.helperHealth.probe
         let useCase = DownloaderUseCase(
-            downloader: YtDlpDownloader(),
+            downloader: YtDlpDownloader(runner: context.processRunner),
             helperProbe: helperProbe,
             jobRunner: context.jobRunner,
-            settingsStore: context.settingsStore
+            settingsStore: context.settingsStore,
+            simulateRunner: context.processRunner
         )
         let viewModel = DownloaderViewModel(context: context, useCase: useCase)
         session.viewModel = viewModel

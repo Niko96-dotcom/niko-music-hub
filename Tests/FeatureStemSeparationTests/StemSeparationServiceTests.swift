@@ -317,7 +317,8 @@ struct StemSeparationServiceTests {
         )
         let backend = DemucsMLXBackend(
             settings: HelperToolSettings(),
-            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator)
+            commandBuilder: DemucsMLXCommandBuilder(locator: emptyLocator),
+            runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let runner = JobRunner()
         let service = StemSeparationService(

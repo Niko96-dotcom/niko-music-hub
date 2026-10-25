@@ -40,7 +40,8 @@ extension ToolContext {
             outputInboxStore: SmokeOutputInboxStore(),
             jobRunner: SmokeJobRunner(),
             fileActions: SmokeFileActions(),
-            diagnostics: SmokeDiagnostics()
+            diagnostics: SmokeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
     }
 }

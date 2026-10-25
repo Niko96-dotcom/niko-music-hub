@@ -121,7 +121,7 @@ final class ArchiveCPRPluginCoordinator {
     private var loadTask: Task<Void, Never>?
     private let processRunner: any ExternalProcessRunning
 
-    init(processRunner: any ExternalProcessRunning = FoundationExternalProcessRunner()) {
+    init(processRunner: any ExternalProcessRunning) {
         self.processRunner = processRunner
     }
 

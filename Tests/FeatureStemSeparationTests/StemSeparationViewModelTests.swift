@@ -18,7 +18,8 @@ struct StemSeparationViewModelTests {
             outputInboxStore: outputInboxStore,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let backend = MockStemSeparationBackend()
         backend.filesToWrite = [(.vocals, "vocals.wav"), (.drums, "drums.wav"), (.bass, "bass.wav"), (.other, "other.wav")]
@@ -106,7 +107,8 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let vm = StemSeparationViewModel(context: context, service: service)
         #expect(backend.configuredDemucsURL == nil)
@@ -246,7 +248,8 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: runner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let vm = StemSeparationViewModel(context: context, service: service, youtubeWorkflow: workflow)
 
@@ -371,8 +374,9 @@ struct StemSeparationViewModelTests {
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
             diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             helperHealth: HelperToolHealth(
-                probe: HelperToolProbe(locator: emptyLocator),
+                probe: HelperToolProbe(runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()), locator: emptyLocator),
                 appSettings: AppSettingsObserver(store: settingsStore)
             )
         )
@@ -421,8 +425,9 @@ struct StemSeparationViewModelTests {
             jobRunner: runner,
             fileActions: FixtureFileActions(),
             diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             helperHealth: HelperToolHealth(
-                probe: HelperToolProbe(locator: emptyLocator),
+                probe: HelperToolProbe(runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()), locator: emptyLocator),
                 appSettings: AppSettingsObserver(store: settingsStore)
             )
         )
@@ -470,6 +475,7 @@ struct StemSeparationViewModelTests {
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
             diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             helperHealth: HelperToolHealth(
                 probe: HelperToolProbe(runner: FailingRunner(), locator: fixtureLocator),
                 appSettings: AppSettingsObserver(store: settingsStore)
@@ -534,7 +540,8 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: customWording, reason: .helperUnavailable)
@@ -575,7 +582,8 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: runner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let localBackend = MockStemSeparationBackend()
         localBackend.requestedResult = .success(outputFolderURL: URL(fileURLWithPath: "/unused"), stems: [])
@@ -606,7 +614,8 @@ struct StemSeparationViewModelTests {
             outputInboxStore: inbox,
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let backend = MockStemSeparationBackend()
         backend.requestedResult = .failed(message: StemSeparationHelperCopy.missingBody)
@@ -653,6 +662,7 @@ struct StemSeparationViewModelTests {
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
             diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             helperHealth: HelperToolHealth(
                 probe: readyChecker,
                 appSettings: AppSettingsObserver(store: settingsStore)
@@ -706,7 +716,8 @@ struct StemSeparationViewModelTests {
                 folder: FileManager.default.temporaryDirectory.appendingPathComponent("stem-unreadable-\(UUID().uuidString)"),
                 executable: URL(fileURLWithPath: "/usr/local/bin/demucs-mlx")
             ),
-            diagnostics: FakeDiagnostics()
+            diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let service = StemSeparationService(
             backend: MockStemSeparationBackend(),
@@ -752,6 +763,7 @@ struct StemSeparationViewModelTests {
             jobRunner: jobRunner,
             fileActions: FixtureFileActions(),
             diagnostics: FakeDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()),
             appSettings: appSettings,
             helperHealth: HelperToolHealth(
                 probe: HelperToolProbe(

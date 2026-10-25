@@ -56,7 +56,8 @@ final class AudioCaptureActivityWiringTests: XCTestCase {
             outputInboxStore: EmptyOutputInboxStore(),
             jobRunner: JobRunner(),
             fileActions: NoFileActions(),
-            diagnostics: SilentDiagnostics()
+            diagnostics: SilentDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
     }
 

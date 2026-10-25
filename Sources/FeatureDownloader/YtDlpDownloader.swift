@@ -163,7 +163,7 @@ public struct YtDlpDownloader: DownloadRunning {
     private let stallCheckIntervalNanoseconds: UInt64
 
     public init(
-        runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
+        runner: any ExternalProcessRunning,
         stallClock: any DownloadStallClock = SystemDownloadStallClock(),
         stallCheckIntervalNanoseconds: UInt64 = 5_000_000_000
     ) {

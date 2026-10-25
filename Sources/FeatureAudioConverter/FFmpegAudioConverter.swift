@@ -13,7 +13,7 @@ public struct FFmpegAudioConverter: AudioConverting, @unchecked Sendable {
 
     public init(
         ffmpegURL: URL,
-        runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
+        runner: any ExternalProcessRunning,
         outputFileNamer: OutputFileNamer = OutputFileNamer(),
         verifier: WAVOutputVerifier = WAVOutputVerifier(),
         fileManager: FileManager = .default

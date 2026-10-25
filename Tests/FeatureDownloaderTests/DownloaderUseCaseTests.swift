@@ -177,7 +177,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: downloader,
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://www.youtube.com/watch?v=internal")!
 
@@ -214,7 +215,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: downloader,
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore(outputRoot: outputDir)
+            settingsStore: FixtureSettingsStore(outputRoot: outputDir),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://example.com/watch?v=permanent")!
 
@@ -340,7 +342,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: downloader,
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://example.com/watch?v=stall")!
 
@@ -373,7 +376,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: downloader,
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://www.youtube.com/watch?v=retry")!
 
@@ -653,7 +657,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             ]),
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://example.com/watch?v=skip")!
         let outputs = try await useCase.download(
@@ -675,7 +680,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: downloader,
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://example.com/playlist?list=abc")!
         do {
@@ -707,7 +713,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: downloader,
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://example.com/watch?v=same")!
         let outputs = try await useCase.download(
@@ -773,7 +780,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: SuccessfulDownloader(outputs: []),
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://example.com/watch?v=empty")!
 
@@ -803,7 +811,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: FreshM4aThenFreshWavDownloader(m4aURL: m4aURL, wavURL: wavURL),
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://example.com/watch?v=retry-format")!
 
@@ -861,7 +870,8 @@ final class DownloaderUseCaseTests: XCTestCase {
             downloader: conformer,
             helperProbe: helperProbe(runner: AvailableVersionRunner()),
             jobRunner: SpyJobRunner(),
-            settingsStore: FixtureSettingsStore()
+            settingsStore: FixtureSettingsStore(),
+            simulateRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
         let sourceURL = URL(string: "https://example.com/watch?v=bad")!
         do {

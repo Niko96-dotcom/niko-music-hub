@@ -27,6 +27,8 @@ struct AppComposition {
     let persistenceIssues: [PersistenceIssue]
     /// Quit reads the job center, where the Vault queue registers too (ADR-019).
     let termination: HubTerminationCoordinator
+    /// The helper process groups `context.processRunner` started; the app delegate reaps them at quit (ADR-019).
+    let processGroups: LiveProcessGroupRegistry
     /// AppKit saves the main window frame into the standard defaults domain, so
     /// an isolated settings suite (tests, E2E) must not autosave it.
     let persistsWindowFrame: Bool
@@ -142,9 +144,12 @@ struct AppComposition {
                 settingsStore: settingsStore
             )
         }()
+        // One runner starts every helper, so quit can reap them all from one registry (ADR-019).
+        let processGroups = LiveProcessGroupRegistry()
+        let processRunner = FoundationExternalProcessRunner(processGroups: processGroups)
         // One locator for every helper consumer, from this run's Tools settings.
         let helperHealth = HelperToolHealth(
-            probe: HelperToolProbe(locator: HelperToolLocator(runtime: runtime)),
+            probe: HelperToolProbe(runner: processRunner, locator: HelperToolLocator(runtime: runtime)),
             appSettings: appSettings
         )
         // One recording signal: the Audio Recorder sets it, archive preview playback pauses on it.
@@ -157,6 +162,7 @@ struct AppComposition {
             fileActions: fileActions,
             launchAtLogin: launchAtLogin,
             diagnostics: diagnostics,
+            processRunner: processRunner,
             jobStatusCenter: jobStatusCenter,
             navigationHistory: navigationHistory,
             appSettings: appSettings,
@@ -192,6 +198,7 @@ struct AppComposition {
         )
         let helperSetup = HelperToolSetupModel(
             locator: helperHealth.locator,
+            installer: HelperToolInstaller(locator: helperHealth.locator, processRunner: processRunner),
             settingsProvider: { appSettings.settings.helperTools },
             jobStatusCenter: jobStatusCenter,
             helperHealth: helperHealth
@@ -273,6 +280,7 @@ struct AppComposition {
             archiveViewModel: archiveViewModel,
             persistenceIssues: persistenceIssues,
             termination: HubTerminationCoordinator(jobStatusCenter: jobStatusCenter),
+            processGroups: processGroups,
             persistsWindowFrame: !runtime.usesIsolatedSettingsSuite
         )
     }

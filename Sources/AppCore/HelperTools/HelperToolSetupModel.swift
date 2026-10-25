@@ -6,7 +6,7 @@ import Foundation
 /// Owned by the app composition (`AppComposition.helperSetup`) so installs continue
 /// if the sheet closes. The sheet itself is owned by `HubShellSession.isSetupPresented`.
 @MainActor
-public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
+public final class HelperToolSetupModel: ObservableObject {
     public enum BundleState: Equatable {
         case checking
         case notInstalled
@@ -40,13 +40,13 @@ public final class HelperToolSetupModel: ObservableObject, @unchecked Sendable {
 
     public init(
         locator: HelperToolLocator,
-        installer: HelperToolInstaller? = nil,
+        installer: HelperToolInstaller,
         settingsProvider: @escaping @MainActor () -> HelperToolSettings,
         jobStatusCenter: ShellJobStatusCenter? = nil,
         helperHealth: HelperToolHealth? = nil
     ) {
         self.locator = locator
-        self.installer = installer ?? HelperToolInstaller(locator: locator)
+        self.installer = installer
         self.settingsProvider = settingsProvider
         self.jobStatusCenter = jobStatusCenter
         self.helperHealth = helperHealth

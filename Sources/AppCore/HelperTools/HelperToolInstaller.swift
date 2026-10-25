@@ -124,7 +124,7 @@ public actor HelperToolInstaller {
     public init(
         locator: HelperToolLocator,
         downloader: any HelperDownloading = URLSessionHelperDownloader(),
-        processRunner: any StreamingExternalProcessRunning = FoundationExternalProcessRunner(),
+        processRunner: any StreamingExternalProcessRunning,
         fileManager: FileManager = .default
     ) {
         self.locator = locator

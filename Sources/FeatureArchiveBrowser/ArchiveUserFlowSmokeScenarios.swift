@@ -247,7 +247,6 @@ enum ArchiveUserFlowSmokeScenarios {
         ),
     ]
 }
-#endif
 
 struct CoreFlowScenario: Sendable, Equatable {
     let userFlow: String
@@ -346,3 +345,4 @@ struct PreviewTiebreakLabScenario: Sendable, Equatable {
     let requiresHeader: Bool
     let calloutSubstring: String
 }
+#endif

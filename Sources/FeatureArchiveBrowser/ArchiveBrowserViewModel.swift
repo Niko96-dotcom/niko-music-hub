@@ -29,7 +29,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// The archive's playback owner. Every write of `selectedSong` reaches it, and every
     /// view that shows playback gets it from here. It pauses on the context's recording signal.
     let previewSession: ArchivePreviewSession
-    let cprPlugins = ArchiveCPRPluginCoordinator()
+    let cprPlugins: ArchiveCPRPluginCoordinator
     let opener: MusicItemOpener
     let pathSafety = PathSafety()
     let fileActions: any FileActions
@@ -544,6 +544,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.fileActions = context.fileActions
         self.jobStatusCenter = context.jobStatusCenter
         self.previewSession = ArchivePreviewSession(capture: context.audioCaptureActivity)
+        self.cprPlugins = ArchiveCPRPluginCoordinator(processRunner: context.processRunner)
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime

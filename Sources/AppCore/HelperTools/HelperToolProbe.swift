@@ -27,7 +27,7 @@ public struct HelperToolProbe: Sendable {
     private let referenceDateOverride: Date?
 
     public init(
-        runner: any ExternalProcessRunning = FoundationExternalProcessRunner(),
+        runner: any ExternalProcessRunning,
         referenceDate: Date? = nil,
         locator: HelperToolLocator
     ) {

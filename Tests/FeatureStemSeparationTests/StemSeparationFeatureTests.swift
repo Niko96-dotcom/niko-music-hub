@@ -24,7 +24,8 @@ struct StemSeparationFeatureTests {
             outputInboxStore: FeatureTestOutputInboxStore(),
             jobRunner: JobRunner(),
             fileActions: FeatureTestFileActions(),
-            diagnostics: FeatureTestDiagnostics()
+            diagnostics: FeatureTestDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
 
         _ = feature.makeView(context: context)

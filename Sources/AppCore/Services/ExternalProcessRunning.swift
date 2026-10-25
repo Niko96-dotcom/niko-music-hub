@@ -94,7 +94,7 @@ public struct FoundationExternalProcessRunner: StreamingExternalProcessRunning {
     public init(
         maximumCapturedOutputBytes: Int = defaultMaximumCapturedOutputBytes,
         terminationGraceSeconds: TimeInterval = 0.25,
-        processGroups: LiveProcessGroupRegistry = .shared
+        processGroups: LiveProcessGroupRegistry
     ) {
         self.maximumCapturedOutputBytes = max(1, maximumCapturedOutputBytes)
         self.terminationGraceSeconds = max(0, terminationGraceSeconds)
@@ -127,16 +127,15 @@ public struct FoundationExternalProcessRunner: StreamingExternalProcessRunning {
     }
 }
 
-/// Process-wide set of the helper process groups that are running right now (ADR-019).
+/// The helper process groups that are running right now (ADR-019).
 ///
 /// Every `FoundationExternalProcessRunner` starts its helper as the leader of a new
 /// process group, so helpers outlive the app unless something signals them. The runner
 /// records each group on spawn and forgets it as soon as the leader is reaped, so a
-/// reap never signals a PID the system has handed out again. The app delegate calls
-/// `reapLiveProcessGroups()` from `applicationWillTerminate`.
+/// reap never signals a PID the system has handed out again. `AppComposition` builds
+/// the app's one registry and its runner (`ToolContext.processRunner`); the app
+/// delegate calls `reapLiveProcessGroups()` on it from `applicationWillTerminate`.
 public final class LiveProcessGroupRegistry: @unchecked Sendable {
-    public static let shared = LiveProcessGroupRegistry()
-
     private let lock = NSLock()
     private var groups: Set<pid_t> = []
     private var hasReaped = false

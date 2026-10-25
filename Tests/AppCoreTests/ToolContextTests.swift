@@ -101,7 +101,8 @@ private extension ToolContext {
             outputInboxStore: FixtureOutputInboxStore(),
             jobRunner: FixtureJobRunner(),
             fileActions: FixtureFileActions(),
-            diagnostics: FixtureDiagnostics()
+            diagnostics: FixtureDiagnostics(),
+            processRunner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         )
     }
 }

@@ -19,7 +19,7 @@ final class ExternalProcessRunningTests: XCTestCase {
     }
 
     func testFoundationRunnerCapturesExitCodeAndOutput() async throws {
-        let runner = FoundationExternalProcessRunner()
+        let runner = FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         let result = try await runner.run(
             ExternalProcessRequest(
                 executableURL: URL(fileURLWithPath: "/bin/echo"),
@@ -33,7 +33,7 @@ final class ExternalProcessRunningTests: XCTestCase {
     }
 
     func testFoundationRunnerTimesOutAndTerminatesProcess() async throws {
-        let runner = FoundationExternalProcessRunner()
+        let runner = FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
 
         do {
             _ = try await runner.run(
@@ -53,7 +53,7 @@ final class ExternalProcessRunningTests: XCTestCase {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
 
-        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05)
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05, processGroups: LiveProcessGroupRegistry())
         let request = ExternalProcessRequest(
             executableURL: perlURL,
             arguments: [
@@ -90,7 +90,7 @@ final class ExternalProcessRunningTests: XCTestCase {
     func testFoundationRunnerCapturesLargeStandardErrorWithoutBlocking() async throws {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
-        let runner = FoundationExternalProcessRunner()
+        let runner = FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
 
         let result = try await runner.run(
             ExternalProcessRequest(
@@ -106,7 +106,7 @@ final class ExternalProcessRunningTests: XCTestCase {
     func testFoundationRunnerStreamsOutputBeforeCompletion() async throws {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
-        let runner = FoundationExternalProcessRunner()
+        let runner = FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         let streamed = LockedStringArray()
 
         let result = try await runner.run(
@@ -129,7 +129,7 @@ final class ExternalProcessRunningTests: XCTestCase {
     }
 
     func testEarlyClosedStreamDoesNotSpinWhileHelperKeepsRunning() async throws {
-        let runner = FoundationExternalProcessRunner()
+        let runner = FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         let cpuBefore = Self.processCPUSeconds()
 
         let result = try await runner.run(
@@ -159,7 +159,7 @@ final class ExternalProcessRunningTests: XCTestCase {
     func testStreamingDecodesUTF8ScalarSplitAcrossReadsWithStreamIsolation() async throws {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
-        let runner = FoundationExternalProcessRunner()
+        let runner = FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
         let stdoutChunks = LockedStringArray()
         let stderrChunks = LockedStringArray()
 
@@ -309,7 +309,7 @@ final class ExternalProcessRunningTests: XCTestCase {
     func testTimeoutReturnsPromptlyWhenChildIgnoresSIGTERM() async throws {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
-        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05)
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05, processGroups: LiveProcessGroupRegistry())
         let startedAt = ContinuousClock.now
 
         do {
@@ -334,7 +334,7 @@ final class ExternalProcessRunningTests: XCTestCase {
         let pidFile = FileManager.default.temporaryDirectory
             .appendingPathComponent("process-descendant-\(UUID().uuidString).pid")
         defer { try? FileManager.default.removeItem(at: pidFile) }
-        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05)
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05, processGroups: LiveProcessGroupRegistry())
         let script = """
         $child=fork();
         if ($child == 0) {
@@ -375,7 +375,7 @@ final class ExternalProcessRunningTests: XCTestCase {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
         let limit = 32 * 1024
-        let runner = FoundationExternalProcessRunner(maximumCapturedOutputBytes: limit)
+        let runner = FoundationExternalProcessRunner(maximumCapturedOutputBytes: limit, processGroups: LiveProcessGroupRegistry())
 
         let result = try await runner.run(
             ExternalProcessRequest(
@@ -392,7 +392,7 @@ final class ExternalProcessRunningTests: XCTestCase {
     func testTaskCancellationReturnsWithoutWaitingForIgnoredTERMChild() async throws {
         let perlURL = URL(fileURLWithPath: "/usr/bin/perl")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: perlURL.path))
-        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05)
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 0.05, processGroups: LiveProcessGroupRegistry())
         let task = Task {
             try await runner.run(
                 ExternalProcessRequest(
@@ -423,7 +423,7 @@ final class ExternalProcessRunningTests: XCTestCase {
         let pidFile = FileManager.default.temporaryDirectory
             .appendingPathComponent("process-sigterm-\(UUID().uuidString).pid")
         defer { try? FileManager.default.removeItem(at: pidFile) }
-        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 30)
+        let runner = FoundationExternalProcessRunner(terminationGraceSeconds: 30, processGroups: LiveProcessGroupRegistry())
         let task = Task.detached {
             try await runner.run(
                 ExternalProcessRequest(
@@ -453,7 +453,7 @@ final class ExternalProcessRunningTests: XCTestCase {
 
     func testSignalTerminationIsTyped() async throws {
         let shellURL = URL(fileURLWithPath: "/bin/sh")
-        let runner = FoundationExternalProcessRunner()
+        let runner = FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())
 
         let result = try await runner.run(
             ExternalProcessRequest(

@@ -34,6 +34,7 @@ public struct StemSeparationFeature: ToolFeature {
         let helperProbe = context.helperHealth.probe
         let backend = DemucsMLXBackend(
             commandBuilder: DemucsMLXCommandBuilder(locator: helperProbe.locator),
+            runner: context.processRunner,
             settingsProvider: {
                 try settingsStore.loadSettings().helperTools
             }
@@ -44,10 +45,11 @@ public struct StemSeparationFeature: ToolFeature {
             jobRunner: context.jobRunner
         )
         let downloaderUseCase = DownloaderUseCase(
-            downloader: YtDlpDownloader(),
+            downloader: YtDlpDownloader(runner: context.processRunner),
             helperProbe: helperProbe,
             jobRunner: context.jobRunner,
-            settingsStore: context.settingsStore
+            settingsStore: context.settingsStore,
+            simulateRunner: context.processRunner
         )
         let youtubeWorkflow = YouTubeStemSeparationWorkflow(
             downloader: YtDlpYouTubeAudioDownloader(useCase: downloaderUseCase),

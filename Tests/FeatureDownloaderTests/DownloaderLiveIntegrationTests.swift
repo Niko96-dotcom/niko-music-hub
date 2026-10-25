@@ -33,7 +33,7 @@ final class DownloaderLiveIntegrationTests: XCTestCase {
         )
 
         let progressLines = LockedStringArray()
-        let downloader = YtDlpDownloader()
+        let downloader = YtDlpDownloader(runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry()))
         let result = try await downloader.download(request) { line in
             progressLines.append(line)
         }
@@ -78,7 +78,7 @@ final class DownloaderLiveIntegrationTests: XCTestCase {
             helperSearchDirectories: Self.helperSearchDirectories(for: ytDlpURL)
         )
 
-        let result = try await YtDlpDownloader().download(request) { _ in }
+        let result = try await YtDlpDownloader(runner: FoundationExternalProcessRunner(processGroups: LiveProcessGroupRegistry())).download(request) { _ in }
         XCTAssertNotEqual(result.exitCode, 0)
         XCTAssertTrue(result.outputURLs.isEmpty)
         XCTAssertFalse(result.standardError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
