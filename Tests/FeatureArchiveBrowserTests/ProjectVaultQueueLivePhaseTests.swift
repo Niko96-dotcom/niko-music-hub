@@ -205,7 +205,6 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
             scanOverride: { _ in ScanResult(songs: songs) }
         )
         viewModel.applyCatalogEdit(.load(songs))
-        viewModel.filteredSongs = songs
         // Enqueue captures rootIDs from the live presentation context. The
         // init built the context before songs were assigned, so refresh here.
         viewModel.refreshProjectVaultPresentationContext()

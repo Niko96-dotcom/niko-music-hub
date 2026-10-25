@@ -70,8 +70,8 @@ struct ArchiveBoardView: View {
         }
         // Selection publishes on the same view model but never emits on this
         // property publisher, so it cannot trigger a full board re-projection.
-        .onReceive(viewModel.$filteredSongs) { songs in
-            projectionCache.refresh(with: songs, preservingOrder: viewModel.isSearching)
+        .onReceive(viewModel.browse.$filteredSongs) { songs in
+            projectionCache.refresh(with: songs, preservingOrder: viewModel.browse.isSearching)
         }
     }
 
@@ -96,7 +96,7 @@ struct ArchiveBoardView: View {
             }
         } trailing: {
             ArchiveBoardSearchField(
-                input: viewModel.searchInput,
+                input: viewModel.browse.searchInput,
                 onEdit: { query in handleSearchEdit(query) },
                 isDisabled: viewModel.songs.isEmpty,
                 keyboardFocus: $keyboardFocus
@@ -146,9 +146,9 @@ struct ArchiveBoardView: View {
 
     private func handleSearchEdit(_ query: String) {
         if query.isEmpty {
-            viewModel.clearSearch()
+            viewModel.browse.clearSearch()
         } else {
-            viewModel.setSearchQuery(query)
+            viewModel.browse.setSearchQuery(query)
         }
     }
 }

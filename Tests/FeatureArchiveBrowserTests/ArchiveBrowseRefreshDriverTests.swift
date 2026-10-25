@@ -8,41 +8,40 @@ final class ArchiveBrowseRefreshDriverTests: XCTestCase {
     func testResultCountTracksAppliedSearchAndClears() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load(state("").songs))
-        model.recomputeBrowseResults()
-        XCTAssertNil(model.searchResultCountText)
-        model.setSearchQuery("neon")
-        XCTAssertNil(model.searchResultCountText)
-        model.recomputeBrowseResults()
-        XCTAssertTrue(model.isSearching)
-        XCTAssertEqual(model.searchResultCountText, "1 result")
-        model.setSearchQuery("zzzzzzzzzzzz")
-        model.recomputeBrowseResults()
-        XCTAssertEqual(model.searchResultCountText, "0 results")
+        model.browse.recompute()
+        XCTAssertNil(model.browse.searchResultCountText)
+        model.browse.setSearchQuery("neon")
+        XCTAssertNil(model.browse.searchResultCountText)
+        model.browse.recompute()
+        XCTAssertTrue(model.browse.isSearching)
+        XCTAssertEqual(model.browse.searchResultCountText, "1 result")
+        model.browse.setSearchQuery("zzzzzzzzzzzz")
+        model.browse.recompute()
+        XCTAssertEqual(model.browse.searchResultCountText, "0 results")
         model.setBackgroundStatusMessage("Scan needs attention")
-        model.setSearchQuery("")
-        XCTAssertFalse(model.isSearching)
-        XCTAssertNil(model.searchResultCountText)
-        XCTAssertEqual(model.filteredSongs.count, 2)
+        model.browse.setSearchQuery("")
+        XCTAssertFalse(model.browse.isSearching)
+        XCTAssertNil(model.browse.searchResultCountText)
+        XCTAssertEqual(model.browse.filteredSongs.count, 2)
         XCTAssertEqual(model.statusMessage, "Scan needs attention")
     }
 
     func testTypingPublishesTextWithoutInvalidatingArchiveUntilResultsApply() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load(state("").songs))
-        model.filteredSongs = model.songs
         var archiveChanges = 0
         var enteredText: [String] = []
         let archiveSubscription = model.objectWillChange.sink { archiveChanges += 1 }
-        let textSubscription = model.searchInput.$query.dropFirst().sink { enteredText.append($0) }
-        model.setSearchQuery("neon")
-        model.setSearchQuery("neon hook")
+        let textSubscription = model.browse.searchInput.$query.dropFirst().sink { enteredText.append($0) }
+        model.browse.setSearchQuery("neon")
+        model.browse.setSearchQuery("neon hook")
         XCTAssertEqual(archiveChanges, 0)
         XCTAssertEqual(enteredText, ["neon", "neon hook"])
-        XCTAssertEqual(model.searchQuery, "neon hook")
-        XCTAssertEqual(model.filteredSongs.count, 2)
-        model.recomputeBrowseResults()
+        XCTAssertEqual(model.browse.searchQuery, "neon hook")
+        XCTAssertEqual(model.browse.filteredSongs.count, 2)
+        model.browse.recompute()
         XCTAssertGreaterThan(archiveChanges, 0)
-        XCTAssertEqual(model.filteredSongs.map(\.displayTitle), ["Neon Hook"])
+        XCTAssertEqual(model.browse.filteredSongs.map(\.displayTitle), ["Neon Hook"])
         withExtendedLifetime((archiveSubscription, textSubscription)) {}
     }
 
@@ -109,21 +108,20 @@ final class ArchiveBrowseRefreshDriverTests: XCTestCase {
     func testImmediateClearAndRootResetSupersedePendingLiveSearch() async throws {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make(), browseSearchDebounceNanoseconds: 0)
         model.applyCatalogEdit(.load(state("").songs))
-        model.filteredSongs = model.songs
-        model.setSearchQuery("neon")
-        model.setSearchQuery("", immediate: true)
+        model.browse.setSearchQuery("neon")
+        model.browse.setSearchQuery("", immediate: true)
         try await Task.sleep(for: .milliseconds(30))
-        XCTAssertEqual(Set(model.filteredSongs.map(\.id)), Set(model.songs.map(\.id)))
-        model.setSearchQuery("ocean")
-        model.recomputeBrowseResults()
-        XCTAssertEqual(model.searchResultCountText, "1 result")
+        XCTAssertEqual(Set(model.browse.filteredSongs.map(\.id)), Set(model.songs.map(\.id)))
+        model.browse.setSearchQuery("ocean")
+        model.browse.recompute()
+        XCTAssertEqual(model.browse.searchResultCountText, "1 result")
         model.clearScanResults()
         try await Task.sleep(for: .milliseconds(30))
-        XCTAssertTrue(model.filteredSongs.isEmpty)
-        XCTAssertTrue(model.searchMatchSummaries.isEmpty)
-        XCTAssertEqual(model.searchQuery, "")
-        XCTAssertFalse(model.isSearching)
-        XCTAssertNil(model.searchResultCountText)
+        XCTAssertTrue(model.browse.filteredSongs.isEmpty)
+        XCTAssertTrue(model.browse.searchMatchSummaries.isEmpty)
+        XCTAssertEqual(model.browse.searchQuery, "")
+        XCTAssertFalse(model.browse.isSearching)
+        XCTAssertNil(model.browse.searchResultCountText)
     }
 
     private func waitForCalls(_ count: Int, projector: SuspendedBrowseProjector) async throws {

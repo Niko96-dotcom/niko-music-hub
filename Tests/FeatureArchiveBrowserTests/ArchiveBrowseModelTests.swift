@@ -2,8 +2,29 @@ import NikoMusicCore
 @testable import FeatureArchiveBrowser
 import XCTest
 
+/// The browse owner on its own, over a song list the test controls: the empty query never
+/// touches the search index, an active query keeps the reused index true to catalog edits, and
+/// input changes, clearing and a root change behave as the browse page expects.
 @MainActor
-final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
+final class ArchiveBrowseModelTests: XCTestCase {
+    /// The catalog and scan the browse model reads, and how often results were applied.
+    private final class Source {
+        var songs: [Song] = []
+        var skipped: [SkippedScanEntry] = []
+        var applied = 0
+    }
+
+    private func makeBrowse(_ source: Source, debounceNanoseconds: UInt64 = 200_000_000) -> ArchiveBrowseModel {
+        ArchiveBrowseModel(
+            refreshDriver: ArchiveBrowseRefreshDriver(debounceNanoseconds: debounceNanoseconds),
+            source: ArchiveBrowseSource(
+                songs: { source.songs },
+                skippedEntries: { source.skipped },
+                didApplyResults: { source.applied += 1 }
+            )
+        )
+    }
+
     private func songs() -> [Song] {
         [
             Song(
@@ -22,28 +43,31 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
     }
 
     func testEmptyQueryKeepsIndexEmpty() {
-        let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.applyCatalogEdit(.load(songs()))
-        model.recomputeBrowseResults()
-        XCTAssertTrue(model.cachedSearchIndex.songs.isEmpty)
+        let source = Source()
+        let model = makeBrowse(source)
+        source.songs = songs()
+        model.recompute()
+        XCTAssertTrue(model.searchIndex.songs.isEmpty)
         XCTAssertEqual(model.filteredSongs.count, 2)
         XCTAssertFalse(model.isSearching)
     }
 
     func testFilterToggleWithEmptyQueryKeepsIndexEmptyAndAppliesFilter() {
-        let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.applyCatalogEdit(.load(songs()))
-        model.recomputeBrowseResults()
+        let source = Source()
+        let model = makeBrowse(source)
+        source.songs = songs()
+        model.recompute()
         model.toggleBrowseFilter(.hasWarnings)
-        XCTAssertTrue(model.cachedSearchIndex.songs.isEmpty)
+        XCTAssertTrue(model.searchIndex.songs.isEmpty)
         XCTAssertEqual(model.filteredSongs.map(\.displayTitle), ["Ocean Drive"])
         model.toggleBrowseFilter(.hasWarnings)
-        XCTAssertTrue(model.cachedSearchIndex.songs.isEmpty)
+        XCTAssertTrue(model.searchIndex.songs.isEmpty)
         XCTAssertEqual(model.filteredSongs.count, 2)
     }
 
     func testActiveQuerySyncReflectsTitleEditAndPreservesOrder() {
-        let model = ArchiveBrowserViewModel(context: TestToolContext.make())
+        let source = Source()
+        let model = makeBrowse(source)
         // Folders intentionally distinct from titles so title invalidation is
         // observable (folder text would otherwise still match "neon").
         let titled = [
@@ -60,14 +84,14 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
                 scanWarnings: ["missing preview"]
             ),
         ]
-        model.applyCatalogEdit(.load(titled))
+        source.songs = titled
         model.setSearchQuery("neon", immediate: true)
         XCTAssertEqual(model.filteredSongs.map(\.effectiveDisplayTitle), ["Neon Hook"])
 
         var updated = titled
         updated[0].virtualTitle = "Ocean Revised Title"
-        model.applyCatalogEdit(.load(updated))
-        model.recomputeBrowseResults()
+        source.songs = updated
+        model.recompute()
         // Old term no longer matches; the index now serves the edited title.
         XCTAssertTrue(model.filteredSongs.isEmpty)
         model.setSearchQuery("ocean revised", immediate: true)
@@ -76,8 +100,9 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
     }
 
     func testNonSearchEditReturnsFreshSongPreservingScores() {
-        let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.applyCatalogEdit(.load(songs()))
+        let source = Source()
+        let model = makeBrowse(source)
+        source.songs = songs()
         model.setSearchQuery("neon", immediate: true)
         let beforeSummary = model.searchMatchSummaries
         XCTAssertEqual(model.filteredSongs.count, 1)
@@ -85,8 +110,8 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
         var updated = songs()
         updated[0].collaboratorIDs = ["collab-2"]
         updated[0].previewSelectionMode = .manual
-        model.applyCatalogEdit(.load(updated))
-        model.recomputeBrowseResults()
+        source.songs = updated
+        model.recompute()
         XCTAssertEqual(model.filteredSongs.map(\.id), [updated[0].id])
         XCTAssertEqual(model.searchMatchSummaries, beforeSummary)
         XCTAssertEqual(model.filteredSongs.first?.collaboratorIDs, ["collab-2"])
@@ -94,27 +119,29 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
     }
 
     func testRemovalAndReorderReflectedWithActiveQuery() {
-        let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.applyCatalogEdit(.load(songs()))
+        let source = Source()
+        let model = makeBrowse(source)
+        source.songs = songs()
         model.setSearchQuery("ocean", immediate: true)
         XCTAssertEqual(model.filteredSongs.map(\.displayTitle), ["Ocean Drive"])
 
         // Removal drops the match.
-        model.applyCatalogEdit(.load([songs()[0]]))
-        model.recomputeBrowseResults()
+        source.songs = [songs()[0]]
+        model.recompute()
         XCTAssertTrue(model.filteredSongs.isEmpty)
 
         // Re-adding plus reorder still resolves the live Song value.
         let reordered = [songs()[1], songs()[0]]
-        model.applyCatalogEdit(.load(reordered))
-        model.recomputeBrowseResults()
+        source.songs = reordered
+        model.recompute()
         XCTAssertEqual(model.filteredSongs.map(\.displayTitle), ["Ocean Drive"])
-        XCTAssertEqual(model.cachedSearchIndex.songs.map(\.id), reordered.map(\.id))
+        XCTAssertEqual(model.searchIndex.songs.map(\.id), reordered.map(\.id))
     }
 
     func testActiveQueryKeepsRelevanceOrderOverSortMode() {
-        let model = ArchiveBrowserViewModel(context: TestToolContext.make())
-        model.applyCatalogEdit(.load(songs()))
+        let source = Source()
+        let model = makeBrowse(source)
+        source.songs = songs()
         model.setSearchQuery("neon", immediate: true)
         let relevanceOrder = model.filteredSongs.map(\.id)
         model.setSortMode(.titleAZ)
@@ -124,6 +151,72 @@ final class ArchiveBrowseSearchInvalidationTests: XCTestCase {
         XCTAssertTrue(model.filteredSongs.isEmpty)
         model.toggleBrowseFilter(.hasWarnings)
         XCTAssertEqual(model.filteredSongs.map(\.id), relevanceOrder)
+    }
+
+    func testClearSearchResetsQueryAndResults() {
+        let source = Source()
+        let model = makeBrowse(source)
+        source.songs = songs()
+        model.recompute()
+        let unfilteredShelf = model.filteredSongs
+        XCTAssertEqual(unfilteredShelf.count, 2)
+
+        model.setSearchQuery("Neon Hook", immediate: true)
+        XCTAssertEqual(model.searchQuery, "Neon Hook")
+        XCTAssertEqual(model.filteredSongs.map(\.displayTitle), ["Neon Hook"])
+
+        model.clearSearch()
+        XCTAssertEqual(model.searchQuery, "")
+        XCTAssertEqual(model.filteredSongs.map(\.id), unfilteredShelf.map(\.id))
+        XCTAssertFalse(model.isSearching)
+    }
+
+    func testEveryApplyReportsBackSoTheSelectionCanFollow() {
+        let source = Source()
+        let model = makeBrowse(source)
+        source.songs = songs()
+
+        model.recompute()
+        model.setSortMode(.titleAZ)
+        model.setSearchQuery("neon", immediate: true)
+
+        XCTAssertEqual(source.applied, 3)
+    }
+
+    func testTheCollaboratorShelfStartsOnTheDefaultCollaboratorOnlyWhenNoneIsChosen() {
+        let source = Source()
+        let model = makeBrowse(source)
+
+        model.selectShelf(.byCollaborator, defaultCollaboratorID: "first")
+        XCTAssertEqual(model.selectedCollaboratorID, "first")
+
+        model.setSelectedCollaboratorID("second")
+        model.selectShelf(.allSongs, defaultCollaboratorID: "first")
+        model.selectShelf(.byCollaborator, defaultCollaboratorID: "first")
+        XCTAssertEqual(model.selectedCollaboratorID, "second")
+    }
+
+    func testARootChangeRestoresTheDefaultsWithoutRecomputing() {
+        let source = Source()
+        let model = makeBrowse(source)
+        source.songs = songs()
+        model.setSearchQuery("neon", immediate: true)
+        model.setSortMode(.titleAZ)
+        model.toggleBrowseFilter(.hasWarnings)
+        model.toggleShowHiddenSongs()
+        let applied = source.applied
+
+        model.clearForRootChange()
+
+        XCTAssertEqual(model.searchQuery, "")
+        XCTAssertEqual(model.sortMode, .recentCPR)
+        XCTAssertEqual(model.browseFilter, [])
+        XCTAssertFalse(model.showHiddenSongs)
+        XCTAssertEqual(model.selectedShelf, .allSongs)
+        XCTAssertTrue(model.filteredSongs.isEmpty)
+        XCTAssertFalse(model.isSearching)
+        XCTAssertTrue(model.searchIndex.songs.isEmpty, "a new index for the new roots")
+        XCTAssertEqual(source.applied, applied, "the catalog's clear edit recomputes, not the reset")
     }
 
     func testBackgroundProjectorMatchesSynchronousProjection() async {

@@ -69,12 +69,12 @@ extension ArchiveBrowserViewModel {
     }
 
     func activeSearchExportContext() -> ArchiveDiagnosticsSearchContext? {
-        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = browse.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let matches = filteredSongs.map { song in
+        let matches = browse.filteredSongs.map { song in
             ArchiveDiagnosticsSearchMatch(
                 displayTitle: song.effectiveDisplayTitle,
-                summary: searchMatchSummaries[song.id, default: ""]
+                summary: browse.searchMatchSummaries[song.id, default: ""]
             )
         }
         return ArchiveDiagnosticsSearchContext(query: trimmed, matches: matches)
@@ -82,8 +82,8 @@ extension ArchiveBrowserViewModel {
 
     func activeSkippedSearchExportContext() -> ArchiveDiagnosticsSkippedSearchContext? {
         ArchiveDiagnosticsSkippedSearchContext.from(
-            query: searchQuery,
-            results: skippedSearchMatches
+            query: browse.searchQuery,
+            results: browse.skippedSearchMatches
         )
     }
 

@@ -34,7 +34,6 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.filteredSongs = [song]
         viewModel.selectedSong = nil
         viewModel.viewMode = .board
 
@@ -59,7 +58,6 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.filteredSongs = [song]
         viewModel.selectedSong = song
         viewModel.viewMode = .list
         XCTAssertEqual(history.lastRoute(for: archiveID), "list:\(song.id)")
@@ -78,7 +76,6 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.filteredSongs = [song]
         viewModel.selectedSong = nil
         viewModel.viewMode = .board
 
@@ -115,7 +112,6 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.filteredSongs = [song]
         viewModel.selectedSong = nil
         viewModel.viewMode = .board
         history.record(toolID: archiveID, route: "board")

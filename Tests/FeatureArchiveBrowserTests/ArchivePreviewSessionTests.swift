@@ -11,7 +11,6 @@ final class ArchivePreviewSessionTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load(fixture.songs))
-        model.filteredSongs = fixture.songs
         let session = model.previewSession
         let first = fixture.songs[0]
         let second = fixture.songs[1]
@@ -256,7 +255,6 @@ final class ArchivePreviewSessionTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load([fixture.song]))
-        model.filteredSongs = [fixture.song]
         let session = model.previewSession
         model.selectSongOnBoard(fixture.song)
         model.audition(fixture.song)

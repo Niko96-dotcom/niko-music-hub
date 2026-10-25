@@ -61,8 +61,8 @@ final class ArchiveBoardNativeColumn {
             landingFrame: { [weak self] in self?.dropLayout.frame(for: $0) },
             refreshedContent: { [weak self] in
                 guard let self else { return content }
-                let column = ArchiveBoardProjection.columns(from: self.input.viewModel.filteredSongs,
-                                                             preservingOrder: self.input.viewModel.isSearching)
+                let column = ArchiveBoardProjection.columns(from: self.input.viewModel.browse.filteredSongs,
+                                                             preservingOrder: self.input.viewModel.browse.isSearching)
                     .first { $0.id == self.input.column.id } ?? self.input.column
                 return Self.content(input: self.input, column: column,
                                     state: ArchiveBoardLaneState(viewModel: self.input.viewModel),

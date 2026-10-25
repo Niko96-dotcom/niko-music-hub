@@ -22,7 +22,7 @@ struct ArchiveBrowserView: View {
         self._previewSession = ObservedObject(wrappedValue: viewModel.previewSession)
         self._previewPlayer = ObservedObject(wrappedValue: viewModel.previewSession.player)
         _boardProjectionCache = StateObject(
-            wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.filteredSongs, preservingOrder: viewModel.isSearching)
+            wrappedValue: ArchiveBoardProjectionCache(songs: viewModel.browse.filteredSongs, preservingOrder: viewModel.browse.isSearching)
         )
     }
 
@@ -131,9 +131,9 @@ struct ArchiveBrowserView: View {
                         .padding(.vertical, HubDesignSystem.Spacing.inlineGap)
                         .background(.bar)
                 }
-            if viewModel.searchResultCountText != nil || viewModel.statusMessage?.isEmpty == false {
+            if viewModel.browse.searchResultCountText != nil || viewModel.statusMessage?.isEmpty == false {
                 HStack {
-                    if let count = viewModel.searchResultCountText {
+                    if let count = viewModel.browse.searchResultCountText {
                         Text(count)
                         Spacer()
                     }
@@ -250,10 +250,10 @@ struct ArchiveBrowserView: View {
         .onKeyPress(.escape) {
             guard isActiveTool else { return .ignored }
             if keyboardFocus == .search {
-                if viewModel.searchQuery.isEmpty {
+                if viewModel.browse.searchQuery.isEmpty {
                     keyboardFocus = .archive
                 } else {
-                    viewModel.clearSearch()
+                    viewModel.browse.clearSearch()
                     keyboardFocus = .search
                 }
                 return .handled

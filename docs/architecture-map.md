@@ -91,8 +91,8 @@ Hops in call order. Ownership detail is in [architecture.md](architecture.md).
 3. `ArchiveCatalogCoordinator` merges stored user metadata (`ArchiveMetadataMerger`). Scans never write
    metadata.
 4. `applyCatalogScanUpdate` (`+ScanHost.swift`) applies `.rescan` through `applyCatalogEdit(_:)`
-   (`ArchiveBrowserViewModel.swift`), which projects the result, writes `SongCatalog` and runs
-   `ArchiveBrowseProjection` and `MusicSearchIndex`; `ArchiveMetadataEditingCoordinator.scheduleIndexPersist`
+   (`ArchiveBrowserViewModel.swift`), which projects the result, writes `SongCatalog` and has `ArchiveBrowseModel`
+   run `ArchiveBrowseProjection` and `MusicSearchIndex`; `ArchiveMetadataEditingCoordinator.scheduleIndexPersist`
    saves the snapshot.
 5. Open: `openLatestCPR(for:)` (`+Exports.swift`) checks the Vault block, then
    `MusicItemOpener.openLatestCPR(for:dryRun:allowedRoots:)` resolves the file with `PathSafety` and calls
@@ -169,7 +169,8 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Durable settings (music roots, output folder, Vault, helpers) | `SettingsStore` → `UserDefaultsSettingsStore`; display mirror `AppSettingsObserver` | UserDefaults key `nikoMusicHub.settings` (JSON) |
 | Archive song catalog (scan baseline, visible list, id index) | `SongCatalog`, written only by `ArchiveBrowserViewModel.applyCatalogEdit(_:)` | snapshot in `SQLiteArchiveIndexStore` |
 | Archive scan list (the folders the archive scans) | the settings store; edited only through `ArchiveScanList` (AppCore); the archive follows `appSettings` ([architecture.md § Archive scan list](architecture.md#archive-scan-list)) | settings JSON in UserDefaults |
-| Loaded roots, selection, browse inputs | `ArchiveBrowserViewModel` | memory |
+| Loaded roots, selection | `ArchiveBrowserViewModel` | memory |
+| Archive browse inputs and results (search text, shelf, filters, sort, filtered list, search index) | `ArchiveBrowseModel`, held as `ArchiveBrowserViewModel.browse` | memory |
 | Archive page (`viewMode`, `listShowsDetail`) | `ArchiveBrowserViewModel`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
@@ -284,11 +285,12 @@ These rules are documented and, where named, enforced. The full table is in
    consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to
    the archive view model, and the recorder and the archive share one recording signal through `ToolContext`, since
    2026-10-24.)
-6. **`ArchiveBrowserViewModel` is one type in 20 files** (the main file plus 19 `+*.swift` extensions; the
+6. **`ArchiveBrowserViewModel` is one type in 19 files** (the main file plus 18 `+*.swift` extensions; the
    footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog` on 2026-10-23).
    Owners extracted so far: scan orchestrator, catalog, metadata editing, Vault queue and observation, and since
-   2026-10-25 the song analysis (`ArchiveSongAnalysisModel`) and the intelligence hints (`ArchiveIntelligenceModel`).
-   The other extensions still share one set of state, and the root reset still resets about 25 properties by hand.
+   2026-10-25 the song analysis (`ArchiveSongAnalysisModel`), the intelligence hints (`ArchiveIntelligenceModel`)
+   and the browse page (`ArchiveBrowseModel`). The other extensions still share one set of state, and the root reset
+   still resets about 15 properties by hand.
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
    2026-10-25. `DevToolFeature` always compiles and is shown

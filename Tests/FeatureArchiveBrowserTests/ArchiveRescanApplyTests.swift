@@ -24,7 +24,7 @@ final class ArchiveRescanApplyTests: XCTestCase {
     private func makeModel(_ songs: [Song]) -> ArchiveBrowserViewModel {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make(), archiveRootWatcher: NoopArchiveRootWatcher())
         model.applyCatalogEdit(.load(songs))
-        model.recomputeBrowseResults()
+        model.browse.recompute()
         return model
     }
 
@@ -40,9 +40,9 @@ final class ArchiveRescanApplyTests: XCTestCase {
         let model = makeModel((0..<600).map { makeSong($0) })
         let heldSongs = model.songs
         let heldScanned = model.scannedSongs
-        let heldFiltered = model.filteredSongs
+        let heldFiltered = model.browse.filteredSongs
         var filteredPublishes = 0
-        let subscription = model.$filteredSongs.dropFirst().sink { _ in filteredPublishes += 1 }
+        let subscription = model.browse.$filteredSongs.dropFirst().sink { _ in filteredPublishes += 1 }
         defer { subscription.cancel() }
 
         // The same catalog, built again: equal values that share no storage with the held ones.
@@ -51,7 +51,7 @@ final class ArchiveRescanApplyTests: XCTestCase {
 
         XCTAssertTrue(sameStorage(model.songs, heldSongs), "the held catalog is kept, not replaced by an equal copy")
         XCTAssertTrue(sameStorage(model.scannedSongs, heldScanned))
-        XCTAssertTrue(sameStorage(model.filteredSongs, heldFiltered), "the browse list was not projected again")
+        XCTAssertTrue(sameStorage(model.browse.filteredSongs, heldFiltered), "the browse list was not projected again")
         XCTAssertEqual(filteredPublishes, 0)
         XCTAssertEqual(model.scanDiagnostics, rescanned.diagnostics, "the scan summary still updates")
         XCTAssertEqual(model.statusMessage, rescanned.statusMessage)
@@ -70,7 +70,7 @@ final class ArchiveRescanApplyTests: XCTestCase {
         model.applyCatalogScanUpdate(update(model, songs: next), roots: [])
 
         XCTAssertEqual(model.songs[7].mainPreviewCandidateID, next[7].mainPreviewCandidateID)
-        XCTAssertEqual(model.filteredSongs.count, 50)
+        XCTAssertEqual(model.browse.filteredSongs.count, 50)
         XCTAssertNil(model.songAnalysis.mixdownBPMBySongID[changedKey], "the song's main preview changed")
         XCTAssertNotNil(model.songAnalysis.mixdownBPMBySongID[untouchedKey], "an unchanged song keeps its analysis")
     }

@@ -160,8 +160,8 @@ final class ArchiveAnalyticsTests: XCTestCase {
         let baselineReads = store.historyReadCount
         XCTAssertGreaterThanOrEqual(baselineReads, 1)
 
-        model.setSearchQuery("neon", immediate: true)
-        model.toggleBrowseFilter(.hasWarnings)
+        model.browse.setSearchQuery("neon", immediate: true)
+        model.browse.toggleBrowseFilter(.hasWarnings)
         if let first = model.songs.first {
             model.selectSong(first)
         }

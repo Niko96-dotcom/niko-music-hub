@@ -74,14 +74,14 @@ final class ArchiveCatalogEditTests: XCTestCase {
     func testEditedSelectedSongStaysSelectedWithItsNewValue() {
         let neon = song("A", title: "Neon Hook")
         let model = makeModel([neon, song("B", title: "Ocean Drive")])
-        model.setSearchQuery("neon", immediate: true)
+        model.browse.setSearchQuery("neon", immediate: true)
         model.selectSong(neon)
 
         let renamed = song("A", title: "Neon Hook (Remix)")
         model.applyCatalogEdit(.replace([renamed]))
 
         XCTAssertEqual(model.selectedSong, renamed)
-        XCTAssertEqual(model.filteredSongs, [renamed])
+        XCTAssertEqual(model.browse.filteredSongs, [renamed])
     }
 
     /// Per-song caches follow every edit, not only rescans: a song that leaves the
@@ -121,12 +121,12 @@ final class ArchiveCatalogEditTests: XCTestCase {
     func testEditThatMovesTheSelectedSongOutOfTheFilterDeselectsIt() {
         let neon = song("A", title: "Neon Hook")
         let model = makeModel([neon, song("B", title: "Ocean Drive")])
-        model.setSearchQuery("neon", immediate: true)
+        model.browse.setSearchQuery("neon", immediate: true)
         model.selectSong(neon)
 
         model.applyCatalogEdit(.replace([song("A", title: "Sunset")]))
 
         XCTAssertNil(model.selectedSong)
-        XCTAssertEqual(model.filteredSongs, [])
+        XCTAssertEqual(model.browse.filteredSongs, [])
     }
 }

@@ -40,7 +40,6 @@ extension ArchiveBrowserViewModel {
     func clearRootBoundArchiveState(statusMessage nextStatusMessage: String?) {
         cancelPendingProjectVaultOperations()
         vaultOperations.clearAllOperationMessages()
-        browseRefreshDriver.cancelPendingDebounce()
         intelligence.clearForRootChange()
         metadataEditing.clearForRootChange()
         songAnalysis.cancel()
@@ -48,23 +47,13 @@ extension ArchiveBrowserViewModel {
         scanOrchestrator.clearPendingPaths()
         previewSession.clear()
         ArchivePreviewPlayer.clearMetadataCaches()
-        isSearching = false
-        filteredSongs = []
-        searchMatchSummaries = [:]
-        skippedSearchMatches = []
-        searchQuery = ""
-        selectedShelf = .allSongs
-        selectedCollaboratorID = nil
-        browseFilter = []
-        showHiddenSongs = false
-        sortMode = .recentCPR
+        browse.clearForRootChange()
         selectedSong = nil
         songDetailsExpanded = false
         pluginsSectionExpanded = false
         showArchivedProjects = false
         vaultObservation.clearForRootChange(notifyWhenChanged: false)
         scanDiagnostics = nil
-        cachedSearchIndex = MusicSearchIndex()
         // Last, so the browse recompute of the edit sees the reset inputs. Its
         // per-song step drops every mixdown result and plugin summary.
         applyCatalogEdit(.clear)

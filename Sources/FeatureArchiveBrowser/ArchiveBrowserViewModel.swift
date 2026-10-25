@@ -22,10 +22,21 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     // MARK: - Dependencies
 
-    let searchInput = ArchiveSearchInput()
     let identityReviewViewModel: ProjectIdentityReviewViewModel
     let catalog: ArchiveCatalogCoordinator
-    let browseRefreshDriver: ArchiveBrowseRefreshDriver
+    private let browseRefreshDriver: ArchiveBrowseRefreshDriver
+    /// Browse inputs (search text, shelf, collaborator, filters, sort, hidden
+    /// songs), the list they produce and the reusable search index. It reads the
+    /// visible catalog and the scan's skipped entries; applied results reconcile
+    /// the selection.
+    private(set) lazy var browse = ArchiveBrowseModel(
+        refreshDriver: browseRefreshDriver,
+        source: ArchiveBrowseSource(
+            songs: { [weak self] in self?.songs ?? [] },
+            skippedEntries: { [weak self] in self?.scanDiagnostics?.skippedEntries ?? [] },
+            didApplyResults: { [weak self] in self?.reconcileSelectedSong(requireVisibleInFilteredList: true) }
+        )
+    )
     /// The archive's playback owner. Every write of `selectedSong` reaches it, and every
     /// view that shows playback gets it from here. It pauses on the context's recording signal.
     let previewSession: ArchivePreviewSession
@@ -175,11 +186,27 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
         return change
     }
-    @Published var filteredSongs: [Song] = []
-    @Published var searchMatchSummaries: [String: String] = [:]
-    @Published var skippedSearchMatches: [SkippedEntrySearchResult] = []
-    @Published var selectedShelf: ArchiveSmartShelf = .allSongs
-    @Published var selectedCollaboratorID: String?
+
+    /// The browse follow-up of a catalog change (and of new scan diagnostics,
+    /// whose skipped entries the browse list shows): recompute the browse results
+    /// (they reconcile the selection) and refresh intelligence.
+    func refreshAfterCatalogChange() {
+        browse.recompute()
+        refreshIntelligence()
+        // Analytics stays on screen (a `switch` case, no re-appear), so a scan
+        // or status edit that lands while it is open must refresh the snapshot.
+        // Browse inputs (keystrokes, filters, sort) and selection go through
+        // other paths and stay cheap: no history read there. Outside analytics
+        // the snapshot stays lazy and is rebuilt on entry.
+        if viewMode == .analytics {
+            refreshAnalytics()
+        }
+    }
+
+    /// The By Collaborator shelf starts on the address book's first collaborator.
+    func selectShelf(_ shelf: ArchiveSmartShelf) {
+        browse.selectShelf(shelf, defaultCollaboratorID: collaborators.first?.id)
+    }
     @Published var selectedSong: Song? {
         didSet {
             synchronizePreviewSelection()
@@ -227,9 +254,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
     @Published var archiveAccessFailure: ArchiveAccessFailure?
     @Published var collaborators: [Collaborator] = []
-    @Published var showHiddenSongs = false
-    @Published var sortMode: ArchiveBrowseSortMode = .recentCPR
-    @Published var browseFilter: ArchiveBrowseFilter = []
     @Published var pendingCollaboratorRemoval: Collaborator?
     /// Collaborator suggestions, duplicate hints, the missing-audio summary and
     /// the "until the next scan" dismissals. `refreshIntelligence()` feeds it.
@@ -385,8 +409,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// generations are projected into `songs` only when the user opts into them, so
     /// toggling that view never loses the clean scan baseline.
     var scannedSongs: [Song] { songCatalog.scanned }
-    // Updated before filteredSongs publishes, so Board uses the applied query mode.
-    var isSearching = false
     var projectVaultRestoreOptionsLoading = false
     /// Undo stack for workflow-status and metadata edits. Owned by
     /// `ArchiveMetadataEditingCoordinator` (owned/injected/weak window-bound
@@ -425,6 +447,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var metadataEditingCancellable: AnyCancellable?
     var songAnalysisCancellable: AnyCancellable?
     var intelligenceCancellable: AnyCancellable?
+    var browseCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -441,10 +464,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     // recovery timer). Read-only peers above preserve the view API; writes
     // go through the observation's intentional methods.
     var navigationCancellable: AnyCancellable?
-    /// Reused search index rebuilt from the current shelf on each browse recompute.
-    /// Avoids allocating a fresh `MusicSearchIndex` on every keystroke while still
-    /// reflecting live metadata (titles/aliases) after catalog edits.
-    var cachedSearchIndex = MusicSearchIndex()
     /// Keeps security-scoped access alive for bookmarked roots while the model lives.
     var securityScopedRootAccesses: [SecurityScopedRootAccess] = []
     /// The stored roots and Vault settings the archive last loaded; nil while
@@ -454,16 +473,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     public var requestConverterHandoff: ((URL) -> Void)?
 
     // MARK: - Computed
-
-    var searchResultCountText: String? {
-        guard isSearching else { return nil }
-        return CountCopy.count(filteredSongs.count, "result")
-    }
-
-    var searchQuery: String {
-        get { searchInput.query }
-        set { searchInput.query = newValue }
-    }
 
     var showsSidebarMorePanel: Bool {
         !roots.isEmpty
@@ -577,6 +586,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         songAnalysisCancellable = songAnalysis.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
         intelligenceCancellable = intelligence.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+        browseCancellable = browse.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
         loadRootsFromSettings()
         followStoredSettingsChanges()
@@ -734,7 +745,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     }
 
     func healthReport() -> ArchiveHealthReport {
-        ArchiveHealthReport(songs: songs, includeHidden: showHiddenSongs)
+        ArchiveHealthReport(songs: songs, includeHidden: browse.showHiddenSongs)
     }
 
     func convertMainPreview(for song: Song) {

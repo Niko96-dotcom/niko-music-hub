@@ -47,15 +47,15 @@ extension ArchiveBrowserViewModel {
         case .list:
             return ArchiveSongSelectionNavigator.move(
                 direction: direction,
-                songs: filteredSongs,
+                songs: browse.filteredSongs,
                 selectedID: selectedSong?.id
             )
         case .board:
             return ArchiveSongSelectionNavigator.moveOnBoard(
                 direction: direction,
-                songs: filteredSongs,
+                songs: browse.filteredSongs,
                 selectedID: selectedSong?.id,
-                preservingOrder: isSearching
+                preservingOrder: browse.isSearching
             )
         case .boardDetail, .analytics:
             return nil
@@ -67,7 +67,7 @@ extension ArchiveBrowserViewModel {
         // identity is a filesystem path (Song.id == folder path) so it is
         // never logged — only the event itself.
         if selectedSong?.id != song.id {
-            diagnostics.scoped(to: .archive).log(.info, "Archive song selection changed (shelf=\(selectedShelf.rawValue))")
+            diagnostics.scoped(to: .archive).log(.info, "Archive song selection changed (shelf=\(browse.selectedShelf.rawValue))")
         }
         selectedSong = song
         // Keep the first viewport calm when changing songs (ARCH-07).
@@ -108,7 +108,7 @@ extension ArchiveBrowserViewModel {
             clearSelection(stopPlayback: previewSession.songID == current.id)
             return
         }
-        if requireVisibleInFilteredList, !filteredSongs.contains(where: { $0.id == fresh.id }) {
+        if requireVisibleInFilteredList, !browse.filteredSongs.contains(where: { $0.id == fresh.id }) {
             clearSelection(stopPlayback: false)
             return
         }

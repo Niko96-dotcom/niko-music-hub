@@ -21,7 +21,7 @@ struct ArchiveSidebarView: View {
                 .padding(.top, HubToolLayout.secondaryRowGap)
 
             collaboratorShelfPicker
-                .padding(.top, viewModel.selectedShelf == .byCollaborator ? 14 : 0)
+                .padding(.top, viewModel.browse.selectedShelf == .byCollaborator ? 14 : 0)
 
             songList
                 .padding(.top, 14)
@@ -101,11 +101,11 @@ struct ArchiveSidebarView: View {
                 Divider()
 
                 Button {
-                    viewModel.toggleShowHiddenSongs()
+                    viewModel.browse.toggleShowHiddenSongs()
                 } label: {
                     Label(
-                        viewModel.showHiddenSongs ? "Hide Hidden Songs" : "Show Hidden Songs",
-                        systemImage: viewModel.showHiddenSongs ? "eye.slash" : "eye"
+                        viewModel.browse.showHiddenSongs ? "Hide Hidden Songs" : "Show Hidden Songs",
+                        systemImage: viewModel.browse.showHiddenSongs ? "eye.slash" : "eye"
                     )
                 }
             } label: {
@@ -130,7 +130,7 @@ struct ArchiveSidebarView: View {
                     Button {
                         viewModel.selectShelf(shelf)
                     } label: {
-                        if viewModel.selectedShelf == shelf {
+                        if viewModel.browse.selectedShelf == shelf {
                             Label(shelf.title, systemImage: "checkmark")
                         } else {
                             Text(shelf.title)
@@ -142,9 +142,9 @@ struct ArchiveSidebarView: View {
             Section("Sort") {
                 ForEach(ArchiveBrowseSortMode.allCases, id: \.self) { mode in
                     Button {
-                        viewModel.setSortMode(mode)
+                        viewModel.browse.setSortMode(mode)
                     } label: {
-                        if viewModel.sortMode == mode {
+                        if viewModel.browse.sortMode == mode {
                             Label(mode.title, systemImage: "checkmark")
                         } else {
                             Text(mode.title)
@@ -157,9 +157,9 @@ struct ArchiveSidebarView: View {
                 ForEach(ProjectWorkflowStatus.allCases, id: \.self) { status in
                     let filter = ArchiveBrowseFilter.workflowStatus(status)
                     Button {
-                        viewModel.toggleBrowseFilter(filter)
+                        viewModel.browse.toggleBrowseFilter(filter)
                     } label: {
-                        if viewModel.browseFilter.contains(filter) {
+                        if viewModel.browse.browseFilter.contains(filter) {
                             Label(status.displayTitle, systemImage: "checkmark")
                         } else {
                             Label(status.displayTitle, systemImage: status.archiveSymbolName)
@@ -171,9 +171,9 @@ struct ArchiveSidebarView: View {
             Section("Filter") {
                 ForEach(ArchiveBrowseFilter.sidebarFilters, id: \.rawValue) { filter in
                     Button {
-                        viewModel.toggleBrowseFilter(filter)
+                        viewModel.browse.toggleBrowseFilter(filter)
                     } label: {
-                        if viewModel.browseFilter.contains(filter) {
+                        if viewModel.browse.browseFilter.contains(filter) {
                             Label(filter.sidebarAccessibilityLabel, systemImage: "checkmark")
                         } else {
                             Label(filter.sidebarAccessibilityLabel, systemImage: filter.sidebarSymbolName)
@@ -199,7 +199,7 @@ struct ArchiveSidebarView: View {
             HStack(spacing: 4) {
                 Image(systemName: "line.3.horizontal.decrease.circle")
                     .font(.system(size: 14, weight: .semibold))
-                Text(viewModel.selectedShelf.sidebarChipTitle)
+                Text(viewModel.browse.selectedShelf.sidebarChipTitle)
                     .font(HubDesignSystem.Typography.caption().weight(.medium))
                     .lineLimit(1)
             }
@@ -221,22 +221,22 @@ struct ArchiveSidebarView: View {
         .menuStyle(.borderlessButton)
         .help("Filters and shelves")
         .accessibilityLabel("Filters and shelves")
-        .accessibilityValue(viewModel.selectedShelf.title)
+        .accessibilityValue(viewModel.browse.selectedShelf.title)
         .disabled(viewModel.songs.isEmpty)
     }
 
     private var browseFilterMenuIsActive: Bool {
-        viewModel.selectedShelf != .allSongs
-            || viewModel.sortMode != .recentCPR
-            || !viewModel.browseFilter.isEmpty
+        viewModel.browse.selectedShelf != .allSongs
+            || viewModel.browse.sortMode != .recentCPR
+            || !viewModel.browse.browseFilter.isEmpty
     }
 
     @ViewBuilder
     private var collaboratorShelfPicker: some View {
-        if viewModel.selectedShelf == .byCollaborator {
+        if viewModel.browse.selectedShelf == .byCollaborator {
             Picker("Collaborator", selection: Binding(
-                get: { viewModel.selectedCollaboratorID ?? "" },
-                set: { viewModel.setSelectedCollaboratorID($0.isEmpty ? nil : $0) }
+                get: { viewModel.browse.selectedCollaboratorID ?? "" },
+                set: { viewModel.browse.setSelectedCollaboratorID($0.isEmpty ? nil : $0) }
             )) {
                 Text("Choose…").tag("")
                 ForEach(viewModel.collaborators) { collaborator in
@@ -256,12 +256,12 @@ struct ArchiveSidebarView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(HubDesignSystem.Palette.textTertiary)
             ArchiveSearchTextField(
-                input: viewModel.searchInput,
+                input: viewModel.browse.searchInput,
                 onEdit: { query in
                     if query.isEmpty {
-                        viewModel.clearSearch()
+                        viewModel.browse.clearSearch()
                     } else {
-                        viewModel.setSearchQuery(query)
+                        viewModel.browse.setSearchQuery(query)
                     }
                 },
                 isDisabled: viewModel.songs.isEmpty,
@@ -301,11 +301,11 @@ struct ArchiveSidebarView: View {
             .hubCard(cornerRadius: HubDesignSystem.Radius.row)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Scanning archive")
-        } else if viewModel.filteredSongs.isEmpty {
-            if !viewModel.skippedSearchMatches.isEmpty {
+        } else if viewModel.browse.filteredSongs.isEmpty {
+            if !viewModel.browse.skippedSearchMatches.isEmpty {
                 archiveEmptyState(
                     title: "No matches",
-                    body: ArchiveSkippedSearchCopy.emptyStateBody(matches: viewModel.skippedSearchMatches),
+                    body: ArchiveSkippedSearchCopy.emptyStateBody(matches: viewModel.browse.skippedSearchMatches),
                     systemImage: "magnifyingglass"
                 )
             } else {
@@ -318,12 +318,12 @@ struct ArchiveSidebarView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 3) {
-                    ForEach(viewModel.filteredSongs, id: \.id) { song in
+                    ForEach(viewModel.browse.filteredSongs, id: \.id) { song in
                         SongCardView(
                             song: song,
                             isSelected: viewModel.selectedSong?.id == song.id,
                             session: viewModel.previewSession,
-                            matchSummary: viewModel.searchMatchSummaries[song.id],
+                            matchSummary: viewModel.browse.searchMatchSummaries[song.id],
                             onSelect: {
                                 ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
                                 keyboardFocus = .archive
