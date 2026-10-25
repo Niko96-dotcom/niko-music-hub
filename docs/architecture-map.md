@@ -2,7 +2,7 @@
 
 Last verified: 2026-10-22 at `3ace650` (source read); modules, dependencies and the Vault flow re-checked on
 2026-10-25 at the commit that adds `ProjectVaultRuntime` (parent `1b2caea`); the archive state owners, flows and
-gap 6 re-checked on 2026-10-25 at `aef05ad`. Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
+gap 6 re-checked on 2026-10-25 at `d55a7a3`. Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
 
 Start here. This page names the entry points, modules, main flows, state owners, seams and gates, and
 links to the documents that hold the detail. It does not repeat them.
