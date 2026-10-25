@@ -121,9 +121,9 @@ final class ArchiveSongAnalysisModel: ObservableObject {
         ArchiveCPRPluginCoordinator.invalidate(path: path, cache: &cprPluginSummaryByCPRPath)
     }
 
-    /// Stops both loads. A root change calls it; the catalog's `.clear` edit
-    /// then drops every cached result through `follow(_:remainingSongIDs:pluginsSectionExpanded:)`.
-    func cancel() {
+    /// A root change: both loads stop. The catalog's `.clear` edit that follows
+    /// drops every cached result through `follow(_:remainingSongIDs:pluginsSectionExpanded:)`.
+    func clearForRootChange() {
         mixdown.cancel()
         plugins.cancel()
     }

@@ -146,7 +146,7 @@ final class ArchiveLibraryModel: ObservableObject {
 
     /// A root change: the old roots' diagnostics go. The scanning flag already
     /// ended with the roots.
-    func clearScanForRootChange() {
+    func clearForRootChange() {
         scanDiagnostics = nil
     }
 

@@ -341,7 +341,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         vaultOperations.clearAllOperationMessages()
         intelligence.clearForRootChange()
         metadataEditing.clearForRootChange()
-        songAnalysis.cancel()
+        songAnalysis.clearForRootChange()
         clearFooterWarning()
         scanOrchestrator.clearPendingPaths()
         previewSession.clear()
@@ -349,7 +349,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         browse.clearForRootChange()
         page.clearForRootChange()
         vaultObservation.clearForRootChange(notifyWhenChanged: false)
-        library.clearScanForRootChange()
+        library.clearForRootChange()
         applyCatalogEdit(.clear)
         setStatusMessage(nextStatusMessage)
     }
