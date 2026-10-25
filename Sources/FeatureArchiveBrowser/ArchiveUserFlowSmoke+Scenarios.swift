@@ -96,7 +96,7 @@ extension ArchiveUserFlowSmoke {
         homeDirectory: String
     ) throws -> SmokeRun {
         let scenario = ArchiveUserFlowSmokeScenarios.fixtureDiagnostics
-        guard let diagnostics = viewModel.scanDiagnostics else {
+        guard let diagnostics = viewModel.library.scanDiagnostics else {
             throw ArchiveUserFlowSmokeError.fixtureScanHealthBadgeMissing
         }
 

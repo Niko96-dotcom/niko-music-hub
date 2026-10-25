@@ -64,7 +64,7 @@ struct ArchiveSidebarView: View {
 
             browseFilterMenu
 
-            if viewModel.isScanning {
+            if viewModel.library.isScanning {
                 HubLabeledButton(
                     icon: "xmark",
                     label: CancelCopy.cancelScan,
@@ -76,10 +76,10 @@ struct ArchiveSidebarView: View {
             }
 
             Menu {
-                Button(viewModel.isScanning ? "Scanning Archive…" : "Scan Archive") {
+                Button(viewModel.library.isScanning ? "Scanning Archive…" : "Scan Archive") {
                     Task { await viewModel.scan() }
                 }
-                .disabled(viewModel.isScanning || viewModel.roots.isEmpty)
+                .disabled(viewModel.library.isScanning || viewModel.library.roots.isEmpty)
                 if viewModel.canBrowseArchivedProjects {
                     Button(viewModel.showArchivedProjects ? "Hide Archived Songs" : "Show Archived Songs") {
                         viewModel.setShowArchivedProjects(!viewModel.showArchivedProjects)
@@ -276,19 +276,19 @@ struct ArchiveSidebarView: View {
 
     @ViewBuilder
     private var songList: some View {
-        if viewModel.roots.isEmpty {
+        if viewModel.library.roots.isEmpty {
             archiveEmptyState(
                 title: "No archive folder",
                 body: "Add the folder with your song projects",
                 systemImage: "folder.badge.plus"
             )
-        } else if viewModel.songs.isEmpty && !viewModel.isScanning {
+        } else if viewModel.songs.isEmpty && !viewModel.library.isScanning {
             archiveEmptyState(
                 title: "No songs yet",
                 body: "Choose Scan Archive from the + menu",
                 systemImage: "music.note.list"
             )
-        } else if viewModel.songs.isEmpty && viewModel.isScanning {
+        } else if viewModel.songs.isEmpty && viewModel.library.isScanning {
             HStack(spacing: 5) {
                 ProgressView()
                     .controlSize(.mini)

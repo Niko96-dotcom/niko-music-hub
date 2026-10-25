@@ -125,7 +125,7 @@ extension ArchiveBrowserViewModel {
     /// locations) is a failed resolution and must not trigger a new archive.
     private func initiatingSongResolvesStably(_ song: Song, for review: ProjectIdentityReview) throws -> Bool {
         guard FileManager.default.fileExists(atPath: song.folderPath.path) else { return false }
-        let roots = try loadSettingsForWrite().musicRoots
+        let roots = try library.loadSettingsForWrite().musicRoots
         return stableSongs(matching: review, musicRoots: roots).contains(where: { $0.id == song.id })
     }
 

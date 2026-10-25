@@ -42,7 +42,7 @@ final class SongMetadataRepairTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: scanned) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         await viewModel.scan()
 
         XCTAssertEqual(viewModel.metadataRepairSongIDs, [badID])
@@ -95,7 +95,7 @@ final class SongMetadataRepairTests: XCTestCase {
                 ScanResult(songs: [Song(folderPath: badFolder, originalFolderName: "Bad Song", displayTitle: "Bad Song")])
             }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         await viewModel.scan()
         XCTAssertEqual(viewModel.metadataRepairSongIDs, [badID])
 
@@ -138,7 +138,7 @@ final class SongMetadataRepairTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: folders.map { Song(folderPath: $0, originalFolderName: $0.lastPathComponent, displayTitle: $0.lastPathComponent) }) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         await viewModel.scan()
         XCTAssertEqual(viewModel.metadataRepairSongIDs, Set(ids))
 
@@ -167,7 +167,7 @@ final class SongMetadataRepairTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [existing]) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         await viewModel.scan()
         XCTAssertNil(viewModel.catalog.metadataEditBlockWarning(for: existing.id))
 

@@ -32,7 +32,7 @@ public enum ArchiveUserFlowSmoke {
             homeDirectory: homeDirectory
         )
 
-        guard let diagnostics = viewModel.scanDiagnostics else {
+        guard let diagnostics = viewModel.library.scanDiagnostics else {
             throw ArchiveUserFlowSmokeError.fixtureScanHealthBadgeMissing
         }
         let rankingLab = try runRankingLabCheck(

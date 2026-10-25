@@ -39,11 +39,11 @@ struct ArchiveBoardView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            if viewModel.showsArchiveAccessRecovery {
+            if viewModel.library.showsArchiveAccessRecovery {
                 EmptyView()
             } else if viewModel.songs.isEmpty {
                 ArchiveBoardEmptyState(
-                    isScanning: viewModel.isScanning,
+                    isScanning: viewModel.library.isScanning,
                     onChooseRoot: onChooseRoot,
                     onOpenListView: { viewModel.setBrowseLayout(list: true) }
                 )
@@ -77,7 +77,7 @@ struct ArchiveBoardView: View {
 
     private var header: some View {
         HubPageHeader("Board") {
-            if viewModel.isScanning {
+            if viewModel.library.isScanning {
                 HStack(spacing: 5) {
                     ProgressView()
                         .controlSize(.mini)

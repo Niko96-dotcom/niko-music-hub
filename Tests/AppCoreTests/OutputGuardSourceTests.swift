@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 
 /// Where a write may land is decided by two owners: `ToolOutputGuard(settings:)` for tool
-/// output and `ArchiveBrowserViewModel.writeProtectedRoots()` for the archive browser's
+/// output and `ArchiveLibraryModel.writeProtectedRoots()` for the archive browser's
 /// exports and New Song. Writers that chose their own roots shipped five times: the
 /// browse list as protection (604025d, e26f73c, fda0cb9) and defaults after an unreadable
 /// settings load (e2135e6, 89ff277).
@@ -154,7 +154,7 @@ final class OutputGuardSourceTests: XCTestCase {
         "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+ProjectVaultPresentation.swift": 1,
         // First-run probe (no new-user sheet for damaged settings), and the access-failure
         // check after a retry, which only presents the next failed root.
-        "Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel+Roots.swift": 2,
+        "Sources/FeatureArchiveBrowser/ArchiveLibraryModel.swift": 2,
         // Exclusions only hide folders from a read-only scan; refusing it would hide the library.
         "Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift": 1,
     ]

@@ -105,7 +105,7 @@ struct NewSongSheet: View {
         do {
             let request = NewSongRequest(
                 name: name,
-                root: try viewModel.newSongDraftRoot(),
+                root: try viewModel.library.newSongDraftRoot(),
                 collaboratorIDs: Array(selectedCollaboratorIDs),
                 appNote: note.isEmpty ? nil : note,
                 workflowStatus: workflowStatus,

@@ -29,7 +29,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
-        viewModel.roots = []
+        viewModel.library.roots = []
         viewModel.addRoot(root)
 
         let reloaded = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
@@ -50,7 +50,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: FailingArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [], globalWarnings: [], skippedEntries: []) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         viewModel.restartArchiveRootWatching()
 
         XCTAssertEqual(
@@ -79,7 +79,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
 
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
-        viewModel.roots = []
+        viewModel.library.roots = []
         viewModel.addRoots([firstRoot, secondRoot])
 
         let reloaded = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
@@ -99,7 +99,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        viewModel.roots = []
+        viewModel.library.roots = []
         viewModel.addRoots([root, root])
         XCTAssertEqual(viewModel.roots.map(\.path), [root.standardizedFileURL.path])
     }
@@ -112,7 +112,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         userDefaults.removePersistentDomain(forName: suiteName)
         let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
-        viewModel.roots = []
+        viewModel.library.roots = []
 
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
             .appendingPathComponent(".build", isDirectory: true)
@@ -175,7 +175,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 ScanResult(songs: [alpha, zulu], globalWarnings: [], skippedEntries: [])
             }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
 
         await viewModel.scan()
 
@@ -623,7 +623,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 return ScanResult(songs: [replacementSong])
             }
         )
-        viewModel.roots = [firstRoot]
+        viewModel.library.roots = [firstRoot]
 
         let staleTask = Task { await viewModel.scan() }
         let startDeadline = Date().addingTimeInterval(2)
@@ -632,7 +632,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
         XCTAssertTrue(staleScan.isWaiting)
 
-        viewModel.roots = [secondRoot]
+        viewModel.library.roots = [secondRoot]
         let replacementTask = Task { await viewModel.scan() }
         await replacementTask.value
 
@@ -671,7 +671,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 try await gate.wait()
             }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         viewModel.applyCatalogEdit(.load([existingSong]))
 
         let scanTask = Task { await viewModel.scan() }
@@ -711,7 +711,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 return try await gate.wait()
             }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         viewModel.restartArchiveRootWatching()
 
         let scanTask = Task { await viewModel.scan() }
@@ -854,7 +854,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [song], globalWarnings: [], skippedEntries: []) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
 
         await viewModel.scan()
         _ = await viewModel.indexPersistTask?.value
@@ -917,7 +917,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [badScanned, goodScanned]) }
         )
-        viewModel.roots = [tempDir]
+        viewModel.library.roots = [tempDir]
         // Drive the actual coordinator path synchronously through a full scan.
         let coordinator = viewModel.catalog
         let update = coordinator.applyFullScanResult(
@@ -966,7 +966,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [scanned]) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         await viewModel.scan()
         _ = await viewModel.indexPersistTask?.value
         let live = try XCTUnwrap(viewModel.songs.first { $0.id == scanned.id })
@@ -1022,7 +1022,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [scannedSong]) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         let initialDeadline = Date().addingTimeInterval(2)
         while !indexStore.didFinishInitialLoad, Date() < initialDeadline {
             try await Task.sleep(nanoseconds: 10_000_000)
@@ -1090,7 +1090,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [scannedSong]) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         let initialDeadline = Date().addingTimeInterval(2)
         while !indexStore.didFinishInitialLoad, Date() < initialDeadline {
             try await Task.sleep(nanoseconds: 10_000_000)
@@ -1134,7 +1134,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [song]) }
         )
-        viewModel.roots = [folder]
+        viewModel.library.roots = [folder]
         let update = viewModel.catalog.applyFullScanResult(
             result: ScanResult(songs: [song]),
             roots: [folder],
@@ -1599,9 +1599,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let store = UserDefaultsSettingsStore(userDefaults: userDefaults, key: "settings")
 
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make(settingsStore: store))
-        viewModel.roots = []
-        viewModel.refreshFirstRunState()
-        XCTAssertTrue(viewModel.needsFirstRunOnboarding)
+        viewModel.library.roots = []
+        viewModel.library.refreshFirstRunState()
+        XCTAssertTrue(viewModel.library.needsFirstRunOnboarding)
 
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
             .appendingPathComponent(".build", isDirectory: true)
@@ -1609,7 +1609,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         viewModel.addRoot(root)
-        XCTAssertFalse(viewModel.needsFirstRunOnboarding)
+        XCTAssertFalse(viewModel.library.needsFirstRunOnboarding)
         XCTAssertTrue(try store.loadSettings().archiveOnboardingCompleted)
     }
 
@@ -3223,7 +3223,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             songMetadataStore: metadataStore,
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         let created = try viewModel.createNewSong(
             request: NewSongRequest(name: "CI Song", root: draftRoot, appNote: "test")
         )
@@ -3255,7 +3255,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             context: TestToolContext.make(),
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.roots = [archiveRoot]
+        viewModel.library.roots = [archiveRoot]
 
         let created = try viewModel.createNewSong(
             request: NewSongRequest(name: "Template Song", root: draftRoot, templateFolder: templateRoot)
@@ -3292,7 +3292,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             scanOverride: nil,
             workspaceOpener: workspace
         )
-        viewModel.roots = [archiveRoot]
+        viewModel.library.roots = [archiveRoot]
 
         let created = try viewModel.createNewSong(
             request: NewSongRequest(name: "No Cubase Here", root: draftRoot, templateFolder: templateRoot)
@@ -3321,7 +3321,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             context: TestToolContext.make(),
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.roots = [archiveRoot]
+        viewModel.library.roots = [archiveRoot]
 
         let created = try viewModel.createNewSong(
             request: NewSongRequest(name: "No CPR Yet", root: draftRoot)
@@ -3347,7 +3347,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             context: TestToolContext.make(),
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.roots = [archiveRoot]
+        viewModel.library.roots = [archiveRoot]
 
         XCTAssertThrowsError(
             try viewModel.createNewSong(
@@ -3368,11 +3368,11 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             context: TestToolContext.make(),
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.roots = []
+        viewModel.library.roots = []
         XCTAssertFalse(viewModel.showsSidebarMorePanel)
         XCTAssertEqual(viewModel.sidebarHealthContext.summary, "Health & insights")
 
-        viewModel.roots = [
+        viewModel.library.roots = [
             URL(fileURLWithPath: "/tmp/archive-root", isDirectory: true)
         ]
         XCTAssertTrue(viewModel.showsSidebarMorePanel)
@@ -3787,7 +3787,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let mixdown = mixdownFolder.appendingPathComponent("Song A mix.wav")
         FileManager.default.createFile(atPath: mixdown.path, contents: Data("fixture".utf8))
         watcher.simulateFilesystemChange(paths: [mixdown])
-        viewModel.roots = [rootB]
+        viewModel.library.roots = [rootB]
 
         let settleDeadline = Date().addingTimeInterval(2)
         while Date() < settleDeadline {
@@ -3883,7 +3883,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isScanning)
 
         // A newer full scan starts (and parks) while the incremental rescan is still held.
-        viewModel.roots = [rootB]
+        viewModel.library.roots = [rootB]
         let fullScanTask = Task { await viewModel.scan() }
         try await waitUntil("full scan parked at the gate") { gate.isWaiting }
 
@@ -4156,7 +4156,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         try await waitUntil("incremental operation parked in filesystem update") { operationHold.isHeld }
         XCTAssertTrue(viewModel.isScanning)
 
-        viewModel.roots = [rootB]
+        viewModel.library.roots = [rootB]
         XCTAssertFalse(viewModel.isScanning)
 
         await viewModel.scan()
@@ -4194,7 +4194,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let context = TestToolContext.make(fileActions: CapturingTestFileActions(revealed: revealed))
         let viewModel = ArchiveBrowserViewModel(context: context)
         await viewModel.scan()
-        viewModel.roots = [link]
+        viewModel.library.roots = [link]
 
         let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
         let cpr = try XCTUnwrap(neon.effectiveLatestCPR?.filePath ?? neon.latestCPR?.filePath)
@@ -4617,7 +4617,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
             }
         }
-        XCTAssertThrowsError(try viewModel.newSongDraftRoot(), "New Song draft root") { error in
+        XCTAssertThrowsError(try viewModel.library.newSongDraftRoot(), "New Song draft root") { error in
             XCTAssertEqual(error as? ArchiveWriteGuardError, .settingsUnreadable)
         }
         XCTAssertEqual(try Self.snapshot(of: fixture.vaultArchive), archiveBefore, "nothing written into the archive")
@@ -4670,7 +4670,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             context: TestToolContext.make(),
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
 
         XCTAssertThrowsError(try viewModel.fileAccess.exportIndexJSON(to: root.appendingPathComponent("Song/index.json"))) { error in
             XCTAssertEqual(error as? ArchiveDiagnosticsExportError, .destinationInsideArchiveRoot)
@@ -4744,7 +4744,7 @@ private struct VaultArchiveWriteGuardFixture {
             scanOverride: { _ in ScanResult() }
         )
         // `exportDiagnostics(to:)` returns early without a scan, so give it one.
-        viewModel.scanDiagnostics = ArchiveScanDiagnostics(
+        viewModel.library.recordScan(ArchiveScanDiagnostics(
             scannedAt: Date(),
             rootPaths: [scanRoot.path],
             songCount: 0,
@@ -4753,7 +4753,7 @@ private struct VaultArchiveWriteGuardFixture {
             globalWarnings: [],
             songWarningSummaries: [],
             skippedEntries: []
-        )
+        ))
         return viewModel
     }
 

@@ -319,7 +319,7 @@ final class SongMetadataDraftAutosaveTests: XCTestCase {
                 ScanResult(songs: [songA, songB], globalWarnings: [], skippedEntries: [])
             }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         return CountingHarness(
             root: root,
             cprA: cprA,
@@ -380,7 +380,7 @@ final class SongMetadataDraftAutosaveTests: XCTestCase {
                 ScanResult(songs: [songA, songB], globalWarnings: [], skippedEntries: [])
             }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         return Harness(
             root: root,
             cprA: cprA,

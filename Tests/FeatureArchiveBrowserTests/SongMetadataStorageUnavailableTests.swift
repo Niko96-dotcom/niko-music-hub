@@ -38,7 +38,7 @@ final class SongMetadataStorageUnavailableTests: XCTestCase {
             archiveRootWatcher: NoopArchiveRootWatcher(),
             scanOverride: { _ in ScanResult(songs: [song]) }
         )
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         await viewModel.scan()
         return viewModel
     }

@@ -133,7 +133,7 @@ extension ArchiveBrowserViewModel {
             // refuse the capture instead of reading as "no review pending".
             let settings: AppSettings
             do {
-                settings = try self.loadSettingsForWrite()
+                settings = try self.library.loadSettingsForWrite()
             } catch {
                 if self.boundArchiveCaptureSongID == songID {
                     self.boundArchiveCaptureSongID = nil
@@ -239,7 +239,7 @@ extension ArchiveBrowserViewModel {
             let willRemove = authorization.permitsRemoval
             let liveSettings: AppSettings
             do {
-                liveSettings = try self.loadSettingsForWrite()
+                liveSettings = try self.library.loadSettingsForWrite()
             } catch {
                 if self.boundArchiveCaptureSongID == songID {
                     self.boundArchiveCaptureSongID = nil

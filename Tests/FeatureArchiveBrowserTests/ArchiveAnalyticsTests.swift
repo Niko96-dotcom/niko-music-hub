@@ -110,7 +110,7 @@ final class ArchiveAnalyticsTests: XCTestCase {
         }
         let store = HistoryCountingStore()
         let model = ArchiveBrowserViewModel(context: TestToolContext.make(), songMetadataStore: store)
-        model.roots = [archiveRoot]
+        model.library.roots = [archiveRoot]
         model.applyCatalogEdit(.load([song("Neon Hook")]))
         model.showAnalytics()
         let baselineReads = store.historyReadCount

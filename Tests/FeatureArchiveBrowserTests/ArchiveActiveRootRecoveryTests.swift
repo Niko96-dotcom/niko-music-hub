@@ -65,7 +65,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
 
         XCTAssertTrue(viewModel.roots.isEmpty)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID)
 
         // Grant Access to the SAME Active folder with a fresh bookmark.
         let repairedBookmark = Data([0xC1])
@@ -92,16 +92,16 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertNotNil(persisted.musicRoots.first(where: { $0.id == archiveID }))
 
         // Warning advances to the second unresolved root; populated library uses inline strip.
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
-        XCTAssertFalse(viewModel.showsArchiveAccessRecovery)
-        XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertFalse(viewModel.library.showsArchiveAccessRecovery)
+        XCTAssertTrue(viewModel.library.showsInlineArchiveAccessRecovery)
         XCTAssertTrue(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == activeCanonical }))
 
         // Recovering the second root clears the failure without touching the repaired Active.
         provider.secondURL = secondDir
         XCTAssertTrue(viewModel.retryStoredArchiveAccess())
-        XCTAssertNil(viewModel.archiveAccessFailure)
-        XCTAssertFalse(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
+        XCTAssertFalse(viewModel.library.showsInlineArchiveAccessRecovery)
         let repersisted = try fixture.store.loadSettings()
         XCTAssertEqual(repersisted.musicRoots.first(where: { $0.id == activeID })?.securityScopedBookmark, repairedBookmark)
         XCTAssertEqual(repersisted.musicRoots.first(where: { $0.id == activeID })?.role, .active)
@@ -171,7 +171,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let provider = ActiveRecoveryBookmarkProvider()
         provider.activeURL = realDir
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID)
 
         viewModel.addRoots([reselectURL], bookmarksByURL: [reselectURL: Data([0xC1])])
 
@@ -184,7 +184,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
             ArchiveScanList.canonicalPath(for: $0.fallbackURL) == activeCanonical
         }
         XCTAssertEqual(duplicates.map(\.id), [activeID], "canonical alias must not mint a duplicate scanOnly")
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, secondID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, secondID)
     }
 
     func testDifferentFolderDoesNotReassignVaultBinding() throws {
@@ -230,7 +230,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         provider.activeURL = activeDir
         provider.extraURL = otherDir
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID)
 
         // Choosing a DIFFERENT folder is an additional scan root, never a silent
         // Vault reassignment (fail closed).
@@ -247,8 +247,8 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
             $0.role == .scanOnly && ArchiveScanList.canonicalPath(for: $0.fallbackURL) == ArchiveScanList.canonicalPath(for: otherDir)
         }))
         // Original Active remains the actionable failure.
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
-        XCTAssertTrue(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID)
+        XCTAssertTrue(viewModel.library.showsInlineArchiveAccessRecovery)
     }
 
     func testUnresolvedActiveRootIsNotDuplicatedByRepeatedRootChanges() throws {
@@ -291,7 +291,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let provider = ActiveRecoveryBookmarkProvider()
         provider.extraURL = otherDir
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID)
 
         // Adding and removing an unrelated root saves each time; the stale
         // Active root must stay a single entry.
@@ -362,7 +362,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
             bookmarkProvider: provider,
             scanOverride: { _ in ScanResult() }
         )
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID)
 
         viewModel.addRoots([activeDir], bookmarksByURL: [activeDir: Data([0xC1])])
 
@@ -375,7 +375,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         XCTAssertFalse(stillPersisted.musicRoots.contains(where: {
             $0.role == .scanOnly && ArchiveScanList.canonicalPath(for: $0.fallbackURL) == ArchiveScanList.canonicalPath(for: activeDir)
         }), "failed persist must not leave a duplicate scanOnly behind")
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID, "failed persist must keep the Active recovery actionable")
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID, "failed persist must keep the Active recovery actionable")
         XCTAssertNotNil(viewModel.persistenceWarningMessage)
 
         // A failed save changes nothing, so the person grants access again; that
@@ -439,7 +439,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let provider = ActiveRecoveryBookmarkProvider()
         provider.activeURL = activeDir
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID)
 
         // Live old-bug relaunch: the stored roots already hold the same folder as
         // an erroneous enabled duplicate scanOnly. Granting access must still
@@ -463,8 +463,8 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         )
         XCTAssertFalse(persisted.musicRoots.contains(where: { $0.id == duplicateID }))
         XCTAssertNotNil(persisted.musicRoots.first(where: { $0.id == archiveID }))
-        XCTAssertNil(viewModel.archiveAccessFailure)
-        XCTAssertFalse(viewModel.showsInlineArchiveAccessRecovery)
+        XCTAssertNil(viewModel.library.archiveAccessFailure)
+        XCTAssertFalse(viewModel.library.showsInlineArchiveAccessRecovery)
         XCTAssertTrue(viewModel.roots.contains(where: { ArchiveScanList.canonicalPath(for: $0) == activeCanonical }))
     }
 
@@ -516,7 +516,7 @@ final class ArchiveActiveRootRecoveryTests: XCTestCase {
         let provider = ActiveRecoveryBookmarkProvider()
         provider.activeURL = activeDir
         let viewModel = fixture.makeViewModel(bookmarkProvider: provider)
-        XCTAssertEqual(viewModel.archiveAccessFailure?.storedRootID, activeID)
+        XCTAssertEqual(viewModel.library.archiveAccessFailure?.storedRootID, activeID)
 
         viewModel.addRoots([activeDir], bookmarksByURL: [activeDir: Data([0xC1])])
 

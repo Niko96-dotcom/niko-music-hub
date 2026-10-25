@@ -698,7 +698,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             scanOverride: { _ in ScanResult(songs: [song], globalWarnings: [], skippedEntries: []) }
         )
         _ = try XCTUnwrap(viewModel.upsertCollaborator(name: "Jamie Rivera"))
-        viewModel.roots = [root]
+        viewModel.library.roots = [root]
         viewModel.applyCatalogEdit(.load([song]))
 
         viewModel.refreshIntelligenceNow()

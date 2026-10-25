@@ -491,7 +491,7 @@ final class ArchiveVaultObservationTests: XCTestCase {
         let keptSong = makeSong(in: harness.active, named: "Kept Later")
         let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [])
         try await waitUntil { runtime.snapshotsCalls >= 1 && runtime.dueCalls >= 1 }
-        viewModel.roots = [harness.active]
+        viewModel.library.roots = [harness.active]
         viewModel.applyCatalogEdit(.load([archivedSong, keptSong]))
         let beforeArchive = viewModel.indexPersistTask
 

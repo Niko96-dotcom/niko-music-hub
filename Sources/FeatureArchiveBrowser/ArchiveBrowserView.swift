@@ -28,10 +28,10 @@ struct ArchiveBrowserView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if viewModel.scanError != nil {
+            if viewModel.library.scanError != nil {
                 scanFailureCard
             }
-            if viewModel.showsInlineArchiveAccessRecovery, let failure = viewModel.archiveAccessFailure {
+            if viewModel.library.showsInlineArchiveAccessRecovery, let failure = viewModel.library.archiveAccessFailure {
                 inlineArchiveAccessRecovery(failure)
             }
         GeometryReader { proxy in
@@ -104,7 +104,7 @@ struct ArchiveBrowserView: View {
                     .background(Color.clear)
                 }
 
-                if viewModel.showsArchiveAccessRecovery, let failure = viewModel.archiveAccessFailure {
+                if viewModel.library.showsArchiveAccessRecovery, let failure = viewModel.library.archiveAccessFailure {
                     Color.black.opacity(0.35)
                         .ignoresSafeArea()
                     ArchiveAccessRecoveryView(
@@ -265,7 +265,7 @@ struct ArchiveBrowserView: View {
                 viewModel.requestStopActiveProjectVaultTransfer()
                 return .handled
             }
-            if viewModel.isScanning {
+            if viewModel.library.isScanning {
                 viewModel.cancelScan()
                 return .handled
             }
@@ -301,7 +301,7 @@ struct ArchiveBrowserView: View {
             showNewSongSheet = true
         }
         .sheet(isPresented: Binding(
-            get: { viewModel.needsFirstRunOnboarding },
+            get: { viewModel.library.needsFirstRunOnboarding },
             set: { _ in /* Skip keeps the archive empty; roots can be added from the board or Settings */ }
         )) {
             ArchiveFirstRunView(onChooseRoot: chooseRoot, onSkip: { viewModel.completeArchiveOnboarding() })
@@ -351,9 +351,9 @@ struct ArchiveBrowserView: View {
         } message: {
             Text(CancelCopy.stopTransferMessage)
         }
-        .task(id: viewModel.roots.map(\.path).joined(separator: "|")) {
-            guard !viewModel.isScanning else { return }
-            if viewModel.roots.isEmpty {
+        .task(id: viewModel.library.roots.map(\.path).joined(separator: "|")) {
+            guard !viewModel.library.isScanning else { return }
+            if viewModel.library.roots.isEmpty {
                 viewModel.clearScanResults()
                 return
             }
@@ -432,7 +432,7 @@ struct ArchiveBrowserView: View {
                         .foregroundStyle(HubDesignSystem.Palette.accent)
                 }
                 VStack(spacing: 6) {
-                    Text(viewModel.roots.isEmpty ? "Add your archive folder" : "Select a song")
+                    Text(viewModel.library.roots.isEmpty ? "Add your archive folder" : "Select a song")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                         .lineLimit(1)
@@ -495,7 +495,7 @@ struct ArchiveBrowserView: View {
             Text(ArchiveOpenErrorCopy.scanTitle)
                 .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
                 .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-            Text(viewModel.scanError ?? ArchiveOpenErrorCopy.scanBody)
+            Text(viewModel.library.scanError ?? ArchiveOpenErrorCopy.scanBody)
                 .font(HubDesignSystem.Typography.caption())
                 .foregroundStyle(HubDesignSystem.Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -514,7 +514,7 @@ struct ArchiveBrowserView: View {
         .padding(.horizontal, HubToolLayout.horizontalPadding)
         .padding(.top, 12)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(ArchiveOpenErrorCopy.scanTitle). \(viewModel.scanError ?? ArchiveOpenErrorCopy.scanBody)")
+        .accessibilityLabel("\(ArchiveOpenErrorCopy.scanTitle). \(viewModel.library.scanError ?? ArchiveOpenErrorCopy.scanBody)")
     }
 
     /// NMH-049: nearby open failure above the footer for keyboard-triggered Open
@@ -655,9 +655,9 @@ struct ArchiveBrowserView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Grant Access"
-        if let failure = viewModel.archiveAccessFailure {
+        if let failure = viewModel.library.archiveAccessFailure {
             panel.message = "Grant access to “\(failure.displayName)” so Niko Music Hub can scan this folder."
-            panel.directoryURL = viewModel.storedArchiveAccessDirectory()
+            panel.directoryURL = viewModel.library.storedArchiveAccessDirectory()
         }
         if panel.runModal() == .OK, let url = panel.url {
             addArchiveRootsFromOpenPanel([url])

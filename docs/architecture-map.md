@@ -81,7 +81,7 @@ Hops in call order. Ownership detail is in [architecture.md](architecture.md).
 
 ### Find a song and open its project
 
-1. `ArchiveBrowserViewModel.init` loads roots (`+Roots.swift`), then the cached snapshot
+1. `ArchiveBrowserViewModel.init` loads roots (`ArchiveLibraryModel.loadRootsFromSettings`), then the cached snapshot
    (`loadCachedIndexIfAvailable` → `ArchiveCatalogCoordinator.loadCachedSongsReportDetached` →
    `SQLiteArchiveIndexStore.loadLatest`), then starts a background scan when it has a root watcher and no
    fixture root.
@@ -90,7 +90,7 @@ Hops in call order. Ownership detail is in [architecture.md](architecture.md).
    is dropped.
 3. `ArchiveCatalogCoordinator` merges stored user metadata (`ArchiveMetadataMerger`). Scans never write
    metadata.
-4. `applyCatalogScanUpdate` (`+ScanHost.swift`) applies `.rescan` through `applyCatalogEdit(_:)`
+4. `applyCatalogScanUpdate` (`+Scan.swift`) applies `.rescan` through `applyCatalogEdit(_:)`
    (`ArchiveBrowserViewModel.swift`), which projects the result, writes `SongCatalog` and has `ArchiveBrowseModel`
    run `ArchiveBrowseProjection` and `MusicSearchIndex`; `ArchiveMetadataEditingCoordinator.scheduleIndexPersist`
    saves the snapshot.
@@ -169,7 +169,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Durable settings (music roots, output folder, Vault, helpers) | `SettingsStore` → `UserDefaultsSettingsStore`; display mirror `AppSettingsObserver` | UserDefaults key `nikoMusicHub.settings` (JSON) |
 | Archive song catalog (scan baseline, visible list, id index) | `SongCatalog`, written only by `ArchiveBrowserViewModel.applyCatalogEdit(_:)` | snapshot in `SQLiteArchiveIndexStore` |
 | Archive scan list (the folders the archive scans) | the settings store; edited only through `ArchiveScanList` (AppCore); the archive follows `appSettings` ([architecture.md § Archive scan list](architecture.md#archive-scan-list)) | settings JSON in UserDefaults |
-| Loaded roots | `ArchiveBrowserViewModel` | memory |
+| Loaded roots, their access, first-run state, scan state (scanning, scan error, diagnostics, root generation) | `ArchiveLibraryModel`, held as `ArchiveBrowserViewModel.library` | memory |
 | Archive browse inputs and results (search text, shelf, filters, sort, filtered list, search index) | `ArchiveBrowseModel`, held as `ArchiveBrowserViewModel.browse` | memory |
 | Archive page (`viewMode`, `listShowsDetail`) and the selected song | `ArchivePageModel`, held as `ArchiveBrowserViewModel.page`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
@@ -287,13 +287,14 @@ These rules are documented and, where named, enforced. The full table is in
    consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to
    the archive view model, and the recorder and the archive share one recording signal through `ToolContext`, since
    2026-10-24.)
-6. **`ArchiveBrowserViewModel` is one type in 17 files** (the main file plus 16 `+*.swift` extensions; the
+6. **`ArchiveBrowserViewModel` is one type in 15 files** (the main file plus 14 `+*.swift` extensions; the
    footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog` on 2026-10-23).
    Owners extracted so far: scan orchestrator, catalog, metadata editing, Vault queue and observation, and since
-   2026-10-25 the song analysis (`ArchiveSongAnalysisModel`), the intelligence hints (`ArchiveIntelligenceModel`)
+   2026-10-25 the song analysis (`ArchiveSongAnalysisModel`), the intelligence hints (`ArchiveIntelligenceModel`),
    the browse page (`ArchiveBrowseModel`), the page and selection (`ArchivePageModel`), the address book
-   (`ArchiveAddressBookModel`) and file access (`ArchiveFileAccessModel`). The other extensions still
-   share one set of state, and the root reset still resets about 10 properties by hand.
+   (`ArchiveAddressBookModel`), file access (`ArchiveFileAccessModel`) and the library (`ArchiveLibraryModel`). The
+   Vault dialogs and the bound-authorization capture are still view-model state, and the root reset still sets one
+   of them (`showArchivedProjects`) by hand.
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
    2026-10-25. `DevToolFeature` always compiles and is shown

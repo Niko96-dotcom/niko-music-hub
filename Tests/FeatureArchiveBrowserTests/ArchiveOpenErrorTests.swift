@@ -50,7 +50,7 @@ final class ArchiveOpenErrorTests: XCTestCase {
                 userInfo: [NSLocalizedDescriptionKey: "unreadable fixture root"]
             )
         )
-        XCTAssertEqual(model.scanError, ArchiveOpenErrorCopy.scanBody)
+        XCTAssertEqual(model.library.scanError, ArchiveOpenErrorCopy.scanBody)
         XCTAssertTrue(model.statusMessage?.contains("Scan failed") == true)
     }
 }

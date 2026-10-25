@@ -73,10 +73,10 @@ final class ArchiveSettingsRepairTests: XCTestCase {
             context: TestToolContext.make(settingsStore: makeStore(blob: Data(#"{"vault":{"spaceIntent":"bogus"}}"#.utf8))),
             archiveRootWatcher: NoopArchiveRootWatcher()
         )
-        viewModel.roots = []
-        viewModel.refreshFirstRunState()
+        viewModel.library.roots = []
+        viewModel.library.refreshFirstRunState()
 
-        XCTAssertFalse(viewModel.needsFirstRunOnboarding, "damaged settings belong to a returning user")
+        XCTAssertFalse(viewModel.library.needsFirstRunOnboarding, "damaged settings belong to a returning user")
     }
 
     func testUnreadableSettingsLoadAddsNoArchiveWarning() {

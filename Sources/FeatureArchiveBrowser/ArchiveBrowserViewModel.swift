@@ -59,7 +59,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             },
             writeProtectedRoots: { [weak self] in
                 guard let self else { throw ArchiveWriteGuardError.settingsUnreadable }
-                return try self.writeProtectedRoots()
+                return try self.library.writeProtectedRoots()
             },
             isVaultBlocked: { [weak self] song in self?.blocksGenericProjectVaultFileActions(for: song) ?? true },
             vaultBlockReason: { [weak self] song in self?.projectOpenBlockReason(for: song) },
@@ -76,7 +76,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     )
     let fileActions: any FileActions
     let settingsStore: SettingsStore
-    /// Display-only settings. Writes and Vault decisions use `loadSettingsForWrite()`.
+    /// Display-only settings. Writes and Vault decisions use `library.loadSettingsForWrite()`.
     let appSettings: AppSettingsObserver
     /// Settings-pane deep links (Vault status row → Settings → Vault).
     let router: QuickAccessRouter
@@ -93,12 +93,21 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     // MARK: - Published state
 
-    @Published var roots: [URL] = [] {
-        didSet {
-            guard oldValue.standardizedArchivePaths != roots.standardizedArchivePaths else { return }
-            invalidateActiveScanForRootChange()
-        }
-    }
+    /// The loaded roots, their access, the first-run state and the scan state
+    /// (scanning flag, scan error, diagnostics, root generation).
+    private(set) lazy var library = ArchiveLibraryModel(
+        settingsStore: settingsStore,
+        appSettings: appSettings,
+        diagnostics: diagnostics,
+        runtime: runtime,
+        bookmarkProvider: bookmarkProvider,
+        host: ArchiveLibraryHost(
+            raiseWarning: { [weak self] warning in self?.recordPersistenceWarning(warning) },
+            resolveWarning: { [weak self] kind in self?.resolveFooterWarning(kind) },
+            rootsDidChange: { [weak self] in self?.scanOrchestrator.invalidateForRootChange() },
+            scanningDidChange: { [weak self] in self?.publishShellJobStatus() }
+        )
+    )
     /// The songs this browser holds: the scan baseline and the visible list,
     /// with an id index. `applyCatalogEdit(_:)` is its only writer: the setter
     /// is private to this file, so another writer does not compile.
@@ -228,19 +237,38 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
 
+    /// A root change (or Clear Scan Results): every owner drops what it holds for
+    /// the old roots, in this order:
+    ///
+    /// 1. Vault work and dialogs stop first, so nothing queued for the old roots
+    ///    runs while the rest resets.
+    /// 2. The owners reset their own state; the order among them does not matter.
+    /// 3. `applyCatalogEdit(.clear)` comes last: its browse recompute must see the
+    ///    reset browse inputs and the cleared scan diagnostics, and its per-song
+    ///    step drops every BPM/key result and plug-in summary.
+    /// 4. The status line, after the edit, so it is the one that shows.
+    func clearRootBoundArchiveState(statusMessage nextStatusMessage: String?) {
+        cancelPendingProjectVaultOperations()
+        vaultOperations.clearAllOperationMessages()
+        intelligence.clearForRootChange()
+        metadataEditing.clearForRootChange()
+        songAnalysis.cancel()
+        clearFooterWarning()
+        scanOrchestrator.clearPendingPaths()
+        previewSession.clear()
+        ArchivePreviewPlayer.clearMetadataCaches()
+        browse.clearForRootChange()
+        page.clearForRootChange()
+        showArchivedProjects = false
+        vaultObservation.clearForRootChange(notifyWhenChanged: false)
+        library.clearScanForRootChange()
+        applyCatalogEdit(.clear)
+        setStatusMessage(nextStatusMessage)
+    }
+
     /// The By Collaborator shelf starts on the address book's first collaborator.
     func selectShelf(_ shelf: ArchiveSmartShelf) {
         browse.selectShelf(shelf, defaultCollaboratorID: collaborators.first?.id)
-    }
-    @Published var isScanning = false {
-        didSet {
-            // NMH-049: a new scan dismisses the nearby scan error.
-            // Guarded so an already-clear error adds no extra publish.
-            if isScanning, scanError != nil {
-                scanError = nil
-            }
-            publishShellJobStatus()
-        }
     }
     /// What the archive footer shows. `ArchiveFooterStatus` owns the rules; the
     /// footer methods at the end of this file are the only writers.
@@ -248,18 +276,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var statusMessage: String? { footer.text }
     var statusBaseMessage: String? { footer.message }
     var persistenceWarningMessage: String? { footer.warning?.text }
-    /// NMH-049: nearby scan failure body (footer keeps `Scan failed: …`).
-    @Published var scanError: String?
-    @Published var scanDiagnostics: ArchiveScanDiagnostics?
-    @Published var needsFirstRunOnboarding = false {
-        didSet {
-            // NMH-042: first-run overlay appear/dismiss changes layout.
-            if oldValue != needsFirstRunOnboarding {
-                HubAccessibilityAnnouncer.layoutChanged()
-            }
-        }
-    }
-    @Published var archiveAccessFailure: ArchiveAccessFailure?
     /// The collaborator address book and a removal waiting for confirmation.
     private(set) lazy var addressBook = ArchiveAddressBookModel(
         store: collaboratorStore,
@@ -405,7 +421,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
 
     // MARK: - Stored state
 
-    var rootGeneration: UInt64 = 0
     lazy var scanOrchestrator = ArchiveScanOrchestrator(host: self)
     /// Songs discovered by the configured active/scan roots. Project Vault archive
     /// generations are projected into `songs` only when the user opts into them, so
@@ -453,6 +468,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var pageCancellable: AnyCancellable?
     var addressBookCancellable: AnyCancellable?
     var fileAccessCancellable: AnyCancellable?
+    var libraryCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -468,11 +484,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     // (context, health, snapshots, path index, card cache, archived count,
     // recovery timer). Read-only peers above preserve the view API; writes
     // go through the observation's intentional methods.
-    /// Keeps security-scoped access alive for bookmarked roots while the model lives.
-    var securityScopedRootAccesses: [SecurityScopedRootAccess] = []
-    /// The stored roots and Vault settings the archive last loaded; nil while
-    /// settings are unreadable. `followStoredSettings()` compares against it.
-    var followedSettings: ArchiveFollowedSettings?
     var storedSettingsCancellable: AnyCancellable?
     public var requestConverterHandoff: ((URL) -> Void)?
 
@@ -599,14 +610,16 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
         fileAccessCancellable = fileAccess.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
-        loadRootsFromSettings()
+        libraryCancellable = library.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+        library.loadRootsFromSettings()
         followStoredSettingsChanges()
         page.attach(context.navigationHistory) { [weak self] route in
             self?.restoreNavigationRoute(route)
         }
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)
         addressBook.load()
-        refreshFirstRunState()
+        library.refreshFirstRunState()
         restartArchiveRootWatching()
         loadCachedIndexIfAvailable()
         Task {
@@ -702,10 +715,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     // MARK: - Helpers
 
     /// Mirrors scan and Vault-transfer activity into the shell job status center;
-    /// driven by the `isScanning` observer and the operation owner's
+    /// driven by the library's `isScanning` observer and the operation owner's
     /// `onActiveChanged` hook (same timing as the former active-operation didSet).
     func publishShellJobStatus() {
-        if isScanning {
+        if library.isScanning {
             jobStatusCenter.setExtraJob(
                 sourceID: ShellJobExtraSourceID.archiveScan,
                 status: ShellJobStatusCopy.archiveScanStatus,
