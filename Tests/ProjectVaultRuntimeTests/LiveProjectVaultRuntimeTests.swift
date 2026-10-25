@@ -150,7 +150,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let restored = try await runtime.recoverInterruptedArchive(snapshot: snapshot)
         XCTAssertNotNil(restored.completedAt)
         try VaultManifestBuilder().verify(before, at: restored.destinationURL)
-        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm
         XCTAssertTrue(pinned.contains(restored.projectID.description))
         XCTAssertTrue(pinned.contains(restored.destinationURL.standardizedFileURL.resolvingSymlinksInPath().path))
         do {
@@ -277,7 +277,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
         _ = try await fixture.runtime().archive(song: fixture.song, trigger: .backupCopy)
         let songID = fixture.song.id
-        try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = [songID] }
+        try fixture.settingsStore.updateSettings { $0.vault.keepLocalPins.storedForm = [songID] }
         let runtime = try LiveProjectVaultRuntime(
             settingsStore: LaterLoadsFailSettingsStore(wrapping: fixture.settingsStore, successfulLoads: 1),
             transferStore: fixture.transferStore(),
@@ -308,11 +308,11 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             ("resolved source path", transfer.sourceURL.standardizedFileURL.resolvingSymlinksInPath().path),
         ]
         for (label, key) in keys {
-            try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = [key] }
+            try fixture.settingsStore.updateSettings { $0.vault.keepLocalPins.storedForm = [key] }
             let snapshot = try await runtime.snapshots().first { $0.record.id == archived.record.id }
             XCTAssertEqual(snapshot?.record.pinned, true, "Keep Local stored by \(label) must show as pinned")
         }
-        try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = ["/nowhere/Other Song"] }
+        try fixture.settingsStore.updateSettings { $0.vault.keepLocalPins.storedForm = ["/nowhere/Other Song"] }
         let unpinned = try await runtime.snapshots().first { $0.record.id == archived.record.id }
         XCTAssertEqual(unpinned?.record.pinned, false)
 
@@ -321,7 +321,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let pinnedID = ProjectID()
         let songID = fixture.song.id
         try fixture.saveCatalogEntry(projectID: pinnedID)
-        try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs = [songID] }
+        try fixture.settingsStore.updateSettings { $0.vault.keepLocalPins.storedForm = [songID] }
         let byLocation = try await runtime.snapshots().first { $0.record.id == pinnedID }
         XCTAssertNil(byLocation?.transfer)
         XCTAssertEqual(byLocation?.record.pinned, true)
@@ -354,7 +354,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         // Restore preserves Done and pins Keep Local: rearchive must observe
         // protection first, then explicitly unpin project ID and canonical path.
         let restoredCanonical = ProjectVaultArchiveAuthorization.canonicalPath(for: fixture.project)
-        let pinnedAfterRestore = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        let pinnedAfterRestore = try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm
         XCTAssertTrue(pinnedAfterRestore.contains(archived.record.id.description))
         XCTAssertTrue(pinnedAfterRestore.contains(restoredCanonical))
         do {
@@ -369,11 +369,11 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
         }
         try fixture.settingsStore.updateSettings { [project = fixture.project, songID = fixture.song.id] in
-            $0.vault.keepLocalProjectIDs.remove(archived.record.id.description)
-            $0.vault.keepLocalProjectIDs.remove(restoredCanonical)
-            $0.vault.keepLocalProjectIDs.remove(project.path)
-            $0.vault.keepLocalProjectIDs.remove(project.standardizedFileURL.path)
-            $0.vault.keepLocalProjectIDs.remove(songID)
+            $0.vault.keepLocalPins.storedForm.remove(archived.record.id.description)
+            $0.vault.keepLocalPins.storedForm.remove(restoredCanonical)
+            $0.vault.keepLocalPins.storedForm.remove(project.path)
+            $0.vault.keepLocalPins.storedForm.remove(project.standardizedFileURL.path)
+            $0.vault.keepLocalPins.storedForm.remove(songID)
         }
         let againAuthorization = try await runtime.captureArchiveAuthorization(
             for: fixture.song,
@@ -405,7 +405,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             }
             if blocker == "keepLocal" {
                 let projectPath = fixture.project.path
-                try fixture.settingsStore.updateSettings { $0.vault.keepLocalProjectIDs.insert(projectPath) }
+                try fixture.settingsStore.updateSettings { $0.vault.keepLocalPins.storedForm.insert(projectPath) }
             }
             if blocker == "emergency" {
                 try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
@@ -2061,7 +2061,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             catalogProjectID: nil
         )
         try fixture.settingsStore.updateSettings { settings in
-            settings.vault.keepLocalProjectIDs.insert(sourcePath)
+            settings.vault.keepLocalPins.storedForm.insert(sourcePath)
         }
 
         do {
@@ -2959,7 +2959,7 @@ extension LiveProjectVaultRuntimeTests {
         let canonicalSource = ProjectVaultArchiveAuthorization.canonicalPath(for: fixture.project)
         let runtime = try fixture.runtime(
             activityProbe: FinalBoundaryMutatingProbe {
-                try? settingsStore.updateSettings { $0.vault.keepLocalProjectIDs.insert(canonicalSource) }
+                try? settingsStore.updateSettings { $0.vault.keepLocalPins.storedForm.insert(canonicalSource) }
             },
             projectOpener: RuntimeNoopVaultProjectOpener()
         )
@@ -2977,7 +2977,7 @@ extension LiveProjectVaultRuntimeTests {
             XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
         }
 
-        XCTAssertTrue(try settingsStore.loadSettings().vault.keepLocalProjectIDs.contains(canonicalSource))
+        XCTAssertTrue(try settingsStore.loadSettings().vault.keepLocalPins.storedForm.contains(canonicalSource))
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
         XCTAssertEqual(try fixture.transferStore().allTransferRecords().first?.state, .archiveVerified)
     }
@@ -4445,7 +4445,7 @@ extension LiveProjectVaultRuntimeTests {
         // Restore preserves Done and pins Keep Local: rearchive must observe
         // protection first, then explicitly unpin project ID and canonical path.
         let rescannedCanonical = ProjectVaultArchiveAuthorization.canonicalPath(for: fixture.project)
-        let rescannedPinned = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        let rescannedPinned = try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm
         XCTAssertTrue(rescannedPinned.contains(archived.record.id.description))
         XCTAssertTrue(rescannedPinned.contains(rescannedCanonical))
         do {
@@ -4460,12 +4460,12 @@ extension LiveProjectVaultRuntimeTests {
             XCTAssertEqual(error as? ProjectVaultRuntimeError, .keepLocal)
         }
         try fixture.settingsStore.updateSettings { [project = fixture.project] in
-            $0.vault.keepLocalProjectIDs.remove(archived.record.id.description)
-            $0.vault.keepLocalProjectIDs.remove(copy.record.id.description)
-            $0.vault.keepLocalProjectIDs.remove(rescannedCanonical)
-            $0.vault.keepLocalProjectIDs.remove(project.path)
-            $0.vault.keepLocalProjectIDs.remove(project.standardizedFileURL.path)
-            $0.vault.keepLocalProjectIDs.remove(scanned.id)
+            $0.vault.keepLocalPins.storedForm.remove(archived.record.id.description)
+            $0.vault.keepLocalPins.storedForm.remove(copy.record.id.description)
+            $0.vault.keepLocalPins.storedForm.remove(rescannedCanonical)
+            $0.vault.keepLocalPins.storedForm.remove(project.path)
+            $0.vault.keepLocalPins.storedForm.remove(project.standardizedFileURL.path)
+            $0.vault.keepLocalPins.storedForm.remove(scanned.id)
         }
 
         let rescanned = try XCTUnwrap(MusicArchiveScanner().scan(roots: [fixture.active]).songs.first {
@@ -4474,9 +4474,9 @@ extension LiveProjectVaultRuntimeTests {
         // Rescanned identity uses the same stable folder; clear any residual
         // scan-representation key so the explicit owner opt-out above holds.
         try fixture.settingsStore.updateSettings {
-            $0.vault.keepLocalProjectIDs.remove(rescanned.id)
-            $0.vault.keepLocalProjectIDs.remove(rescanned.folderPath.path)
-            $0.vault.keepLocalProjectIDs.remove(rescanned.folderPath.standardizedFileURL.path)
+            $0.vault.keepLocalPins.storedForm.remove(rescanned.id)
+            $0.vault.keepLocalPins.storedForm.remove(rescanned.folderPath.path)
+            $0.vault.keepLocalPins.storedForm.remove(rescanned.folderPath.standardizedFileURL.path)
         }
         let againAuthorization = try await runtime.captureArchiveAuthorization(
             for: rescanned,

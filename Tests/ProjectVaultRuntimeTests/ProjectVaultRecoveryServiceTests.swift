@@ -153,7 +153,7 @@ final class ProjectVaultRecoveryServiceTests: XCTestCase {
         XCTAssertEqual(fresh.vault.activeRootID, settingsBefore.vault.activeRootID)
         XCTAssertEqual(fresh.vault.archiveRootID, settingsBefore.vault.archiveRootID)
         XCTAssertEqual(fresh.musicRoots.map(\.id), settingsBefore.musicRoots.map(\.id))
-        XCTAssertEqual(fresh.vault.keepLocalProjectIDs, ["keep-1"])
+        XCTAssertEqual(fresh.vault.keepLocalPins.storedForm, ["keep-1"])
 
         // Current settings and database are byte-for-byte untouched.
         XCTAssertEqual(try fixture.settingsStore.loadSettings(), settingsBefore)
@@ -320,7 +320,7 @@ final class ProjectVaultRecoveryServiceTests: XCTestCase {
                     activeRootID: activeRoot.id,
                     archiveRootID: archiveRoot.id,
                     automationEmergencyStop: false,
-                    keepLocalProjectIDs: ["keep-1"]
+                    keepLocalPins: KeepLocalPins(storedForm: ["keep-1"])
                 )
             ))
             songID = "/tmp/Recovery Song"

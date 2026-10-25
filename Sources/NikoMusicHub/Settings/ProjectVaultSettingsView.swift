@@ -158,7 +158,7 @@ struct ProjectVaultSettingsView: View {
         .sheet(isPresented: $showKeepLocalReview) {
             KeepLocalReviewSheet(
                 settings: settings,
-                pinCount: settings.vault.keepLocalPins.storedKeys.count,
+                pinCount: settings.vault.keepLocalPins.storedKeyCount,
                 browserVisited: keepLocalBrowserVisited,
                 onOpenArchiveBrowser: openKeepLocalArchiveBrowser,
                 onDone: doneKeepLocalReview,

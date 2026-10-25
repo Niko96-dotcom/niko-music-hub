@@ -477,10 +477,13 @@ Return and Esc on a tool page have one owner each (2026-10-24, finding #10 of th
 pinned, which keys a pin writes and which keys unpin removes. [ADR 021](decisions/021-keep-local-pin-format.md) has the
 decision.
 
-- Storage is unchanged: `VaultSettings.keepLocalProjectIDs`, a set of strings that mixes catalog project IDs, song IDs and
-  folder paths in several spellings. Older builds and recovery bundles read it, so a pin still writes every spelling
-  they compare (raw, standardized, resolved, canonical). The set is `internal` to AppCore; everything else uses
-  `VaultSettings.keepLocalPins` (`KeepLocalPinsSourceTests`).
+- Storage is unchanged: the settings key `keepLocalProjectIDs`, an array of strings that mixes catalog project IDs, song
+  IDs and folder paths in several spellings. Older builds and recovery bundles read it, so a pin still writes every
+  spelling they compare (raw, standardized, resolved, canonical). `VaultSettings.keepLocalPins` stores the
+  `KeepLocalPins` value, which encodes itself as that array. The keys are `private` to `KeepLocalPins`, so code
+  anywhere else cannot read or build a key set: it does not compile (`KeepLocalPinsSourceTests` keeps them private).
+  Diagnostics and the Review Keep Local sheet show `storedKeyCount`; settings repair salvages a damaged value through
+  `KeepLocalPins.salvaging(storedValue:)`. Tests plant and read keys only through the settings codec.
 - A caller describes a project with what it knows (`KeepLocalPins.Project`: project IDs, song IDs, folders). IDs match
   exactly; folders match by one canonical folder path (`KeepLocalPins.canonicalFolderPath`, which
   `ArchiveVaultObservation.vaultCanonicalPath` forwards to), so a pin under another spelling of the same folder

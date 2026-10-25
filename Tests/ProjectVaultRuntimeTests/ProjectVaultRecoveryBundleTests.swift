@@ -41,7 +41,7 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
                 activeRootID: active.id,
                 archiveRootID: archive.id,
                 automationEmergencyStop: false,
-                keepLocalProjectIDs: ["keep-1"]
+                keepLocalPins: KeepLocalPins(storedForm: ["keep-1"])
             )
         )
         let bundleURL = root.appendingPathComponent("bundle", isDirectory: true)
@@ -59,7 +59,7 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
         // Identity, roots, metadata, and Keep Local preserved.
         XCTAssertEqual(result.settings.vault.activeRootID, active.id)
         XCTAssertEqual(result.settings.vault.archiveRootID, archive.id)
-        XCTAssertEqual(result.settings.vault.keepLocalPins.storedKeys, ["keep-1"])
+        XCTAssertEqual(result.settings.vault.keepLocalPins.storedForm, ["keep-1"])
         XCTAssertEqual(result.settings.musicRoots.map(\.id), [active.id, archive.id])
         XCTAssertEqual(result.settings.musicRoots.map(\.pathFallback), [active.pathFallback, archive.pathFallback])
         // Staged database carries the full snapshot and workflow metadata.
@@ -146,7 +146,7 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
         XCTAssertTrue(result.settings.vault.automationEmergencyStop)
         XCTAssertEqual(result.settings.vault.keepPreviousGenerationDays, 21)
         XCTAssertEqual(result.settings.vault.activeRootID, settings.vault.activeRootID)
-        XCTAssertEqual(result.settings.vault.keepLocalPins.storedKeys, ["keep-1"])
+        XCTAssertEqual(result.settings.vault.keepLocalPins.storedForm, ["keep-1"])
         for key in removedKeys {
             XCTAssertNil(try vaultObject(result.settingsURL)[key], key)
         }
@@ -443,7 +443,7 @@ final class ProjectVaultRecoveryBundleTests: XCTestCase {
                 activeRootID: active.id,
                 archiveRootID: archive.id,
                 automationEmergencyStop: false,
-                keepLocalProjectIDs: ["keep-1"]
+                keepLocalPins: KeepLocalPins(storedForm: ["keep-1"])
             )
         )
     }

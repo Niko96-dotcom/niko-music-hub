@@ -446,7 +446,7 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
         XCTAssertTrue(viewModel.vaultObservation.isIntentionalKeepLocalSkip(for: restored))
 
         viewModel.setProjectKeepLocal(false, for: restored)
-        XCTAssertEqual(try harness.store.loadSettings().vault.keepLocalPins.storedKeys, [])
+        XCTAssertEqual(try harness.store.loadSettings().vault.keepLocalPins.storedForm, [])
         XCTAssertFalse(viewModel.vaultObservation.isIntentionalKeepLocalSkip(for: restored))
     }
 

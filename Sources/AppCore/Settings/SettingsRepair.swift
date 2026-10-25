@@ -191,7 +191,7 @@ enum SettingsSalvage {
     /// | spaceIntent                   | keepCopy, legacy rollout stepped back       |
     /// | automationEmergencyStop       | true (stop engaged)                         |
     /// | independentBackupConfirmed    | false                                       |
-    /// | keepLocalProjectIDs           | readable pins kept + removal paused         |
+    /// | keepLocalProjectIDs (pins)    | readable pins kept + removal paused         |
     /// | keepLocalReviewRequired       | true when pins/blob unreadable, else kept   |
     /// | reserve / retention days      | defaults                                    |
     /// | verification / drill dates    | nil (never)                                 |
@@ -281,17 +281,13 @@ enum SettingsSalvage {
         }
         var removalPaused = false
         if let rawKeepLocal = object["keepLocalProjectIDs"] {
-            let entries = rawKeepLocal as? [Any]
-            let ids = entries?.compactMap { $0 as? String } ?? []
-            if entries == nil || ids.count != entries?.count {
-                // Unpinning a Keep Local project would expose it to removal.
-                // Keep every readable pin, and pause removal until the user
-                // reviews the list (the raw value stays in the backup).
-                vault.keepLocalProjectIDs = Set(ids)
-                removalPaused = true
-            } else {
-                vault.keepLocalProjectIDs = Set(ids)
-            }
+            // Unpinning a Keep Local project would expose it to removal. Keep
+            // every readable pin, and when some could not be read, pause
+            // removal until the user reviews the list (the raw value stays in
+            // the backup).
+            let salvaged = KeepLocalPins.salvaging(storedValue: rawKeepLocal)
+            vault.keepLocalPins = salvaged.pins
+            removalPaused = !salvaged.isComplete
         }
 
         if removalPaused {
