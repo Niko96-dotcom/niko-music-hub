@@ -480,10 +480,13 @@ decision.
 - Storage is unchanged: the settings key `keepLocalProjectIDs`, an array of strings that mixes catalog project IDs, song
   IDs and folder paths in several spellings. Older builds and recovery bundles read it, so a pin still writes every
   spelling they compare (raw, standardized, resolved, canonical). `VaultSettings.keepLocalPins` stores the
-  `KeepLocalPins` value, which encodes itself as that array. The keys are `private` to `KeepLocalPins`, so code
-  anywhere else cannot read or build a key set: it does not compile (`KeepLocalPinsSourceTests` keeps them private).
-  Diagnostics and the Review Keep Local sheet show `storedKeyCount`; settings repair salvages a damaged value through
-  `KeepLocalPins.salvaging(storedValue:)`. Tests plant and read keys only through the settings codec.
+  `KeepLocalPins` value, which encodes itself as that array. The keys are `private` to `KeepLocalPins`, so a direct
+  read of the keys, or a key set built by hand, does not compile elsewhere. Two paths reach them by design: the public
+  `Codable` conformance (the settings store decodes and encodes it; a JSON round trip could also do so) and the
+  internal `KeepLocalPins.salvaging(storedValue:)`, which settings repair uses for a damaged value. Tests plant and
+  read keys through the codec. `KeepLocalPinsSourceTests` keeps the keys private and fails when a file other than
+  `AppSettings.swift` and `SettingsRepair.swift` names `KeepLocalPins.self` or `salvaging(`; a generic round trip
+  that names neither is left to review. Diagnostics and the Review Keep Local sheet show `storedKeyCount`.
 - A caller describes a project with what it knows (`KeepLocalPins.Project`: project IDs, song IDs, folders). IDs match
   exactly; folders match by one canonical folder path (`KeepLocalPins.canonicalFolderPath`, which
   `ArchiveVaultObservation.vaultCanonicalPath` forwards to), so a pin under another spelling of the same folder
@@ -570,7 +573,9 @@ saved in `vault_restores`) each change only through one table.
   an assignment outside the record's file does not compile. A new record starts in `activeLocal` or
   `materializingArchive`; only the decoder gives a record another state, as the journal row holds it. Tests plant such
   a row the same way, through the decoder (`VaultJournalFixtures.swift` in each Vault test target).
-  `VaultStateWriterSourceTests` keeps the setters private and fails on any other assignment inside the two record files.
+  `VaultStateWriterSourceTests` keeps the setters private. In the code of the two record files (comments ignored) it
+  allows three lines that assign the field, the start of a new record, the decoder and the checked writer, and fails
+  on any other line that assigns `state` or `phase`, passes it `inout` (`&state`) or assigns `self` whole.
   `ProjectVaultStateMachineTests` and `VaultRestorePhaseTests` pin both tables, check them against `VaultObservedEdges`,
   the edges the Vault suites made when the tables were written (2026-10-24), and check that a record's writer moves
   only along the table and keeps the record unchanged when it refuses.

@@ -5,8 +5,8 @@ import XCTest
 /// table, and the journal would hold an edge nobody checked. The compiler keeps the writes in the
 /// records' own files: `state` and `phase` are `private(set)`, so only `VaultTransferRecord.apply(_:)`
 /// and `VaultRestoreRecord.changePhase(to:)` change a live record. This test keeps the setters private
-/// and checks the one thing the compiler cannot: inside its own file, a record assigns its field only in
-/// the new record's start, the decoder and the checked writer.
+/// and checks the one thing the compiler cannot: inside its own file, a record assigns its field (also
+/// `inout` or through `self =`) only in the new record's start, the decoder and the checked writer.
 /// AGENTS.md row "Vault records"; docs/architecture.md § Vault state changes.
 final class VaultStateWriterSourceTests: XCTestCase {
     static let rule = RepoRule(
@@ -47,26 +47,41 @@ final class VaultStateWriterSourceTests: XCTestCase {
         }
     }
 
-    /// The detector must catch an assignment of the record's own field, bare or through a value, and
-    /// ignore comparisons, other fields and comments.
+    /// The detector must catch an assignment of the record's own field anywhere on a line, bare or
+    /// through a value, an `inout` pass and a whole-value `self =`, and ignore comparisons, other fields,
+    /// declarations and comments.
     func testDetectorCatchesAssignmentsOfTheField() {
-        for line in ["state = .archiveVerified", "self.state = state", "copy.state = .recoveryRequired", "$0.phase=.superseded", "phase = next"] {
+        for line in [
+            "state = .archiveVerified", "self.state = state", "copy.state = .recoveryRequired", "$0.phase=.superseded", "phase = next",
+            "mutating func force(_ next: VaultTransferState) { state = next }",
+            "if ok { state = next }",
+            "case .stop: phase = .superseded",
+            "Self.set(&state, next)",
+            "swap(&self.phase, &other)",
+            "self = other",
+        ] {
             XCTAssertEqual(Self.stateWrites(in: line).count, 1, "Detector misses: \(line)")
         }
         for line in [
             "guard state == .archiveVerified else { return }",
             "self.archiveTransferState = archiveTransferState",
             "let phase = record.phase",
+            "var state = record.state",
+            "if self == other { return }",
             SourceLex.stripped("// state = .archiveVerified"),
         ] {
             XCTAssertEqual(Self.stateWrites(in: line), [], "Detector flags allowed code: \(line)")
         }
     }
 
-    /// Each line that assigns `state` or `phase` (bare, or as a member of a value), trimmed.
+    /// Each line that assigns `state` or `phase` anywhere (bare or as a member of a value, but not a
+    /// `let`/`var` declaration), passes it `inout` (`&state`), or assigns `self` whole, trimmed.
     static func stateWrites(in code: String) -> [String] {
-        code.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { line in
-            line.range(of: #"^(?:[\w$?]+\.)?(state|phase)\s*=(?!=)"#, options: .regularExpression) != nil
+        let write = #"(?<![\w$.])(?<!\blet )(?<!\bvar )(?:[\w$?]+\.)?(?:state|phase)\s*=(?!=)"#
+        let inoutPass = #"&\s*(?:[\w$?]+\.)?(?:state|phase)\b"#
+        let wholeValue = #"\bself\s*=(?!=)"#
+        return code.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { line in
+            line.range(of: "\(write)|\(inoutPass)|\(wholeValue)", options: .regularExpression) != nil
         }
     }
 }
