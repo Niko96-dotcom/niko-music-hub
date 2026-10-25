@@ -29,7 +29,8 @@ final class PackageSettingsSourceTests: XCTestCase {
     /// -warnings-as-errors cannot promote a warning Swift downgraded itself: a call into
     /// main-actor isolation inferred from a @preconcurrency protocol (SwiftUI's `View`) stays
     /// a warning. ./script/ci.sh catches those with a build into an empty scratch path, the
-    /// only build that prints every file's warnings, and fails on any warning in its log.
+    /// only build that prints every file's warnings, and fails on any warning in its log but
+    /// SwiftPM's notices about a pinned dependency (a package-cache race, not this code).
     func testCIFailsOnAnyWarningInACleanBuild() throws {
         let script = try SourceTestSupport.read("script/ci.sh")
             .components(separatedBy: .newlines)
@@ -38,7 +39,8 @@ final class PackageSettingsSourceTests: XCTestCase {
         for fragment in [
             #"CLEAN_BUILD="$(mktemp -d"#,
             #"swift build --build-tests --explicit-target-dependency-import-check error --scratch-path "$CLEAN_BUILD" 2>&1 | tee "$CLEAN_BUILD_LOG""#,
-            #"if grep -q 'warning: ' "$CLEAN_BUILD_LOG"; then"#,
+            #"BUILD_WARNINGS="$(sed $'s/\033\\[[0-9;]*m//g' "$CLEAN_BUILD_LOG" | grep 'warning: ' | grep -Ev "$DEPENDENCY_NOTICE" || true)""#,
+            #"if [[ -n "$BUILD_WARNINGS" ]]; then"#,
         ] {
             XCTAssertTrue(script.contains(fragment), "script/ci.sh no longer fails on warnings of a clean build: missing `\(fragment)`")
         }

@@ -28,6 +28,8 @@ That wraps the required local gates:
 
 `script/ci.sh` skips host-only CoreAudio capture tests that need a usable system-audio capture device. Those tests stay in the source suite; they are just not the always-on local gate.
 
+`script/ci.sh` builds into an empty scratch path and fails on any warning the build prints, except SwiftPM's notices about a pinned dependency (`warning: 'sparkle': skipping cache due to an error` when two SwiftPM processes share the package cache). Compiler, manifest, driver and linker warnings always fail it.
+
 For setup diagnosis:
 
 ```bash

@@ -230,7 +230,8 @@ caller.
   [AGENTS.md](../AGENTS.md#rules-and-what-enforces-them): module boundaries, design contract, SwiftUI state
   ownership, output guard, real-defaults access, count copy, package settings.
 - `./script/ci.sh`: fixtures, clean strict build (`--explicit-target-dependency-import-check error`,
-  warnings as errors, fails on any printed warning), `swift test` minus host-only CoreAudio tests,
+  warnings as errors, fails on any printed warning except SwiftPM's notices about a pinned dependency,
+  `warning: '<dependency>': …`), `swift test` minus host-only CoreAudio tests,
   recorder gate, UI-probe self-test, `NikoMusicCoreSelfTest`, CLI export smoke and refusal,
   release-engineering tests.
 - `./script/e2e_user_smoke.sh`: builds the app and drives it with a fixture root, dry-run open and an
@@ -357,7 +358,11 @@ Documents that disagree with the code: none known. (Closed on 2026-10-25:
 - `NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh` passed on the same files; production preferences unchanged.
 - `ci.sh` skips the host-only CoreAudio capture tests by design.
 - The first `ci.sh` run on these files stopped at the clean build: SwiftPM printed a package-cache warning
-  (`'sparkle': skipping cache due to an error`), and `ci.sh` fails on any printed warning. The rerun was clean.
+  (`'sparkle': skipping cache due to an error`), and `ci.sh` failed on any printed warning. The rerun was clean.
+  Since 2026-10-25 `ci.sh` lets SwiftPM's notices about a pinned dependency (`warning: '<identity>': …`, the
+  identities from `Package.resolved`) pass and still fails on every other warning: compiler
+  (`<file>.swift:<line>:<col>: warning:`), this package's manifest, the driver and the linker (checked with a
+  planted unused variable and `-warnings-as-errors` removed: exit 1).
 - In an agent shell at utility QoS, four recorder probe tests can fail on unchanged code; run `ci.sh`
   from Terminal.app for a trustworthy result.
 
