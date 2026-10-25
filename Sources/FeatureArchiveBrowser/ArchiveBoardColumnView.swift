@@ -1,6 +1,7 @@
 import AppCore
 import AppKit
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// Value inputs for one retained native lane. The model is used for actions;

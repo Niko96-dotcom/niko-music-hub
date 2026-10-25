@@ -1,6 +1,7 @@
 import AppCore
 import AppKit
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 @testable import FeatureArchiveBrowser
 import XCTest

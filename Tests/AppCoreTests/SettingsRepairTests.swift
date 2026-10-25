@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// D1: corrupt settings fail closed on load, and an explicit Repair Settings

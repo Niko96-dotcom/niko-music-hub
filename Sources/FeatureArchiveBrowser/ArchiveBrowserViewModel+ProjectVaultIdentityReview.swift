@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 
 extension ArchiveBrowserViewModel {
     /// Persisted reviews carry no authorization. They resolve stable catalog

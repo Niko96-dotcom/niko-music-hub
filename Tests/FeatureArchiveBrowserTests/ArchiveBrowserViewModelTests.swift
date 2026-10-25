@@ -2,6 +2,7 @@ import AppCore
 import Darwin
 @testable import FeatureArchiveBrowser
 import NikoMusicCore
+import ProjectVaultRuntime
 import SQLite3
 import XCTest
 

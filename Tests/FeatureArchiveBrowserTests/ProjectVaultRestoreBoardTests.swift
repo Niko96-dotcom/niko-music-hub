@@ -2,6 +2,7 @@ import AppCore
 @testable import FeatureArchiveBrowser
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// Package 3: Keep Local pins survive under every identity key, copy-only

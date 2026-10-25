@@ -1,5 +1,6 @@
 import AppCore
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// A song row keeps identity, context, and preview controls in a consistent order.

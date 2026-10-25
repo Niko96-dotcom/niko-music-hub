@@ -1,5 +1,6 @@
 import AppCore
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// Health, collaborators, intelligence, and diagnostics tucked under a collapsible Library section.

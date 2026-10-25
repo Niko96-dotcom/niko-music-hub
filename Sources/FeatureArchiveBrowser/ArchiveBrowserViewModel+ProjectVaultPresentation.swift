@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 
 extension ArchiveBrowserViewModel {
     /// O(1) card lookup. Owned by `ArchiveVaultObservation`; no settings reads.

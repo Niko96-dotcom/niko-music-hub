@@ -86,7 +86,6 @@ public enum ShellJobExtraSourceID: Sendable {
 public enum ShellJobStatusCopy: Sendable {
     public static let cancel = CancelCopy.cancelOperation
     public static let scanningArchive = "Scanning archive"
-    public static let vaultTransferFallback = "Project Vault transfer"
     public static let recordingTake = "Recording system audio"
     public static let installingHelperTools = "Installing helper tools"
 
@@ -103,22 +102,4 @@ public enum ShellJobStatusCopy: Sendable {
         cancelTarget: .scan,
         blocksQuit: false
     )
-
-    /// NMH-054: vault transfer row, at operation start (`progress == nil`) and
-    /// during a restore. `percent` is the honest staging fraction
-    /// (nil while totals are unknown), so the jobs row reads determinate
-    /// (`Transferring “Song” · 42%`) exactly when the detail bar does.
-    public static func vaultTransferStatus(
-        songName: String,
-        progress: ProjectVaultRestoreProgress?
-    ) -> ShellJobStatus {
-        ShellJobStatus(
-            id: ShellJobExtraSourceID.vaultTransfer,
-            title: songName.isEmpty ? vaultTransferFallback : songName,
-            percent: progress?.fraction,
-            cancelActionID: ShellJobExtraSourceID.vaultTransfer,
-            activityVerb: "Transferring",
-            cancelTarget: .vaultTransfer
-        )
-    }
 }

@@ -1,5 +1,6 @@
 import AppCore
 import Foundation
+import ProjectVaultRuntime
 import XCTest
 @testable import FeatureArchiveBrowser
 import NikoMusicCore

@@ -1,5 +1,6 @@
 import AppCore
 import AppUpdates
+import ProjectVaultRuntime
 import SwiftUI
 
 /// Paneled Settings window (⌘, / App menu). Shared session so pane switches
@@ -14,6 +15,7 @@ struct HubSettingsRoot: View {
         context: ToolContext,
         appearanceController: AppAppearanceController,
         updateController: AppUpdateController,
+        vaultRecoveryService: ProjectVaultRecoveryService?,
         router: QuickAccessRouter,
         shellSession: HubShellSession
     ) {
@@ -23,6 +25,7 @@ struct HubSettingsRoot: View {
                 context: context,
                 appearanceController: appearanceController,
                 updateController: updateController,
+                vaultRecoveryService: vaultRecoveryService,
                 shellSession: shellSession
             )
         )

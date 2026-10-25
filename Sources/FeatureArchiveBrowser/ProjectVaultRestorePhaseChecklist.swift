@@ -1,5 +1,6 @@
 import AppCore
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// NMH-054 fallback when byte size cannot be read: one honest check per

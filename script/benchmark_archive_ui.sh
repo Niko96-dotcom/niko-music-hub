@@ -13,7 +13,7 @@ while IFS= read -r object; do OBJECTS+=("$object"); done < <(
   python3 - "$BIN_DIR" <<'PYOBJECTS'
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
-for module in ("FeatureArchiveBrowser", "AppCore", "NikoMusicCore"):
+for module in ("FeatureArchiveBrowser", "ProjectVaultRuntime", "AppCore", "NikoMusicCore"):
     mapping = json.loads((root / (module + ".build") / "output-file-map.json").read_text())
     for entry in mapping.values():
         obj = entry.get("object")

@@ -1,5 +1,6 @@
 import AppCore
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 enum ProjectIdentityReviewCopy: Sendable {

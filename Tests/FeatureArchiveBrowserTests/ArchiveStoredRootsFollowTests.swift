@@ -3,6 +3,7 @@ import Combine
 @testable import FeatureArchiveBrowser
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// Settings, Set Up and the Project Vault pane save to the store and call

@@ -2,6 +2,7 @@ import AppCore
 import CryptoKit
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// Recovery-bundle service tests using disposable fixtures only.

@@ -2,6 +2,7 @@ import AppCore
 @testable import FeatureArchiveBrowser
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// Bound-authorization UI consumer. Uses the real view-model queue

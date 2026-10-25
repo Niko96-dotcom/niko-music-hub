@@ -1,4 +1,5 @@
 import AppCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// Unified archive confirmation sheet (single presenter for board + detail).

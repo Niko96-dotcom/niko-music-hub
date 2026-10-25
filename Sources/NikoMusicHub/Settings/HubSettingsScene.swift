@@ -1,5 +1,6 @@
 import AppCore
 import AppUpdates
+import ProjectVaultRuntime
 import SwiftUI
 
 /// Hosts hub-wide preferences in the SwiftUI Settings scene (⌘, / App menu).
@@ -9,6 +10,7 @@ struct HubSettingsScene: View {
     let context: ToolContext
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
+    let vaultRecoveryService: ProjectVaultRecoveryService?
     let router: QuickAccessRouter
     let shellSession: HubShellSession
 
@@ -17,6 +19,7 @@ struct HubSettingsScene: View {
             context: context,
             appearanceController: appearanceController,
             updateController: updateController,
+            vaultRecoveryService: vaultRecoveryService,
             router: router,
             shellSession: shellSession
         )

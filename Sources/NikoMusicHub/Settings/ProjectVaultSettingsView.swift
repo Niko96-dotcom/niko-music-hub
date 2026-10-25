@@ -2,11 +2,13 @@ import AppCore
 import AppKit
 import Combine
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct ProjectVaultSettingsView: View {
     let context: ToolContext
+    let recoveryService: ProjectVaultRecoveryService?
     @Binding var settings: AppSettings
     let settingsAvailable: Bool
     let onSave: (@escaping @Sendable (inout AppSettings) -> Void) -> Bool
@@ -135,7 +137,7 @@ struct ProjectVaultSettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .hubSurface(.panel, cornerRadius: HubDesignSystem.Radius.popover)
 
-            ProjectVaultRecoverySection(context: context)
+            ProjectVaultRecoverySection(context: context, recoveryService: recoveryService)
 
             if settings.vault.isEnabled {
                 Text("Turning Project Vault off never moves or deletes a project.")

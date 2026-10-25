@@ -1,6 +1,7 @@
 import AppCore
 import NikoMusicCore
 @testable import FeatureArchiveBrowser
+import ProjectVaultRuntime
 import XCTest
 
 @MainActor

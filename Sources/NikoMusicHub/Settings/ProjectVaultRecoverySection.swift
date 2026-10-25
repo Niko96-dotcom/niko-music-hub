@@ -1,5 +1,6 @@
 import AppCore
 import AppKit
+import ProjectVaultRuntime
 import SwiftUI
 
 /// Recovery-copy section for the Project Vault settings pane.
@@ -13,6 +14,8 @@ import SwiftUI
 /// free of AppKit UI. User copy never exposes hashes or other internals.
 struct ProjectVaultRecoverySection: View {
     let context: ToolContext
+    /// Nil when the current catalog is unavailable: export is disabled, opening a copy still works.
+    let recoveryService: ProjectVaultRecoveryService?
 
     @State private var message: String?
     @State private var isWorking = false
@@ -32,7 +35,7 @@ struct ProjectVaultRecoverySection: View {
                     label: isWorking ? "Working…" : "Export…",
                     style: .secondary,
                     help: "Save a recovery copy of the library metadata",
-                    isEnabled: !isWorking && context.recoveryService != nil
+                    isEnabled: !isWorking && recoveryService != nil
                 ) { exportRecovery() }
             }
             SettingsRowDivider()
@@ -64,7 +67,7 @@ struct ProjectVaultRecoverySection: View {
     // MARK: - Export
 
     private func exportRecovery() {
-        guard let service = context.recoveryService else {
+        guard let service = recoveryService else {
             message = "The current catalog is unavailable, so a new export cannot be made."
             return
         }

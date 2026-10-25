@@ -3,6 +3,7 @@ import AppKit
 import AppUpdates
 import Combine
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 @MainActor
@@ -10,6 +11,8 @@ final class HubSettingsSession: ObservableObject {
     let context: ToolContext
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
+    /// Project Vault recovery export and import; nil when the archive database is damaged.
+    let vaultRecoveryService: ProjectVaultRecoveryService?
     let shellSession: HubShellSession
 
     @Published var settings: AppSettings = .default
@@ -33,11 +36,13 @@ final class HubSettingsSession: ObservableObject {
         context: ToolContext,
         appearanceController: AppAppearanceController,
         updateController: AppUpdateController,
+        vaultRecoveryService: ProjectVaultRecoveryService?,
         shellSession: HubShellSession
     ) {
         self.context = context
         self.appearanceController = appearanceController
         self.updateController = updateController
+        self.vaultRecoveryService = vaultRecoveryService
         self.shellSession = shellSession
         self.settings = Self.normalized(context.appSettings.settings)
         // Follow external writers (Recorder slider, vault runtime) while the
@@ -312,6 +317,7 @@ struct SettingsView: View {
         case .vault:
             ProjectVaultSettingsView(
                 context: session.context,
+                recoveryService: session.vaultRecoveryService,
                 settings: $session.settings,
                 settingsAvailable: session.settingsLoadError == nil,
                 onSave: saveProjectVaultSettings

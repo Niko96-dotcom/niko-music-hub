@@ -1,6 +1,7 @@
 # Architecture map — Niko Music Hub
 
-Last verified: 2026-10-22 at `3ace650` (source read). Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
+Last verified: 2026-10-22 at `3ace650` (source read); modules, dependencies and the Vault flow re-checked on
+2026-10-25 at the commit that adds `ProjectVaultRuntime` (parent `1b2caea`). Latest `./script/ci.sh` result: [Check baseline](#check-baseline-2026-10-25)
 
 Start here. This page names the entry points, modules, main flows, state owners, seams and gates, and
 links to the documents that hold the detail. It does not repeat them.
@@ -12,7 +13,7 @@ Each section says what kind of statement it makes:
 - **Open**: not decided, or not verified.
 
 Detail lives in [architecture.md](architecture.md) (owners, safety, Project Vault),
-[design-contract.md](design-contract.md) (UI), [decisions/](decisions/) (ADRs 017–021),
+[design-contract.md](design-contract.md) (UI), [decisions/](decisions/) (ADRs 017–022),
 [vault-durability.md](vault-durability.md) and [vault-recovery.md](vault-recovery.md).
 [product-scope.md](product-scope.md) is the historical v0.1 scope.
 
@@ -32,12 +33,14 @@ Detail lives in [architecture.md](architecture.md) (owners, safety, Project Vaul
 
 ## Modules (observed)
 
-Line counts are Swift source lines at the commit above, for orientation only.
+Line counts are Swift source lines at the commit above, for orientation only; `AppCore` and `ProjectVaultRuntime`
+were recounted on 2026-10-25, when the runtime moved out of `AppCore`.
 
 | Target | Responsibility | Start reading | Tests |
 | --- | --- | --- | --- |
 | `NikoMusicCore` (18.7k) | Archive domain: scan, preview ranking, search, browse rules, path safety, opening, SQLite stores, Project Vault engines. No UI. | `Scanning/CubaseArchiveScanner.swift` (`MusicArchiveScanner`), `Domain/Song.swift`, `Safety/PathSafety.swift`, `Persistence/SQLiteArchiveDatabase.swift` | `NikoMusicCoreTests` |
-| `AppCore` (16.1k) | Shell kit (tool seam, `ToolContext`, settings, jobs and quit, Output Inbox, helper tools, router, design system) **and** the Project Vault runtime | `Features/ToolFeature.swift`, `Services/ToolContext.swift`, `Shell/HubShellSession.swift`, `ProjectVault/LiveProjectVaultRuntime.swift` | `AppCoreTests` |
+| `AppCore` (11.8k) | Shell kit only (tool seam, `ToolContext`, settings, jobs and quit, Output Inbox, helper tools, router, design system); [ADR 022](decisions/022-appcore-scope-and-vault-runtime-target.md) says what belongs here | `Features/ToolFeature.swift`, `Services/ToolContext.swift`, `Shell/HubShellSession.swift` | `AppCoreTests` |
+| `ProjectVaultRuntime` (5.0k) | Project Vault runtime: the runtime actor, admissions, bound archive token, capacity, recovery bundle, presentation, Vault root pairing. No UI frameworks. | `LiveProjectVaultRuntime.swift`, `ProjectVaultOperating.swift`, `ProjectVaultArchiveAuthorization.swift` | `ProjectVaultRuntimeTests` |
 | `FeatureArchiveBrowser` (19.2k) | Board, list, song detail, preview player, metadata edits, Project Vault UI and queue | `ArchiveBrowserFeature.swift`, `ArchiveBrowserViewModel.swift`, the four coordinators in [architecture.md](architecture.md#featurearchivebrowser-swiftui-feature) | `FeatureArchiveBrowserTests` |
 | `FeatureAudioConverter` (2.7k) | Batch WAV conversion: AVFoundation first, FFmpeg fallback | `BatchAudioConversionUseCase.swift`, `AudioConversionPipeline.swift` | `FeatureAudioConverterTests` |
 | `FeatureAudioRecorder` (4.4k) | System-audio capture to WAV | `AudioCapturePort.swift`, `CoreAudioTapAdapter.swift` | `FeatureAudioRecorderTests` |
@@ -50,8 +53,9 @@ Line counts are Swift source lines at the commit above, for orientation only.
 Dependencies, as declared in [Package.swift](../Package.swift):
 
 ```text
-NikoMusicHub ──► AppUpdates, every Feature*, AppCore, NikoMusicCore
+NikoMusicHub ──► AppUpdates, every Feature*, ProjectVaultRuntime, AppCore, NikoMusicCore
 Feature*     ──► AppCore ──► NikoMusicCore
+FeatureArchiveBrowser ──► ProjectVaultRuntime ──► AppCore, NikoMusicCore   (ADR 022)
 FeatureStemSeparation ──► FeatureDownloader      (the one feature → feature edge)
 AppUpdates   ──► AppCore, Sparkle 2.9.6 (pinned exactly)
 NikoMusicHubCLI, NikoMusicCoreSelfTest ──► NikoMusicCore
@@ -115,7 +119,7 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
    copy-only.
 2. `ProjectVaultOperationCoordinator.enqueue` runs one operation at a time, rejects duplicates and retries
    a failed Done at most 3 times, copy-only.
-3. `LiveProjectVaultRuntime` (actor, AppCore) takes the mutation lease (in-actor token plus a cross-process
+3. `LiveProjectVaultRuntime` (actor, `ProjectVaultRuntime`) takes the mutation lease (in-actor token plus a cross-process
    `flock`), re-checks the token against the live source, reconciles project identity (`+Catalog.swift`),
    builds the write and removal admissions (`+Admission.swift`) and creates a `LocalVaultTransferEngine`
    through `makeTransferEngine`, which passes the runtime's stores, clock and recovery policy.
@@ -140,7 +144,7 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
    automatic archiving; nothing archives on a timer, after inactivity or on low space.
 
 `NikoMusicCore/Vault` does every file operation and takes each policy decision as an injected admission
-closure. `AppCore/ProjectVault` turns settings, Keep Local, Emergency Stop, capacity and the bound token
+closure. `ProjectVaultRuntime` turns settings, Keep Local, Emergency Stop, capacity and the bound token
 into those closures; it imports neither SwiftUI nor AppKit. Every folder path inside the two Vault roots
 comes from `VaultFolders` (Core); see [architecture.md § Vault folders](architecture.md#vault-folders).
 
@@ -207,8 +211,8 @@ caller.
 ## Tests and gates (observed)
 
 - One test target per source target; `FeatureStemSeparationTests` uses Swift Testing, the others XCTest.
-  `AppCoreTests` also imports the archive and recorder features for the cross-feature tests (the registry, Keep
-  Local pins, the recording signal).
+  `AppCoreTests` also imports the archive and recorder features and the Vault runtime for the cross-feature tests
+  (the registry, Keep Local pins, the recording signal, settings with Vault refusals).
 - Archive tests use the synthetic archive in `Fixtures/CubaseArchive/`, generated by
   `script/fixtures/generate_cubase_archive_fixtures.sh`. Vault tests build temporary roots
   (`FriendsWorkflowFixture`, `ProjectVaultSyntheticFixtures`).
@@ -232,6 +236,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Rule | Source | Enforced by |
 | --- | --- | --- |
 | Core has no UI frameworks; feature modules are independent except Stems → Downloader | [ADR 020](decisions/020-module-boundary-checks.md) | `ModuleBoundarySourceTests`, strict import check |
+| `AppCore` holds only the shell kit; a subsystem with its own state owners and rules, used only by one feature and the composition, gets its own target. `ProjectVaultRuntime` imports only `AppCore`, `NikoMusicCore` and system frameworks, and only the archive feature and the app import it | [ADR 022](decisions/022-appcore-scope-and-vault-runtime-target.md) | `ModuleBoundarySourceTests`, strict import check |
 | Archive access is read-only; writes outside a confirmed Vault transfer are refused | [architecture.md § Safety](architecture.md#safety-architecture) | `ReadOnlyArchivePolicy`, `PathSafety`, `OutputGuardSourceTests` |
 | Every feature registers through `ToolFeature`; the archive is not special | [architecture.md § Principles](architecture.md#principles) | judgment (see gap 1) |
 | One registry of running work; quit reads it | [ADR 019](decisions/019-running-work-and-quit.md) | `HubTerminationSourceTests`, `ShellJobStatusCenterTests` |
@@ -244,7 +249,6 @@ These rules are documented and, where named, enforced. The full table is in
 | A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
 | One UI scaffold, header and chrome material | [design-contract.md](design-contract.md) | `HubDesignContractSourceTests` |
-| The Vault runtime leaves `AppCore` once it gets its own target | [AGENTS.md § Architecture](../AGENTS.md#architecture) | none; no date or trigger |
 
 ## Where the code differs from the intent (observed)
 
@@ -302,7 +306,9 @@ Documents that disagree with the code: none known. (Closed on 2026-10-25:
    `ToolContext` serves the launch. The archive view model stays built by the composition for the shell.
 2. Which layer owns the inbox handoff for a new tool, and should a new tool use `JobRunner` or an extra
    source? (Admission is settled: one `ToolOutputDestination` per run.)
-3. What triggers moving the Project Vault runtime out of `AppCore`?
+3. Settled on 2026-10-25: a subsystem with its own state owners and rules, used only by one feature and the
+   composition, gets its own target over `AppCore`. The Project Vault runtime met that test and is `ProjectVaultRuntime`;
+   `AppCore` names no runtime type ([ADR 022](decisions/022-appcore-scope-and-vault-runtime-target.md)).
 4. Settled on 2026-10-24: preview playback is injected. The archive view model owns the one session and views get
    it by initializer; the coordinator is gone ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)).
 5. Settled on 2026-10-24: no background Vault archiving (inactivity, low space). Niko chose to remove the

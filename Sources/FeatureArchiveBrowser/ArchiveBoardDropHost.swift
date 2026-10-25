@@ -1,5 +1,6 @@
 import AppCore
 import AppKit
+import ProjectVaultRuntime
 import SwiftUI
 
 /// SwiftUI's DropDelegate cannot supply the drag manager's final image frame.

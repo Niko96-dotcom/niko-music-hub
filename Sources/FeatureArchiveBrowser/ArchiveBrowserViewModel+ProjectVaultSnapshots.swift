@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 
 extension ArchiveBrowserViewModel {
     /// O(1) snapshot lookup. Owned by `ArchiveVaultObservation`.

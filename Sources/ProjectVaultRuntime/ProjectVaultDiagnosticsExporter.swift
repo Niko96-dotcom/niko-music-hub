@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 
 public enum ProjectVaultDiagnosticsExportError: Error, Equatable, Sendable {

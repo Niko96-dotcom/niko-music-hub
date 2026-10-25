@@ -41,6 +41,11 @@ real tree, test targets included.
    `nmh_swift build`) drops the flag, after stripping shell comments and
    splitting `;`, `&&` and `||` chains. `--show-bin-path` only prints a path and
    is exempt.
+5. Added 2026-10-25 with [ADR 022](022-appcore-scope-and-vault-runtime-target.md):
+   `testProjectVaultRuntimeImportsOnlyShellKitCoreAndSystemFrameworks` pins
+   `ProjectVaultRuntime` to `AppCore`, `NikoMusicCore`, Foundation, Darwin and
+   CryptoKit, and `testOnlyTheArchiveFeatureAndTheAppImportProjectVaultRuntime`
+   pins its importers to `FeatureArchiveBrowser` and the app target.
 
 ## Options
 

@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 
 extension ArchiveBrowserViewModel {
     func performProjectVaultPrimaryAction(for song: Song) {

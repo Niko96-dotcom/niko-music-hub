@@ -1,6 +1,7 @@
 import AppCore
 import AppKit
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// The lane's scrolling boundary. AppKit owns row reuse and the document

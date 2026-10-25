@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 
 /// The small, immutable subset of settings that determines Project Vault card
 /// state. It is loaded once while refreshing the presentation cache, never from

@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// Kanban board over the current browse list: one column per workflow stage,

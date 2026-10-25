@@ -29,6 +29,10 @@ let package = Package(
             targets: ["NikoMusicCore"]
         ),
         .library(
+            name: "ProjectVaultRuntime",
+            targets: ["ProjectVaultRuntime"]
+        ),
+        .library(
             name: "AppUpdates",
             targets: ["AppUpdates"]
         ),
@@ -81,6 +85,11 @@ let package = Package(
             swiftSettings: strictSwiftSettings
         ),
         .target(
+            name: "ProjectVaultRuntime",
+            dependencies: ["AppCore", "NikoMusicCore"],
+            swiftSettings: strictSwiftSettings
+        ),
+        .target(
             name: "AppUpdates",
             dependencies: [
                 "AppCore",
@@ -127,7 +136,7 @@ let package = Package(
         ),
         .target(
             name: "FeatureArchiveBrowser",
-            dependencies: ["AppCore", "NikoMusicCore"],
+            dependencies: ["AppCore", "NikoMusicCore", "ProjectVaultRuntime"],
             swiftSettings: strictSwiftSettings
         ),
         .target(
@@ -141,6 +150,7 @@ let package = Package(
                 "AppCore",
                 "AppUpdates",
                 "NikoMusicCore",
+                "ProjectVaultRuntime",
                 "FeatureArchiveBrowser",
                 "FeatureBPMTapper",
                 "FeatureAudioConverter",
@@ -152,7 +162,12 @@ let package = Package(
         ),
         .testTarget(
             name: "AppCoreTests",
-            dependencies: ["AppCore", "NikoMusicCore", "FeatureArchiveBrowser", "FeatureAudioRecorder"],
+            dependencies: ["AppCore", "NikoMusicCore", "ProjectVaultRuntime", "FeatureArchiveBrowser", "FeatureAudioRecorder"],
+            swiftSettings: strictSwiftSettings
+        ),
+        .testTarget(
+            name: "ProjectVaultRuntimeTests",
+            dependencies: ["ProjectVaultRuntime", "AppCore", "NikoMusicCore"],
             swiftSettings: strictSwiftSettings
         ),
         .testTarget(
@@ -187,7 +202,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FeatureArchiveBrowserTests",
-            dependencies: ["FeatureArchiveBrowser", "NikoMusicCore", "AppCore"],
+            dependencies: ["FeatureArchiveBrowser", "NikoMusicCore", "AppCore", "ProjectVaultRuntime"],
             swiftSettings: strictSwiftSettings
         ),
         .testTarget(

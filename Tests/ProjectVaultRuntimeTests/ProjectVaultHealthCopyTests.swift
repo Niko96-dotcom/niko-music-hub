@@ -1,4 +1,5 @@
 import AppCore
+import ProjectVaultRuntime
 import XCTest
 
 final class ProjectVaultHealthCopyTests: XCTestCase {

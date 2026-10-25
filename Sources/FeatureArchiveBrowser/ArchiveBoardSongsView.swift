@@ -1,5 +1,6 @@
 import AppCore
 import NikoMusicCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// Keep search typing and unrelated progress publications outside the scrolling

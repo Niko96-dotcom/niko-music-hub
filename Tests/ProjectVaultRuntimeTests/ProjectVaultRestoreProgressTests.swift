@@ -1,5 +1,6 @@
 import AppCore
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// NMH-054: restore progress is determinate when totals exist.
