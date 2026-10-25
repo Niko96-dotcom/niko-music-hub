@@ -111,6 +111,9 @@ through `ExternalProcessRunning` in their own process groups. The layers differ 
 | Stem Separation | `JobRunner` job | `StemSeparationViewModel` loads it into the request; `StemSeparationService` admits the run folder | `StemSeparationService` |
 | Audio Recorder | own `Task` + extra source `audioRecorder` | `ToolOutputDestination.load` / `RecordSystemAudioUseCase` | `AudioRecorderViewModel.finalizeRecording` |
 
+A new tool runs as a `JobRunner` job. The converter, the recorder take and the download's title lookup are named
+exceptions with their reasons ([architecture.md § How a tool runs its work](architecture.md#how-a-tool-runs-its-work)).
+
 ### Project Vault: archive, restore, recover
 
 1. A Done drop, the Done command or Archive Now calls `startBoundArchiveCapture`
@@ -240,6 +243,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Archive access is read-only; writes outside a confirmed Vault transfer are refused | [architecture.md § Safety](architecture.md#safety-architecture) | `ReadOnlyArchivePolicy`, `PathSafety`, `OutputGuardSourceTests` |
 | Every feature registers through `ToolFeature`; the archive is not special | [architecture.md § Principles](architecture.md#principles) | judgment (see gap 1) |
 | One registry of running work; quit reads it | [ADR 019](decisions/019-running-work-and-quit.md) | `HubTerminationSourceTests`, `ShellJobStatusCenterTests` |
+| A tool runs work the person waits for as a `JobRunner` job; its own `Task` is view-local; work outside the runner is a named extra source | [architecture.md § How a tool runs its work](architecture.md#how-a-tool-runs-its-work) | `ToolWorkSourceTests` |
 | A tool page binds Return and Esc only through `HubInspectorPage`; a page you left takes no key | [design-contract.md §4](design-contract.md#4-tool-pages--hubinspectorpage) | `HubDesignContractSourceTests`, `HubInspectorPageKeysTests` |
 | Each built-in tool ID is defined once; shell code orders, routes and labels tools from their metadata and job rows, never by ID | [architecture.md § Tool self-description](architecture.md#tool-self-description) | `ToolIDSourceTests`, `ToolSectionTests`, `InAppJobCancelRoutingTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
@@ -261,9 +265,13 @@ These rules are documented and, where named, enforced. The full table is in
    signal** when a caller leaves them out. The two production callers are correct: `AppComposition` passes
    them all, and `ArchiveSmokeCommands` runs alone. (The second context and the hand-counted tool number went
    on 2026-10-23.)
-3. **Two ways to run work.** Downloader and Stem Separation use `JobRunner`; the converter, recorder,
-   helper installs, archive scan and Vault queue run their own tasks and register as extra sources.
-   ADR 019 documents the registry, not which way a new tool should choose.
+3. Closed on 2026-10-25: one rule says how a tool runs its work. Work the person waits for is a `JobRunner` job
+   (Downloader, Stem Separation); the converter, the recorder take, the download's title lookup, helper installs, the
+   archive scan and the Vault queue are named extra sources, each with its reason, and `ToolWorkSourceTests` lists
+   every `Task` a tool module creates ([architecture.md § How a tool runs its work](architecture.md#how-a-tool-runs-its-work)).
+   The WAV Converter is the one tool run that could be a job and is not; the reason and what it would take are there.
+   Still open: the Settings recovery export and import and the test restore run in unregistered tasks, so quit does
+   not wait for them; the check lists them as that gap.
 4. **The inbox handoff sits at a different layer per tool** (table above). Admission is one rule since
    2026-10-22: every run admits through one `ToolOutputDestination`. The handoff differences are mostly
    intended ([architecture.md § Tool output destination](architecture.md#tool-output-destination)). The
@@ -304,8 +312,10 @@ Documents that disagree with the code: none known. (Closed on 2026-10-25:
 1. Settled on 2026-10-23: the stored settings own the scan list, `ArchiveScanList` edits it, and the archive
    follows `appSettings` ([architecture.md § Archive scan list](architecture.md#archive-scan-list)). One
    `ToolContext` serves the launch. The archive view model stays built by the composition for the shell.
-2. Which layer owns the inbox handoff for a new tool, and should a new tool use `JobRunner` or an extra
-   source? (Admission is settled: one `ToolOutputDestination` per run.)
+2. Settled on 2026-10-25: a new tool runs its work as a `JobRunner` job, not an extra source, and writes its inbox
+   handoff inside the job's operation, as Stem Separation does; the handoff stays in each tool (gap 3, gap 4,
+   [architecture.md § How a tool runs its work](architecture.md#how-a-tool-runs-its-work)). Admission was settled
+   before: one `ToolOutputDestination` per run.
 3. Settled on 2026-10-25: a subsystem with its own state owners and rules, used only by one feature and the
    composition, gets its own target over `AppCore`. The Project Vault runtime met that test and is `ProjectVaultRuntime`;
    `AppCore` names no runtime type ([ADR 022](decisions/022-appcore-scope-and-vault-runtime-target.md)).
