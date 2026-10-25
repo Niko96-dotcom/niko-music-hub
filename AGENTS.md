@@ -138,9 +138,9 @@ unverified. See `docs/update-feed.md`.
 
 ## Ultimate De-Slop
 
-Only when the user explicitly asks for **Ultimate De Slop**, **de-slop** or `/ultimate-de-slop`: follow
-[docs/de-slop.md](docs/de-slop.md) (vendored harness in `.cursor/`, state in `.deslop/`). Ordinary reviews,
-audits and scoped cleanup do not activate it.
+Only when the user explicitly asks for **Ultimate De Slop**, **de-slop**, `/ultimate-de-slop` or that bounded
+iterative workflow: follow [docs/de-slop.md](docs/de-slop.md) (harness in `.cursor/`, state in `.deslop/`).
+Ordinary reviews, audits and scoped cleanup do not activate it; follow explicit review-only or direct-work requests.
 
 ## Git rules
 

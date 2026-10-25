@@ -341,7 +341,9 @@ Documents that disagree with the code: none known. (Closed on 2026-10-25:
    change through `VaultRestorePhase`'s table; an unlisted edge fails closed (gap 9).
 7. ADRs 001–016 are not in the public tree. Are they retired, or private planning history?
 8. `docs/architecture.md` and this map are not in the source-sale export list (`script/export-source-sale.sh`),
-   although `README.md` links `docs/architecture.md`. Is that intended?
+   although `README.md` links `docs/architecture.md`. Is that intended? Since 2026-10-25 the exported
+   `CONTRIBUTING.md` and `docs/local-dev-flow.md` also link files the export leaves out (`AGENTS.md`,
+   `docs/README.md`, this map, the design contract, ADR 019, `vault-durability.md`).
 9. Not verified at runtime: in E2E smoke mode the production archive view model probably exists beside
    the smoke's own view models, because `AppComposition.make()` runs before
    `applicationWillFinishLaunching`.

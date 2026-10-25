@@ -46,6 +46,7 @@ final class PackageSettingsSourceTests: XCTestCase {
         for fragment in [
             #"CLEAN_BUILD="$(mktemp -d"#,
             #"swift build --build-tests --explicit-target-dependency-import-check error --scratch-path "$CLEAN_BUILD" 2>&1 | tee "$CLEAN_BUILD_LOG""#,
+            #"DEPENDENCY_NOTICE="^warning: '($(sed -n 's/.*"identity" : "\([^"]*\)".*/\1/p' Package.resolved | paste -sd'|' -))': ""#,
             #"BUILD_WARNINGS="$(sed $'s/\033\\[[0-9;]*m//g' "$CLEAN_BUILD_LOG" | grep 'warning: ' | grep -Ev "$DEPENDENCY_NOTICE" || true)""#,
             #"if [[ -n "$BUILD_WARNINGS" ]]; then"#,
         ] {

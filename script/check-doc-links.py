@@ -4,30 +4,47 @@
 Checks [text](target), ![alt](target) and HTML href/src attributes outside code. A target
 must exist relative to the file; a #fragment into a Markdown file must match one of its
 headings (GitHub's slugs). External links are not fetched. docs/history/ is skipped except
-its README: those records keep the links they had before they moved there.
-Usage: script/check-doc-links.py [repo-root]
+its README: those records keep the links they had before they moved there. In a Git checkout
+the files are Git's (tracked, plus untracked ones .gitignore does not exclude), so other
+worktrees and ignored folders are never read; without Git (the buyer export) it walks the folder.
+Usage: script/check-doc-links.py [repo-root]   (default: the current directory)
 """
 
 import os
 import re
+import subprocess
 import sys
 from urllib.parse import unquote
 
-ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.getcwd())
 SKIP_DIRS = {".build", ".git", ".deslop", ".cursor", ".planning", ".ai", ".codex", "dist", "DerivedData", "node_modules"}
 LINK = re.compile(r"!?\[(?:[^\[\]]|\[[^\]]*\])*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 HTML = re.compile(r"""\b(?:href|src)=["']([^"']+)["']""")
 FENCE = re.compile(r"^\s*(```|~~~)")
 
 
+def repository_files():
+    """Every file a link may point to, relative to ROOT, and every folder that holds one."""
+    if os.path.exists(os.path.join(ROOT, ".git")):
+        listed = subprocess.run(["git", "-C", ROOT, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                                capture_output=True, text=True, check=True).stdout.split("\0")
+        files = {path for path in listed if path and os.path.exists(os.path.join(ROOT, path))}
+    else:
+        files = set()
+        for directory, subdirs, names in os.walk(ROOT):
+            subdirs[:] = [d for d in subdirs if d not in SKIP_DIRS]
+            files |= {os.path.relpath(os.path.join(directory, name), ROOT) for name in names}
+    parts = [path.split("/")[:-1] for path in files]
+    return files, {"/".join(folder[:depth]) for folder in parts for depth in range(1, len(folder) + 1)}
+
+
+FILES, FOLDERS = repository_files()
+
+
 def markdown_files():
-    for directory, subdirs, files in os.walk(ROOT):
-        subdirs[:] = sorted(d for d in subdirs if d not in SKIP_DIRS)
-        relative = os.path.relpath(directory, ROOT)
-        for name in sorted(files):
-            path = os.path.normpath(os.path.join(relative, name))
-            if name.endswith(".md") and (not path.startswith("docs/history/") or path == "docs/history/README.md"):
-                yield path
+    for path in sorted(FILES):
+        if path.endswith(".md") and (not path.startswith("docs/history/") or path == "docs/history/README.md"):
+            yield path
 
 
 def prose_lines(path, keep_code=False):
@@ -63,7 +80,7 @@ def problems(path):
                 continue  # https:, mailto: and other external links
             file_part, _, fragment = target.partition("#")
             resolved = os.path.normpath(os.path.join(os.path.dirname(path), unquote(file_part))) if file_part else path
-            if not os.path.exists(os.path.join(ROOT, resolved)):
+            if resolved not in FILES and resolved not in FOLDERS:
                 yield f"{path}:{number}: {target}: {resolved} does not exist"
             elif fragment and resolved.endswith(".md") and unquote(fragment).lower() not in anchors(resolved):
                 yield f"{path}:{number}: {target}: no heading #{fragment} in {resolved}"

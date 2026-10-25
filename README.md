@@ -117,7 +117,7 @@ Tests run against a synthetic archive under `Fixtures/CubaseArchive/` — empty 
 | `AppUpdates` | Sparkle integration, isolated so nothing else links it. |
 | `NikoMusicHub` | The app target: composition root, shell, menus, settings. |
 
-Start with the [architecture map](docs/architecture-map.md) (entry points, main flows, state owners, open questions). Full detail in [`docs/architecture.md`](docs/architecture.md); product intent in [`docs/history/product/product-scope.md`](docs/history/product/product-scope.md).
+Start with the [architecture map](docs/architecture-map.md) (entry points, main flows, state owners, open questions). Full detail in [`docs/architecture.md`](docs/architecture.md); the historical v0.1 product intent in [`docs/history/product/product-scope.md`](docs/history/product/product-scope.md).
 
 ### Releases
 

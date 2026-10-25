@@ -18,24 +18,48 @@ final class RulebookSourceTests: XCTestCase {
         }
         let table = SourceTree.read("AGENTS.md").components(separatedBy: "\n").filter { $0.hasPrefix("| **") }
         XCTAssertGreaterThan(table.count, 20, "the rules table was not found in AGENTS.md")
-        let testFiles = SourceTree.swiftFiles(under: "Tests/")
-        let classes = Set(SourceTree.matches(#"class \w+: XCTestCase"#, in: testFiles, .raw).map { $0.text.dropFirst(6).dropLast(12) }.map(String.init))
-        let methods = Set(SourceTree.matches(#"func test\w+\("#, in: testFiles, .raw).map { String($0.text.dropFirst(5).dropLast()) })
+        let methods = Self.testMethodsByClass()
         var named = 0
         for row in table {
             var currentClass: String?
-            // `ClassTests`, `ClassTests.testMethod`, and `.testMethod` for the class named just before.
-            for token in SourceTree.matches(SourceTree.regex(#"`(\w+Tests)?(?:\.(test\w+))?`"#), in: row).map(\.text) {
-                let parts = token.trimmingCharacters(in: CharacterSet(charactersIn: "`")).split(separator: ".", omittingEmptySubsequences: false)
-                if let name = parts.first, !name.isEmpty { currentClass = String(name) }
+            // `ClassTests` (n), `ClassTests.testMethod`, and `.testMethod` for the class named just before.
+            for match in SourceTree.matches(SourceTree.regex(#"`(\w+Tests)?(?:\.(test\w+))?`(?: \((\d+)\))?"#), in: row) {
+                let parts = match.text.split(separator: "`", omittingEmptySubsequences: false)
+                let name = parts[1].split(separator: ".", omittingEmptySubsequences: false)
+                if !name[0].isEmpty { currentClass = String(name[0]) }
                 guard let className = currentClass else { continue }
                 named += 1
-                Self.rule.require(classes.contains(className), "AGENTS.md names \(className), which no test target defines")
-                if parts.count == 2 {
-                    Self.rule.require(methods.contains(String(parts[1])), "AGENTS.md names \(className).\(parts[1]), which does not exist")
+                guard let defined = methods[className] else {
+                    Self.rule.check(["AGENTS.md names \(className), which no test target defines"])
+                    continue
+                }
+                if name.count == 2 {
+                    Self.rule.require(defined.contains(String(name[1])), "AGENTS.md names \(className).\(name[1]), which \(className) does not define")
+                }
+                if let count = Int(parts[2].trimmingCharacters(in: CharacterSet(charactersIn: " ()"))) {
+                    Self.rule.require(defined.count == count, "AGENTS.md says \(className) has \(count) tests; it has \(defined.count)")
                 }
             }
         }
         XCTAssertGreaterThan(named, 30, "the rules table names too few tests")
+    }
+
+    /// Each XCTestCase subclass under Tests/ and the `test…` methods declared after it in its file.
+    private static func testMethodsByClass() -> [String: Set<String>] {
+        let declaration = SourceTree.regex(#"class (\w+): XCTestCase|func (test\w+)\("#)
+        var methods: [String: Set<String>] = [:]
+        for file in SourceTree.swiftFiles(under: "Tests/") {
+            let text = SourceTree.read(file, .code) as NSString
+            var current: String?
+            for match in declaration.matches(in: text as String, range: NSRange(location: 0, length: text.length)) {
+                if match.range(at: 1).location != NSNotFound {
+                    current = text.substring(with: match.range(at: 1))
+                    methods[current!, default: []] = methods[current!, default: []]
+                } else if let current {
+                    methods[current, default: []].insert(text.substring(with: match.range(at: 2)))
+                }
+            }
+        }
+        return methods
     }
 }

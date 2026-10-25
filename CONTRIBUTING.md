@@ -14,6 +14,9 @@ access read-only by default. This page is the way in; it links to the detail ins
 4. **The UI contract.** [docs/design-contract.md](docs/design-contract.md), before you touch a SwiftUI view.
 5. **The gates** below, before you call a change done. Everything else: [docs/README.md](docs/README.md).
 
+In the source-sale export (`script/export-source-sale.sh`) some linked files are absent, among them `AGENTS.md`,
+`docs/README.md`, the map and the design contract.
+
 ## Gates
 
 ```bash
@@ -49,11 +52,12 @@ ApplicationServices AX).
 
 ## Rule tests
 
-The test target `RepoRuleTests` (`Tests/RepoRuleTests/`) reads the source text and checks the repository's
-rules that the compiler cannot: who may build a guard, which strings a view may show, which module may
+The test target `RepoRuleTests` (`Tests/RepoRuleTests/`) holds the repository-rule tests. They read the
+source text and check the rules that the compiler cannot: who may build a guard, which strings a view may show, which module may
 import which. They check rules, not behavior, and each exists because the same mistake shipped more than
-once. They stand on one helper, `SourceTree.swift` (files read once, matches with file and line), and
-every failure has one shape:
+once. Some behavior tests in the other targets (about 50 files) still read a source file inline; they test
+behavior and stay where they are. The rule tests stand on one helper, `SourceTree.swift` (files read once,
+matches with file and line), and every failure has one shape:
 
 ```text
 Rule: Count copy. Sources/A.swift:3: `\(n) songs` counts without CountCopy. Why: … See: AGENTS.md row "Count copy"; … Fix: Use CountCopy.count(n, "song") …
@@ -81,6 +85,6 @@ When one fails:
 ## Git hygiene
 
 - Keep commits coherent and green.
-- Do not commit `.ai/runs/`, `.build/`, `dist/`, `DerivedData/`, `.DS_Store`, `.xcresult`, or personal scan logs.
+- Do not commit `.ai/runs/`, `.deslop/`, `.build/`, `dist/`, `DerivedData/`, `.DS_Store`, `.xcresult`, or personal scan logs.
 - Do not push unless the current task explicitly asks for it.
 - GitHub Actions are not required; paste local gate results into PRs instead.
