@@ -503,7 +503,7 @@ final class ProjectVaultOperationCoordinatorTests: XCTestCase {
 
     /// View-model forwarding: removing a per-song message through the owner
     /// emits `VM.objectWillChange` with no status callback involved. Fails if
-    /// `wireVaultOperationCoordinator`'s sink forwarding is removed; does not
+    /// the view model's `forwardChanges(of: vaultOperations)` is removed; does not
     /// pass merely via VM status/other Published mutations because the removal
     /// path publishes only `operationMessages`.
     func testViewModelForwardsOperationMessageRemoval() async throws {
