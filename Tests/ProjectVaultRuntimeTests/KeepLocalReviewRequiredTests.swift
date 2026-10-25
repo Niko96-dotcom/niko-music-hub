@@ -95,7 +95,7 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         let store = UserDefaultsSettingsStore(userDefaults: defaults)
         _ = try store.repairStoredSettings(backupDirectory: makeTempDirectory("partial-pins"))
         let repaired = try store.loadSettings().vault
-        XCTAssertEqual(repaired.keepLocalProjectIDs, ["pinned-a"])
+        XCTAssertEqual(repaired.keepLocalPins.storedForm, ["pinned-a"])
         XCTAssertTrue(repaired.keepLocalReviewRequired)
     }
 
@@ -169,14 +169,14 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         let store = UserDefaultsSettingsStore(userDefaults: defaults)
 
         // Same atomic save the Review sheet performs: clear the flag, carry pins.
-        let pins = try store.loadSettings().vault.keepLocalProjectIDs
+        let pins = try store.loadSettings().vault.keepLocalPins.storedForm
         try store.updateSettings {
             $0.vault.keepLocalReviewRequired = false
-            $0.vault.keepLocalProjectIDs = pins
+            $0.vault.keepLocalPins.storedForm = pins
         }
         let cleared = try store.loadSettings().vault
         XCTAssertFalse(cleared.keepLocalReviewRequired)
-        XCTAssertEqual(cleared.keepLocalProjectIDs, ["pinned-a", "pinned-b"])
+        XCTAssertEqual(cleared.keepLocalPins.storedForm, ["pinned-a", "pinned-b"])
         XCTAssertTrue(ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(cleared))
     }
 
@@ -193,7 +193,7 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
 
         // A pin added while the review sheet is open (after the sheet's
         // snapshot) must survive Done Reviewing.
-        try store.updateSettings { $0.vault.keepLocalProjectIDs.insert("pinned-b") }
+        try store.updateSettings { $0.vault.keepLocalPins.storedForm.insert("pinned-b") }
         // The fixed Done Reviewing path: clear only the flag against latest storage.
         try store.updateSettings { settings in
             _ = KeepLocalReviewPolicy.completeReview(&settings, confirmed: true, browserVisited: true)
@@ -201,15 +201,15 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
 
         let cleared = try store.loadSettings().vault
         XCTAssertFalse(cleared.keepLocalReviewRequired)
-        XCTAssertEqual(cleared.keepLocalProjectIDs, ["pinned-a", "pinned-b"])
+        XCTAssertEqual(cleared.keepLocalPins.storedForm, ["pinned-a", "pinned-b"])
     }
 
     func testDoneReviewPolicyNeverTouchesPins() throws {
         var settings = configuredReviewSettings()
-        settings.vault.keepLocalProjectIDs = ["pinned-a", "pinned-b"]
+        settings.vault.keepLocalPins.storedForm = ["pinned-a", "pinned-b"]
         XCTAssertTrue(KeepLocalReviewPolicy.completeReview(&settings, confirmed: true, browserVisited: true))
         XCTAssertFalse(settings.vault.keepLocalReviewRequired)
-        XCTAssertEqual(settings.vault.keepLocalProjectIDs, ["pinned-a", "pinned-b"])
+        XCTAssertEqual(settings.vault.keepLocalPins.storedForm, ["pinned-a", "pinned-b"])
     }
 
     func testReviewPolicyRefusesClearanceBeforeBrowserVisit() {
@@ -221,10 +221,10 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         XCTAssertFalse(KeepLocalReviewPolicy.canCompleteReview(settings, confirmed: false, browserVisited: true))
         XCTAssertFalse(KeepLocalReviewPolicy.canCompleteReview(settings, confirmed: false, browserVisited: false))
 
-        settings.vault.keepLocalProjectIDs = ["pinned-a"]
+        settings.vault.keepLocalPins.storedForm = ["pinned-a"]
         XCTAssertFalse(KeepLocalReviewPolicy.completeReview(&settings, confirmed: true, browserVisited: false))
         XCTAssertTrue(settings.vault.keepLocalReviewRequired, "flag must survive a checkbox-only attempt")
-        XCTAssertEqual(settings.vault.keepLocalProjectIDs, ["pinned-a"])
+        XCTAssertEqual(settings.vault.keepLocalPins.storedForm, ["pinned-a"])
         XCTAssertFalse(KeepLocalReviewPolicy.completeReview(&settings, confirmed: false, browserVisited: true))
         XCTAssertTrue(settings.vault.keepLocalReviewRequired)
     }
@@ -234,10 +234,10 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         XCTAssertTrue(KeepLocalReviewPolicy.canCompleteReview(settings, confirmed: true, browserVisited: true))
 
         var clearing = settings
-        clearing.vault.keepLocalProjectIDs = ["pinned-a", "pinned-b"]
+        clearing.vault.keepLocalPins.storedForm = ["pinned-a", "pinned-b"]
         XCTAssertTrue(KeepLocalReviewPolicy.completeReview(&clearing, confirmed: true, browserVisited: true))
         XCTAssertFalse(clearing.vault.keepLocalReviewRequired)
-        XCTAssertEqual(clearing.vault.keepLocalProjectIDs, ["pinned-a", "pinned-b"])
+        XCTAssertEqual(clearing.vault.keepLocalPins.storedForm, ["pinned-a", "pinned-b"])
     }
 
     func testGatedReviewPreservesConcurrentPins() throws {
@@ -250,7 +250,7 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         try seedMatchingEnabledRoots(into: store)
 
         // A pin added while the sheet is open must survive gated Done Reviewing.
-        try store.updateSettings { $0.vault.keepLocalProjectIDs.insert("pinned-b") }
+        try store.updateSettings { $0.vault.keepLocalPins.storedForm.insert("pinned-b") }
 
         // Checkbox without the browser visit must not clear; the gated policy
         // leaves the flag set.
@@ -265,7 +265,7 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         }
         let done = try store.loadSettings().vault
         XCTAssertFalse(done.keepLocalReviewRequired)
-        XCTAssertEqual(done.keepLocalProjectIDs, ["pinned-a", "pinned-b"])
+        XCTAssertEqual(done.keepLocalPins.storedForm, ["pinned-a", "pinned-b"])
     }
 
     // MARK: - Vault setup gate (empty/unconfigured Vault cannot be reviewed away)
@@ -335,7 +335,7 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         for (name, configured) in cases {
             var settings = configured
             settings.vault.keepLocalReviewRequired = true
-            settings.vault.keepLocalProjectIDs = ["pinned-a"]
+            settings.vault.keepLocalPins.storedForm = ["pinned-a"]
             XCTAssertFalse(
                 KeepLocalReviewPolicy.vaultRootsConfigured(in: settings),
                 "\(name) must not count as configured"
@@ -349,7 +349,7 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
                 "\(name): flag must stay set"
             )
             XCTAssertTrue(settings.vault.keepLocalReviewRequired, name)
-            XCTAssertEqual(settings.vault.keepLocalProjectIDs, ["pinned-a"], "\(name): pins must survive refusal")
+            XCTAssertEqual(settings.vault.keepLocalPins.storedForm, ["pinned-a"], "\(name): pins must survive refusal")
         }
     }
 
@@ -357,14 +357,14 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
     /// refused cases above prove the same visit + checkbox is not enough alone.
     func testReviewClearsOnlyWithMatchingEnabledRoots() {
         var settings = configuredReviewSettings()
-        settings.vault.keepLocalProjectIDs = ["pinned-a"]
+        settings.vault.keepLocalPins.storedForm = ["pinned-a"]
         XCTAssertTrue(KeepLocalReviewPolicy.vaultRootsConfigured(in: settings))
         XCTAssertTrue(
             KeepLocalReviewPolicy.canCompleteReview(settings, confirmed: true, browserVisited: true)
         )
         XCTAssertTrue(KeepLocalReviewPolicy.completeReview(&settings, confirmed: true, browserVisited: true))
         XCTAssertFalse(settings.vault.keepLocalReviewRequired)
-        XCTAssertEqual(settings.vault.keepLocalProjectIDs, ["pinned-a"])
+        XCTAssertEqual(settings.vault.keepLocalPins.storedForm, ["pinned-a"])
     }
 
     /// A visit before choosing a new root must not authorize the new root.
@@ -373,7 +373,7 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
     /// though the new roots are fully configured.
     func testChangingRootsRequiresFreshBrowserVisit() {
         var settings = configuredReviewSettings()
-        settings.vault.keepLocalProjectIDs = ["pinned-a"]
+        settings.vault.keepLocalPins.storedForm = ["pinned-a"]
         XCTAssertTrue(KeepLocalReviewPolicy.completeReview(&settings, confirmed: true, browserVisited: true))
         XCTAssertFalse(settings.vault.keepLocalReviewRequired)
 
@@ -397,10 +397,10 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         XCTAssertTrue(settings.vault.keepLocalReviewRequired)
 
         // A fresh visit of the new roots clears, keeping pins added meanwhile.
-        settings.vault.keepLocalProjectIDs.insert("pinned-b")
+        settings.vault.keepLocalPins.storedForm.insert("pinned-b")
         XCTAssertTrue(KeepLocalReviewPolicy.completeReview(&settings, confirmed: true, browserVisited: true))
         XCTAssertFalse(settings.vault.keepLocalReviewRequired)
-        XCTAssertEqual(settings.vault.keepLocalProjectIDs, ["pinned-a", "pinned-b"])
+        XCTAssertEqual(settings.vault.keepLocalPins.storedForm, ["pinned-a", "pinned-b"])
     }
 
     /// A cleared obligation stays cleared only when nothing changed: an

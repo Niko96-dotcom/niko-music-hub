@@ -786,7 +786,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let transferStore = try fixture.transferStore()
         var transfer = try XCTUnwrap(try transferStore.verifiedArchiveGeneration(projectID: fixture.projectID()))
         try FileManager.default.removeItem(at: transfer.destinationURL)
-        transfer.state = .archivedOnlineOnly
+        transfer.plantJournalState(.archivedOnlineOnly)
         try transferStore.save(transfer)
 
         await viewModel.refreshProjectVaultSnapshots()
@@ -1024,7 +1024,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let folder = readySong.folderPath.standardizedFileURL
         // A restore pins the project ID and the folder paths, not the key the toggle writes.
         try fixture.settingsStore.updateSettings {
-            $0.vault.keepLocalPins = KeepLocalPins(storedKeys: $0.vault.keepLocalPins.storedKeys.union([
+            $0.vault.keepLocalPins = KeepLocalPins(storedForm: $0.vault.keepLocalPins.storedForm.union([
                 snapshot.record.id.description,
                 readySong.id,
                 folder.path,
@@ -1037,7 +1037,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
 
         viewModel.setProjectKeepLocal(false, for: readySong)
         await viewModel.refreshProjectVaultSnapshots()
-        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedKeys, [])
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm, [])
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.isKeepLocal, false)
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
     }
@@ -1060,7 +1060,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: fixture.active)
         let aliased = link.appendingPathComponent("Friends Workflow Song", isDirectory: true)
         try fixture.settingsStore.updateSettings {
-            $0.vault.keepLocalPins = KeepLocalPins(storedKeys: $0.vault.keepLocalPins.storedKeys.union([
+            $0.vault.keepLocalPins = KeepLocalPins(storedForm: $0.vault.keepLocalPins.storedForm.union([
                 snapshot.record.id.description,
                 aliased.path,
                 aliased.standardizedFileURL.path,
@@ -1073,7 +1073,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
 
         viewModel.setProjectKeepLocal(false, for: readySong)
         await viewModel.refreshProjectVaultSnapshots()
-        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedKeys, [])
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm, [])
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.isKeepLocal, false)
         XCTAssertEqual(viewModel.projectVaultPresentation(for: readySong)?.primaryAction, .freeUpSpace)
     }

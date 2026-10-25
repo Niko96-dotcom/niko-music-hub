@@ -1,9 +1,9 @@
 # Decision: Keep Local pins keep their stored format; one module owns matching
 
-**Status:** Accepted — implemented (`6ae71fb`..`63630fd`; `KeepLocalPins`, `KeepLocalPinsTests`, `KeepLocalPinsSourceTests`)  
+**Status:** Accepted — implemented (`6ae71fb`..`63630fd`; `KeepLocalPins`, `KeepLocalPinsTests`, `KeepLocalPinsSourceTests`); keys private to `KeepLocalPins` since 2026-10-25  
 **Date:** 2026-10-22  
 **Deciders:** Niko Music Hub owner (approved 2026-10-22) + implementation  
-**Scope:** `VaultSettings.keepLocalProjectIDs`, `KeepLocalPins` (AppCore), every Keep Local check in the Project Vault runtime and the archive browser
+**Scope:** the settings key `keepLocalProjectIDs` (`VaultSettings.keepLocalPins` since 2026-10-25), `KeepLocalPins` (AppCore), every Keep Local check in the Project Vault runtime and the archive browser
 
 ## Context
 
@@ -26,6 +26,10 @@ Project Vault recovery bundles read.
    - which keys unpin removes
 
    Every Keep Local check and write goes through it. The raw set becomes `internal` to AppCore.
+   (2026-10-25: the keys are `private` to `KeepLocalPins`. `VaultSettings.keepLocalPins` stores the value,
+   which encodes itself as the same array under the same key. A direct read or a hand-built key set
+   outside `KeepLocalPins.swift` does not compile; the settings codec and repair's salvage are the two
+   allowed paths to the keys, for the settings store, repair and tests.)
 3. A pin writes at least every spelling an older build compares. Matching never reports "not
    pinned" where an older check reported "pinned".
 

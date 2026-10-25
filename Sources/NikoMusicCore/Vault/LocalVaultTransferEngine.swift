@@ -1261,7 +1261,7 @@ public actor LocalVaultTransferEngine {
     /// is saved; then the record is saved with its new state, before the side
     /// effect the state describes.
     private func checkAndSave(_ record: inout VaultTransferRecord, _ transition: VaultTransition) throws {
-        record.state = try ProjectVaultStateMachine().applying(transition, to: record.state)
+        try record.apply(transition)
         try persist(&record)
     }
 

@@ -244,7 +244,7 @@ final class VaultSettingsTests: XCTestCase {
         XCTAssertEqual(partial.spaceIntent, .keepCopy)
         XCTAssertFalse(partial.automationEmergencyStop)
         XCTAssertFalse(partial.independentBackupConfirmed)
-        XCTAssertEqual(partial.keepLocalPins.storedKeys, [])
+        XCTAssertEqual(partial.keepLocalPins.storedForm, [])
     }
 
     func testOptionalVaultFieldsAcceptMissingAndNull() throws {
@@ -298,7 +298,7 @@ final class VaultSettingsTests: XCTestCase {
                 spaceIntent: .freeSpace,
                 independentBackupConfirmed: true,
                 lastSuccessfulVerificationAt: verifiedAt,
-                keepLocalProjectIDs: ["song-a"]
+                keepLocalPins: KeepLocalPins(storedForm: ["song-a"])
             )
         )
 

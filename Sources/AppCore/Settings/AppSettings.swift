@@ -107,9 +107,9 @@ public struct VaultSettings: Equatable, Codable, Sendable {
     public var lastSuccessfulVerificationAt: Date?
     public var lastRestoreDrillAt: Date?
     /// App metadata only. Paths are stable scan identifiers; pinning never writes
-    /// into or changes a project folder. The stored Keep Local keys: read and
-    /// write them through `keepLocalPins` (ADR 021).
-    var keepLocalProjectIDs: Set<String>
+    /// into or changes a project folder. Stored under the key
+    /// `keepLocalProjectIDs` as the array of strings older builds read (ADR 021).
+    public var keepLocalPins: KeepLocalPins
     /// Durable Keep Local review obligation. Set by settings repair when the
     /// pin list (or the whole Vault/settings blob) could not be read, so pins
     /// may be missing. While true, every active-copy removal path refuses at
@@ -131,7 +131,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         independentBackupConfirmed: Bool = false,
         lastSuccessfulVerificationAt: Date? = nil,
         lastRestoreDrillAt: Date? = nil,
-        keepLocalProjectIDs: Set<String> = [],
+        keepLocalPins: KeepLocalPins = KeepLocalPins(),
         keepLocalReviewRequired: Bool = false
     ) {
         self.isEnabled = isEnabled
@@ -147,7 +147,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         self.independentBackupConfirmed = independentBackupConfirmed
         self.lastSuccessfulVerificationAt = lastSuccessfulVerificationAt
         self.lastRestoreDrillAt = lastRestoreDrillAt
-        self.keepLocalProjectIDs = keepLocalProjectIDs
+        self.keepLocalPins = keepLocalPins
         self.keepLocalReviewRequired = keepLocalReviewRequired
     }
 
@@ -187,7 +187,7 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         case transferFreeSpaceReserveGiB, keepPreviousGenerationDays
         case rolloutStage, spaceIntent, automationEmergencyStop, independentBackupConfirmed
         case lastSuccessfulVerificationAt, lastRestoreDrillAt
-        case keepLocalProjectIDs
+        case keepLocalPins = "keepLocalProjectIDs"
         case keepLocalReviewRequired
     }
 
@@ -244,10 +244,10 @@ public struct VaultSettings: Equatable, Codable, Sendable {
         }
         lastSuccessfulVerificationAt = try values.decodeIfPresent(Date.self, forKey: .lastSuccessfulVerificationAt)
         lastRestoreDrillAt = try values.decodeIfPresent(Date.self, forKey: .lastRestoreDrillAt)
-        if values.contains(.keepLocalProjectIDs) {
-            keepLocalProjectIDs = try values.decode(Set<String>.self, forKey: .keepLocalProjectIDs)
+        if values.contains(.keepLocalPins) {
+            keepLocalPins = try values.decode(KeepLocalPins.self, forKey: .keepLocalPins)
         } else {
-            keepLocalProjectIDs = []
+            keepLocalPins = KeepLocalPins()
         }
         // Durable review obligation: a missing key means no repair ever
         // flagged the pins (false), but a present corrupt value — including

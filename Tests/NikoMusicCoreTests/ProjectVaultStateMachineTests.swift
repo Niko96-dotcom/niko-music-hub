@@ -86,6 +86,53 @@ final class ProjectVaultStateMachineTests: XCTestCase {
         }
     }
 
+    /// A record's state changes only through `apply(_:)`, which takes the edge from the table: from
+    /// every state to every state, a listed edge moves the record and an unlisted one throws and leaves
+    /// the record as it was. A new record starts in `activeLocal`.
+    func testRecordStateChangesOnlyThroughTheTable() throws {
+        func record(in state: VaultTransferState) -> VaultTransferRecord {
+            VaultTransferRecord(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+                projectID: ProjectID(),
+                sourceURL: URL(fileURLWithPath: "/Active/Song", isDirectory: true),
+                stagingURL: URL(fileURLWithPath: "/Vault/staging", isDirectory: true),
+                destinationURL: URL(fileURLWithPath: "/Vault/generation", isDirectory: true),
+                state: state
+            )
+        }
+        XCTAssertEqual(VaultTransferRecord(
+            projectID: ProjectID(),
+            sourceURL: URL(fileURLWithPath: "/Active/Song", isDirectory: true),
+            stagingURL: URL(fileURLWithPath: "/Vault/staging", isDirectory: true),
+            destinationURL: URL(fileURLWithPath: "/Vault/generation", isDirectory: true)
+        ).state, .activeLocal)
+        for state in VaultTransferState.allCases {
+            for destination in VaultTransferState.allCases {
+                var changed = record(in: state)
+                let before = changed
+                if machine.allowedDestinations(from: state).contains(destination) {
+                    try changed.apply(.advance(to: destination))
+                    XCTAssertEqual(changed.state, destination, "\(state) -> \(destination)")
+                } else {
+                    XCTAssertThrowsError(try changed.apply(.advance(to: destination)), "\(state) -> \(destination)") {
+                        XCTAssertEqual($0 as? VaultTransitionError, .illegal(from: state, to: destination))
+                    }
+                    XCTAssertEqual(changed, before, "a refused change keeps the record: \(state) -> \(destination)")
+                }
+            }
+        }
+
+        let unproven = VaultRemovalEvidence(manifestVerified: false, archiveDurability: .verifiedLocal, metadataPersisted: true)
+        var verified = record(in: .archiveVerified)
+        XCTAssertThrowsError(try verified.apply(.beginRemovingActiveCopy(unproven))) {
+            XCTAssertEqual($0 as? VaultTransitionError, .removalNotProven)
+        }
+        XCTAssertEqual(verified.state, .archiveVerified)
+        let proven = VaultRemovalEvidence(manifestVerified: true, archiveDurability: .verifiedLocal, metadataPersisted: true)
+        try verified.apply(.beginRemovingActiveCopy(proven))
+        XCTAssertEqual(verified.state, .removingActiveCopy)
+    }
+
     func testActiveRemovalRequiresVerifiedManifestAndPersistedMetadata() throws {
         let valid = VaultRemovalEvidence(
             manifestVerified: true,

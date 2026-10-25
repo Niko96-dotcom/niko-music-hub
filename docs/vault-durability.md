@@ -294,7 +294,8 @@ project a second time; each run's edges must be observed ones), the portable
 retry windows in `VaultArchiveLayoutTests`, the two unlisted-edge tests (a
 transfer row in a restore-half state, a failed save of `archiveVerified`), the
 tables in `ProjectVaultStateMachineTests` and `VaultRestorePhaseTests`, and the
-one-writer guard `VaultStateWriterSourceTests`. See
+one writer per record (`state` and `phase` are `private(set)`, so the compiler
+refuses another; `VaultStateWriterSourceTests` keeps them so). See
 [architecture.md § Vault state changes](architecture.md#vault-state-changes).
 
 Covered elsewhere (not re-proven here, do not claim as new proof):

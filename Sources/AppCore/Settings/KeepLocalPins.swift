@@ -4,10 +4,12 @@ import NikoMusicCore
 /// Keep Local pins: projects the person keeps on this Mac. The Project Vault
 /// never removes a pinned project's Active folder.
 ///
-/// The stored keys (`VaultSettings.keepLocalProjectIDs`) mix catalog project
-/// IDs, song IDs and folder paths in several spellings, because older builds
-/// wrote and compared spellings (ADR 021). Callers describe a project with what
-/// they know; matching, writing and removing stay here.
+/// The stored keys mix catalog project IDs, song IDs and folder paths in
+/// several spellings, because older builds wrote and compared spellings
+/// (ADR 021). They are private to this type: callers describe a project with
+/// what they know, and matching, writing, removing and the stored form stay
+/// here. Settings store the value under the old key, `keepLocalProjectIDs`, as
+/// the same array of strings.
 public struct KeepLocalPins: Equatable, Sendable {
     /// One project as a caller knows it. IDs match exactly; folders match by
     /// canonical folder path, so another spelling of the same folder counts.
@@ -21,19 +23,31 @@ public struct KeepLocalPins: Equatable, Sendable {
         }
     }
 
-    /// What settings store.
-    public private(set) var storedKeys: Set<String>
+    /// What settings store. Only this type reads or builds it (ADR 021).
+    private var storedKeys: Set<String>
     /// Canonical folder paths of the stored path keys, computed once per value
     /// so a check canonicalizes only the caller's folders.
     private var storedFolderPaths: Set<String>
 
-    public init(storedKeys: Set<String>) {
+    /// No pins.
+    public init() {
+        self.init(storedKeys: [])
+    }
+
+    private init(storedKeys: Set<String>) {
         self.storedKeys = storedKeys
         storedFolderPaths = Self.canonicalFolderPaths(ofKeys: storedKeys)
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.storedKeys == rhs.storedKeys
+    }
+
+    /// The number of stored keys, not of projects: one pin writes several
+    /// spellings, and an older pin cannot be grouped by project (ADR 021).
+    /// Diagnostics and the Review Keep Local count show it.
+    public var storedKeyCount: Int {
+        storedKeys.count
     }
 
     /// An ID-only project, or a set without path keys, needs no filesystem call.
@@ -96,10 +110,25 @@ public struct KeepLocalPins: Equatable, Sendable {
     }
 }
 
-extension VaultSettings {
-    /// The Keep Local pins over the stored keys (ADR 021).
-    public var keepLocalPins: KeepLocalPins {
-        get { KeepLocalPins(storedKeys: keepLocalProjectIDs) }
-        set { keepLocalProjectIDs = newValue.storedKeys }
+/// The stored form older builds read and write: a plain array of the keys.
+extension KeepLocalPins: Codable {
+    public init(from decoder: Decoder) throws {
+        self.init(storedKeys: try decoder.singleValueContainer().decode(Set<String>.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(storedKeys)
+    }
+}
+
+extension KeepLocalPins {
+    /// Settings repair for a stored value that did not decode: keeps every
+    /// readable key. `isComplete` is false when the value was not an array or
+    /// held an entry that is not a string, so some pins may be missing.
+    static func salvaging(storedValue: Any) -> (pins: KeepLocalPins, isComplete: Bool) {
+        let entries = storedValue as? [Any]
+        let keys = entries?.compactMap { $0 as? String } ?? []
+        return (KeepLocalPins(storedKeys: Set(keys)), entries != nil && keys.count == entries?.count)
     }
 }

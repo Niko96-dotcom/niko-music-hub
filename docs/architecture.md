@@ -477,10 +477,16 @@ Return and Esc on a tool page have one owner each (2026-10-24, finding #10 of th
 pinned, which keys a pin writes and which keys unpin removes. [ADR 021](decisions/021-keep-local-pin-format.md) has the
 decision.
 
-- Storage is unchanged: `VaultSettings.keepLocalProjectIDs`, a set of strings that mixes catalog project IDs, song IDs and
-  folder paths in several spellings. Older builds and recovery bundles read it, so a pin still writes every spelling
-  they compare (raw, standardized, resolved, canonical). The set is `internal` to AppCore; everything else uses
-  `VaultSettings.keepLocalPins` (`KeepLocalPinsSourceTests`).
+- Storage is unchanged: the settings key `keepLocalProjectIDs`, an array of strings that mixes catalog project IDs, song
+  IDs and folder paths in several spellings. Older builds and recovery bundles read it, so a pin still writes every
+  spelling they compare (raw, standardized, resolved, canonical). `VaultSettings.keepLocalPins` stores the
+  `KeepLocalPins` value, which encodes itself as that array. The keys are `private` to `KeepLocalPins`, so a direct
+  read of the keys, or a key set built by hand, does not compile elsewhere. Two paths reach them by design: the public
+  `Codable` conformance (the settings store decodes and encodes it; a JSON round trip could also do so) and the
+  internal `KeepLocalPins.salvaging(storedValue:)`, which settings repair uses for a damaged value. Tests plant and
+  read keys through the codec. `KeepLocalPinsSourceTests` keeps the keys private and fails when a file other than
+  `AppSettings.swift` and `SettingsRepair.swift` names `KeepLocalPins.self` or `salvaging(`; a generic round trip
+  that names neither is left to review. Diagnostics and the Review Keep Local sheet show `storedKeyCount`.
 - A caller describes a project with what it knows (`KeepLocalPins.Project`: project IDs, song IDs, folders). IDs match
   exactly; folders match by one canonical folder path (`KeepLocalPins.canonicalFolderPath`, which
   `ArchiveVaultObservation.vaultCanonicalPath` forwards to), so a pin under another spelling of the same folder
@@ -526,8 +532,8 @@ saved in `vault_restores`) each change only through one table.
 
 | Record | Table | Writers |
 | --- | --- | --- |
-| Transfer | [`ProjectVaultStateMachine`](../Sources/NikoMusicCore/Vault/ProjectVaultStateMachine.swift); removal only through `beginRemovingActiveCopy` with `VaultRemovalEvidence` | `LocalVaultTransferEngine.checkAndSave` |
-| Restore | `VaultRestorePhase.allowedNextPhases` in [`VaultRestoreRecord.swift`](../Sources/NikoMusicCore/Vault/VaultRestoreRecord.swift) | `LocalVaultRestoreEngine.checkAndSave`; the launch reconcile in `SQLiteVaultTransferStore` |
+| Transfer | [`ProjectVaultStateMachine`](../Sources/NikoMusicCore/Vault/ProjectVaultStateMachine.swift); removal only through `beginRemovingActiveCopy` with `VaultRemovalEvidence` | `VaultTransferRecord.apply(_:)`, called by `LocalVaultTransferEngine.checkAndSave` |
+| Restore | `VaultRestorePhase.allowedNextPhases` in [`VaultRestoreRecord.swift`](../Sources/NikoMusicCore/Vault/VaultRestoreRecord.swift) | `VaultRestoreRecord.changePhase(to:)`, called by `LocalVaultRestoreEngine.checkAndSave` and the launch reconcile in `SQLiteVaultTransferStore` |
 
 - The tables list every edge a path reaches through one event (a thrown error, a cancel, a launch or retry decision),
   each with the path that makes it: the archive chain and its stops, the removal rewinds (refused or stopped before
@@ -563,9 +569,16 @@ saved in `vault_restores`) each change only through one table.
   `VaultRestoreCrashWindow`: between a side effect and the save that records it) let a test stop an engine as if the
   process died. `VaultCrashWindowTests` then runs a fresh engine's launch recovery twice and pins the state, the Active
   folder, the generation and the file operations the relaunch replays.
-- `VaultStateWriterSourceTests` fails on any other assignment of `state` or `phase`. `ProjectVaultStateMachineTests`
-  and `VaultRestorePhaseTests` pin both tables and check them against `VaultObservedEdges`, the edges the Vault suites
-  made when the tables were written (2026-10-24).
+- The compiler keeps every change in the checked writer: `state` and `phase` are `private(set)` on their records, so
+  an assignment outside the record's file does not compile. A new record starts in `activeLocal` or
+  `materializingArchive`; only the decoder gives a record another state, as the journal row holds it. Tests plant such
+  a row the same way, through the decoder (`VaultJournalFixtures.swift` in each Vault test target).
+  `VaultStateWriterSourceTests` keeps the setters private. In the code of the two record files (comments ignored) it
+  allows three lines that assign the field, the start of a new record, the decoder and the checked writer, and fails
+  on any other line that assigns `state` or `phase`, passes it `inout` (`&state`) or assigns `self` whole.
+  `ProjectVaultStateMachineTests` and `VaultRestorePhaseTests` pin both tables, check them against `VaultObservedEdges`,
+  the edges the Vault suites made when the tables were written (2026-10-24), and check that a record's writer moves
+  only along the table and keeps the record unchanged when it refuses.
 - Open: the store saves without an expected-state compare-and-set, so a stale writer is not refused (survivor
   retirement does a read-compare); the removal evidence passes constant `manifestVerified` and `metadataPersisted`
   values; a crash between a restore's open and its `completedAt` save opens the project again at the next launch.

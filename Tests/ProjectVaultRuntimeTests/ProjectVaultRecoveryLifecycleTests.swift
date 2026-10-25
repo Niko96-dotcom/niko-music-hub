@@ -235,7 +235,7 @@ final class ProjectVaultRecoveryLifecycleTests: XCTestCase {
                     activeRootID: activeRoot.id,
                     archiveRootID: archiveRoot.id,
                     automationEmergencyStop: false,
-                    keepLocalProjectIDs: ["keep-1"]
+                    keepLocalPins: KeepLocalPins(storedForm: ["keep-1"])
                 )
             ))
             snapshot = ArchiveIndexSnapshot(

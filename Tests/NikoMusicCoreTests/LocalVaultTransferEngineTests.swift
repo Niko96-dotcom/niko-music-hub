@@ -78,7 +78,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let now = Date(timeIntervalSince1970: 29_000)
         var record = try failedDurabilityRecord(fixture: fixture, retryCount: 0, updatedAt: now)
-        record.state = .removingActiveCopy
+        record.plantJournalState(.removingActiveCopy)
         record.error = nil
         try store.save(record)
         // A retryable copy for another project: normally resumed at launch.
@@ -127,7 +127,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             defer { fixture.remove() }
             let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
             var record = try await verifiedArchive(fixture: fixture, store: store)
-            record.state = .recoveryRequired
+            record.plantJournalState(.recoveryRequired)
             record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
             try store.save(record)
             if sourceState == "partial" {
@@ -162,7 +162,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             defer { fixture.remove() }
             let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
             var record = try await verifiedArchive(fixture: fixture, store: store)
-            record.state = .recoveryRequired
+            record.plantJournalState(.recoveryRequired)
             record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
             try store.save(record)
             if failure == "corrupt" {
@@ -1365,7 +1365,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             updatedAt: now
         )
         let legacyManifest = try legacyManifestIncludingExactDSStore(at: record.stagingURL)
-        record.state = .awaitingProviderDurability
+        record.plantJournalState(.awaitingProviderDurability)
         record.error = nil
         record.manifestID = legacyManifest.id
         record.manifest = legacyManifest
@@ -1539,7 +1539,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
             )
             try FileManager.default.copyItem(at: fixture.source, to: record.destinationURL)
             let manifest = try VaultManifestBuilder().build(at: record.destinationURL)
-            record.state = origin
+            record.plantJournalState(origin)
             record.error = nil
             record.manifestID = manifest.id
             record.manifest = manifest
@@ -1707,7 +1707,7 @@ final class LocalVaultTransferEngineTests: XCTestCase {
                 let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
                 let verified = try await verifiedArchive(fixture: fixture, store: store)
                 var legacy = verified
-                legacy.state = .failedRecoverable
+                legacy.plantJournalState(.failedRecoverable)
                 legacy.error = VaultTransferError(
                     origin: origin,
                     reason: .unknown,

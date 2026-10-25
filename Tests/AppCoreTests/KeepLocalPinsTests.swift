@@ -69,27 +69,27 @@ final class KeepLocalPinsTests: XCTestCase {
     func testIDsMatchExactly() {
         let projectID = ProjectID()
         let loose = "loose-project:file:///archive/#bmVvbg=="
-        let pins = KeepLocalPins(storedKeys: [projectID.description, loose])
+        let pins = KeepLocalPins(storedForm: [projectID.description, loose])
         XCTAssertTrue(pins.contains(Project(projectIDs: [projectID])))
         XCTAssertTrue(pins.contains(Project(songIDs: [loose])))
         XCTAssertFalse(pins.contains(Project(projectIDs: [ProjectID()], songIDs: ["loose-project:other"])))
-        XCTAssertFalse(KeepLocalPins(storedKeys: []).contains(Project(projectIDs: [projectID])))
+        XCTAssertFalse(KeepLocalPins(storedForm: []).contains(Project(projectIDs: [projectID])))
     }
 
     func testFoldersMatchByCanonicalPathWhateverTheSpelling() throws {
         let folders = try makeFolders()
         for stored in [folders.real, folders.throughLink, folders.dotted, folders.privateSpelled] {
-            var pins = KeepLocalPins(storedKeys: [])
+            var pins = KeepLocalPins(storedForm: [])
             pins.pin(Project(folders: [stored]))
             for asked in [folders.real, folders.throughLink, folders.dotted, folders.privateSpelled] {
                 XCTAssertTrue(pins.contains(Project(folders: [asked])), "stored \(stored.path), asked \(asked.path)")
             }
             XCTAssertFalse(pins.contains(Project(folders: [folders.other])))
         }
-        var missing = KeepLocalPins(storedKeys: [folders.missing.path])
+        var missing = KeepLocalPins(storedForm: [folders.missing.path])
         XCTAssertTrue(missing.contains(Project(folders: [folders.missingPrivateSpelled])), "missing folders still match across the /private alias")
         missing.unpin(Project(folders: [folders.missingPrivateSpelled]))
-        XCTAssertTrue(missing.storedKeys.isEmpty)
+        XCTAssertTrue(missing.storedForm.isEmpty)
     }
 
     /// Requirement 1: wherever a former check found a stored key among the
@@ -113,7 +113,7 @@ final class KeepLocalPinsTests: XCTestCase {
             formerMatches += 1
             let project = Project(songIDs: askedIDs, folders: askedFolders)
             XCTAssertTrue(
-                KeepLocalPins(storedKeys: stored).contains(project),
+                KeepLocalPins(storedForm: stored).contains(project),
                 "stored \(stored), ids \(askedIDs), folders \(askedFolders.map(\.path))"
             )
         }
@@ -128,7 +128,7 @@ final class KeepLocalPinsTests: XCTestCase {
         let folders = try makeFolders()
         let projectID = ProjectID()
         let songID = folders.throughLink.standardizedFileURL.path
-        var pins = KeepLocalPins(storedKeys: [])
+        var pins = KeepLocalPins(storedForm: [])
         pins.pin(Project(projectIDs: [projectID], songIDs: [songID], folders: [folders.throughLink]))
 
         let standardized = folders.throughLink.standardizedFileURL
@@ -141,8 +141,8 @@ final class KeepLocalPinsTests: XCTestCase {
             projectID.description,
             folders.throughLink.path, standardized.path, standardized.resolvingSymlinksInPath().path,
         ]
-        XCTAssertTrue(pins.storedKeys.isSuperset(of: browserWriter))
-        XCTAssertTrue(pins.storedKeys.isSuperset(of: restoreWriter))
+        XCTAssertTrue(pins.storedForm.isSuperset(of: browserWriter))
+        XCTAssertTrue(pins.storedForm.isSuperset(of: restoreWriter))
     }
 
     /// L106: a pin stored under a catalog project ID (no transfer) and the song
@@ -151,9 +151,9 @@ final class KeepLocalPinsTests: XCTestCase {
         let folders = try makeFolders()
         let recordID = ProjectID()
         let songID = folders.real.standardizedFileURL.path
-        var pins = KeepLocalPins(storedKeys: [recordID.description, songID])
+        var pins = KeepLocalPins(storedForm: [recordID.description, songID])
         pins.unpin(Project(projectIDs: [recordID], songIDs: [songID], folders: [folders.real]))
-        XCTAssertTrue(pins.storedKeys.isEmpty)
+        XCTAssertTrue(pins.storedForm.isEmpty)
     }
 
     /// L048: a restore pinned the folder under a symlinked-root spelling; the
@@ -161,12 +161,12 @@ final class KeepLocalPinsTests: XCTestCase {
     func testUnpinRemovesARestorePinUnderAnAliasedSpelling() throws {
         let folders = try makeFolders()
         let projectID = ProjectID()
-        var pins = KeepLocalPins(storedKeys: [])
+        var pins = KeepLocalPins(storedForm: [])
         pins.pin(Project(projectIDs: [projectID], folders: [folders.throughLink]))
         pins.pin(Project(folders: [folders.privateSpelled]))
 
         pins.unpin(Project(projectIDs: [projectID], songIDs: [folders.real.standardizedFileURL.path], folders: [folders.real]))
-        XCTAssertTrue(pins.storedKeys.isEmpty, "left: \(pins.storedKeys)")
+        XCTAssertTrue(pins.storedForm.isEmpty, "left: \(pins.storedForm)")
         XCTAssertFalse(pins.contains(Project(folders: [folders.throughLink])))
     }
 
@@ -174,27 +174,42 @@ final class KeepLocalPinsTests: XCTestCase {
         let folders = try makeFolders()
         let keep = ProjectID()
         let remove = ProjectID()
-        var pins = KeepLocalPins(storedKeys: [])
+        var pins = KeepLocalPins(storedForm: [])
         pins.pin(Project(projectIDs: [keep], folders: [folders.other]))
         pins.pin(Project(projectIDs: [remove], folders: [folders.real]))
-        let otherProjectKeys = KeepLocalPins(storedKeys: []).pinning(Project(projectIDs: [keep], folders: [folders.other])).storedKeys
+        let otherProjectKeys = KeepLocalPins(storedForm: []).pinning(Project(projectIDs: [keep], folders: [folders.other])).storedForm
 
         pins.unpin(Project(projectIDs: [remove], folders: [folders.throughLink]))
-        XCTAssertEqual(pins.storedKeys, otherProjectKeys)
+        XCTAssertEqual(pins.storedForm, otherProjectKeys)
         XCTAssertTrue(pins.contains(Project(projectIDs: [keep])))
         XCTAssertFalse(pins.contains(Project(folders: [folders.real])))
     }
 
     // MARK: - Settings and the browser's rule
 
-    func testVaultSettingsReadAndWriteThePinsOverTheStoredKeys() throws {
+    /// The stored format stays: a vault an earlier build wrote (`keepLocalProjectIDs`, an array of
+    /// strings) decodes and matches, and encodes back under the same key as the same array, so an older
+    /// build reads what this one writes.
+    func testVaultSettingsKeepTheStoredFormatOlderBuildsRead() throws {
         let folders = try makeFolders()
-        var vault = VaultSettings()
-        vault.keepLocalPins.pin(Project(folders: [folders.real]))
-        XCTAssertEqual(vault.keepLocalProjectIDs, vault.keepLocalPins.storedKeys)
+        let projectID = ProjectID()
+        let written = #"{"isEnabled":true,"keepLocalProjectIDs":["\#(projectID.description)","\#(folders.real.path)"]}"#
+        var vault = try JSONDecoder().decode(VaultSettings.self, from: Data(written.utf8))
+        XCTAssertTrue(vault.keepLocalPins.contains(Project(projectIDs: [projectID])))
         XCTAssertTrue(vault.keepLocalPins.contains(Project(folders: [folders.throughLink])))
+        XCTAssertEqual(vault.keepLocalPins.storedKeyCount, 2)
+
+        func storedArray(_ vault: VaultSettings) throws -> Set<String> {
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(vault)) as? [String: Any])
+            XCTAssertNil(object["keepLocalPins"], "the settings key stays keepLocalProjectIDs")
+            return Set(try XCTUnwrap(object["keepLocalProjectIDs"] as? [String]))
+        }
+        XCTAssertEqual(try storedArray(vault), [projectID.description, folders.real.path])
         vault.keepLocalPins.unpin(Project(folders: [folders.dotted]))
-        XCTAssertTrue(vault.keepLocalProjectIDs.isEmpty)
+        XCTAssertEqual(try storedArray(vault), [projectID.description])
+        vault.keepLocalPins.unpin(Project(projectIDs: [projectID]))
+        XCTAssertEqual(try storedArray(vault), [])
+        XCTAssertEqual(vault.keepLocalPins, KeepLocalPins())
     }
 
     func testCanonicalFolderPathIsTheArchiveBrowsersRule() throws {

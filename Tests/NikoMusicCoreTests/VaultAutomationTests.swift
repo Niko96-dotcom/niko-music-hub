@@ -238,7 +238,7 @@ final class VaultAutomationTests: XCTestCase {
             stagingURL: fixture.archive.appendingPathComponent(".niko-staging/forged"),
             destinationURL: fixture.archive.appendingPathComponent("generations/forged")
         )
-        forged.state = .archiveVerified
+        forged.plantJournalState(.archiveVerified)
 
         do {
             _ = try await engine.removeActiveCopy(after: forged)
@@ -460,14 +460,14 @@ private actor RecordingAutomaticArchiver: VaultAutomaticArchiving {
             stagingURL: URL(fileURLWithPath: "/tmp/staging"),
             destinationURL: URL(fileURLWithPath: "/tmp/archive")
         )
-        record.state = .archiveVerified
+        record.plantJournalState(.archiveVerified)
         return record
     }
 
     func removeActiveCopy(after archivedRecord: VaultTransferRecord) async throws -> VaultTransferRecord {
         removalCalls += 1
         var record = archivedRecord
-        record.state = .archivedLocal
+        record.plantJournalState(.archivedLocal)
         return record
     }
 

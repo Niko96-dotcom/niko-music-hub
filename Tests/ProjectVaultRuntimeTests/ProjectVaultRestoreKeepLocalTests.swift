@@ -34,7 +34,7 @@ final class ProjectVaultRestoreKeepLocalTests: XCTestCase {
 
         // Keep Local is persisted for the project ID plus the actual Active
         // folder identity before any rearchive can observe the copy.
-        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm
         XCTAssertTrue(pinned.contains(archived.record.id.description))
         XCTAssertTrue(pinned.contains(fixture.project.standardizedFileURL.resolvingSymlinksInPath().path))
 
@@ -82,7 +82,7 @@ final class ProjectVaultRestoreKeepLocalTests: XCTestCase {
         let completed = try await retrying.retryRestore(id: failed.id)
         XCTAssertNotNil(completed.completedAt)
         XCTAssertEqual(completed.id, failed.id)
-        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm
         XCTAssertTrue(pinned.contains(archived.record.id.description))
         let retriedSnapshots = try await retrying.snapshots()
         let snapshot = try XCTUnwrap(retriedSnapshots.first { $0.record.id == archived.record.id })
@@ -106,7 +106,7 @@ final class ProjectVaultRestoreKeepLocalTests: XCTestCase {
         let failed = try XCTUnwrap(try fixture.transferStore().recoverableRestoreRecords().first { $0.projectID == archived.record.id })
         try VaultManifestBuilder().verify(failed.manifest, at: failed.destinationURL)
         let destinationBefore = try fixture.transferStore().restoreRecord(id: failed.id)
-        let pinsBefore = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        let pinsBefore = try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm
         try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
         let recorder = RestoreRecordingOpener()
         let stopped = try fixture.runtime(opener: recorder)
@@ -121,7 +121,7 @@ final class ProjectVaultRestoreKeepLocalTests: XCTestCase {
         XCTAssertNil(persisted.completedAt)
         XCTAssertEqual(persisted.destinationURL, try XCTUnwrap(destinationBefore?.destinationURL))
         try VaultManifestBuilder().verify(failed.manifest, at: failed.destinationURL)
-        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs, pinsBefore)
+        XCTAssertEqual(try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm, pinsBefore)
     }
 
     func testDawOpenFailureKeepsVerifiedCopyPinnedWithRetryOpen() async throws {
@@ -143,7 +143,7 @@ final class ProjectVaultRestoreKeepLocalTests: XCTestCase {
         try VaultManifestBuilder().verify(failed.manifest, at: fixture.project)
 
         // Retry stays pinned: Keep Local was persisted for the verified copy.
-        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalProjectIDs
+        let pinned = try fixture.settingsStore.loadSettings().vault.keepLocalPins.storedForm
         XCTAssertTrue(pinned.contains(archived.record.id.description))
         let failedSnapshots = try await runtime.snapshots()
         let snapshot = try XCTUnwrap(failedSnapshots.first { $0.record.id == archived.record.id })
@@ -469,7 +469,7 @@ private final class RestoreKeepLocalObservingOpener: VaultProjectOpening, @unche
     var openCount: Int { lock.withLock { _openCount } }
     init(settingsStore: any SettingsStore) { self.settingsStore = settingsStore }
     func openProject(at projectURL: URL, allowedRoot: URL) throws -> MusicItemOpener.OpenResult? {
-        let pins = (try? settingsStore.loadSettings().vault.keepLocalProjectIDs) ?? []
+        let pins = (try? settingsStore.loadSettings().vault.keepLocalPins.storedForm) ?? []
         lock.withLock {
             _observedPins.append(pins)
             _openCount += 1
@@ -477,7 +477,7 @@ private final class RestoreKeepLocalObservingOpener: VaultProjectOpening, @unche
         return nil
     }
     func openProject(at projectURL: URL, allowedRoot: URL, selectedRelativePath: String?) throws -> MusicItemOpener.OpenResult? {
-        let pins = (try? settingsStore.loadSettings().vault.keepLocalProjectIDs) ?? []
+        let pins = (try? settingsStore.loadSettings().vault.keepLocalPins.storedForm) ?? []
         lock.withLock {
             _observedPins.append(pins)
             _openCount += 1
