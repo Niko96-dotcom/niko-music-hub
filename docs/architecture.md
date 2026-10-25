@@ -226,7 +226,7 @@ detail) and the selected song belong to [`ArchivePageModel`](../Sources/FeatureA
 held as `ArchiveBrowserViewModel.page`. Views read the page through it and state intent on the view model, never
 writing it: `openSongDetail(_:)`, `showBoard()` (back from the detail or analytics, keeping the selection),
 `setBrowseLayout(list:)`, `showAnalytics()`, `clearSelection(stopPlayback:)` and `restoreNavigationRoute(_:)`. The
-setters are `private(set)`, and `ArchiveViewIntentSourceTests` fails on a write outside `ArchivePageModel.swift`. When the page changes, `ArchiveBrowserView` gives the archive the keyboard
+setters are `private(set)`, so the compiler refuses a write outside `ArchivePageModel.swift`; `ArchiveViewIntentSourceTests` keeps them private. When the page changes, `ArchiveBrowserView` gives the archive the keyboard
 (unless the search field has it), so Esc and the song shortcuts work after a page change that did not come from a
 click: VoiceOver's "Open song detail", the Song menu, Back/Forward (`ArchiveKeyboardFocusTests`).
 

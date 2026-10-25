@@ -19,8 +19,8 @@ enum ArchiveViewMode {
 /// Rules it owns:
 ///
 /// - Views state intent; only this type writes `viewMode` and
-///   `listShowsDetail` (their setters are private, and
-///   `ArchiveViewIntentSourceTests` names this file as the one writer).
+///   `listShowsDetail` (their setters are `private(set)`, so a write elsewhere
+///   does not compile; `ArchiveViewIntentSourceTests` keeps them private).
 /// - Selecting a song collapses the detail's disclosures, so a new song opens
 ///   on a calm first viewport.
 /// - The page's route (`navigationRoute`) is what the shell's back/forward
