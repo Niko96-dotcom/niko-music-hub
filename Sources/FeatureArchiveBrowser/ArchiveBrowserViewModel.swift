@@ -11,6 +11,15 @@ import ProjectVaultRuntime
 /// object: every owner's publish is forwarded here at once.
 @MainActor
 public final class ArchiveBrowserViewModel: ObservableObject {
+    /// Declared, not synthesized. The synthesized getter finds a publisher in the first
+    /// `@Published` property's storage, walking the stored properties on every access;
+    /// without one it returns a fresh publisher each time, so forwarding would depend on
+    /// `footer` staying `@Published` here. `@Published` sends through this one.
+    /// `nonisolated(unsafe)`: the protocol requirement is nonisolated and the publisher is
+    /// not `Sendable`; every send happens on the main actor, and the publisher guards its
+    /// own subscriber list.
+    public nonisolated(unsafe) let objectWillChange = ObservableObjectPublisher()
+
     // MARK: - Dependencies
 
     let settingsStore: SettingsStore
@@ -580,12 +589,9 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
     }
 
-    /// Views observe this object, so each owner's publish is sent here at once,
-    /// at the same moment as the owner's own (willSet). The publisher is read once,
-    /// here: the synthesized `objectWillChange` getter walks this class's stored
-    /// properties on every access, which cost each forwarded publish about 18 µs.
-    /// It is one stable instance (kept in the `footer` property's storage), it does
-    /// not retain this view model, and the subscriptions end with it.
+    /// Views observe this object, so each owner's publish is sent here at once, at the
+    /// same moment as the owner's own (willSet). The sink holds the declared publisher,
+    /// not this view model, and the subscriptions end with it.
     private func forwardChanges<Owner: ObservableObject>(of owner: Owner)
         where Owner.ObjectWillChangePublisher == ObservableObjectPublisher {
         let publisher = objectWillChange

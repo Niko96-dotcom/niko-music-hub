@@ -187,7 +187,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 - Normal refresh uses `stageSnapshots(_:)`, projects the catalog, then refreshes cards. A changed catalog also prebuilds cards in `applyCatalogEdit(_:)` before publishing songs. The operation-scoped phase poller uses `applyPolledSnapshots(_:songs:)`, which reuses staging and publishes a changed snapshot once; unchanged snapshots are a no-op.
 - Snapshot/path validation, Keep Local pins, and generic-action blocking live beside their inputs. Archive projection may inspect filesystem paths and load metadata; it reports metadata-read failures through the supplied warning callback. It does not initiate scans or reload settings.
 - `scheduleRecovery` / `cancelRecovery` own deadline deduplication, busy checks, the 30-second backoff, and cancellation on deinitialization. Runtime execution and subsequent refresh enter through callbacks with weak view-model captures.
-- The "Show archived songs" choice (`showsArchivedProjects`) lives here too, as the catalog projection's input; a root change turns it off. The view model retains runtime refresh orchestration, status composition, and Done enqueue decisions. An unavailable runtime clears snapshots; an unreadable journal preserves the last presentation and reports a warning. Read-only peers and a weak `objectWillChange` subscription connect the owner to existing views.
+- The "Show archived songs" choice (`showsArchivedProjects`) lives here too, as the catalog projection's input; a root change turns it off. The view model retains runtime refresh orchestration, status composition, and Done enqueue decisions. An unavailable runtime clears snapshots; an unreadable journal preserves the last presentation and reports a warning. Read-only peers and the view model's change forwarding (a sink that sends on the view model's declared `objectWillChange`) connect the owner to existing views.
 
 ## Archive metadata editing ownership
 
@@ -667,7 +667,7 @@ use `writeProtectedRoots()`. `OutputGuardSourceTests` enforces both owners.
 
 Settings that gate a write or a Project Vault decision are loaded with `try`, and the action is
 refused when they cannot be read (`ToolOutputDestination.load(from:)`,
-`ArchiveBrowserViewModel.loadSettingsForWrite()`); display-only code reads
+`ArchiveLibraryModel.loadSettingsForWrite()`); display-only code reads
 `ToolContext.appSettings`. The few `try? …loadSettings()` reads that stay are listed with their
 reasons in `OutputGuardSourceTests`.
 
