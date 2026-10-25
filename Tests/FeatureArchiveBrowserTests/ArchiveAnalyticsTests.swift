@@ -37,8 +37,8 @@ final class ArchiveAnalyticsTests: XCTestCase {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load([song("Alpha", status: .prod), song("Beta", status: .song)]))
         model.showAnalytics()
-        XCTAssertTrue(model.viewMode == .analytics)
-        XCTAssertEqual(model.analyticsSnapshot?.overview.totalSongs, 2)
+        XCTAssertTrue(model.page.viewMode == .analytics)
+        XCTAssertEqual(model.page.analyticsSnapshot?.overview.totalSongs, 2)
 
         do {
             var updated = model.songs
@@ -46,16 +46,16 @@ final class ArchiveAnalyticsTests: XCTestCase {
             model.applyCatalogEdit(.load(updated))
         }
 
-        XCTAssertTrue(model.viewMode == .analytics, "must stay on the analytics page")
-        XCTAssertEqual(model.analyticsSnapshot?.overview.totalSongs, 3)
-        XCTAssertEqual(model.analyticsSnapshot?.overview.finished, 1)
+        XCTAssertTrue(model.page.viewMode == .analytics, "must stay on the analytics page")
+        XCTAssertEqual(model.page.analyticsSnapshot?.overview.totalSongs, 3)
+        XCTAssertEqual(model.page.analyticsSnapshot?.overview.finished, 1)
     }
 
     func testStatusChangeWhileAnalyticsOpenUpdatesSnapshot() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load([song("Alpha", status: .prod), song("Beta", status: .song)]))
         model.showAnalytics()
-        XCTAssertEqual(model.analyticsSnapshot?.overview.finished, 0)
+        XCTAssertEqual(model.page.analyticsSnapshot?.overview.finished, 0)
 
         do {
             var updated = model.songs
@@ -63,33 +63,33 @@ final class ArchiveAnalyticsTests: XCTestCase {
             model.applyCatalogEdit(.load(updated))
         }
 
-        XCTAssertEqual(model.analyticsSnapshot?.overview.finished, 1)
-        XCTAssertEqual(model.analyticsSnapshot?.overview.totalSongs, 2)
+        XCTAssertEqual(model.page.analyticsSnapshot?.overview.finished, 1)
+        XCTAssertEqual(model.page.analyticsSnapshot?.overview.totalSongs, 2)
     }
 
     func testCatalogUpdatesStayLazyOutsideAnalytics() {
         let model = ArchiveBrowserViewModel(context: TestToolContext.make())
         model.applyCatalogEdit(.load([song("Alpha")]))
-        XCTAssertNil(model.analyticsSnapshot, "no snapshot before entering analytics")
+        XCTAssertNil(model.page.analyticsSnapshot, "no snapshot before entering analytics")
 
         do {
             var updated = model.songs
             updated.append(song("Beta"))
             model.applyCatalogEdit(.load(updated))
         }
-        XCTAssertNil(model.analyticsSnapshot, "catalog churn outside analytics must stay lazy")
+        XCTAssertNil(model.page.analyticsSnapshot, "catalog churn outside analytics must stay lazy")
 
         model.showAnalytics()
-        XCTAssertEqual(model.analyticsSnapshot?.overview.totalSongs, 2)
+        XCTAssertEqual(model.page.analyticsSnapshot?.overview.totalSongs, 2)
 
-        model.viewMode = .board
+        model.showBoard()
         do {
             var updated = model.songs
             updated.append(song("Gamma"))
             model.applyCatalogEdit(.load(updated))
         }
         XCTAssertEqual(
-            model.analyticsSnapshot?.overview.totalSongs, 2,
+            model.page.analyticsSnapshot?.overview.totalSongs, 2,
             "leaving analytics must resume lazy snapshots until re-entry"
         )
     }
@@ -177,6 +177,6 @@ final class ArchiveAnalyticsTests: XCTestCase {
             model.applyCatalogEdit(.load(updated))
         }
         XCTAssertEqual(store.historyReadCount, baselineReads + 1, "actual catalog updates must refresh")
-        XCTAssertEqual(model.analyticsSnapshot?.overview.totalSongs, 3)
+        XCTAssertEqual(model.page.analyticsSnapshot?.overview.totalSongs, 3)
     }
 }

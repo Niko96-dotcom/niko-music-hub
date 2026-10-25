@@ -23,14 +23,14 @@ final class ProjectVaultPresentationCacheTests: XCTestCase {
             originalFolderName: "Second",
             displayTitle: "Second"
         )
-        viewModel.selectedSong = first
+        viewModel.selectSongOnBoard(first)
 
         var publications = 0
         let observation = viewModel.objectWillChange.sink { _ in publications += 1 }
         viewModel.selectSongOnBoard(second)
         withExtendedLifetime(observation) {}
 
-        XCTAssertEqual(viewModel.selectedSong?.id, second.id)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, second.id)
         XCTAssertEqual(
             publications,
             1,

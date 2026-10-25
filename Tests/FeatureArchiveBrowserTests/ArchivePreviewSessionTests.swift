@@ -22,7 +22,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
 
         model.selectSongOnBoard(first)
 
-        XCTAssertEqual(model.selectedSong?.id, first.id)
+        XCTAssertEqual(model.page.selectedSong?.id, first.id)
         XCTAssertEqual(session.songID, first.id, "A paused bar must follow the highlighted card")
         XCTAssertEqual(session.songTitle, first.effectiveDisplayTitle)
         XCTAssertEqual(session.preview?.filePath, first.mainPreviewURL)
@@ -49,7 +49,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         }
         model.applyCatalogEdit(.load(songs))
 
-        model.selectedSong = songs[0]
+        model.selectSongOnBoard(songs[0])
         assertArmed(session, with: songs[0])
         model.restoreNavigationRoute("detail:" + songs[1].id) // Back/Forward
         assertArmed(session, with: songs[1])
@@ -58,8 +58,8 @@ final class ArchivePreviewSessionTests: XCTestCase {
         model.clearSelection(stopPlayback: false)
         XCTAssertEqual(session.songID, songs[1].id, "Deselecting keeps the loaded track")
         session.openSong() // The bar's title button.
-        XCTAssertEqual(model.selectedSong?.id, songs[1].id)
-        XCTAssertEqual(model.viewMode, .boardDetail)
+        XCTAssertEqual(model.page.selectedSong?.id, songs[1].id)
+        XCTAssertEqual(model.page.viewMode, .boardDetail)
     }
 
     func testEachViewModelPlaysThroughItsOwnSession() throws {
@@ -68,7 +68,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         let first = ArchiveBrowserViewModel(context: TestToolContext.make())
         let second = ArchiveBrowserViewModel(context: TestToolContext.make())
         XCTAssertFalse(first.previewSession === second.previewSession)
-        first.selectedSong = fixture.songs[0]
+        first.selectSongOnBoard(fixture.songs[0])
         first.audition(fixture.songs[1])
         XCTAssertEqual(first.previewSession.songID, fixture.songs[1].id)
         XCTAssertTrue(first.previewSession.isPlaying)
@@ -164,7 +164,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         XCTAssertEqual(session.player.currentTime, 0)
         model.clearSelection(stopPlayback: false)
         session.openSong()
-        XCTAssertEqual(model.selectedSong?.id, refreshed.id, "The bar still opens its own song after deselection")
+        XCTAssertEqual(model.page.selectedSong?.id, refreshed.id, "The bar still opens its own song after deselection")
     }
 
     func testRecordingDefersSelectionBindingAndNeverResumesAudio() throws {
@@ -261,7 +261,7 @@ final class ArchivePreviewSessionTests: XCTestCase {
         session.player.pause()
         try await ready(session.player)
         session.player.seek(to: 1, url: fixture.previews[0].filePath)
-        model.viewMode = .list
+        model.setBrowseLayout(list: true)
         model.clearSelection(stopPlayback: false)
         XCTAssertEqual(session.preview?.id, fixture.previews[0].id)
         XCTAssertEqual(session.player.currentTime, 1, accuracy: 0.1)

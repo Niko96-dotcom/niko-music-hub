@@ -382,7 +382,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.clearScanResults()
         XCTAssertTrue(viewModel.songs.isEmpty)
         XCTAssertTrue(viewModel.browse.filteredSongs.isEmpty)
-        XCTAssertNil(viewModel.selectedSong)
+        XCTAssertNil(viewModel.page.selectedSong)
     }
 
     func testIntelligenceRefreshRetainsOnlyMissingAudioSummary() async throws {
@@ -486,7 +486,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.browse.filteredSongs.isEmpty)
         XCTAssertTrue(viewModel.browse.searchMatchSummaries.isEmpty)
         XCTAssertTrue(viewModel.browse.skippedSearchMatches.isEmpty)
-        XCTAssertNil(viewModel.selectedSong)
+        XCTAssertNil(viewModel.page.selectedSong)
         XCTAssertNil(viewModel.scanDiagnostics)
         XCTAssertNil(viewModel.statusMessage)
         XCTAssertEqual(viewModel.browse.searchQuery, "")
@@ -1368,13 +1368,13 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         let second = try XCTUnwrap(viewModel.songs.dropFirst().first)
 
         viewModel.selectSong(first)
-        viewModel.songDetailsExpanded = true
-        viewModel.pluginsSectionExpanded = true
+        viewModel.page.songDetailsExpanded = true
+        viewModel.page.pluginsSectionExpanded = true
 
         viewModel.selectSong(second)
-        XCTAssertEqual(viewModel.selectedSong?.id, second.id)
-        XCTAssertFalse(viewModel.songDetailsExpanded)
-        XCTAssertFalse(viewModel.pluginsSectionExpanded)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, second.id)
+        XCTAssertFalse(viewModel.page.songDetailsExpanded)
+        XCTAssertFalse(viewModel.page.pluginsSectionExpanded)
     }
 
     func testSearchClearsSelectionWhenSongLeavesFilteredList() async throws {
@@ -1389,10 +1389,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         await viewModel.scan()
         let neon = try XCTUnwrap(viewModel.songs.first { $0.displayTitle == "Neon Hook" })
         viewModel.selectSong(neon)
-        XCTAssertEqual(viewModel.selectedSong?.id, neon.id)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, neon.id)
 
         viewModel.browse.setSearchQuery("zzzz-no-match", immediate: true)
-        XCTAssertNil(viewModel.selectedSong)
+        XCTAssertNil(viewModel.page.selectedSong)
     }
 
     func testScanRefreshUpdatesSelectedSongSnapshot() async throws {
@@ -1418,8 +1418,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             ),
             roots: viewModel.roots
         )
-        XCTAssertEqual(viewModel.selectedSong?.id, neon.id)
-        XCTAssertEqual(viewModel.selectedSong?.appNote, "post-scan note")
+        XCTAssertEqual(viewModel.page.selectedSong?.id, neon.id)
+        XCTAssertEqual(viewModel.page.selectedSong?.appNote, "post-scan note")
     }
 
     func testExportDiagnosticsIncludesSkippedSearchContext() async throws {
@@ -2255,7 +2255,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: sourceSong))
         viewModel.revealInFinder(url: sourceSong.folderPath)
         try? viewModel.openLatestCPR(for: sourceSong)
-        if let selectedSong = viewModel.selectedSong {
+        if let selectedSong = viewModel.page.selectedSong {
             viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
             try? viewModel.openLatestCPR(for: selectedSong)
         }
@@ -2369,7 +2369,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
                 viewModel.revealInFinder(url: sourceSong.folderPath)
                 try? viewModel.openLatestCPR(for: sourceSong)
-                if let selectedSong = viewModel.selectedSong {
+                if let selectedSong = viewModel.page.selectedSong {
                     viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
                     try? viewModel.openLatestCPR(for: selectedSong)
                 }
@@ -2449,7 +2449,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.retryReviewedProjectVaultRestore(for: archivedSong)
         viewModel.revealInFinder(url: archivedSong.folderPath)
         try? viewModel.openLatestCPR(for: archivedSong)
-        if let selectedSong = viewModel.selectedSong {
+        if let selectedSong = viewModel.page.selectedSong {
             viewModel.revealInFinder(url: selectedSong.folderPath)
             try? viewModel.openLatestCPR(for: selectedSong)
         }
@@ -2527,7 +2527,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.retryReviewedProjectVaultRestore(for: archivedSong)
         viewModel.revealInFinder(url: archivedSong.folderPath)
         try? viewModel.openLatestCPR(for: archivedSong)
-        if let selectedSong = viewModel.selectedSong {
+        if let selectedSong = viewModel.page.selectedSong {
             viewModel.revealInFinder(url: selectedSong.folderPath)
             try? viewModel.openLatestCPR(for: selectedSong)
         }
@@ -2611,7 +2611,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: archivedSong))
         try? viewModel.openLatestCPR(for: archivedSong)
         // Global F/O shortcuts use these same selected-song entry points.
-        if let selectedSong = viewModel.selectedSong {
+        if let selectedSong = viewModel.page.selectedSong {
             viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
             try? viewModel.openLatestCPR(for: selectedSong)
         }
@@ -2710,7 +2710,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: sourceSong))
             viewModel.revealInFinder(url: sourceSong.folderPath)
             try? viewModel.openLatestCPR(for: sourceSong)
-            if let selectedSong = viewModel.selectedSong {
+            if let selectedSong = viewModel.page.selectedSong {
                 viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
                 try? viewModel.openLatestCPR(for: selectedSong)
             }
@@ -2814,7 +2814,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: archivedSong))
         viewModel.revealInFinder(url: archivedSong.folderPath)
         try? viewModel.openLatestCPR(for: archivedSong)
-        if let selectedSong = viewModel.selectedSong {
+        if let selectedSong = viewModel.page.selectedSong {
             viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: selectedSong))
             try? viewModel.openLatestCPR(for: selectedSong)
         }

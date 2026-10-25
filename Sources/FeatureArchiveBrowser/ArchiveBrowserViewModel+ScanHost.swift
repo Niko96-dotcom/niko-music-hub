@@ -25,7 +25,7 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
             if skippedEntriesUnchanged {
                 // "Until the next scan" dismissals end with the scan, so the intelligence pass still runs.
                 refreshIntelligence()
-                if viewMode == .analytics { refreshAnalytics() }
+                if page.viewMode == .analytics { refreshAnalytics() }
             } else {
                 refreshAfterCatalogChange()
             }

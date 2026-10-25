@@ -80,7 +80,7 @@ final class ArchiveCatalogEditTests: XCTestCase {
         let renamed = song("A", title: "Neon Hook (Remix)")
         model.applyCatalogEdit(.replace([renamed]))
 
-        XCTAssertEqual(model.selectedSong, renamed)
+        XCTAssertEqual(model.page.selectedSong, renamed)
         XCTAssertEqual(model.browse.filteredSongs, [renamed])
     }
 
@@ -126,7 +126,7 @@ final class ArchiveCatalogEditTests: XCTestCase {
 
         model.applyCatalogEdit(.replace([song("A", title: "Sunset")]))
 
-        XCTAssertNil(model.selectedSong)
+        XCTAssertNil(model.page.selectedSong)
         XCTAssertEqual(model.browse.filteredSongs, [])
     }
 }

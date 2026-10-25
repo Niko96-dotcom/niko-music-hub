@@ -48,9 +48,7 @@ extension ArchiveBrowserViewModel {
         previewSession.clear()
         ArchivePreviewPlayer.clearMetadataCaches()
         browse.clearForRootChange()
-        selectedSong = nil
-        songDetailsExpanded = false
-        pluginsSectionExpanded = false
+        page.clearForRootChange()
         showArchivedProjects = false
         vaultObservation.clearForRootChange(notifyWhenChanged: false)
         scanDiagnostics = nil

@@ -123,10 +123,10 @@ struct ArchiveBoardLaneState: Equatable {
 extension ArchiveBoardLaneState {
     @MainActor
     init(viewModel: ArchiveBrowserViewModel) {
-        selectedSong = viewModel.selectedSong
+        selectedSong = viewModel.page.selectedSong
         vaultPresentations = viewModel.projectVaultPresentationsBySongID
         vaultActivity = viewModel.projectVaultActivityMessages
-        isBoardVisible = viewModel.showsBoardPage
+        isBoardVisible = viewModel.page.showsBoardPage
     }
 }
 

@@ -220,7 +220,7 @@ extension ArchiveBrowserViewModel {
         _ = applyMetadataMerge(for: song) { metadata, _ in
             metadata.isIgnored = hidden
         }
-        if hidden, selectedSong?.id == song.id {
+        if hidden, page.selectedSong?.id == song.id {
             clearSelection(stopPlayback: previewSession.songID == song.id)
         }
     }

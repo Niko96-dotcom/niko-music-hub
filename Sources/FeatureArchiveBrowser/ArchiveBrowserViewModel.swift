@@ -9,17 +9,6 @@ import ProjectVaultRuntime
 /// delegate to their owners; extensions integrate their results with the UI.
 @MainActor
 public final class ArchiveBrowserViewModel: ObservableObject {
-    // MARK: - Types
-
-    /// Archive page layout: the board is home, opening a card goes to
-    /// fullscreen detail, and the classic sidebar+detail list stays reachable.
-    enum ArchiveViewMode {
-        case board
-        case boardDetail
-        case list
-        case analytics
-    }
-
     // MARK: - Dependencies
 
     let identityReviewViewModel: ProjectIdentityReviewViewModel
@@ -37,14 +26,20 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             didApplyResults: { [weak self] in self?.reconcileSelectedSong(requireVisibleInFilteredList: true) }
         )
     )
-    /// The archive's playback owner. Every write of `selectedSong` reaches it, and every
+    /// The page (board, detail, list, analytics), the selected song, the detail's
+    /// disclosures and the analytics snapshot. Every write of the selection
+    /// reaches `selectionDidChange(previousSongID:)`.
+    private(set) lazy var page = ArchivePageModel(selectionDidChange: { [weak self] previousSongID in
+        self?.selectionDidChange(previousSongID: previousSongID)
+    })
+    /// The archive's playback owner. Every write of the selection reaches it, and every
     /// view that shows playback gets it from here. It pauses on the context's recording signal.
     let previewSession: ArchivePreviewSession
     /// BPM/key of the main preview and the project's plug-ins, with the rules
     /// that keep those caches true to the catalog. Reads only the selection.
     private(set) lazy var songAnalysis = ArchiveSongAnalysisModel(
         plugins: ArchiveCPRPluginCoordinator(processRunner: processRunner),
-        selectedSong: { [weak self] in self?.selectedSong }
+        selectedSong: { [weak self] in self?.page.selectedSong }
     )
     private let processRunner: any StreamingExternalProcessRunning
     let opener: MusicItemOpener
@@ -164,7 +159,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             songAnalysis.follow(
                 change,
                 remainingSongIDs: { Set(songs.map(\.id)) },
-                pluginsSectionExpanded: pluginsSectionExpanded
+                pluginsSectionExpanded: page.pluginsSectionExpanded
             )
         }
         switch edit {
@@ -198,7 +193,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         // Browse inputs (keystrokes, filters, sort) and selection go through
         // other paths and stay cheap: no history read there. Outside analytics
         // the snapshot stays lazy and is rebuilt on entry.
-        if viewMode == .analytics {
+        if page.viewMode == .analytics {
             refreshAnalytics()
         }
     }
@@ -207,19 +202,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     func selectShelf(_ shelf: ArchiveSmartShelf) {
         browse.selectShelf(shelf, defaultCollaboratorID: collaborators.first?.id)
     }
-    @Published var selectedSong: Song? {
-        didSet {
-            synchronizePreviewSelection()
-            // NMH-049: a song change dismisses the nearby open error.
-            // Guarded so an already-clear error adds no extra publish.
-            if oldValue?.id != selectedSong?.id, openError != nil {
-                openError = nil
-            }
-        }
-    }
-    /// Song-detail "Details" disclosure state — hoisted so the browser-level "d"
-    /// keyboard shortcut can toggle it.
-    @Published var songDetailsExpanded = false
     @Published var isScanning = false {
         didSet {
             // NMH-049: a new scan dismisses the nearby scan error.
@@ -267,7 +249,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// SwiftUI updates flow through the observation bridge in
     /// `wireVaultObservation()`.
     var archivedProjectCount: Int { vaultObservation.archivedCount }
-    @Published var pluginsSectionExpanded = false
     /// Single metadata-editing owner for mutation/gate/persistence ordering,
     /// notes/status undo, repair IDs, and delayed index persistence. All
     /// mutations go through the coordinator's intentional methods; these
@@ -389,17 +370,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// `ArchiveVaultObservation`; this read-only peer preserves the existing
     /// view API with no duplicate storage.
     var projectVaultHealth: ProjectVaultHealth { vaultObservation.health }
-    @Published var viewMode: ArchiveViewMode = .board {
-        didSet {
-            // NMH-042: board ↔ list ↔ boardDetail ↔ analytics changes layout.
-            if oldValue != viewMode {
-                HubAccessibilityAnnouncer.layoutChanged()
-            }
-        }
-    }
-    /// Compact list shows the detail page only after an explicit open (double-click / Return).
-    @Published var listShowsDetail = false
-    @Published var analyticsSnapshot: ArchiveAnalyticsSnapshot?
 
     // MARK: - Stored state
 
@@ -448,6 +418,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var songAnalysisCancellable: AnyCancellable?
     var intelligenceCancellable: AnyCancellable?
     var browseCancellable: AnyCancellable?
+    var pageCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -463,7 +434,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     // (context, health, snapshots, path index, card cache, archived count,
     // recovery timer). Read-only peers above preserve the view API; writes
     // go through the observation's intentional methods.
-    var navigationCancellable: AnyCancellable?
     /// Keeps security-scoped access alive for bookmarked roots while the model lives.
     var securityScopedRootAccesses: [SecurityScopedRootAccess] = []
     /// The stored roots and Vault settings the archive last loaded; nil while
@@ -589,9 +559,13 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
         browseCancellable = browse.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+        pageCancellable = page.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
         loadRootsFromSettings()
         followStoredSettingsChanges()
-        attachNavigationHistory(context.navigationHistory)
+        page.attach(context.navigationHistory) { [weak self] route in
+            self?.restoreNavigationRoute(route)
+        }
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)
         loadCollaborators()
         refreshFirstRunState()

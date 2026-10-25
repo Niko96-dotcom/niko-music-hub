@@ -10,9 +10,9 @@ final class ArchiveListSelectionTests: XCTestCase {
 
         viewModel.selectSong(song)
 
-        XCTAssertEqual(viewModel.selectedSong?.id, song.id)
-        XCTAssertEqual(viewModel.viewMode, .list)
-        XCTAssertFalse(viewModel.listShowsDetail)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, song.id)
+        XCTAssertEqual(viewModel.page.viewMode, .list)
+        XCTAssertFalse(viewModel.page.listShowsDetail)
     }
 
     func testOpenSongDetailInListSetsListShowsDetail() {
@@ -21,9 +21,9 @@ final class ArchiveListSelectionTests: XCTestCase {
 
         viewModel.openSongDetail(song)
 
-        XCTAssertTrue(viewModel.listShowsDetail)
-        XCTAssertEqual(viewModel.viewMode, .list)
-        XCTAssertEqual(viewModel.selectedSong?.id, song.id)
+        XCTAssertTrue(viewModel.page.listShowsDetail)
+        XCTAssertEqual(viewModel.page.viewMode, .list)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, song.id)
     }
 
     func testOpenSongDetailFromBoardSetsBoardDetail() {
@@ -32,14 +32,16 @@ final class ArchiveListSelectionTests: XCTestCase {
 
         viewModel.openSongDetail(song)
 
-        XCTAssertEqual(viewModel.viewMode, .boardDetail)
-        XCTAssertEqual(viewModel.selectedSong?.id, song.id)
+        XCTAssertEqual(viewModel.page.viewMode, .boardDetail)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, song.id)
     }
 
-    private func makeViewModel(songs: [Song], viewMode: ArchiveBrowserViewModel.ArchiveViewMode) -> ArchiveBrowserViewModel {
+    private func makeViewModel(songs: [Song], viewMode: ArchiveViewMode) -> ArchiveBrowserViewModel {
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         viewModel.applyCatalogEdit(.load(songs))
-        viewModel.viewMode = viewMode
+        if viewMode == .list {
+            viewModel.setBrowseLayout(list: true)
+        }
         return viewModel
     }
 

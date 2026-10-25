@@ -32,13 +32,13 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
     ) async -> CPRPluginSummary? {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let selected = viewModel.selectedSong,
+            if let selected = viewModel.page.selectedSong,
                let summary = viewModel.songAnalysis.pluginSummary(for: selected) {
                 return summary
             }
             try? await Task.sleep(nanoseconds: 20_000_000)
         }
-        if let selected = viewModel.selectedSong {
+        if let selected = viewModel.page.selectedSong {
             return viewModel.songAnalysis.pluginSummary(for: selected)
         }
         return nil
@@ -75,8 +75,8 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
 
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         viewModel.applyCatalogEdit(.load([selected, unrelated]))
-        viewModel.selectedSong = selected
-        viewModel.pluginsSectionExpanded = true
+        viewModel.selectSongOnBoard(selected)
+        viewModel.page.pluginsSectionExpanded = true
 
         // Start the selected load, then synchronously apply a catalog update
         // where only the UNRELATED song's CPR changed. The shared cancel in
@@ -102,8 +102,8 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
         viewModel.applyCatalogScanUpdate(update, roots: [])
 
         // Section stays open and selection survives the rescan.
-        XCTAssertTrue(viewModel.pluginsSectionExpanded)
-        XCTAssertEqual(viewModel.selectedSong?.id, selected.id)
+        XCTAssertTrue(viewModel.page.pluginsSectionExpanded)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, selected.id)
 
         let summary = await waitForPlugins(viewModel)
         let populated = try XCTUnwrap(summary, "open plugins section never populated after catalog update")
@@ -141,8 +141,8 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
 
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         viewModel.applyCatalogEdit(.load([selected, unrelated]))
-        viewModel.selectedSong = selected
-        viewModel.pluginsSectionExpanded = true
+        viewModel.selectSongOnBoard(selected)
+        viewModel.page.pluginsSectionExpanded = true
         viewModel.songAnalysis.refreshPluginSummary(for: selected)
         let first = await waitForPlugins(viewModel)
         XCTAssertNotNil(first)
@@ -166,8 +166,8 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
         )
         viewModel.applyCatalogScanUpdate(update, roots: [])
 
-        XCTAssertTrue(viewModel.pluginsSectionExpanded)
-        let cached = viewModel.selectedSong.flatMap { viewModel.songAnalysis.pluginSummary(for: $0) }
+        XCTAssertTrue(viewModel.page.pluginsSectionExpanded)
+        let cached = viewModel.page.selectedSong.flatMap { viewModel.songAnalysis.pluginSummary(for: $0) }
         XCTAssertNotNil(cached)
         XCTAssertEqual(Set(cached?.pluginNames ?? []), ["Comp", "EQ"])
     }

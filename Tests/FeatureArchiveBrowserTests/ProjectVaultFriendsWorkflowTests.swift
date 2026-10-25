@@ -710,7 +710,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
         XCTAssertEqual(viewModel.projectVaultPresentation(for: archivedSong)?.allowsWorkflowMutation, false)
 
-        viewModel.selectedSong = archivedSong
+        viewModel.selectSongOnBoard(archivedSong)
         viewModel.applyCatalogScanUpdate(
             ArchiveCatalogCoordinator.CatalogScanApplyResult(
                 songs: viewModel.scannedSongs,
@@ -721,7 +721,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
             ),
             roots: viewModel.roots
         )
-        XCTAssertEqual(viewModel.selectedSong?.id, archivedSong.id)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, archivedSong.id)
         XCTAssertTrue(
             viewModel.songs.contains { $0.folderPath.standardizedFileURL.path == archivePath },
             "A scan apply must synchronously retain the opt-in archive projection."

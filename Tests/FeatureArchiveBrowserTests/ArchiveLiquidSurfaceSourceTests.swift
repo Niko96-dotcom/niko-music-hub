@@ -49,8 +49,9 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(miniPlayer.contains("clearMetadataCaches"), "Hook/duration caches must be clearable")
 
         let viewModel = try archiveBrowserViewModelSources()
-        XCTAssertTrue(viewModel.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
-        XCTAssertTrue(viewModel.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
+        let page = try featureSource("ArchivePageModel.swift")
+        XCTAssertTrue(page.contains("songDetailsExpanded = false"), "selectSong must collapse Details")
+        XCTAssertTrue(page.contains("pluginsSectionExpanded = false"), "selectSong must collapse plugins")
         XCTAssertTrue(viewModel.contains("reconcileSelectedSong"), "Browse/scan must reconcile selection")
         XCTAssertTrue(viewModel.contains("previewSession.clear()"), "Explicit lifecycle reset must stop playback")
         XCTAssertTrue(viewModel.contains("scheduleDebouncedIndexPersist"), "Metadata edits must debounce index writes")

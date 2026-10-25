@@ -64,7 +64,7 @@ extension ArchiveBrowserViewModel {
     }
 
     func selectedSongExportContext() -> ArchiveDiagnosticsSelectedSongContext? {
-        guard let song = selectedSong else { return nil }
+        guard let song = page.selectedSong else { return nil }
         return ArchiveDiagnosticsSelectedSongContext.from(song: song)
     }
 

@@ -65,7 +65,7 @@ struct ArchiveBoardView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onReceive(NotificationCenter.default.publisher(for: .archiveSearchFocusRequested)) { _ in
-            guard viewModel.showsBoardPage else { return }
+            guard viewModel.page.showsBoardPage else { return }
             keyboardFocus = .search
         }
         // Selection publishes on the same view model but never emits on this

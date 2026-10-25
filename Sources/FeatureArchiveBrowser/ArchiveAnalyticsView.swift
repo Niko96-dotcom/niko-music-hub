@@ -11,7 +11,7 @@ struct ArchiveAnalyticsView: View {
         VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
             header
 
-            if let snapshot = viewModel.analyticsSnapshot {
+            if let snapshot = viewModel.page.analyticsSnapshot {
                 ScrollView {
                     VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
                         overviewRow(snapshot.overview)

@@ -39,12 +39,12 @@ struct ArchiveBrowserView: View {
             let compactList = ArchiveBrowserLayout.isCompactList(listWidth)
 
             ZStack {
-                switch viewModel.viewMode {
+                switch viewModel.page.viewMode {
                 case .board, .boardDetail:
                     // Keep the board's bounded native row pool across a detail
                     // visit. Visibility, hit testing and accessibility follow
                     // the route; lanes reset their scroll when detail opens.
-                    let showsBoard = viewModel.showsBoardPage
+                    let showsBoard = viewModel.page.showsBoardPage
                     ZStack {
                         ArchiveBoardView(
                             viewModel: viewModel,
@@ -70,7 +70,7 @@ struct ArchiveBrowserView: View {
                     // Below the split-view breakpoint the list and the detail pane take
                     // turns owning the full width instead of squeezing side by side.
                     let splitView = proxy.size.width >= ArchiveBrowserLayout.splitViewMinWidth
-                    let compactListShowsDetail = viewModel.listShowsDetail && viewModel.selectedSong != nil
+                    let compactListShowsDetail = viewModel.page.listShowsDetail && viewModel.page.selectedSong != nil
                     HStack(spacing: 0) {
                         if splitView || !compactListShowsDetail {
                             ArchiveSidebarView(
@@ -206,7 +206,7 @@ struct ArchiveBrowserView: View {
         // detail", the Song menu, Back/Forward) would leave the keyboard where it
         // was: Esc and the song shortcuts would do nothing until a click. Search
         // keeps the keyboard while the person types.
-        .onChange(of: viewModel.viewMode) { _, _ in
+        .onChange(of: viewModel.page.viewMode) { _, _ in
             guard isActiveTool, keyboardFocus != .search else { return }
             ArchiveShortcutFocusPolicy.claimArchiveKeyFocus()
             keyboardFocus = .archive
@@ -223,27 +223,27 @@ struct ArchiveBrowserView: View {
             return .handled
         }
         .onKeyPress(.return) {
-            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
             viewModel.openSelectedSongDetail()
             return .handled
         }
         .onKeyPress("p") {
-            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
             performOpenPreview()
             return .handled
         }
         .onKeyPress("o") {
-            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
             performOpenProject()
             return .handled
         }
         .onKeyPress("f") {
-            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
             performRevealInFinder()
             return .handled
         }
         .onKeyPress("d") {
-            guard isActiveTool, allowsSongShortcuts, viewModel.selectedSong != nil else { return .ignored }
+            guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
             performShowVersions()
             return .handled
         }
@@ -269,7 +269,7 @@ struct ArchiveBrowserView: View {
                 viewModel.cancelScan()
                 return .handled
             }
-            switch viewModel.viewMode {
+            switch viewModel.page.viewMode {
             case .boardDetail, .analytics:
                 viewModel.showBoard()
                 return .handled
@@ -370,7 +370,7 @@ struct ArchiveBrowserView: View {
     /// as one calm reading column instead of content pinned to the left edge.
     @ViewBuilder
     private var boardDetailPage: some View {
-        if let song = viewModel.selectedSong {
+        if let song = viewModel.page.selectedSong {
             VStack(alignment: .leading, spacing: HubToolLayout.sectionSpacing) {
                 HStack {
                     HubLabeledButton(icon: "chevron.backward", label: "Board", style: .ghost,
@@ -405,7 +405,7 @@ struct ArchiveBrowserView: View {
 
     @ViewBuilder
     private var detailPane: some View {
-        if let song = viewModel.selectedSong {
+        if let song = viewModel.page.selectedSong {
             // NOTE: no `.focusable()` wrapper here — a focusable container swallows every
             // click inside the detail pane (buttons, fields, disclosures all go dead).
             SongDetailView(song: song, viewModel: viewModel)
@@ -449,7 +449,7 @@ struct ArchiveBrowserView: View {
     }
 
     private var selectedSongAllowsWorkflowMutation: Bool {
-        guard let song = viewModel.selectedSong else { return false }
+        guard let song = viewModel.page.selectedSong else { return false }
         return viewModel.canMutateWorkflowStatus(for: song)
     }
 
@@ -465,10 +465,10 @@ struct ArchiveBrowserView: View {
 
     private var archiveSongFocusedActions: ArchiveSongFocusedActions {
         ArchiveSongFocusedActions(
-            hasSelectedSong: viewModel.selectedSong != nil,
+            hasSelectedSong: viewModel.page.selectedSong != nil,
             allowsUnmodifiedShortcuts: allowsSongShortcuts,
             allowsWorkflowMutation: selectedSongAllowsWorkflowMutation,
-            isPreviewPlaying: previewSession.isPlaying && previewSession.songID == viewModel.selectedSong?.id,
+            isPreviewPlaying: previewSession.isPlaying && previewSession.songID == viewModel.page.selectedSong?.id,
             canSkipPreview: previewSession.preview != nil && previewPlayer.duration > 0 && ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: true),
             playPausePreview: { _ = performPlayPausePreview() },
             openPreview: performOpenPreview,
@@ -526,7 +526,7 @@ struct ArchiveBrowserView: View {
                 .foregroundStyle(HubDesignSystem.Palette.warning)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            if let song = viewModel.selectedSong,
+            if let song = viewModel.page.selectedSong,
                viewModel.preferredRevealURL(for: song) != nil {
                 HubLabeledButton(
                     icon: "folder",
@@ -585,12 +585,12 @@ struct ArchiveBrowserView: View {
     }
 
     private func performOpenPreview() {
-        guard let song = viewModel.selectedSong else { return }
+        guard let song = viewModel.page.selectedSong else { return }
         try? viewModel.openMainPreview(for: song)
     }
 
     private func performOpenProject() {
-        guard let song = viewModel.selectedSong else { return }
+        guard let song = viewModel.page.selectedSong else { return }
         do {
             try viewModel.openLatestCPR(for: song)
         } catch {
@@ -599,18 +599,18 @@ struct ArchiveBrowserView: View {
     }
 
     private func performRevealInFinder() {
-        guard let song = viewModel.selectedSong else { return }
+        guard let song = viewModel.page.selectedSong else { return }
         viewModel.revealInFinder(url: viewModel.preferredRevealURL(for: song))
     }
 
     private func performShowVersions() {
-        guard viewModel.selectedSong != nil else { return }
-        viewModel.songDetailsExpanded = true
+        guard viewModel.page.selectedSong != nil else { return }
+        viewModel.page.songDetailsExpanded = true
         NotificationCenter.default.post(name: .archiveShowSongVersions, object: nil)
     }
 
     private func performApplyWorkflowStatus(_ status: ProjectWorkflowStatus?) {
-        guard let song = viewModel.selectedSong else { return }
+        guard let song = viewModel.page.selectedSong else { return }
         viewModel.applyWorkflowStatus(status, for: song)
     }
 
@@ -618,12 +618,12 @@ struct ArchiveBrowserView: View {
     private func performPlayPausePreview() -> Bool {
         let session = previewSession
         switch ArchiveSpacePreviewAction.resolve(
-            selectedSongID: viewModel.selectedSong?.id,
+            selectedSongID: viewModel.page.selectedSong?.id,
             loadedSongID: session.songID,
             hasLoadedPreview: session.preview != nil
         ) {
         case .auditionSelected:
-            guard let song = viewModel.selectedSong else { return false }
+            guard let song = viewModel.page.selectedSong else { return false }
             viewModel.audition(song)
             return true
         case .toggleLoaded:

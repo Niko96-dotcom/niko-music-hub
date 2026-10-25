@@ -38,12 +38,12 @@ struct ArchiveLayoutToggle: View {
     var body: some View {
         // One button that shows the layout you would switch TO.
         HubIconButton(
-            systemImage: viewModel.isListLayout ? "rectangle.split.3x1" : "list.bullet",
-            accessibilityLabel: viewModel.isListLayout ? "Show board" : "Show list",
-            help: viewModel.isListLayout ? "Board" : "List",
-            isEnabled: viewModel.isListLayout || !viewModel.songs.isEmpty
+            systemImage: viewModel.page.isListLayout ? "rectangle.split.3x1" : "list.bullet",
+            accessibilityLabel: viewModel.page.isListLayout ? "Show board" : "Show list",
+            help: viewModel.page.isListLayout ? "Board" : "List",
+            isEnabled: viewModel.page.isListLayout || !viewModel.songs.isEmpty
         ) {
-            viewModel.setBrowseLayout(list: !viewModel.isListLayout)
+            viewModel.setBrowseLayout(list: !viewModel.page.isListLayout)
         }
     }
 }

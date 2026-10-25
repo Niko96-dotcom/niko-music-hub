@@ -139,7 +139,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 - [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): loaded roots (it follows the stored scan list, see [Archive scan list](#archive-scan-list)), browse, selection, scan host, and integration with metadata/Vault owners.
 - Vault operation extensions: `+ProjectVaultQueue.swift`, `+ProjectVaultArchive.swift`, `+ProjectVault.swift`, `+ProjectVaultActions.swift`, `+ProjectVaultRestore.swift`, `+ProjectVaultRecovery.swift`, `+Metadata.swift` (Done revoke), `+Scan.swift` (root-bound clears).
 - Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift), [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) (song-metadata mutation ordering), [`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) (Vault observation/presentation).
-- State owners the view model composes (each an `ObservableObject` whose publishes the view model forwards, so views keep observing the view model): [`ArchiveSongAnalysisModel`](../Sources/FeatureArchiveBrowser/ArchiveSongAnalysisModel.swift) (BPM/key of the main preview and the project's plug-ins, and the rules that keep those caches true to the catalog), [`ArchiveIntelligenceModel`](../Sources/FeatureArchiveBrowser/ArchiveIntelligenceModel.swift) (collaborator suggestions, duplicate hints, the missing-audio summary, and the "until the next scan" dismissals), [`ArchiveBrowseModel`](../Sources/FeatureArchiveBrowser/ArchiveBrowseModel.swift) (browse inputs, the filtered list, the search index and debounce).
+- State owners the view model composes (each an `ObservableObject` whose publishes the view model forwards, so views keep observing the view model): [`ArchiveSongAnalysisModel`](../Sources/FeatureArchiveBrowser/ArchiveSongAnalysisModel.swift) (BPM/key of the main preview and the project's plug-ins, and the rules that keep those caches true to the catalog), [`ArchiveIntelligenceModel`](../Sources/FeatureArchiveBrowser/ArchiveIntelligenceModel.swift) (collaborator suggestions, duplicate hints, the missing-audio summary, and the "until the next scan" dismissals), [`ArchiveBrowseModel`](../Sources/FeatureArchiveBrowser/ArchiveBrowseModel.swift) (browse inputs, the filtered list, the search index and debounce), [`ArchivePageModel`](../Sources/FeatureArchiveBrowser/ArchivePageModel.swift) (the page, the selected song, the route).
 - Playback: [`ArchivePreviewSession`](../Sources/FeatureArchiveBrowser/ArchivePreviewSession.swift), held by the view model (see [Archive preview playback](#archive-preview-playback)).
 - Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
 - A board lane is an `NSTableView` (`ArchiveBoardNativeSongList`) with reusable rows; each row hosts the unchanged
@@ -154,7 +154,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
   Motion); lane/row motion remains 0.16 seconds. Live scroll end restores hover synchronously; one board-local
   pointer tracking area clears unphased-wheel suppression on the first move, without waiting for the idle timer.
   See `docs/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
-- The board stays mounted under the song detail page (`ArchiveBrowserViewModel.showsBoardPage`): going back must not
+- The board stays mounted under the song detail page (`ArchivePageModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
   hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.
 - Applying a rescan (`applyCatalogScanUpdate`) reacts to the changed songs only, keeps the held catalog arrays when
@@ -217,7 +217,8 @@ The remaining ownership is intentional:
 | View model: catalog | The song catalog through `applyCatalogEdit(_:)` (see [Archive song catalog](#archive-song-catalog)) and selection reconciliation after each browse apply. Owners read current inputs and return results rather than keeping a second catalog. |
 | `ArchiveBrowseModel` | Browse inputs (search text in its own `ArchiveSearchInput`, shelf, collaborator, filters, sort, hidden songs), the filtered list and match summaries, the one reusable `MusicSearchIndex` and the search debounce. It reads the visible catalog and the scan's skipped entries through `ArchiveBrowseSource` and reports each apply back so the view model reconciles the selection. An empty query never touches the index. |
 | View model: roots/scan host | Roots, bookmarks, root generation and scan-result application; `ArchiveScanOrchestrator` owns scan execution. |
-| View model: UI integration | Selection/navigation (see [Archive page state](#archive-page-state)), playback, collaborator edits, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
+| View model: UI integration | Page intents that cross owners (selection with analysis and playback, reconciliation with the catalog and browse list), playback, collaborator edits, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
+| `ArchivePageModel` | The page (`viewMode`, `listShowsDetail`), the selected song, the detail's disclosures, the analytics snapshot, the route recorded in `HubNavigationHistory` and its restore (see [Archive page state](#archive-page-state)). Every selection write reaches the view model's `selectionDidChange(previousSongID:)` (preview session, open error). |
 | `ArchiveIntelligenceModel` | The intelligence panel's hints, computed off the main actor from the catalog and address book the view model passes (`refreshIntelligence()`), and the dismissals that every apply filters against; a scan or root change ends them. |
 | `ArchiveSongAnalysisModel` | BPM/key and plug-in caches, their two loaders, and the rule that a result lands only for the selected song. The catalog writer hands it each `SongCatalogChange`; a metadata edit that changes the main preview invalidates through it. |
 | View model: Vault authorization | Capture/confirmation/restore presentation, runtime dispatch, and the Done revocation bridge. Metadata commands request Done capture or revocation through callbacks; they do not create or reuse authorization. |
@@ -229,10 +230,11 @@ The metadata extension retains the user-created-folder flow, plus preview/playba
 ## Archive page state
 
 The Archive Browser's page (`viewMode`: board, board detail, list, analytics; `listShowsDetail` for the compact list's
-detail) belongs to `ArchiveBrowserViewModel`. Views state intent and never write it: `openSongDetail(_:)`,
-`showBoard()` (back from the detail or analytics, keeping the selection), `setBrowseLayout(list:)`, `showAnalytics()`,
-`clearSelection(stopPlayback:)` and `restoreNavigationRoute(_:)`. `ArchiveViewIntentSourceTests` fails on a write
-outside `ArchiveBrowserViewModel*.swift`. When the page changes, `ArchiveBrowserView` gives the archive the keyboard
+detail) and the selected song belong to [`ArchivePageModel`](../Sources/FeatureArchiveBrowser/ArchivePageModel.swift),
+held as `ArchiveBrowserViewModel.page`. Views read the page through it and state intent on the view model, never
+writing it: `openSongDetail(_:)`, `showBoard()` (back from the detail or analytics, keeping the selection),
+`setBrowseLayout(list:)`, `showAnalytics()`, `clearSelection(stopPlayback:)` and `restoreNavigationRoute(_:)`. The
+setters are `private(set)`, and `ArchiveViewIntentSourceTests` fails on a write outside `ArchivePageModel.swift`. When the page changes, `ArchiveBrowserView` gives the archive the keyboard
 (unless the search field has it), so Esc and the song shortcuts work after a page change that did not come from a
 click: VoiceOver's "Open song detail", the Song menu, Back/Forward (`ArchiveKeyboardFocusTests`).
 
@@ -275,7 +277,7 @@ the headphone-unplug pause. Its `ArchivePreviewPlayer` is the only AVFoundation 
 plays at a time by construction; no coordinator sits between players.
 
 - `ArchiveBrowserViewModel.previewSession` holds it. The view model creates it with its other owners; production
-  builds one view model, so the app has one session for its lifetime. Every write of `selectedSong` reaches it
+  builds one view model, so the app has one session for its lifetime. Every write of `ArchivePageModel.selectedSong` reaches it
   (`synchronizePreviewSelection()`, also for restored routes and catalog reconciliation), and the lifecycle resets (a
   root change; the loaded song hidden or gone from the catalog) call `clear()`.
 - Views get it by initializer, never by a global: `ArchiveBrowserView` and `SongDetailView` from the view model,

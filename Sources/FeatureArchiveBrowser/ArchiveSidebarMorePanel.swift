@@ -107,7 +107,7 @@ struct ArchiveSidebarMorePanel: View {
                                     ArchiveDiagnosticsPanelView(
                                         viewModel: viewModel,
                                         diagnostics: diagnostics,
-                                        selectedSong: viewModel.selectedSong,
+                                        selectedSong: viewModel.page.selectedSong,
                                         searchContext: viewModel.activeSearchExportContext(),
                                         skippedSearchContext: viewModel.activeSkippedSearchExportContext()
                                     )

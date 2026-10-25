@@ -34,15 +34,15 @@ final class ArchiveKeyboardFocusTests: XCTestCase {
         XCTAssertTrue(window.firstResponder === window)
 
         model.openSongDetail(song) // what the card's "Open song detail" action calls
-        XCTAssertEqual(model.viewMode, .boardDetail)
+        XCTAssertEqual(model.page.viewMode, .boardDetail)
         // The page change reaches the view on its next update; with the fix the archive takes
         // the keyboard again. Without it this wait runs out and Esc goes nowhere.
         waitUntil { (window.firstResponder as? NSView)?.isDescendant(of: host) == true }
 
         window.sendEvent(try escapeKey(in: window))
-        waitUntil { model.viewMode == .board }
+        waitUntil { model.page.viewMode == .board }
 
-        XCTAssertEqual(model.viewMode, .board, "Esc must leave a detail that was opened without a click")
+        XCTAssertEqual(model.page.viewMode, .board, "Esc must leave a detail that was opened without a click")
     }
 
     /// The shell keeps the archive pane mounted while another tool is shown. The keys
@@ -73,11 +73,11 @@ final class ArchiveKeyboardFocusTests: XCTestCase {
 
         host.rootView = MountedArchivePane(context: context, model: model, isActiveTool: true)
         waitUntil { (window.firstResponder as? NSView)?.isDescendant(of: host) == true }
-        XCTAssertEqual(model.viewMode, .boardDetail, "Esc on another tool's page must not close the hidden song detail")
+        XCTAssertEqual(model.page.viewMode, .boardDetail, "Esc on another tool's page must not close the hidden song detail")
         window.sendEvent(try escapeKey(in: window))
-        waitUntil { model.viewMode == .board }
+        waitUntil { model.page.viewMode == .board }
 
-        XCTAssertEqual(model.viewMode, .board, "shown again, the archive takes the keyboard back without a click")
+        XCTAssertEqual(model.page.viewMode, .board, "shown again, the archive takes the keyboard back without a click")
     }
 
     private func escapeKey(in window: NSWindow) throws -> NSEvent {

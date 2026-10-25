@@ -169,9 +169,9 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Durable settings (music roots, output folder, Vault, helpers) | `SettingsStore` → `UserDefaultsSettingsStore`; display mirror `AppSettingsObserver` | UserDefaults key `nikoMusicHub.settings` (JSON) |
 | Archive song catalog (scan baseline, visible list, id index) | `SongCatalog`, written only by `ArchiveBrowserViewModel.applyCatalogEdit(_:)` | snapshot in `SQLiteArchiveIndexStore` |
 | Archive scan list (the folders the archive scans) | the settings store; edited only through `ArchiveScanList` (AppCore); the archive follows `appSettings` ([architecture.md § Archive scan list](architecture.md#archive-scan-list)) | settings JSON in UserDefaults |
-| Loaded roots, selection | `ArchiveBrowserViewModel` | memory |
+| Loaded roots | `ArchiveBrowserViewModel` | memory |
 | Archive browse inputs and results (search text, shelf, filters, sort, filtered list, search index) | `ArchiveBrowseModel`, held as `ArchiveBrowserViewModel.browse` | memory |
-| Archive page (`viewMode`, `listShowsDetail`) | `ArchiveBrowserViewModel`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
+| Archive page (`viewMode`, `listShowsDetail`) and the selected song | `ArchivePageModel`, held as `ArchiveBrowserViewModel.page`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
 | User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
 | Keep Local pins | `KeepLocalPins` over `VaultSettings.keepLocalProjectIDs` ([ADR 021](decisions/021-keep-local-pin-format.md)) | settings JSON in UserDefaults |
@@ -251,7 +251,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Each built-in tool ID is defined once; shell code orders, routes and labels tools from their metadata and job rows, never by ID | [architecture.md § Tool self-description](architecture.md#tool-self-description) | `ToolIDSourceTests`, `ToolSectionTests`, `InAppJobCancelRoutingTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
 | A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
-| Archive views state intent; only the view model writes the archive page, and the song detail and the cards use the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `ArchiveViewIntentSourceTests`; `ArchiveVaultObservationTests` (each card offers a status change exactly when the gate accepts it) |
+| Archive views state intent; only `ArchivePageModel` writes the archive page, and the song detail and the cards use the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `private(set)` setters, `ArchiveViewIntentSourceTests`; `ArchiveVaultObservationTests` (each card offers a status change exactly when the gate accepts it) |
 | The archive song catalog is written only through `applyCatalogEdit(_:)` | [architecture.md § Archive song catalog](architecture.md#archive-song-catalog) | the compiler (`songCatalog`'s setter is private to its file), `SongCatalogTests`, `ArchiveCatalogEditTests` |
 | A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
@@ -285,12 +285,12 @@ These rules are documented and, where named, enforced. The full table is in
    consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to
    the archive view model, and the recorder and the archive share one recording signal through `ToolContext`, since
    2026-10-24.)
-6. **`ArchiveBrowserViewModel` is one type in 19 files** (the main file plus 18 `+*.swift` extensions; the
+6. **`ArchiveBrowserViewModel` is one type in 18 files** (the main file plus 17 `+*.swift` extensions; the
    footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog` on 2026-10-23).
    Owners extracted so far: scan orchestrator, catalog, metadata editing, Vault queue and observation, and since
    2026-10-25 the song analysis (`ArchiveSongAnalysisModel`), the intelligence hints (`ArchiveIntelligenceModel`)
-   and the browse page (`ArchiveBrowseModel`). The other extensions still share one set of state, and the root reset
-   still resets about 15 properties by hand.
+   the browse page (`ArchiveBrowseModel`) and the page and selection (`ArchivePageModel`). The other extensions still
+   share one set of state, and the root reset still resets about 10 properties by hand.
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
    2026-10-25. `DevToolFeature` always compiles and is shown

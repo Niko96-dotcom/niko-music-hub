@@ -124,7 +124,7 @@ struct SongDetailView: View {
         .onChange(of: viewModel.hasPendingProjectVaultDialog) { _, pending in
             if pending { storageExpanded = false }
         }
-        .onChange(of: viewModel.songDetailsExpanded) { _, expanded in
+        .onChange(of: viewModel.page.songDetailsExpanded) { _, expanded in
             if expanded { workspaceTab = .versions }
         }
         .onReceive(NotificationCenter.default.publisher(for: .archiveShowSongVersions)) { _ in
@@ -134,15 +134,15 @@ struct SongDetailView: View {
             if tab == .plugins {
                 // Already expanded means no false→true change below, so ask
                 // here: the main project may have changed since the last visit.
-                if viewModel.pluginsSectionExpanded {
+                if viewModel.page.pluginsSectionExpanded {
                     viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
                 } else {
-                    viewModel.pluginsSectionExpanded = true
+                    viewModel.page.pluginsSectionExpanded = true
                 }
             }
         }
         .onChange(of: liveSong.effectiveLatestCPR?.filePath) { _, _ in
-            if viewModel.pluginsSectionExpanded {
+            if viewModel.page.pluginsSectionExpanded {
                 viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
             }
         }
@@ -151,8 +151,8 @@ struct SongDetailView: View {
         // being reset by hand, and the outgoing view flushes its drafts below.
         .onAppear {
             syncDrafts(from: liveSong)
-            viewModel.songDetailsExpanded = false
-            viewModel.pluginsSectionExpanded = false
+            viewModel.page.songDetailsExpanded = false
+            viewModel.page.pluginsSectionExpanded = false
         }
         .onDisappear {
             flushMetadataDraftsIfEdited()
@@ -165,7 +165,7 @@ struct SongDetailView: View {
             previewCandidatePage = 0
             viewModel.songAnalysis.refreshMixdown(for: liveSong)
         }
-        .onChange(of: viewModel.pluginsSectionExpanded) { _, expanded in
+        .onChange(of: viewModel.page.pluginsSectionExpanded) { _, expanded in
             if expanded {
                 viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
             }
@@ -711,7 +711,7 @@ struct SongDetailView: View {
         // can run.
         let isLoading = liveSong.effectiveLatestCPR != nil && summary == nil
         return SongPluginsSection(
-            isExpanded: viewModel.pluginsSectionExpanded,
+            isExpanded: viewModel.page.pluginsSectionExpanded,
             pluginNames: summary?.pluginNames,
             isLoading: isLoading
         )

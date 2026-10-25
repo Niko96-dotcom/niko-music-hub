@@ -40,13 +40,12 @@ final class ArchiveSongSelectionNavigatorTests: XCTestCase {
         ]
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         viewModel.applyCatalogEdit(.load(songs))
-        viewModel.viewMode = .board
         viewModel.selectSongOnBoard(songs[0])
 
         viewModel.moveSongSelection(.down)
 
-        XCTAssertEqual(viewModel.selectedSong?.id, songs[1].id)
-        XCTAssertEqual(viewModel.viewMode, .board)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, songs[1].id)
+        XCTAssertEqual(viewModel.page.viewMode, .board)
     }
 
     @MainActor
@@ -54,13 +53,12 @@ final class ArchiveSongSelectionNavigatorTests: XCTestCase {
         let song = fixtureSong("open-me", title: "Open Me", status: .prod)
         let viewModel = ArchiveBrowserViewModel(context: TestToolContext.make())
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.viewMode = .board
         viewModel.selectSongOnBoard(song)
 
         viewModel.openSelectedSongDetail()
 
-        XCTAssertEqual(viewModel.viewMode, .boardDetail)
-        XCTAssertEqual(viewModel.selectedSong?.id, song.id)
+        XCTAssertEqual(viewModel.page.viewMode, .boardDetail)
+        XCTAssertEqual(viewModel.page.selectedSong?.id, song.id)
     }
 
     func testArchiveKeyboardSourceWiresMoveCommandAndReturn() throws {

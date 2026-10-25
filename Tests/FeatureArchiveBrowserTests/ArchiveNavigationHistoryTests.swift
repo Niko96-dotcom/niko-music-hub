@@ -14,17 +14,17 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
         viewModel.openSongDetail(song)
-        XCTAssertFalse(viewModel.showsBoardPage)
+        XCTAssertFalse(viewModel.page.showsBoardPage)
 
         viewModel.applyCatalogEdit(.load([]))
-        XCTAssertNil(viewModel.selectedSong)
-        XCTAssertEqual(viewModel.viewMode, .boardDetail)
-        XCTAssertTrue(viewModel.showsBoardPage)
+        XCTAssertNil(viewModel.page.selectedSong)
+        XCTAssertEqual(viewModel.page.viewMode, .boardDetail)
+        XCTAssertTrue(viewModel.page.showsBoardPage)
 
-        viewModel.viewMode = .analytics
-        XCTAssertFalse(viewModel.showsBoardPage)
-        viewModel.viewMode = .list
-        XCTAssertFalse(viewModel.showsBoardPage)
+        viewModel.showAnalytics()
+        XCTAssertFalse(viewModel.page.showsBoardPage)
+        viewModel.setBrowseLayout(list: true)
+        XCTAssertFalse(viewModel.page.showsBoardPage)
     }
 
     func testMissingDetailFallsBackToBoardAndLastRouteAgrees() {
@@ -34,8 +34,8 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.selectedSong = nil
-        viewModel.viewMode = .board
+        viewModel.clearSelection(stopPlayback: false)
+        viewModel.showBoard()
 
         let entriesBefore = history.entries.count
         let indexBefore = history.index
@@ -44,8 +44,8 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         // fallback assignment does not visibly change the page.
         history.restore(HubNavigationEntry(toolID: archiveID, route: "detail:missing-song-id"))
 
-        XCTAssertEqual(viewModel.viewMode, .board)
-        XCTAssertEqual(viewModel.navigationRoute, "board")
+        XCTAssertEqual(viewModel.page.viewMode, .board)
+        XCTAssertEqual(viewModel.page.navigationRoute, "board")
         XCTAssertEqual(history.lastRoute(for: archiveID), "board")
         XCTAssertEqual(history.entries.count, entriesBefore, "restore must not append entries")
         XCTAssertEqual(history.index, indexBefore)
@@ -58,14 +58,14 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.selectedSong = song
-        viewModel.viewMode = .list
+        viewModel.selectSongOnBoard(song)
+        viewModel.setBrowseLayout(list: true)
         XCTAssertEqual(history.lastRoute(for: archiveID), "list:\(song.id)")
 
         history.restore(HubNavigationEntry(toolID: archiveID, route: "detail:missing-song-id"))
 
-        XCTAssertEqual(viewModel.viewMode, .board)
-        XCTAssertEqual(viewModel.navigationRoute, "board")
+        XCTAssertEqual(viewModel.page.viewMode, .board)
+        XCTAssertEqual(viewModel.page.navigationRoute, "board")
         XCTAssertEqual(history.lastRoute(for: archiveID), "board")
     }
 
@@ -76,21 +76,21 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.selectedSong = nil
-        viewModel.viewMode = .board
+        viewModel.clearSelection(stopPlayback: false)
+        viewModel.showBoard()
 
         history.restore(HubNavigationEntry(toolID: archiveID, route: "list:\(song.id)"))
-        XCTAssertEqual(viewModel.viewMode, .list)
-        XCTAssertEqual(viewModel.navigationRoute, "list:\(song.id)")
+        XCTAssertEqual(viewModel.page.viewMode, .list)
+        XCTAssertEqual(viewModel.page.navigationRoute, "list:\(song.id)")
         XCTAssertEqual(history.lastRoute(for: archiveID), "list:\(song.id)")
 
         history.restore(HubNavigationEntry(toolID: archiveID, route: "list:missing-song-id"))
-        XCTAssertEqual(viewModel.viewMode, .list)
-        XCTAssertEqual(viewModel.navigationRoute, "list")
+        XCTAssertEqual(viewModel.page.viewMode, .list)
+        XCTAssertEqual(viewModel.page.navigationRoute, "list")
         XCTAssertEqual(history.lastRoute(for: archiveID), "list")
 
         history.restore(HubNavigationEntry(toolID: archiveID, route: "board"))
-        XCTAssertEqual(viewModel.viewMode, .board)
+        XCTAssertEqual(viewModel.page.viewMode, .board)
         XCTAssertEqual(history.lastRoute(for: archiveID), "board")
 
         // Fallback then tool switch: the new archive entry must carry the
@@ -112,18 +112,17 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let archiveID = ToolFeatureID.archiveBrowser
         let song = fixtureSong()
         viewModel.applyCatalogEdit(.load([song]))
-        viewModel.selectedSong = nil
-        viewModel.viewMode = .board
+        viewModel.clearSelection(stopPlayback: false)
+        viewModel.showBoard()
         history.record(toolID: archiveID, route: "board")
 
-        viewModel.selectedSong = song
-        viewModel.viewMode = .boardDetail
+        viewModel.openSongDetail(song)
         XCTAssertEqual(history.lastRoute(for: archiveID), "detail:\(song.id)")
 
         let back = history.goBack()
         XCTAssertEqual(back?.route, "board")
         history.restore(back!)
-        XCTAssertEqual(viewModel.viewMode, .board)
+        XCTAssertEqual(viewModel.page.viewMode, .board)
         XCTAssertEqual(history.lastRoute(for: archiveID), "board")
         XCTAssertTrue(history.canGoForward)
 
@@ -137,8 +136,8 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         let forward = history.goForward()
         XCTAssertEqual(forward?.route, "detail:\(song.id)")
         history.restore(forward!)
-        XCTAssertEqual(viewModel.viewMode, .board, "missing detail must fall back to board")
-        XCTAssertEqual(viewModel.navigationRoute, "board")
+        XCTAssertEqual(viewModel.page.viewMode, .board, "missing detail must fall back to board")
+        XCTAssertEqual(viewModel.page.navigationRoute, "board")
         XCTAssertEqual(history.lastRoute(for: archiveID), "board")
         XCTAssertEqual(history.entries.count, entriesBeforeForwardRestore, "restore must not append entries")
         XCTAssertTrue(history.canGoBack)
@@ -160,8 +159,8 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
 
         viewModel.showBoard()
 
-        XCTAssertEqual(viewModel.viewMode, .board)
-        XCTAssertEqual(viewModel.selectedSong, song)
+        XCTAssertEqual(viewModel.page.viewMode, .board)
+        XCTAssertEqual(viewModel.page.selectedSong, song)
         XCTAssertEqual(context.navigationHistory.lastRoute(for: ToolFeatureID.archiveBrowser), "board")
     }
 
@@ -174,7 +173,7 @@ final class ArchiveNavigationHistoryTests: XCTestCase {
         XCTAssertEqual(history.lastRoute(for: ToolFeatureID.archiveBrowser), "analytics")
 
         viewModel.showBoard()
-        XCTAssertEqual(viewModel.viewMode, .board)
+        XCTAssertEqual(viewModel.page.viewMode, .board)
         XCTAssertEqual(history.lastRoute(for: ToolFeatureID.archiveBrowser), "board")
 
         let entries = history.entries.count

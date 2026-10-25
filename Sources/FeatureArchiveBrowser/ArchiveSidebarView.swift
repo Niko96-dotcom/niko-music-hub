@@ -321,7 +321,7 @@ struct ArchiveSidebarView: View {
                     ForEach(viewModel.browse.filteredSongs, id: \.id) { song in
                         SongCardView(
                             song: song,
-                            isSelected: viewModel.selectedSong?.id == song.id,
+                            isSelected: viewModel.page.selectedSong?.id == song.id,
                             session: viewModel.previewSession,
                             matchSummary: viewModel.browse.searchMatchSummaries[song.id],
                             onSelect: {
