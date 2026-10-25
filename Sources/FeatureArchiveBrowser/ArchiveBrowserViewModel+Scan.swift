@@ -11,17 +11,17 @@ extension ArchiveBrowserViewModel {
 
     func scan() async {
         // A fresh scan ends every "until the next scan" dismissal.
-        dismissedCollaboratorSuggestionIDs.removeAll()
+        intelligence.endDismissalsForNewScan()
         await scanOrchestrator.scan()
     }
 
     func scanInBackground() async {
-        dismissedCollaboratorSuggestionIDs.removeAll()
+        intelligence.endDismissalsForNewScan()
         await scanOrchestrator.scanInBackground()
     }
 
     func scanSync() {
-        dismissedCollaboratorSuggestionIDs.removeAll()
+        intelligence.endDismissalsForNewScan()
         scanOrchestrator.scanSync()
     }
 
@@ -41,7 +41,7 @@ extension ArchiveBrowserViewModel {
         cancelPendingProjectVaultOperations()
         vaultOperations.clearAllOperationMessages()
         browseRefreshDriver.cancelPendingDebounce()
-        intelligenceRefreshTask?.cancel()
+        intelligence.clearForRootChange()
         metadataEditing.clearForRootChange()
         songAnalysis.cancel()
         clearFooterWarning()
@@ -64,10 +64,6 @@ extension ArchiveBrowserViewModel {
         showArchivedProjects = false
         vaultObservation.clearForRootChange(notifyWhenChanged: false)
         scanDiagnostics = nil
-        pendingCollaboratorSuggestions = []
-        dismissedCollaboratorSuggestionIDs.removeAll()
-        duplicateSongHints = []
-        missingAudioReport = nil
         cachedSearchIndex = MusicSearchIndex()
         // Last, so the browse recompute of the edit sees the reset inputs. Its
         // per-song step drops every mixdown result and plugin summary.

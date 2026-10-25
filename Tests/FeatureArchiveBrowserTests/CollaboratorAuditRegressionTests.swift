@@ -77,16 +77,14 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         timeout: TimeInterval = 3
     ) async {
         let deadline = Date().addingTimeInterval(timeout)
-        while viewModel.pendingCollaboratorSuggestions.count != count, Date() < deadline {
+        while viewModel.intelligence.pendingCollaboratorSuggestions.count != count, Date() < deadline {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
     }
 
-    private func waitForIntelligenceApplied(_ viewModel: ArchiveBrowserViewModel, timeout: TimeInterval = 3) async {
-        let deadline = Date().addingTimeInterval(timeout)
-        while viewModel.missingAudioReport == nil, Date() < deadline {
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
+    /// Waits for the running intelligence refresh (debounce, computation, apply) to end.
+    private func waitForIntelligenceApplied(_ viewModel: ArchiveBrowserViewModel) async {
+        await viewModel.intelligence.refreshTask?.value
     }
 
     // MARK: - Finding 1: confirmRemoveCollaborator must not delete before safe unassign
@@ -618,17 +616,16 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
-        let suggestion = try XCTUnwrap(viewModel.pendingCollaboratorSuggestions.first)
+        let suggestion = try XCTUnwrap(viewModel.intelligence.pendingCollaboratorSuggestions.first)
         XCTAssertEqual(suggestion.suggestedCollaboratorID, jamie.id)
 
-        viewModel.dismissCollaboratorSuggestion(suggestion)
-        XCTAssertTrue(viewModel.pendingCollaboratorSuggestions.isEmpty)
+        viewModel.intelligence.dismiss(suggestion)
+        XCTAssertTrue(viewModel.intelligence.pendingCollaboratorSuggestions.isEmpty)
 
-        viewModel.missingAudioReport = nil
         viewModel.refreshIntelligenceNow()
         await waitForIntelligenceApplied(viewModel)
-        XCTAssertTrue(viewModel.pendingCollaboratorSuggestions.isEmpty)
-        XCTAssertTrue(viewModel.dismissedCollaboratorSuggestionIDs.contains(suggestion.id))
+        XCTAssertTrue(viewModel.intelligence.pendingCollaboratorSuggestions.isEmpty)
+        XCTAssertTrue(viewModel.intelligence.dismissedCollaboratorSuggestionIDs.contains(suggestion.id))
     }
 
     func testDismissedSuggestionSurvivesHeldDebouncedRefresh() async throws {
@@ -647,15 +644,14 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
-        let suggestion = try XCTUnwrap(viewModel.pendingCollaboratorSuggestions.first)
+        let suggestion = try XCTUnwrap(viewModel.intelligence.pendingCollaboratorSuggestions.first)
 
         // Schedule the debounced refresh, then dismiss before it applies: the
         // older held refresh must filter at apply time and not reinsert.
         viewModel.refreshIntelligence()
-        viewModel.dismissCollaboratorSuggestion(suggestion)
-        viewModel.missingAudioReport = nil
+        viewModel.intelligence.dismiss(suggestion)
         await waitForIntelligenceApplied(viewModel)
-        XCTAssertTrue(viewModel.pendingCollaboratorSuggestions.isEmpty)
+        XCTAssertTrue(viewModel.intelligence.pendingCollaboratorSuggestions.isEmpty)
     }
 
     func testClearScanResultsPermitsSuggestionAgain() async throws {
@@ -674,17 +670,17 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
-        let suggestion = try XCTUnwrap(viewModel.pendingCollaboratorSuggestions.first)
-        viewModel.dismissCollaboratorSuggestion(suggestion)
-        XCTAssertTrue(viewModel.pendingCollaboratorSuggestions.isEmpty)
+        let suggestion = try XCTUnwrap(viewModel.intelligence.pendingCollaboratorSuggestions.first)
+        viewModel.intelligence.dismiss(suggestion)
+        XCTAssertTrue(viewModel.intelligence.pendingCollaboratorSuggestions.isEmpty)
 
         viewModel.clearScanResults()
-        XCTAssertTrue(viewModel.dismissedCollaboratorSuggestionIDs.isEmpty)
+        XCTAssertTrue(viewModel.intelligence.dismissedCollaboratorSuggestionIDs.isEmpty)
         // A reset stands in for the next scan's fresh catalog.
         viewModel.applyCatalogEdit(.load([song]))
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
-        XCTAssertEqual(viewModel.pendingCollaboratorSuggestions.first?.id, suggestion.id)
+        XCTAssertEqual(viewModel.intelligence.pendingCollaboratorSuggestions.first?.id, suggestion.id)
     }
 
     func testFreshScanPermitsSuggestionAgain() async throws {
@@ -707,14 +703,14 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
-        let suggestion = try XCTUnwrap(viewModel.pendingCollaboratorSuggestions.first)
-        viewModel.dismissCollaboratorSuggestion(suggestion)
+        let suggestion = try XCTUnwrap(viewModel.intelligence.pendingCollaboratorSuggestions.first)
+        viewModel.intelligence.dismiss(suggestion)
 
         // A fresh successful scan ends the dismissal: the suggestion returns.
         await viewModel.scan()
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
-        XCTAssertEqual(viewModel.pendingCollaboratorSuggestions.first?.id, suggestion.id)
+        XCTAssertEqual(viewModel.intelligence.pendingCollaboratorSuggestions.first?.id, suggestion.id)
     }
 
     // MARK: - Finding 3: accept an already-assigned suggestion drops the stale row
@@ -738,11 +734,11 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             suggestedCollaboratorID: jamie.id, suggestedName: jamie.displayName,
             reason: "stale"
         )
-        viewModel.pendingCollaboratorSuggestions = [suggestion]
+        viewModel.intelligence.apply(suggestions: [suggestion], duplicates: [], missing: nil)
 
         viewModel.acceptCollaboratorSuggestion(suggestion)
 
-        XCTAssertTrue(viewModel.pendingCollaboratorSuggestions.isEmpty)
+        XCTAssertTrue(viewModel.intelligence.pendingCollaboratorSuggestions.isEmpty)
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
         XCTAssertEqual(viewModel.songs.first?.appNote, "keep me")
         XCTAssertNil(viewModel.persistenceWarningMessage)
@@ -768,12 +764,12 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             suggestedCollaboratorID: jamie.id, suggestedName: jamie.displayName,
             reason: "refused"
         )
-        viewModel.pendingCollaboratorSuggestions = [suggestion]
+        viewModel.intelligence.apply(suggestions: [suggestion], duplicates: [], missing: nil)
 
         viewModel.acceptCollaboratorSuggestion(suggestion)
 
         // The refusal is not hidden as a success: the row and the warning stay.
-        XCTAssertEqual(viewModel.pendingCollaboratorSuggestions.map(\.id), [suggestion.id])
+        XCTAssertEqual(viewModel.intelligence.pendingCollaboratorSuggestions.map(\.id), [suggestion.id])
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [])
         XCTAssertNotNil(viewModel.statusMessage)
     }
@@ -794,11 +790,11 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
 
         viewModel.refreshIntelligenceNow()
         await waitForSuggestions(viewModel, count: 1)
-        let suggestion = try XCTUnwrap(viewModel.pendingCollaboratorSuggestions.first)
+        let suggestion = try XCTUnwrap(viewModel.intelligence.pendingCollaboratorSuggestions.first)
 
         viewModel.acceptCollaboratorSuggestion(suggestion)
 
-        XCTAssertTrue(viewModel.pendingCollaboratorSuggestions.isEmpty)
+        XCTAssertTrue(viewModel.intelligence.pendingCollaboratorSuggestions.isEmpty)
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
     }
 }

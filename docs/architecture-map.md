@@ -178,6 +178,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
 | Vault transfer state, restore phase | the tables `ProjectVaultStateMachine` and `VaultRestorePhase.allowedNextPhases`; written only by each engine's `checkAndSave` and the restore reconcile ([architecture.md § Vault state changes](architecture.md#vault-state-changes)) | `vault_transfers`, `vault_restores` in `archive-index.sqlite` |
+| Archive intelligence (collaborator suggestions and their dismissals, duplicate hints, missing audio) | `ArchiveIntelligenceModel`, held as `ArchiveBrowserViewModel.intelligence` | memory |
 | Archive song analysis (BPM/key of the main preview, the project's plug-ins) | `ArchiveSongAnalysisModel`, held as `ArchiveBrowserViewModel.songAnalysis`; follows each catalog change | memory |
 | Preview playback | `ArchivePreviewSession`, held by `ArchiveBrowserViewModel.previewSession`; views get it by initializer ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
 | Running work | `JobRunner`, merged with extra sources in `ShellJobStatusCenter`; each row's verb, Cancel help and cancel target come from its tool | memory |
@@ -283,11 +284,11 @@ These rules are documented and, where named, enforced. The full table is in
    consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to
    the archive view model, and the recorder and the archive share one recording signal through `ToolContext`, since
    2026-10-24.)
-6. **`ArchiveBrowserViewModel` is one type in 21 files** (the main file plus 20 `+*.swift` extensions; the
+6. **`ArchiveBrowserViewModel` is one type in 20 files** (the main file plus 19 `+*.swift` extensions; the
    footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog` on 2026-10-23).
    Owners extracted so far: scan orchestrator, catalog, metadata editing, Vault queue and observation, and since
-   2026-10-25 the song analysis (`ArchiveSongAnalysisModel`). The other extensions still share one set of state,
-   and the root reset still resets about 30 properties by hand.
+   2026-10-25 the song analysis (`ArchiveSongAnalysisModel`) and the intelligence hints (`ArchiveIntelligenceModel`).
+   The other extensions still share one set of state, and the root reset still resets about 25 properties by hand.
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
    2026-10-25. `DevToolFeature` always compiles and is shown

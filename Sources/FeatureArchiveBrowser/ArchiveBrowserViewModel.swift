@@ -230,17 +230,10 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     @Published var showHiddenSongs = false
     @Published var sortMode: ArchiveBrowseSortMode = .recentCPR
     @Published var browseFilter: ArchiveBrowseFilter = []
-    @Published var pendingCollaboratorSuggestions: [CollaboratorSuggestion] = []
-    /// Dismissed suggestion identities (`CollaboratorSuggestion.id` =
-    /// songID + collaboratorID) for the current scan. Dismissal hides a row
-    /// "until the next scan": immediate and debounced/async intelligence
-    /// refreshes filter these out at apply time, so a held older refresh can
-    /// never reinsert one. Cleared when a fresh scan starts or scan results
-    /// are cleared. Never persisted; per-instance only.
-    var dismissedCollaboratorSuggestionIDs: Set<String> = []
     @Published var pendingCollaboratorRemoval: Collaborator?
-    @Published var duplicateSongHints: [DuplicateSongHint] = []
-    @Published var missingAudioReport: MissingAudioReport?
+    /// Collaborator suggestions, duplicate hints, the missing-audio summary and
+    /// the "until the next scan" dismissals. `refreshIntelligence()` feeds it.
+    let intelligence = ArchiveIntelligenceModel()
     /// Archived Project Vault generations are opt-in in the browse projection so the
     /// active workspace stays calm. Turning this on exposes verified archive-only
     /// projects in their persisted workflow stage.
@@ -431,6 +424,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var vaultObservationCancellable: AnyCancellable?
     var metadataEditingCancellable: AnyCancellable?
     var songAnalysisCancellable: AnyCancellable?
+    var intelligenceCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -447,7 +441,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     // recovery timer). Read-only peers above preserve the view API; writes
     // go through the observation's intentional methods.
     var navigationCancellable: AnyCancellable?
-    var intelligenceRefreshTask: Task<Void, Never>?
     /// Reused search index rebuilt from the current shelf on each browse recompute.
     /// Avoids allocating a fresh `MusicSearchIndex` on every keystroke while still
     /// reflecting live metadata (titles/aliases) after catalog edits.
@@ -582,6 +575,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         wireVaultObservation()
         wireMetadataEditing()
         songAnalysisCancellable = songAnalysis.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+        intelligenceCancellable = intelligence.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
         loadRootsFromSettings()
         followStoredSettingsChanges()
@@ -719,6 +714,27 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         } else {
             jobStatusCenter.setExtraJob(sourceID: ShellJobExtraSourceID.vaultTransfer, status: nil)
         }
+    }
+
+    /// Recomputes the intelligence hints from the catalog and the address book,
+    /// after the debounce. `refreshIntelligenceNow()` skips it.
+    func refreshIntelligence() {
+        intelligence.refresh(songs: songs, collaborators: collaborators, immediate: false)
+    }
+
+    func refreshIntelligenceNow() {
+        intelligence.refresh(songs: songs, collaborators: collaborators, immediate: true)
+    }
+
+    var sidebarHealthContext: ArchiveSidebarHealthContext {
+        ArchiveSidebarHealthContext.make(
+            report: healthReport(),
+            skippedEntryCount: scanDiagnostics?.skippedEntries.count ?? 0
+        )
+    }
+
+    func healthReport() -> ArchiveHealthReport {
+        ArchiveHealthReport(songs: songs, includeHidden: showHiddenSongs)
     }
 
     func convertMainPreview(for song: Song) {

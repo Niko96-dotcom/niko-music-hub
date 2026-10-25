@@ -10,7 +10,7 @@ extension ArchiveBrowserViewModel {
         if song.collaboratorIDs.contains(suggestion.suggestedCollaboratorID) {
             // Already assigned: the suggestion row is stale. Drop it without
             // touching the song.
-            pendingCollaboratorSuggestions.removeAll { $0.id == suggestion.id }
+            intelligence.removeSuggestion(suggestion)
             return
         }
         var ids = song.collaboratorIDs
@@ -34,12 +34,7 @@ extension ArchiveBrowserViewModel {
             }
             return
         }
-        pendingCollaboratorSuggestions.removeAll { $0.id == suggestion.id }
-    }
-
-    func dismissCollaboratorSuggestion(_ suggestion: CollaboratorSuggestion) {
-        dismissedCollaboratorSuggestionIDs.insert(suggestion.id)
-        pendingCollaboratorSuggestions.removeAll { $0.id == suggestion.id }
+        intelligence.removeSuggestion(suggestion)
     }
 
     func loadCollaborators() {

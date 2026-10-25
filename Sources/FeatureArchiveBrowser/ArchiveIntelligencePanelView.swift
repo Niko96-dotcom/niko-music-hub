@@ -7,10 +7,10 @@ struct ArchiveIntelligencePanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !viewModel.pendingCollaboratorSuggestions.isEmpty {
+            if !viewModel.intelligence.pendingCollaboratorSuggestions.isEmpty {
                 Text("Collaborator suggestions")
                     .font(HubDesignSystem.Typography.caption())
-                ForEach(viewModel.pendingCollaboratorSuggestions.prefix(5)) { suggestion in
+                ForEach(viewModel.intelligence.pendingCollaboratorSuggestions.prefix(5)) { suggestion in
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(suggestion.songTitle) → \(suggestion.suggestedName)")
                             .font(HubDesignSystem.Typography.micro())
@@ -29,17 +29,17 @@ struct ArchiveIntelligencePanelView: View {
                                 accessibilityLabel: "Dismiss suggestion",
                                 help: "Hide this suggestion until the next scan"
                             ) {
-                                viewModel.dismissCollaboratorSuggestion(suggestion)
+                                viewModel.intelligence.dismiss(suggestion)
                             }
                         }
                     }
                 }
             }
 
-            if !viewModel.duplicateSongHints.isEmpty {
+            if !viewModel.intelligence.duplicateSongHints.isEmpty {
                 Text("Possible duplicates")
                     .font(HubDesignSystem.Typography.caption())
-                ForEach(viewModel.duplicateSongHints.prefix(3)) { hint in
+                ForEach(viewModel.intelligence.duplicateSongHints.prefix(3)) { hint in
                     Text(hint.displayTitles.joined(separator: " · "))
                         .font(HubDesignSystem.Typography.micro())
                         .foregroundStyle(HubDesignSystem.Colors.warning)
@@ -47,7 +47,7 @@ struct ArchiveIntelligencePanelView: View {
                 }
             }
 
-            if let missing = viewModel.missingAudioReport {
+            if let missing = viewModel.intelligence.missingAudioReport {
                 if !missing.noPreview.isEmpty {
                     Text("No preview: \(missing.noPreview.count) song(s)")
                         .font(HubDesignSystem.Typography.micro())

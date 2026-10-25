@@ -408,11 +408,11 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
 
         viewModel.refreshIntelligenceNow()
         let deadline = Date().addingTimeInterval(1)
-        while viewModel.missingAudioReport == nil, Date() < deadline {
+        while viewModel.intelligence.missingAudioReport == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
 
-        let summary = try XCTUnwrap(viewModel.missingAudioReport)
+        let summary = try XCTUnwrap(viewModel.intelligence.missingAudioReport)
         XCTAssertEqual(summary.noPreview, ["Song"])
         XCTAssertEqual(summary.noCPR, ["Song"])
         XCTAssertTrue(summary.orphanAudioBySongID.isEmpty)
@@ -441,11 +441,11 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.refreshIntelligenceNow()
 
         let deadline = Date().addingTimeInterval(1)
-        while viewModel.missingAudioReport == nil, Date() < deadline {
+        while viewModel.intelligence.missingAudioReport == nil, Date() < deadline {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
 
-        let summary = try XCTUnwrap(viewModel.missingAudioReport)
+        let summary = try XCTUnwrap(viewModel.intelligence.missingAudioReport)
         XCTAssertEqual(summary.noPreview, ["Second"])
         XCTAssertEqual(summary.noCPR, ["Second"])
     }
@@ -492,9 +492,9 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.searchQuery, "")
         XCTAssertEqual(viewModel.selectedShelf, .allSongs)
         XCTAssertTrue(viewModel.browseFilter.isEmpty)
-        XCTAssertTrue(viewModel.pendingCollaboratorSuggestions.isEmpty)
-        XCTAssertTrue(viewModel.duplicateSongHints.isEmpty)
-        XCTAssertNil(viewModel.missingAudioReport)
+        XCTAssertTrue(viewModel.intelligence.pendingCollaboratorSuggestions.isEmpty)
+        XCTAssertTrue(viewModel.intelligence.duplicateSongHints.isEmpty)
+        XCTAssertNil(viewModel.intelligence.missingAudioReport)
     }
 
     func testRemoveOneRootClearsCatalogAndPersistsRemainingRoot() throws {

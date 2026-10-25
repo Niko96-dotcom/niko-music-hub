@@ -115,8 +115,9 @@ final class ArchiveRescanApplyTests: XCTestCase {
     func testIntelligencePassStillRunsAfterAnUnchangedRescan() {
         let model = makeModel((0..<30).map { makeSong($0) })
         // `scan()` ends dismissals before a rescan lands; the intelligence pass then runs again on apply.
-        model.intelligenceRefreshTask = nil
+        let before = model.intelligence.refreshTask
         model.applyCatalogScanUpdate(update(model, songs: (0..<30).map { makeSong($0) }), roots: [])
-        XCTAssertNotNil(model.intelligenceRefreshTask, "the intelligence refresh was scheduled")
+        XCTAssertNotNil(model.intelligence.refreshTask)
+        XCTAssertNotEqual(model.intelligence.refreshTask, before, "the intelligence refresh was scheduled")
     }
 }
