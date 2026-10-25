@@ -529,8 +529,8 @@ saved in `vault_restores`) each change only through one table.
 
 | Record | Table | Writers |
 | --- | --- | --- |
-| Transfer | [`ProjectVaultStateMachine`](../Sources/NikoMusicCore/Vault/ProjectVaultStateMachine.swift); removal only through `beginRemovingActiveCopy` with `VaultRemovalEvidence` | `LocalVaultTransferEngine.checkAndSave` |
-| Restore | `VaultRestorePhase.allowedNextPhases` in [`VaultRestoreRecord.swift`](../Sources/NikoMusicCore/Vault/VaultRestoreRecord.swift) | `LocalVaultRestoreEngine.checkAndSave`; the launch reconcile in `SQLiteVaultTransferStore` |
+| Transfer | [`ProjectVaultStateMachine`](../Sources/NikoMusicCore/Vault/ProjectVaultStateMachine.swift); removal only through `beginRemovingActiveCopy` with `VaultRemovalEvidence` | `VaultTransferRecord.apply(_:)`, called by `LocalVaultTransferEngine.checkAndSave` |
+| Restore | `VaultRestorePhase.allowedNextPhases` in [`VaultRestoreRecord.swift`](../Sources/NikoMusicCore/Vault/VaultRestoreRecord.swift) | `VaultRestoreRecord.changePhase(to:)`, called by `LocalVaultRestoreEngine.checkAndSave` and the launch reconcile in `SQLiteVaultTransferStore` |
 
 - The tables list every edge a path reaches through one event (a thrown error, a cancel, a launch or retry decision),
   each with the path that makes it: the archive chain and its stops, the removal rewinds (refused or stopped before
@@ -566,9 +566,14 @@ saved in `vault_restores`) each change only through one table.
   `VaultRestoreCrashWindow`: between a side effect and the save that records it) let a test stop an engine as if the
   process died. `VaultCrashWindowTests` then runs a fresh engine's launch recovery twice and pins the state, the Active
   folder, the generation and the file operations the relaunch replays.
-- `VaultStateWriterSourceTests` fails on any other assignment of `state` or `phase`. `ProjectVaultStateMachineTests`
-  and `VaultRestorePhaseTests` pin both tables and check them against `VaultObservedEdges`, the edges the Vault suites
-  made when the tables were written (2026-10-24).
+- The compiler keeps every change in the checked writer: `state` and `phase` are `private(set)` on their records, so
+  an assignment outside the record's file does not compile. A new record starts in `activeLocal` or
+  `materializingArchive`; only the decoder gives a record another state, as the journal row holds it. Tests plant such
+  a row the same way, through the decoder (`VaultJournalFixtures.swift` in each Vault test target).
+  `VaultStateWriterSourceTests` keeps the setters private and fails on any other assignment inside the two record files.
+  `ProjectVaultStateMachineTests` and `VaultRestorePhaseTests` pin both tables, check them against `VaultObservedEdges`,
+  the edges the Vault suites made when the tables were written (2026-10-24), and check that a record's writer moves
+  only along the table and keeps the record unchanged when it refuses.
 - Open: the store saves without an expected-state compare-and-set, so a stale writer is not refused (survivor
   retirement does a read-compare); the removal evidence passes constant `manifestVerified` and `metadataPersisted`
   values; a crash between a restore's open and its `completedAt` save opens the project again at the next launch.

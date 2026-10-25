@@ -533,7 +533,7 @@ final class ProjectVaultPolishTests: XCTestCase {
         XCTAssertFalse(waitingSnapshot.isReadyToFreeSpace(localActiveRetained: true, isBoundGeneration: true, isKeepLocal: false))
 
         var promoting = waiting
-        promoting.state = .promotingArchiveGeneration
+        promoting.plantJournalState(.promotingArchiveGeneration)
         XCTAssertTrue(promoting.isWaitingForProviderUpload)
         let promotingSnapshot = ProjectVaultRuntimeSnapshot(record: record, transfer: promoting)
         XCTAssertFalse(promotingSnapshot.isReadyToFreeSpace(localActiveRetained: true, isBoundGeneration: true, isKeepLocal: false))

@@ -56,7 +56,10 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
     public let archiveTransferState: VaultTransferState?
     public let requiresArchiveMaterialization: Bool
     public var projectionSupplement: VaultProjectionSupplement?
-    public var phase: VaultRestorePhase
+    /// Changes only through `changePhase(to:)`, which the phase table checks.
+    /// A new record starts in `materializingArchive`; a decoded one carries the
+    /// phase its journal row holds.
+    public private(set) var phase: VaultRestorePhase
     public var catalogLocationPersisted: Bool
     public var completedAt: Date?
     public let createdAt: Date
@@ -67,6 +70,12 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
     /// Set when the person stopped this restore. Launch recovery leaves a
     /// stopped restore for an explicit retry instead of resuming it.
     public var stoppedAt: Date?
+
+    /// The only change of a restore's phase. The phase table checks it; a
+    /// change the table does not list throws, and the record keeps its phase.
+    public mutating func changePhase(to next: VaultRestorePhase) throws {
+        phase = try phase.checkedChange(to: next)
+    }
 
     public var reviewGenerationURL: URL? {
         failureReason == .legacyProjectionEvidenceUnavailable ? archiveGenerationURL : nil
@@ -85,7 +94,6 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         archiveTransferState: VaultTransferState? = nil,
         requiresArchiveMaterialization: Bool = true,
         projectionSupplement: VaultProjectionSupplement? = nil,
-        phase: VaultRestorePhase = .materializingArchive,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -100,7 +108,7 @@ public struct VaultRestoreRecord: Codable, Equatable, Sendable, Identifiable {
         self.archiveTransferState = archiveTransferState
         self.requiresArchiveMaterialization = requiresArchiveMaterialization
         self.projectionSupplement = projectionSupplement
-        self.phase = phase
+        self.phase = .materializingArchive
         self.catalogLocationPersisted = false
         self.completedAt = nil
         self.createdAt = createdAt

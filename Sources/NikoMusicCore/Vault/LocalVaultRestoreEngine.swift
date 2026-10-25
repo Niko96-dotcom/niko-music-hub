@@ -855,7 +855,7 @@ public actor LocalVaultRestoreEngine {
     /// then the record is saved with its new phase, before that phase's side
     /// effect.
     private func checkAndSave(_ record: inout VaultRestoreRecord, to phase: VaultRestorePhase) throws {
-        record.phase = try record.phase.checkedChange(to: phase)
+        try record.changePhase(to: phase)
         try persist(&record)
     }
 

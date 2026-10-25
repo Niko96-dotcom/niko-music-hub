@@ -455,7 +455,7 @@ final class VaultProjectionSupplementTests: XCTestCase {
                     mismatch.durability = storedTransfer.durability
                     storedTransfer = mismatch
                 case .nonterminalState:
-                    storedTransfer.state = .failedRecoverable
+                    storedTransfer.plantJournalState(.failedRecoverable)
                 case .destinationMismatchWithinGenerations:
                     storedTransfer.destinationURL = fixture.generation
                         .deletingLastPathComponent()

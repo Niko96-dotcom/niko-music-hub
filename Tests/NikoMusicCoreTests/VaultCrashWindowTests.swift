@@ -804,7 +804,7 @@ final class VaultCrashWindowTests: XCTestCase {
         let fixture = try TransferCrashFixture()
         defer { fixture.remove() }
         var foreign = try fixture.failedRecord(origin: .copyingToArchiveStaging, retryCount: 0, createdAt: Date())
-        foreign.state = .materializingArchive
+        foreign.plantJournalState(.materializingArchive)
         foreign.error = nil
         try fixture.store.base.save(foreign)
         let saved = try XCTUnwrap(fixture.store.record(id: foreign.id))
@@ -1047,7 +1047,7 @@ private final class TransferCrashFixture {
     /// review; saved past the recorder, since the test sets it up.
     func interruptedRemoval(origin: VaultTransferState = .removingActiveCopy) async throws -> VaultTransferRecord {
         var record = try await verifiedArchive()
-        record.state = .recoveryRequired
+        record.plantJournalState(.recoveryRequired)
         record.error = VaultTransferError(origin: origin, reason: .unknown, message: "Interrupted")
         try store.base.save(record)
         return record
@@ -1058,7 +1058,7 @@ private final class TransferCrashFixture {
     /// phase instead. Saved past the recorder, since the test sets it up.
     func stoppedRemoval(in phase: VaultTransferState, legacyFailure: Bool = false) async throws -> VaultTransferRecord {
         var record = try await verifiedArchive()
-        record.state = legacyFailure ? .failedRecoverable : phase
+        record.plantJournalState(legacyFailure ? .failedRecoverable : phase)
         record.error = legacyFailure ? VaultTransferError(origin: phase, reason: .unknown, message: "stopped") : nil
         try store.base.save(record)
         return record
@@ -1103,7 +1103,7 @@ private final class TransferCrashFixture {
     /// saved, saved past the recorder.
     func unfinishedRecord(in state: VaultTransferState, projectID: ProjectID, createdAt: Date) throws -> VaultTransferRecord {
         var record = try failedRecord(origin: state, retryCount: 0, projectID: projectID, createdAt: createdAt)
-        record.state = state
+        record.plantJournalState(state)
         record.error = nil
         try store.base.save(record)
         return record

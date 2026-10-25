@@ -21,7 +21,10 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
     public var manifestID: UUID?
     public var manifest: VaultManifest?
     public var projectionSupplement: VaultProjectionSupplement?
-    public var state: VaultTransferState
+    /// Changes only through `apply(_:)`, which `ProjectVaultStateMachine`
+    /// checks. A new record starts in `activeLocal`; a decoded one carries the
+    /// state its journal row holds.
+    public private(set) var state: VaultTransferState
     public var completedBytes: Int64
     public var totalBytes: Int64
     public var retryCount: Int
@@ -42,7 +45,6 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         sourceURL: URL,
         stagingURL: URL,
         destinationURL: URL,
-        state: VaultTransferState = .activeLocal,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -53,7 +55,7 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         self.manifestID = nil
         self.manifest = nil
         self.projectionSupplement = nil
-        self.state = state
+        self.state = .activeLocal
         self.completedBytes = 0
         self.totalBytes = 0
         self.retryCount = 0
@@ -65,6 +67,12 @@ public struct VaultTransferRecord: Codable, Equatable, Sendable, Identifiable {
         self.supersededBy = nil
         self.preservedActiveCopies = nil
         self.preservedArchiveCopies = nil
+    }
+
+    /// The only change of a transfer's state. The state machine checks the
+    /// edge; one its table does not list throws, and the record keeps its state.
+    public mutating func apply(_ transition: VaultTransition) throws {
+        state = try ProjectVaultStateMachine().applying(transition, to: state)
     }
 
     /// A bounded provider check yielded while cloud upload is still pending.

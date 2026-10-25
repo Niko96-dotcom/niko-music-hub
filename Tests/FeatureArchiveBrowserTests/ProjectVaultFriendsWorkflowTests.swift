@@ -786,7 +786,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         let transferStore = try fixture.transferStore()
         var transfer = try XCTUnwrap(try transferStore.verifiedArchiveGeneration(projectID: fixture.projectID()))
         try FileManager.default.removeItem(at: transfer.destinationURL)
-        transfer.state = .archivedOnlineOnly
+        transfer.plantJournalState(.archivedOnlineOnly)
         try transferStore.save(transfer)
 
         await viewModel.refreshProjectVaultSnapshots()

@@ -155,10 +155,10 @@ final class ProjectVaultRestoreBoardTests: XCTestCase {
             return try XCTUnwrap(records.first { $0.sourceURL.lastPathComponent == folder.lastPathComponent })
         }
         var waiting = try transferID(for: waitingURL)
-        waiting.state = .awaitingProviderDurability
+        waiting.plantJournalState(.awaitingProviderDurability)
         try store.save(waiting)
         var failed = try transferID(for: failedURL)
-        failed.state = .failedRecoverable
+        failed.plantJournalState(.failedRecoverable)
         failed.error = VaultTransferError(origin: .awaitingProviderDurability, reason: .providerUnsynced, message: "test")
         try store.save(failed)
         await model.refreshProjectVaultSnapshots()

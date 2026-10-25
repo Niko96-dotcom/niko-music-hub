@@ -2297,7 +2297,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
                 let baseSnapshot = try fixture.legacyReviewSnapshot(restoreID: UUID())
                 var transfer = try XCTUnwrap(baseSnapshot.transfer, label)
                 var restore = try XCTUnwrap(baseSnapshot.restore, label)
-                restore.phase = phase
+                restore.plantJournalPhase(phase)
                 restore.failureReason = failureReason
                 restore.error = failureReason == nil ? "Catalog/Open did not complete" : "Active integrity mismatch"
                 transfer.sourceURL = restore.destinationURL
@@ -2402,7 +2402,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         defer { fixture.cleanUp() }
         let legacySnapshot = try fixture.legacyReviewSnapshot(restoreID: UUID())
         var restore = try XCTUnwrap(legacySnapshot.restore)
-        restore.phase = .superseded
+        restore.plantJournalPhase(.superseded)
         restore.supersededBy = UUID()
         restore.failureReason = .legacyProjectionEvidenceUnavailable
         let generationURL = try XCTUnwrap(legacySnapshot.transfer?.destinationURL)
@@ -2468,7 +2468,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         defer { fixture.cleanUp() }
         let legacySnapshot = try fixture.legacyReviewSnapshot(restoreID: UUID())
         var transfer = try XCTUnwrap(legacySnapshot.transfer)
-        transfer.state = .recoveryRequired
+        transfer.plantJournalState(.recoveryRequired)
         transfer.error = VaultTransferError(
             origin: .removingActiveCopy,
             reason: .unknown,
@@ -2639,7 +2639,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             var restore = legacySnapshot.restore
             switch blocker {
             case .destructiveRecovery:
-                transfer.state = .recoveryRequired
+                transfer.plantJournalState(.recoveryRequired)
                 transfer.error = VaultTransferError(
                     origin: .removingActiveCopy,
                     reason: .unknown,
@@ -2745,7 +2745,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             )
         try FileManager.default.createDirectory(at: exactGeneration, withIntermediateDirectories: true)
         transfer.destinationURL = exactGeneration
-        transfer.state = .archiveVerified
+        transfer.plantJournalState(.archiveVerified)
         transfer.error = nil
         transfer.manifest = VaultManifest(entries: [])
         transfer.manifestID = transfer.manifest?.id
@@ -2938,7 +2938,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             var transfer = try XCTUnwrap(fixture.snapshot.transfer)
             transfer.sourceURL = fixture.song.folderPath
             transfer.destinationURL = destinationURL
-            transfer.state = .archiveVerified
+            transfer.plantJournalState(.archiveVerified)
             transfer.error = nil
             transfer.manifest = VaultManifest(entries: [])
             transfer.manifestID = transfer.manifest?.id
@@ -4884,7 +4884,7 @@ private struct ProjectVaultViewModelFixture {
             )
         try FileManager.default.createDirectory(at: generation, withIntermediateDirectories: true)
         transfer.destinationURL = generation
-        transfer.state = .archiveVerified
+        transfer.plantJournalState(.archiveVerified)
         transfer.error = nil
         transfer.manifest = VaultManifest(entries: [])
         transfer.manifestID = transfer.manifest?.id
@@ -5225,7 +5225,7 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
         var transfer = snapshot.transfer
         if let retryFailureState {
             if var updatedTransfer = transfer {
-                updatedTransfer.state = retryFailureState
+                updatedTransfer.plantJournalState(retryFailureState)
                 if retryFailureState == .recoveryRequired {
                     updatedTransfer.error = VaultTransferError(
                         origin: .copyingToArchiveStaging,
@@ -5236,7 +5236,7 @@ private actor RecordingProjectVaultRuntime: ProjectVaultOperating {
                 transfer = updatedTransfer
             }
         } else {
-            transfer?.state = .archiveVerified
+            transfer?.plantJournalState(.archiveVerified)
             transfer?.error = nil
             transfer?.nextRetryAt = nil
         }

@@ -81,7 +81,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let before = try VaultManifestBuilder().build(at: fixture.project)
         let snapshot = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         var record = try XCTUnwrap(snapshot.transfer)
-        record.state = .recoveryRequired
+        record.plantJournalState(.recoveryRequired)
         record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
         try fixture.transferStore().save(record)
         let projectFile = try XCTUnwrap(before.entries.first { $0.relativePath.hasSuffix(".cpr") })
@@ -104,7 +104,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let runtime = try fixture.runtime(projectOpener: RuntimeNoopVaultProjectOpener(), now: { fixed })
         let snapshot = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         var record = try XCTUnwrap(snapshot.transfer)
-        record.state = .recoveryRequired
+        record.plantJournalState(.recoveryRequired)
         record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
         try fixture.transferStore().save(record)
 
@@ -142,7 +142,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let before = try VaultManifestBuilder().build(at: fixture.project)
         let snapshot = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         var record = try XCTUnwrap(snapshot.transfer)
-        record.state = .recoveryRequired
+        record.plantJournalState(.recoveryRequired)
         record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
         try fixture.transferStore().save(record)
         let projectFile = try XCTUnwrap(before.entries.first { $0.relativePath.hasSuffix(".cpr") })
@@ -173,7 +173,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let before = try VaultManifestBuilder().build(at: fixture.project)
         let snapshot = try await archiver.archive(song: fixture.song, trigger: .backupCopy)
         var record = try XCTUnwrap(snapshot.transfer)
-        record.state = .recoveryRequired
+        record.plantJournalState(.recoveryRequired)
         record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
         try fixture.transferStore().save(record)
         let projectFile = try XCTUnwrap(before.entries.first { $0.relativePath.hasSuffix(".cpr") })
@@ -214,7 +214,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let before = try VaultManifestBuilder().build(at: fixture.project)
         let snapshot = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         var record = try XCTUnwrap(snapshot.transfer)
-        record.state = .recoveryRequired
+        record.plantJournalState(.recoveryRequired)
         record.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
         try fixture.transferStore().save(record)
 
@@ -480,7 +480,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: false, emergencyStop: false)
         let store = try fixture.transferStore()
         var record = try fixture.failedDurabilityRecord()
-        record.state = .awaitingProviderDurability
+        record.plantJournalState(.awaitingProviderDurability)
         record.error = nil
         record.retryCount = 10
         record.nextRetryAt = Date().addingTimeInterval(60)
@@ -583,7 +583,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         let archived = try await runtime.archive(song: fixture.song, trigger: .backupCopy)
         let store = try fixture.transferStore()
         var removal = try XCTUnwrap(archived.transfer)
-        removal.state = .recoveryRequired
+        removal.plantJournalState(.recoveryRequired)
         removal.error = .init(origin: .removingActiveCopy, reason: .unknown, message: "Interrupted")
         try store.save(removal)
         let template = try fixture.failedDurabilityRecord()
@@ -1415,7 +1415,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
         defer { fixture.cleanup() }
         try fixture.saveSettings(stage: .privateBeta, backupConfirmed: true)
         var interrupted = try fixture.failedDurabilityRecord()
-        interrupted.state = .removingActiveCopy
+        interrupted.plantJournalState(.removingActiveCopy)
         interrupted.error = nil
         try fixture.transferStore().save(interrupted)
         let unreadableTransferID = UUID()
@@ -2216,7 +2216,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
             destinationURL: fixture.active.appendingPathComponent("Restored/Synthetic Song"),
             manifest: manifest
         )
-        restore.phase = .verifyingActiveStaging
+        restore.plantJournalPhase(.verifyingActiveStaging)
         try fixture.transferStore().saveRestore(restore)
 
         let snapshots = try await fixture.runtime().snapshots()
@@ -2390,7 +2390,7 @@ final class LiveProjectVaultRuntimeTests: XCTestCase {
 
             let first = try await initialRuntime.archive(song: fixture.song, trigger: .backupCopy)
             var terminal = try XCTUnwrap(first.transfer)
-            terminal.state = unusable.isOnline ? .archivedOnlineOnly : .archivedLocal
+            terminal.plantJournalState(unusable.isOnline ? .archivedOnlineOnly : .archivedLocal)
             terminal.durability = unusable.isOnline ? .syncedToProvider : .verifiedLocal
             try fixture.transferStore().save(terminal)
             let firstVerification = try fixture.settingsStore

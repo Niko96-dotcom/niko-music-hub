@@ -137,7 +137,7 @@ final class SQLiteVaultTransferStoreTests: XCTestCase {
             manifest: manifest,
             createdAt: Date(timeIntervalSince1970: 100)
         )
-        retired.phase = .superseded
+        retired.plantJournalPhase(.superseded)
         retired.supersededBy = UUID()
         try store.saveRestore(retired)
 
@@ -228,7 +228,7 @@ final class SQLiteVaultTransferStoreTests: XCTestCase {
             manifest: VaultManifest(entries: []),
             createdAt: Date(timeIntervalSince1970: 100)
         )
-        readable.phase = .copyingToActiveStaging
+        readable.plantJournalPhase(.copyingToActiveStaging)
         try store.saveRestore(readable)
         let unreadableID = UUID()
         let unreadableProjectID = ProjectID()
@@ -267,7 +267,7 @@ final class SQLiteVaultTransferStoreTests: XCTestCase {
                 manifest: VaultManifest(entries: []),
                 createdAt: Date(timeIntervalSince1970: 100)
             )
-            record.phase = .copyingToActiveStaging
+            record.plantJournalPhase(.copyingToActiveStaging)
             record.updatedAt = Date(timeIntervalSince1970: updatedAt)
             return record
         }
@@ -311,7 +311,7 @@ final class SQLiteVaultTransferStoreTests: XCTestCase {
         let store = try SQLiteVaultTransferStore(databaseURL: root.appendingPathComponent("vault.sqlite"))
         var record = makeRecord(root: root, state: .archiveEligible)
         try store.save(record)
-        record.state = .preparingArchive
+        record.plantJournalState(.preparingArchive)
         record.retryCount = 1
         try store.save(record)
 

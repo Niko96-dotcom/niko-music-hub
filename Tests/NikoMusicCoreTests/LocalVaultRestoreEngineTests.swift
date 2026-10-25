@@ -480,7 +480,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var archivedLocal = fixture.archiveRecord
-        archivedLocal.state = .archivedLocal
+        archivedLocal.plantJournalState(.archivedLocal)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let events = VaultRestoreEventLog()
         let provider = VaultRestoreProviderSpy(
@@ -523,7 +523,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var archivedLocal = fixture.archiveRecord
-        archivedLocal.state = .archivedLocal
+        archivedLocal.plantJournalState(.archivedLocal)
         try Data("changed-after-manifest".utf8).write(
             to: fixture.generation.appendingPathComponent("Synthetic Song.cpr")
         )
@@ -575,7 +575,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         try Data("changed-after-manifest".utf8).write(
             to: fixture.generation.appendingPathComponent("Synthetic Song.cpr")
         )
@@ -697,7 +697,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         try FileManager.default.copyItem(at: fixture.generation, to: generation)
         var onlineOnly = fixture.archiveRecord
         onlineOnly.destinationURL = generation
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         let outside = fixture.root.appendingPathComponent("outside-provider-generation", isDirectory: true)
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
         try Data("sentinel".utf8).write(to: outside.appendingPathComponent("sentinel.txt"))
@@ -745,7 +745,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let admission = VaultRestoreAdmissionRecorder()
         let events = VaultRestoreEventLog()
@@ -987,7 +987,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let events = VaultRestoreEventLog()
         let admission = VaultRestoreAdmissionRecorder()
@@ -1020,7 +1020,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let events = VaultRestoreEventLog()
         let provider = VaultRestoreProviderSpy(events: events, supportsMaterialization: true)
@@ -1208,7 +1208,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         let archiveBefore = try fixture.snapshot(at: fixture.generation)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let events = VaultRestoreEventLog()
@@ -1255,7 +1255,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         let archiveBefore = try fixture.snapshot(at: fixture.generation)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let events = VaultRestoreEventLog()
@@ -1304,7 +1304,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var onlineOnlyRecord = fixture.archiveRecord
-        onlineOnlyRecord.state = .archivedOnlineOnly
+        onlineOnlyRecord.plantJournalState(.archivedOnlineOnly)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let events = VaultRestoreEventLog()
         let workspace = VaultRestoreWorkspaceSpy(events: events)
@@ -1333,7 +1333,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let fixture = try VaultRestoreFixture()
         defer { fixture.remove() }
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         let archiveBefore = try fixture.snapshot(at: fixture.generation)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         let events = VaultRestoreEventLog()
@@ -1416,7 +1416,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         defer { fixture.remove() }
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         var archive = fixture.archiveRecord
-        archive.state = .archivedOnlineOnly
+        archive.plantJournalState(.archivedOnlineOnly)
         archive.durability = .syncedToProvider
         try store.save(archive)
         let restoreID = UUID()
@@ -1502,7 +1502,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         defer { fixture.remove() }
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         var archive = fixture.archiveRecord
-        archive.state = .archivedOnlineOnly
+        archive.plantJournalState(.archivedOnlineOnly)
         archive.durability = .syncedToProvider
         try store.save(archive)
         let restoreID = UUID()
@@ -1574,7 +1574,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         defer { fixture.remove() }
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         var archive = fixture.archiveRecord
-        archive.state = .archivedOnlineOnly
+        archive.plantJournalState(.archivedOnlineOnly)
         archive.durability = .syncedToProvider
         try store.save(archive)
         let restoreID = UUID()
@@ -1670,7 +1670,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         defer { fixture.remove() }
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         var archive = fixture.archiveRecord
-        archive.state = .archiveVerified
+        archive.plantJournalState(.archiveVerified)
         try store.save(archive)
         let restoreID = UUID()
         let staging = fixture.active
@@ -1748,7 +1748,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         defer { fixture.remove() }
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         var archive = fixture.archiveRecord
-        archive.state = .archivedOnlineOnly
+        archive.plantJournalState(.archivedOnlineOnly)
         archive.durability = .syncedToProvider
         try store.save(archive)
         let olderID = UUID()
@@ -2165,7 +2165,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         let archiveBefore = try fixture.snapshot(at: fixture.generation)
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         try store.save(onlineOnly)
         let events = VaultRestoreEventLog()
         let workspace = VaultRestoreWorkspaceSpy(events: events)
@@ -2227,7 +2227,7 @@ final class LocalVaultRestoreEngineTests: XCTestCase {
         defer { fixture.remove() }
         let store = try SQLiteVaultTransferStore(databaseURL: fixture.databaseURL)
         var onlineOnly = fixture.archiveRecord
-        onlineOnly.state = .archivedOnlineOnly
+        onlineOnly.plantJournalState(.archivedOnlineOnly)
         try store.save(onlineOnly)
         let events = VaultRestoreEventLog()
         let workspace = VaultRestoreWorkspaceSpy(events: events)

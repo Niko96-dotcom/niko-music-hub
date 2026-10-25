@@ -30,6 +30,46 @@ final class VaultRestorePhaseTests: XCTestCase {
         }
     }
 
+    /// A record's phase changes only through `changePhase(to:)`, which takes the change from the
+    /// table: from every phase to every phase, a listed change moves the record and an unlisted one
+    /// throws and leaves the record as it was. A new record starts in `materializingArchive`.
+    func testRecordPhaseChangesOnlyThroughTheTable() throws {
+        func record(in phase: VaultRestorePhase?) -> VaultRestoreRecord {
+            let id = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+            let projectID = ProjectID()
+            let generation = URL(fileURLWithPath: "/Vault/generation", isDirectory: true)
+            let staging = URL(fileURLWithPath: "/Active/staging", isDirectory: true)
+            let destination = URL(fileURLWithPath: "/Active/Song", isDirectory: true)
+            let manifest = VaultManifest(id: id, createdAt: Date(timeIntervalSinceReferenceDate: 0), entries: [])
+            guard let phase else {
+                return VaultRestoreRecord(
+                    id: id, projectID: projectID, archiveGenerationURL: generation, stagingURL: staging,
+                    destinationURL: destination, manifest: manifest
+                )
+            }
+            return VaultRestoreRecord(
+                id: id, projectID: projectID, archiveGenerationURL: generation, stagingURL: staging,
+                destinationURL: destination, manifest: manifest, phase: phase
+            )
+        }
+        XCTAssertEqual(record(in: nil).phase, .materializingArchive)
+        for phase in VaultRestorePhase.allCases {
+            for next in VaultRestorePhase.allCases {
+                var changed = record(in: phase)
+                let before = changed
+                if VaultRestorePhase.allowedNextPhases[phase, default: []].contains(next) {
+                    try changed.changePhase(to: next)
+                    XCTAssertEqual(changed.phase, next, "\(phase) -> \(next)")
+                } else {
+                    XCTAssertThrowsError(try changed.changePhase(to: next), "\(phase) -> \(next)") {
+                        XCTAssertEqual($0 as? VaultTransitionError, .illegalRestorePhase(from: phase, to: next))
+                    }
+                    XCTAssertEqual(changed, before, "a refused change keeps the record: \(phase) -> \(next)")
+                }
+            }
+        }
+    }
+
     func testTableRejectsChangesNoPathMakes() {
         let illegal: [VaultRestoreEdge] = [
             .init(.materializingArchive, .promotingActiveCopy),

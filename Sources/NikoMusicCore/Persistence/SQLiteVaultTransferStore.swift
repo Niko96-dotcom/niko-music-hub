@@ -304,7 +304,7 @@ public struct SQLiteVaultTransferStore: VaultTransferStoring, VaultArchiveGenera
                 guard let winner = component.max(by: Self.isOlderRestoreCandidate) else { continue }
                 for loser in component where loser.id != winner.id {
                     var retired = loser
-                    retired.phase = try loser.phase.checkedChange(to: .superseded)
+                    try retired.changePhase(to: .superseded)
                     retired.supersededBy = winner.id
                     let data = try encoded(retired)
                     try upsertRestore(retired, data: data, on: db)

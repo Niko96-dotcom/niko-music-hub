@@ -182,7 +182,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Vault presentation, automatic recovery and the "Show archived" choice | `ArchiveVaultObservation` | derived; the choice in memory |
 | Archive Vault dialogs (archive/Done confirmation and its authorization capture, restore sheet and progress, identity review, stop transfer, stopped for quit) | `ArchiveVaultDialogsModel`, held as `ArchiveBrowserViewModel.vaultDialogs` | memory |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
-| Vault transfer state, restore phase | the tables `ProjectVaultStateMachine` and `VaultRestorePhase.allowedNextPhases`; written only by each engine's `checkAndSave` and the restore reconcile ([architecture.md § Vault state changes](architecture.md#vault-state-changes)) | `vault_transfers`, `vault_restores` in `archive-index.sqlite` |
+| Vault transfer state, restore phase | the tables `ProjectVaultStateMachine` and `VaultRestorePhase.allowedNextPhases`; written only by each record's checked writer (`VaultTransferRecord.apply(_:)`, `VaultRestoreRecord.changePhase(to:)`), which each engine's `checkAndSave` and the restore reconcile call ([architecture.md § Vault state changes](architecture.md#vault-state-changes)) | `vault_transfers`, `vault_restores` in `archive-index.sqlite` |
 | Archive file access results (nearby open error, last dry-run path, last export paths) | `ArchiveFileAccessModel`, held as `ArchiveBrowserViewModel.fileAccess` | memory |
 | Collaborator address book as the archive shows it, and a staged removal | `ArchiveAddressBookModel`, held as `ArchiveBrowserViewModel.addressBook`, over `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive intelligence (collaborator suggestions and their dismissals, duplicate hints, missing audio) | `ArchiveIntelligenceModel`, held as `ArchiveBrowserViewModel.intelligence` | memory |
@@ -261,6 +261,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | the compiler (the stored keys are `private` to `KeepLocalPins`), `KeepLocalPinsSourceTests` (keeps them private), `KeepLocalPinsTests` |
 | A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
 | Archive views state intent; only `ArchivePageModel` writes the archive page, and the song detail and the cards use the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `private(set)` setters, `ArchiveViewIntentSourceTests`; `ArchiveVaultObservationTests` (each card offers a status change exactly when the gate accepts it) |
+| A transfer's state and a restore's phase change only through their table, in the record's checked writer | [architecture.md § Vault state changes](architecture.md#vault-state-changes) | the compiler (`state` and `phase` are `private(set)`), `VaultStateWriterSourceTests` (keeps them private; the record files assign nowhere else), `ProjectVaultStateMachineTests`, `VaultRestorePhaseTests` |
 | The archive song catalog is written only through `applyCatalogEdit(_:)` | [architecture.md § Archive song catalog](architecture.md#archive-song-catalog) | the compiler (`songCatalog`'s setter is private to its file), `SongCatalogTests`, `ArchiveCatalogEditTests` |
 | A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [architecture.md § SwiftUI state ownership](architecture.md#swiftui-state-ownership) | `SwiftUIStateOwnershipSourceTests` |
@@ -310,7 +311,9 @@ These rules are documented and, where named, enforced. The full table is in
    copy (main flow step 7; [architecture.md § Project Vault bound authorization](architecture.md#project-vault-bound-authorization)).
 9. Closed on 2026-10-24: every transfer state and restore phase change goes through its table, and each engine's
    `checkAndSave` (plus the restore reconcile) is the only writer; an unlisted edge throws before anything is saved
-   ([architecture.md § Vault state changes](architecture.md#vault-state-changes)).
+   ([architecture.md § Vault state changes](architecture.md#vault-state-changes)). Since 2026-10-25 the compiler
+   enforces it: `state` and `phase` are `private(set)`, and the record's own `apply(_:)` or `changePhase(to:)` is the
+   one writer those callers use.
 10. Closed on 2026-10-24: a plain Esc on a tool page cancels what Edit ▸ Cancel cancels. AppKit offers a key
     without ⌘ to the menu only while no window is key, so the menu item never got it; the visible
     `HubInspectorPage` now binds the shell's Esc (`HubShellEscape`) while it has no enabled cancel key. Checked live
