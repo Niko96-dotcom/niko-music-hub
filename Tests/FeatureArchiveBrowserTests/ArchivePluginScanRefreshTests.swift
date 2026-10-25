@@ -33,13 +33,13 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if let selected = viewModel.selectedSong,
-               let summary = viewModel.cprPluginSummary(for: selected) {
+               let summary = viewModel.songAnalysis.pluginSummary(for: selected) {
                 return summary
             }
             try? await Task.sleep(nanoseconds: 20_000_000)
         }
         if let selected = viewModel.selectedSong {
-            return viewModel.cprPluginSummary(for: selected)
+            return viewModel.songAnalysis.pluginSummary(for: selected)
         }
         return nil
     }
@@ -82,7 +82,7 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
         // where only the UNRELATED song's CPR changed. The shared cancel in
         // the unrelated invalidation kills the pending selected task; the
         // fixed scan host must restart the selected summary.
-        viewModel.refreshCPRPluginSummary(for: selected)
+        viewModel.songAnalysis.refreshPluginSummary(for: selected)
 
         let unrelatedV2 = ProjectVersion(
             filePath: unrelatedCPRURL,
@@ -143,7 +143,7 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
         viewModel.applyCatalogEdit(.load([selected, unrelated]))
         viewModel.selectedSong = selected
         viewModel.pluginsSectionExpanded = true
-        viewModel.refreshCPRPluginSummary(for: selected)
+        viewModel.songAnalysis.refreshPluginSummary(for: selected)
         let first = await waitForPlugins(viewModel)
         XCTAssertNotNil(first)
 
@@ -167,7 +167,7 @@ final class ArchivePluginScanRefreshTests: XCTestCase {
         viewModel.applyCatalogScanUpdate(update, roots: [])
 
         XCTAssertTrue(viewModel.pluginsSectionExpanded)
-        let cached = viewModel.selectedSong.flatMap { viewModel.cprPluginSummary(for: $0) }
+        let cached = viewModel.selectedSong.flatMap { viewModel.songAnalysis.pluginSummary(for: $0) }
         XCTAssertNotNil(cached)
         XCTAssertEqual(Set(cached?.pluginNames ?? []), ["Comp", "EQ"])
     }

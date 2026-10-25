@@ -47,15 +47,4 @@ extension ArchiveBrowserViewModel: ArchiveScanHost {
         refreshAfterCatalogChange()
         diagnostics.log(.error, statusMessage ?? "scan failed")
     }
-
-    func mainPreviewModifiedAt(for song: Song) -> Date? {
-        guard let previewID = song.mainPreviewCandidateID,
-              let candidate = song.previewCandidates.first(where: { $0.id == previewID }) else { return nil }
-        return candidate.modifiedAt
-    }
-
-    func effectiveCPRIdentity(for song: Song) -> (path: String, modifiedAt: Date)? {
-        guard let cpr = song.effectiveLatestCPR else { return nil }
-        return (cpr.filePath.standardizedFileURL.path, cpr.modifiedAt)
-    }
 }

@@ -4330,7 +4330,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             return
         }
         let cacheKey = "\(neon.id)|\(previewID)"
-        viewModel.mixdownBPMBySongID[cacheKey] = MixdownBPMEstimate(bpm: 120, confidence: "test")
+        viewModel.songAnalysis.storeMixdownEstimates(cacheKey: cacheKey, bpm: MixdownBPMEstimate(bpm: 120, confidence: "test"), key: nil)
 
         var refreshed = neon
         guard let previewIndex = refreshed.previewCandidates.firstIndex(where: { $0.id == previewID }) else {
@@ -4361,7 +4361,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
             roots: viewModel.roots
         )
 
-        XCTAssertNil(viewModel.mixdownBPMBySongID[cacheKey])
+        XCTAssertNil(viewModel.songAnalysis.mixdownBPMBySongID[cacheKey])
     }
     /// ENG-04 / ADR-019 (T17): queued and running Vault operations reach quit through
     /// the job center, and quit's cancel stops them without the stop-transfer sheet.

@@ -135,7 +135,7 @@ struct SongDetailView: View {
                 // Already expanded means no false→true change below, so ask
                 // here: the main project may have changed since the last visit.
                 if viewModel.pluginsSectionExpanded {
-                    viewModel.refreshCPRPluginSummary(for: liveSong)
+                    viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
                 } else {
                     viewModel.pluginsSectionExpanded = true
                 }
@@ -143,7 +143,7 @@ struct SongDetailView: View {
         }
         .onChange(of: liveSong.effectiveLatestCPR?.filePath) { _, _ in
             if viewModel.pluginsSectionExpanded {
-                viewModel.refreshCPRPluginSummary(for: liveSong)
+                viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
             }
         }
         // Identity is per song (`.id(song.id)` at the call sites), so a song
@@ -163,11 +163,11 @@ struct SongDetailView: View {
         }
         .onChange(of: liveSong.mainPreviewCandidateID) { _, _ in
             previewCandidatePage = 0
-            viewModel.refreshMixdownAnalysis(for: liveSong)
+            viewModel.songAnalysis.refreshMixdown(for: liveSong)
         }
         .onChange(of: viewModel.pluginsSectionExpanded) { _, expanded in
             if expanded {
-                viewModel.refreshCPRPluginSummary(for: liveSong)
+                viewModel.songAnalysis.refreshPluginSummary(for: liveSong)
             }
         }
     }
@@ -366,14 +366,14 @@ struct SongDetailView: View {
 
     private var essentialInfo: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let estimate = viewModel.bpmEstimate(for: liveSong) {
+            if let estimate = viewModel.songAnalysis.bpmEstimate(for: liveSong) {
                 infoLine(
                     label: "Mixdown BPM",
                     value: "\(String(format: "%.1f", estimate.bpm)) (\(estimate.confidence))"
                 )
             }
 
-            if let key = viewModel.keyEstimate(for: liveSong) {
+            if let key = viewModel.songAnalysis.keyEstimate(for: liveSong) {
                 infoLine(
                     label: "Key",
                     value: "\(key.key) (\(key.confidence))"
@@ -701,7 +701,7 @@ struct SongDetailView: View {
     }
 
     private var pluginsSection: some View {
-        let summary = viewModel.cprPluginSummary(for: liveSong)
+        let summary = viewModel.songAnalysis.pluginSummary(for: liveSong)
         // Loading only when a read can still complete: a latest CPR exists but
         // its summary has not arrived. No-project stays on the quiet empty line
         // instead of a perpetual loading state; a finished empty read is also

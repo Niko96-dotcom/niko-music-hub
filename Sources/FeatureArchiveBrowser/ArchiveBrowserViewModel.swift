@@ -26,11 +26,16 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     let identityReviewViewModel: ProjectIdentityReviewViewModel
     let catalog: ArchiveCatalogCoordinator
     let browseRefreshDriver: ArchiveBrowseRefreshDriver
-    let mixdownAnalysis = ArchiveMixdownAnalysisCoordinator()
     /// The archive's playback owner. Every write of `selectedSong` reaches it, and every
     /// view that shows playback gets it from here. It pauses on the context's recording signal.
     let previewSession: ArchivePreviewSession
-    let cprPlugins: ArchiveCPRPluginCoordinator
+    /// BPM/key of the main preview and the project's plug-ins, with the rules
+    /// that keep those caches true to the catalog. Reads only the selection.
+    private(set) lazy var songAnalysis = ArchiveSongAnalysisModel(
+        plugins: ArchiveCPRPluginCoordinator(processRunner: processRunner),
+        selectedSong: { [weak self] in self?.selectedSong }
+    )
+    private let processRunner: any StreamingExternalProcessRunning
     let opener: MusicItemOpener
     let pathSafety = PathSafety()
     let fileActions: any FileActions
@@ -104,8 +109,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     ///
     /// - a new visible list rebuilds the Vault card cache, then publishes;
     /// - any change recomputes the browse results (they reconcile the
-    ///   selection), refreshes intelligence and open analytics, and updates
-    ///   the per-song caches;
+    ///   selection), refreshes intelligence and open analytics, and lets the
+    ///   song analysis follow it (`ArchiveSongAnalysisModel.follow`);
     /// - `.load`, `.rescan` and `.add` sync the repair state;
     /// - `.rescan` and `.add` persist the index (a rescan even when the songs are
     ///   equal, because the index carries the scan date), `.reproject` when the
@@ -145,7 +150,11 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             }
             songCatalog = next
             refreshAfterCatalogChange()
-            updatePerSongCaches(for: change)
+            songAnalysis.follow(
+                change,
+                remainingSongIDs: { Set(songs.map(\.id)) },
+                pluginsSectionExpanded: pluginsSectionExpanded
+            )
         }
         switch edit {
         case .load:
@@ -241,9 +250,6 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     /// SwiftUI updates flow through the observation bridge in
     /// `wireVaultObservation()`.
     var archivedProjectCount: Int { vaultObservation.archivedCount }
-    @Published var mixdownBPMBySongID: [String: MixdownBPMEstimate] = [:]
-    @Published var mixdownKeyBySongID: [String: MixdownKeyEstimate] = [:]
-    @Published var cprPluginSummaryByCPRPath: [String: CPRPluginSummary] = [:]
     @Published var pluginsSectionExpanded = false
     /// Single metadata-editing owner for mutation/gate/persistence ordering,
     /// notes/status undo, repair IDs, and delayed index persistence. All
@@ -424,6 +430,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var vaultOperationsCancellable: AnyCancellable?
     var vaultObservationCancellable: AnyCancellable?
     var metadataEditingCancellable: AnyCancellable?
+    var songAnalysisCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -545,7 +552,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         self.fileActions = context.fileActions
         self.jobStatusCenter = context.jobStatusCenter
         self.previewSession = ArchivePreviewSession(capture: context.audioCaptureActivity)
-        self.cprPlugins = ArchiveCPRPluginCoordinator(processRunner: context.processRunner)
+        self.processRunner = context.processRunner
         self.collaboratorStore = collaboratorStore
         self.archiveRootWatcher = archiveRootWatcher
         self.runtime = runtime
@@ -574,6 +581,8 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         wireVaultOperationCoordinator()
         wireVaultObservation()
         wireMetadataEditing()
+        songAnalysisCancellable = songAnalysis.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
         loadRootsFromSettings()
         followStoredSettingsChanges()
         attachNavigationHistory(context.navigationHistory)

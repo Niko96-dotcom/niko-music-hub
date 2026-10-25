@@ -54,7 +54,8 @@ final class ArchiveLiquidSurfaceSourceTests: XCTestCase {
         XCTAssertTrue(viewModel.contains("reconcileSelectedSong"), "Browse/scan must reconcile selection")
         XCTAssertTrue(viewModel.contains("previewSession.clear()"), "Explicit lifecycle reset must stop playback")
         XCTAssertTrue(viewModel.contains("scheduleDebouncedIndexPersist"), "Metadata edits must debounce index writes")
-        XCTAssertTrue(viewModel.contains("mixdownAnalysisCacheKey"), "BPM/key must key off preview id")
+        let songAnalysis = try featureSource("ArchiveSongAnalysisModel.swift")
+        XCTAssertTrue(songAnalysis.contains("mixdownCacheKey"), "BPM/key must key off preview id")
 
         let browser = try featureSource("ArchiveBrowserView.swift")
         XCTAssertTrue(browser.contains("viewModel.songs.isEmpty"), "Archive remount must not unconditional full-scan")

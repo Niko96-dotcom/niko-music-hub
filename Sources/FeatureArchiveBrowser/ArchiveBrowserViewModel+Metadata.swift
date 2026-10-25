@@ -138,7 +138,7 @@ extension ArchiveBrowserViewModel {
         guard songs.first(where: { $0.id == song.id })?.previewCandidates.contains(where: { $0.id == candidateID }) == true else {
             return
         }
-        invalidateMixdownAnalysis(for: song.id)
+        songAnalysis.invalidateMixdown(for: song.id)
         if let path = songs.first(where: { $0.id == song.id })?
             .previewCandidates.first(where: { $0.id == candidateID })?.filePath {
             ArchivePreviewPlayer.invalidateMetadataCaches(for: path)
@@ -148,19 +148,19 @@ extension ArchiveBrowserViewModel {
             metadata.manualMainPreviewID = candidateID
         }
         if let updated = songs.first(where: { $0.id == song.id }) {
-            refreshMixdownAnalysis(for: updated)
+            songAnalysis.refreshMixdown(for: updated)
         }
     }
 
     func revertPreviewToAuto(for song: Song) {
-        invalidateMixdownAnalysis(for: song.id)
+        songAnalysis.invalidateMixdown(for: song.id)
         _ = applyMetadataMerge(for: song, rankingRefresh: .previewAuto) { metadata, scanned in
             metadata.previewSelectionMode = .auto
             metadata.manualMainPreviewID = nil
             scanned.previewSelectionMode = .auto
         }
         if let updated = songs.first(where: { $0.id == song.id }) {
-            refreshMixdownAnalysis(for: updated)
+            songAnalysis.refreshMixdown(for: updated)
         }
     }
 

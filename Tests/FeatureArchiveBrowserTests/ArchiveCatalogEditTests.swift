@@ -34,8 +34,8 @@ final class ArchiveCatalogEditTests: XCTestCase {
     private func seedPerSongCaches(for song: Song, in model: ArchiveBrowserViewModel) throws -> (mixdown: String, plugins: String) {
         let mixdownKey = try XCTUnwrap(ArchiveMixdownAnalysisCoordinator.cacheKey(for: song))
         let pluginsKey = try XCTUnwrap(song.effectiveLatestCPR).filePath.standardizedFileURL.path
-        model.mixdownBPMBySongID[mixdownKey] = MixdownBPMEstimate(bpm: 120, confidence: "low")
-        model.cprPluginSummaryByCPRPath[pluginsKey] = CPRPluginSummary(pluginNames: ["EQ"], source: "fixture")
+        model.songAnalysis.storeMixdownEstimates(cacheKey: mixdownKey, bpm: MixdownBPMEstimate(bpm: 120, confidence: "low"), key: nil)
+        model.songAnalysis.storePluginSummary(CPRPluginSummary(pluginNames: ["EQ"], source: "fixture"), forCPRPath: pluginsKey)
         return (mixdownKey, pluginsKey)
     }
 
@@ -95,10 +95,10 @@ final class ArchiveCatalogEditTests: XCTestCase {
         let change = model.applyCatalogEdit(.load([kept]))
 
         XCTAssertEqual(change.removed, [gone])
-        XCTAssertNil(model.mixdownBPMBySongID[goneKeys.mixdown])
-        XCTAssertNil(model.cprPluginSummaryByCPRPath[goneKeys.plugins])
-        XCTAssertNotNil(model.mixdownBPMBySongID[keptKeys.mixdown])
-        XCTAssertNotNil(model.cprPluginSummaryByCPRPath[keptKeys.plugins])
+        XCTAssertNil(model.songAnalysis.mixdownBPMBySongID[goneKeys.mixdown])
+        XCTAssertNil(model.songAnalysis.cprPluginSummaryByCPRPath[goneKeys.plugins])
+        XCTAssertNotNil(model.songAnalysis.mixdownBPMBySongID[keptKeys.mixdown])
+        XCTAssertNotNil(model.songAnalysis.cprPluginSummaryByCPRPath[keptKeys.plugins])
     }
 
     /// A root change empties the catalog, and the per-song caches with it.
@@ -112,8 +112,8 @@ final class ArchiveCatalogEditTests: XCTestCase {
 
         XCTAssertTrue(model.songs.isEmpty)
         XCTAssertTrue(model.scannedSongs.isEmpty)
-        XCTAssertTrue(model.mixdownBPMBySongID.isEmpty)
-        XCTAssertTrue(model.cprPluginSummaryByCPRPath.isEmpty)
+        XCTAssertTrue(model.songAnalysis.mixdownBPMBySongID.isEmpty)
+        XCTAssertTrue(model.songAnalysis.cprPluginSummaryByCPRPath.isEmpty)
     }
 
     /// An edit that moves the selected song out of the filtered list deselects it:

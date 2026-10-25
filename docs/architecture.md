@@ -139,6 +139,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 - [`ArchiveBrowserViewModel.swift`](../Sources/FeatureArchiveBrowser/ArchiveBrowserViewModel.swift): loaded roots (it follows the stored scan list, see [Archive scan list](#archive-scan-list)), browse, selection, scan host, and integration with metadata/Vault owners.
 - Vault operation extensions: `+ProjectVaultQueue.swift`, `+ProjectVaultArchive.swift`, `+ProjectVault.swift`, `+ProjectVaultActions.swift`, `+ProjectVaultRestore.swift`, `+ProjectVaultRecovery.swift`, `+Metadata.swift` (Done revoke), `+Scan.swift` (root-bound clears).
 - Coordinators: [`ArchiveScanOrchestrator`](../Sources/FeatureArchiveBrowser/ArchiveScanOrchestrator.swift), [`ArchiveCatalogCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveCatalogCoordinator.swift), [`ProjectVaultOperationCoordinator`](../Sources/FeatureArchiveBrowser/ProjectVaultOperationCoordinator.swift), [`ArchiveMetadataEditingCoordinator`](../Sources/FeatureArchiveBrowser/ArchiveMetadataEditingCoordinator.swift) (song-metadata mutation ordering), [`ArchiveVaultObservation`](../Sources/FeatureArchiveBrowser/ArchiveVaultObservation.swift) (Vault observation/presentation).
+- State owners the view model composes (each an `ObservableObject` whose publishes the view model forwards, so views keep observing the view model): [`ArchiveSongAnalysisModel`](../Sources/FeatureArchiveBrowser/ArchiveSongAnalysisModel.swift) (BPM/key of the main preview and the project's plug-ins, and the rules that keep those caches true to the catalog).
 - Playback: [`ArchivePreviewSession`](../Sources/FeatureArchiveBrowser/ArchivePreviewSession.swift), held by the view model (see [Archive preview playback](#archive-preview-playback)).
 - Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
 - A board lane is an `NSTableView` (`ArchiveBoardNativeSongList`) with reusable rows; each row hosts the unchanged
@@ -215,7 +216,8 @@ The remaining ownership is intentional:
 | --- | --- |
 | View model: catalog/browse | The song catalog through `applyCatalogEdit(_:)` (see [Archive song catalog](#archive-song-catalog)), selected shelf/filter/search state, prepared search index and selection reconciliation. Owners read current inputs and return results rather than keeping a second catalog. |
 | View model: roots/scan host | Roots, bookmarks, root generation and scan-result application; `ArchiveScanOrchestrator` owns scan execution. |
-| View model: UI integration | Selection/navigation (see [Archive page state](#archive-page-state)), playback and preview-analysis invalidation, collaborator/intelligence projections, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
+| View model: UI integration | Selection/navigation (see [Archive page state](#archive-page-state)), playback, collaborator/intelligence projections, exports, and the footer methods (the footer rules belong to `ArchiveFooterStatus`). |
+| `ArchiveSongAnalysisModel` | BPM/key and plug-in caches, their two loaders, and the rule that a result lands only for the selected song. The catalog writer hands it each `SongCatalogChange`; a metadata edit that changes the main preview invalidates through it. |
 | View model: Vault authorization | Capture/confirmation/restore presentation, runtime dispatch, and the Done revocation bridge. Metadata commands request Done capture or revocation through callbacks; they do not create or reuse authorization. |
 | `ProjectVaultOperationCoordinator` | Queue, active/busy state, cancellation, retry and capacity accounting. The observation and editing owners do not mutate its storage. |
 | `ArchiveCatalogCoordinator` | Scan reconciliation, persistence and per-song metadata integrity. The editing owner controls transaction ordering above this layer. |
@@ -254,8 +256,8 @@ reports a `SongCatalogChange`: the changed songs with their old values and the r
   batch) and `clear` (a root change). All but `replace` and `clear` run the Vault projection.
 - The follow-up work of a change lives in that function. A new visible list rebuilds the Vault card cache before it
   publishes. Every change recomputes the browse results (they reconcile the selection), refreshes intelligence and
-  open analytics, and updates the per-song caches (`updatePerSongCaches(for:)`: changed and removed songs only, never
-  new ones). `load`, `rescan` and `add` sync the repair state; `rescan` and `add` persist the index, and `reproject`
+  open analytics, and lets the song analysis follow it (`ArchiveSongAnalysisModel.follow`: changed and removed songs
+  only, never new ones). `load`, `rescan` and `add` sync the repair state; `rescan` and `add` persist the index, and `reproject`
   does when it changed the baseline. Edits leave the index persist to `ArchiveMetadataEditingCoordinator`.
 - Equal lists stay as held: an unchanged 10,000-song rescan keeps one copy of the catalog and reports an empty
   change. The scan shares unchanged song values with the held baseline before it projects.

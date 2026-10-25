@@ -62,8 +62,8 @@ final class ArchiveRescanApplyTests: XCTestCase {
         let model = makeModel(songs)
         let changedKey = try XCTUnwrap(ArchiveMixdownAnalysisCoordinator.cacheKey(for: songs[7]))
         let untouchedKey = try XCTUnwrap(ArchiveMixdownAnalysisCoordinator.cacheKey(for: songs[8]))
-        model.mixdownBPMBySongID[changedKey] = MixdownBPMEstimate(bpm: 120, confidence: "high")
-        model.mixdownBPMBySongID[untouchedKey] = MixdownBPMEstimate(bpm: 90, confidence: "high")
+        model.songAnalysis.storeMixdownEstimates(cacheKey: changedKey, bpm: MixdownBPMEstimate(bpm: 120, confidence: "high"), key: nil)
+        model.songAnalysis.storeMixdownEstimates(cacheKey: untouchedKey, bpm: MixdownBPMEstimate(bpm: 90, confidence: "high"), key: nil)
 
         var next = songs
         next[7] = makeSong(7, mainPreview: "master")
@@ -71,8 +71,8 @@ final class ArchiveRescanApplyTests: XCTestCase {
 
         XCTAssertEqual(model.songs[7].mainPreviewCandidateID, next[7].mainPreviewCandidateID)
         XCTAssertEqual(model.filteredSongs.count, 50)
-        XCTAssertNil(model.mixdownBPMBySongID[changedKey], "the song's main preview changed")
-        XCTAssertNotNil(model.mixdownBPMBySongID[untouchedKey], "an unchanged song keeps its analysis")
+        XCTAssertNil(model.songAnalysis.mixdownBPMBySongID[changedKey], "the song's main preview changed")
+        XCTAssertNotNil(model.songAnalysis.mixdownBPMBySongID[untouchedKey], "an unchanged song keeps its analysis")
     }
 
     func testChangedProjectInvalidatesItsPluginSummaryOnly() {
@@ -80,8 +80,8 @@ final class ArchiveRescanApplyTests: XCTestCase {
         let model = makeModel(songs)
         let oldPath = songs[3].effectiveLatestCPR!.filePath.standardizedFileURL.path
         let otherPath = songs[4].effectiveLatestCPR!.filePath.standardizedFileURL.path
-        model.cprPluginSummaryByCPRPath[oldPath] = CPRPluginSummary(pluginNames: ["EQ"], source: "fixture")
-        model.cprPluginSummaryByCPRPath[otherPath] = CPRPluginSummary(pluginNames: ["Comp"], source: "fixture")
+        model.songAnalysis.storePluginSummary(CPRPluginSummary(pluginNames: ["EQ"], source: "fixture"), forCPRPath: oldPath)
+        model.songAnalysis.storePluginSummary(CPRPluginSummary(pluginNames: ["Comp"], source: "fixture"), forCPRPath: otherPath)
 
         var next = songs
         let newer = ProjectVersion(
@@ -91,8 +91,8 @@ final class ArchiveRescanApplyTests: XCTestCase {
         next[3].latestCPR = newer
         model.applyCatalogScanUpdate(update(model, songs: next), roots: [])
 
-        XCTAssertNil(model.cprPluginSummaryByCPRPath[oldPath])
-        XCTAssertNotNil(model.cprPluginSummaryByCPRPath[otherPath])
+        XCTAssertNil(model.songAnalysis.cprPluginSummaryByCPRPath[oldPath])
+        XCTAssertNotNil(model.songAnalysis.cprPluginSummaryByCPRPath[otherPath])
     }
 
     func testRemovedSongIsPrunedFromTheAnalysisCaches() throws {
@@ -100,16 +100,16 @@ final class ArchiveRescanApplyTests: XCTestCase {
         let model = makeModel(songs)
         let goneKey = try XCTUnwrap(ArchiveMixdownAnalysisCoordinator.cacheKey(for: songs[2]))
         let keptKey = try XCTUnwrap(ArchiveMixdownAnalysisCoordinator.cacheKey(for: songs[3]))
-        model.mixdownBPMBySongID[goneKey] = MixdownBPMEstimate(bpm: 100, confidence: "low")
-        model.mixdownBPMBySongID[keptKey] = MixdownBPMEstimate(bpm: 110, confidence: "low")
+        model.songAnalysis.storeMixdownEstimates(cacheKey: goneKey, bpm: MixdownBPMEstimate(bpm: 100, confidence: "low"), key: nil)
+        model.songAnalysis.storeMixdownEstimates(cacheKey: keptKey, bpm: MixdownBPMEstimate(bpm: 110, confidence: "low"), key: nil)
 
         var next = songs
         next.remove(at: 2)
         model.applyCatalogScanUpdate(update(model, songs: next), roots: [])
 
         XCTAssertEqual(model.songs.count, 9)
-        XCTAssertNil(model.mixdownBPMBySongID[goneKey])
-        XCTAssertNotNil(model.mixdownBPMBySongID[keptKey])
+        XCTAssertNil(model.songAnalysis.mixdownBPMBySongID[goneKey])
+        XCTAssertNotNil(model.songAnalysis.mixdownBPMBySongID[keptKey])
     }
 
     func testIntelligencePassStillRunsAfterAnUnchangedRescan() {

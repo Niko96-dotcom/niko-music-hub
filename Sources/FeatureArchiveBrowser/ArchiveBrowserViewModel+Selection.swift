@@ -7,7 +7,7 @@ import NikoMusicCore
 extension ArchiveBrowserViewModel {
     func selectSong(_ song: Song) {
         applySongSelection(song)
-        refreshMixdownAnalysis(for: song)
+        songAnalysis.refreshMixdown(for: song)
     }
 
     /// Return / Enter activate: board goes to fullscreen detail; list keeps list mode.
@@ -34,7 +34,7 @@ extension ArchiveBrowserViewModel {
         switch viewMode {
         case .list:
             applySongSelection(next)
-            refreshMixdownAnalysis(for: next)
+            songAnalysis.refreshMixdown(for: next)
         case .board:
             selectSongOnBoard(next)
         case .boardDetail, .analytics:
