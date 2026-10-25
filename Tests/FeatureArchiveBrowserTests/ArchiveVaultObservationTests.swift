@@ -132,6 +132,49 @@ final class ArchiveVaultObservationTests: XCTestCase {
         return ProjectVaultRuntimeSnapshot(record: record, transfer: transfer)
     }
 
+    /// A transfer record whose project still has its Active folder on this Mac.
+    private func makeActiveTransferSnapshot(
+        song: Song,
+        harness: Harness,
+        state: VaultTransferState,
+        pinned: Bool = false,
+        configure: (inout VaultTransferRecord) -> Void = { _ in }
+    ) -> ProjectVaultRuntimeSnapshot {
+        let recordID = ProjectID()
+        let record = ProjectRecord(
+            id: recordID,
+            canonicalTitle: song.effectiveDisplayTitle,
+            locations: [ProjectLocation(rootID: harness.activeID, relativePath: song.originalFolderName, kind: .active, availability: .local)],
+            pinned: pinned
+        )
+        var transfer = VaultTransferRecord(
+            projectID: recordID,
+            sourceURL: song.folderPath,
+            stagingURL: song.folderPath.appendingPathComponent(".nmh-test-staging"),
+            destinationURL: harness.archive.appendingPathComponent(recordID.description, isDirectory: true),
+            state: state
+        )
+        configure(&transfer)
+        return ProjectVaultRuntimeSnapshot(record: record, transfer: transfer)
+    }
+
+    /// A project restored to Active whose historical archive folder is `song`.
+    private func makeLinkedArchiveSnapshot(song: Song, harness: Harness) -> ProjectVaultRuntimeSnapshot {
+        let archiveLocation = ProjectLocation(rootID: harness.archiveID, relativePath: song.originalFolderName, kind: .archive, availability: .local)
+        let record = ProjectRecord(
+            canonicalTitle: song.effectiveDisplayTitle,
+            locations: [
+                ProjectLocation(rootID: harness.activeID, relativePath: song.originalFolderName, kind: .active, availability: .local),
+                archiveLocation,
+            ]
+        )
+        return ProjectVaultRuntimeSnapshot(
+            record: record,
+            transfer: nil,
+            linkedArchive: ProjectVaultLinkedArchive(location: archiveLocation, url: song.folderPath)
+        )
+    }
+
     private func makeViewModel(harness: Harness, runtime: ObservationTestRuntime, songs: [Song]) -> ArchiveBrowserViewModel {
         let viewModel = ArchiveBrowserViewModel(
             context: TestToolContext.make(settingsStore: harness.store),
@@ -345,6 +388,74 @@ final class ArchiveVaultObservationTests: XCTestCase {
         XCTAssertEqual(viewModel.projectVaultPresentation(for: song)?.state, .archiving)
         XCTAssertFalse(viewModel.blocksGenericProjectVaultFileActions(for: song), "the shorter rule would allow it")
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: song))
+    }
+
+    /// A restored project keeps its linked archive (the live runtime links it
+    /// whenever the project has no transfer), so the archive folder's card reads
+    /// Active while the Vault still holds that folder. The card's menu, drag and
+    /// VoiceOver actions must not offer the change the gate refuses.
+    func testLinkedArchiveFolderCardReadsActiveButOffersNoStatusChange() async throws {
+        let harness = try makeHarness()
+        defer { harness.cleanup() }
+        let runtime = ObservationTestRuntime()
+        let song = makeSong(in: harness.archive, named: "Linked Archive Song")
+        runtime.setServed([makeLinkedArchiveSnapshot(song: song, harness: harness)])
+        let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: [song])
+        try await waitUntil { runtime.snapshotsCalls >= 1 && runtime.dueCalls >= 1 }
+        _ = await viewModel.refreshProjectVaultSnapshots()
+
+        let card = try XCTUnwrap(viewModel.projectVaultPresentation(for: song))
+        XCTAssertEqual(card.state, .active)
+        XCTAssertTrue(card.blocksFileActions)
+        XCTAssertFalse(card.allowsWorkflowMutation)
+        XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: song))
+    }
+
+    /// Each card offers a status change exactly when the gate accepts one.
+    func testEveryCardOffersAStatusChangeExactlyWhenTheGateAcceptsIt() async throws {
+        let harness = try makeHarness()
+        defer { harness.cleanup() }
+        let runtime = ObservationTestRuntime()
+        let noRecord = makeSong(in: harness.active, named: "No Vault Record")
+        let activeLocal = makeSong(in: harness.active, named: "Active Local")
+        let keepLocal = makeSong(in: harness.active, named: "Keep Local")
+        let copying = makeSong(in: harness.active, named: "Copying")
+        let linkedArchive = makeSong(in: harness.archive, named: "Linked Archive")
+        // The live runtime drops superseded transfers from its snapshots; the
+        // observation still locks them if one arrives.
+        let superseded = makeSong(in: harness.active, named: "Superseded")
+        let supersededBy = makeSong(in: harness.active, named: "Superseded By")
+        let paused = makeSong(in: harness.active, named: "Paused")
+        let removalReview = makeSong(in: harness.active, named: "Removal Review")
+        runtime.setServed([
+            makeActiveTransferSnapshot(song: activeLocal, harness: harness, state: .activeLocal),
+            makeActiveTransferSnapshot(song: keepLocal, harness: harness, state: .activeLocal, pinned: true),
+            makeActiveTransferSnapshot(song: copying, harness: harness, state: .copyingToArchiveStaging),
+            makeLinkedArchiveSnapshot(song: linkedArchive, harness: harness),
+            makeActiveTransferSnapshot(song: superseded, harness: harness, state: .superseded),
+            makeActiveTransferSnapshot(song: supersededBy, harness: harness, state: .activeLocal) {
+                $0.supersededBy = UUID()
+            },
+            makeActiveTransferSnapshot(song: paused, harness: harness, state: .failedRecoverable) {
+                $0.error = VaultTransferError(origin: .copyingToArchiveStaging, reason: .unknown, message: "paused")
+            },
+            makeActiveTransferSnapshot(song: removalReview, harness: harness, state: .recoveryRequired) {
+                $0.error = VaultTransferError(origin: .removingActiveCopy, reason: .unknown, message: "interrupted")
+            },
+        ])
+        let songs = [noRecord, activeLocal, keepLocal, copying, linkedArchive, superseded, supersededBy, paused, removalReview]
+        let viewModel = makeViewModel(harness: harness, runtime: runtime, songs: songs)
+        try await waitUntil { runtime.snapshotsCalls >= 1 && runtime.dueCalls >= 1 }
+        _ = await viewModel.refreshProjectVaultSnapshots()
+
+        for song in songs {
+            let card = try XCTUnwrap(viewModel.projectVaultPresentation(for: song), song.originalFolderName)
+            XCTAssertEqual(card.allowsWorkflowMutation, viewModel.canMutateWorkflowStatus(for: song), song.originalFolderName)
+        }
+        XCTAssertEqual(
+            songs.filter { viewModel.canMutateWorkflowStatus(for: $0) }.map(\.originalFolderName),
+            ["No Vault Record", "Active Local", "Keep Local"]
+        )
     }
 
     // MARK: - Catalog edits are projected

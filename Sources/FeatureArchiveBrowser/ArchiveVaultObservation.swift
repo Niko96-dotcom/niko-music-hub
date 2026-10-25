@@ -620,7 +620,8 @@ final class ArchiveVaultObservation: ObservableObject {
                 || (hasUnsafeTransferGeneration && isArchiveDestinationProjection) {
                 return ProjectVaultCardPresentation(
                     record: record,
-                    transferState: .recoveryRequired
+                    transferState: .recoveryRequired,
+                    blocksFileActions: blocksGenericFileActions(for: song)
                 )
             }
             return ProjectVaultCardPresentation(
@@ -642,7 +643,8 @@ final class ArchiveVaultObservation: ObservableObject {
                     snapshot: snapshot,
                     context: context,
                     isArchiveDestinationProjection: isArchiveDestinationProjection
-                )
+                ),
+                blocksFileActions: blocksGenericFileActions(for: song)
             )
         }
         guard let active = context.activeRoot else { return nil }

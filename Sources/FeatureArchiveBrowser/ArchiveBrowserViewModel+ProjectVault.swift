@@ -86,11 +86,12 @@ extension ArchiveBrowserViewModel {
         vaultObservation.blocksGenericFileActions(for: song)
     }
 
+    /// The card answers from the last card rebuild; the live file-action check
+    /// here also refuses a lock that newer snapshots brought before the cards
+    /// were rebuilt.
     func canMutateWorkflowStatus(for song: Song) -> Bool {
         guard !blocksGenericProjectVaultFileActions(for: song) else { return false }
-        return ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(
-            for: projectVaultPresentation(for: song)
-        )
+        return projectVaultPresentation(for: song)?.allowsWorkflowMutation ?? true
     }
 
     /// False while the Vault is off or its folders are not chosen: Done is then

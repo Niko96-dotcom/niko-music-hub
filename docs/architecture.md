@@ -214,8 +214,11 @@ click: VoiceOver's "Open song detail", the Song menu, Back/Forward (`ArchiveKeyb
 
 Gates follow the same rule: a view asks the view model the question the edit coordinator also asks. The song detail's
 status menu uses `canMutateWorkflowStatus(for:)`, like board drops and the Song menu; the shorter
-`blocksGenericProjectVaultFileActions(for:)` stays the gate for metadata edits and file actions. (Board and list cards
-still use only the card-state policy; see the map's open questions.)
+`blocksGenericProjectVaultFileActions(for:)` stays the gate for metadata edits and file actions. Board and list cards
+read `ProjectVaultCardPresentation.allowsWorkflowMutation`, the same rule: the observation builds each card with the
+file-action block, so a card whose folder the Vault holds (the historical archive folder of a restored project)
+reads Active but offers no status menu, drag or VoiceOver status action. `canMutateWorkflowStatus(for:)` reads that rule and checks
+the block again live, for snapshots newer than the last card rebuild.
 
 ## Archive song catalog
 

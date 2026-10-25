@@ -237,7 +237,7 @@ These rules are documented and, where named, enforced. The full table is in
 | Each built-in tool ID is defined once; shell code orders, routes and labels tools from their metadata and job rows, never by ID | [architecture.md § Tool self-description](architecture.md#tool-self-description) | `ToolIDSourceTests`, `ToolSectionTests`, `InAppJobCancelRoutingTests` |
 | Keep Local pins are checked and written only through `KeepLocalPins`; the stored format stays | [ADR 021](decisions/021-keep-local-pin-format.md) | raw set `internal` to AppCore, `KeepLocalPinsSourceTests`, `KeepLocalPinsTests` |
 | A tool run gets its output folder and guard from one `ToolOutputDestination` | [architecture.md § Tool output destination](architecture.md#tool-output-destination) | `OutputGuardSourceTests` (guard builders listed), `ToolOutputDestinationTests` |
-| Archive views state intent; only the view model writes the archive page, and the song detail uses the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `ArchiveViewIntentSourceTests` |
+| Archive views state intent; only the view model writes the archive page, and the song detail and the cards use the status gate the edit coordinator enforces | [architecture.md § Archive page state](architecture.md#archive-page-state) | `ArchiveViewIntentSourceTests`; `ArchiveVaultObservationTests` (each card offers a status change exactly when the gate accepts it) |
 | The archive song catalog is written only through `applyCatalogEdit(_:)` | [architecture.md § Archive song catalog](architecture.md#archive-song-catalog) | the compiler (`songCatalog`'s setter is private to its file), `SongCatalogTests`, `ArchiveCatalogEditTests` |
 | A tool page reads its recent outputs only through `ToolRecentOutputs`, off the main actor | [architecture.md § Tool recent outputs](architecture.md#tool-recent-outputs) | `HandoffSurfacingSourceTests`, `ToolRecentOutputsTests` |
 | The `App` observes only scene-structural state; one owner for selection | [AGENTS.md](../AGENTS.md#swiftui-state-ownership-do-not-regress) | `SwiftUIStateOwnershipSourceTests` |
@@ -312,10 +312,12 @@ Documents that disagree with the code:
 9. Not verified at runtime: in E2E smoke mode the production archive view model probably exists beside
    the smoke's own view models, because `AppComposition.make()` runs before
    `applicationWillFinishLaunching`.
-10. Board and list cards decide whether to offer a status change from the card-state policy alone, not from
-    `canMutateWorkflowStatus(for:)`. From the code, a transfer in state `superseded` on a song that keeps its Active
-    folder shows a card that offers a change the edit coordinator refuses. Should the card presentation carry the
-    full gate?
+10. Settled on 2026-10-25: the card presentation carries the file-action block, and its `allowsWorkflowMutation`
+    is the one status-change rule for the cards (menu, drag, VoiceOver) and `canMutateWorkflowStatus(for:)`
+    ([architecture.md § Archive page state](architecture.md#archive-page-state)). The superseded example cannot
+    happen in the app: `LiveProjectVaultRuntime.snapshots()` drops superseded transfers (checked live). The
+    historical archive folder of a restored project still reads Active while the Vault holds it; unit-tested, not
+    reached in a running app.
 
 ## Check baseline (2026-10-22)
 

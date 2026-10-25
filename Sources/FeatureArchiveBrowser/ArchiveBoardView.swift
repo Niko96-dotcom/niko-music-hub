@@ -219,7 +219,7 @@ struct ArchiveBoardCardView: View {
     @State private var isHovered = false
 
     private var allowsWorkflowMutation: Bool {
-        ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(for: vaultPresentation)
+        vaultPresentation?.allowsWorkflowMutation ?? true
     }
 
     private var captionLine: String {

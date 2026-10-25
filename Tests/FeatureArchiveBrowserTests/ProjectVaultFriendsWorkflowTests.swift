@@ -707,9 +707,7 @@ final class ProjectVaultFriendsWorkflowTests: XCTestCase {
         })
         let archivePath = archivedSong.folderPath.standardizedFileURL.path
         XCTAssertFalse(viewModel.canMutateWorkflowStatus(for: archivedSong))
-        XCTAssertFalse(ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(
-            for: viewModel.projectVaultPresentation(for: archivedSong)
-        ))
+        XCTAssertEqual(viewModel.projectVaultPresentation(for: archivedSong)?.allowsWorkflowMutation, false)
 
         viewModel.selectedSong = archivedSong
         viewModel.applyCatalogScanUpdate(

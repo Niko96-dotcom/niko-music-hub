@@ -161,6 +161,23 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
     /// separately from workflow status; the project stays visible and nothing
     /// is removed automatically.
     public let isVerifiedCopy: Bool
+    /// The Vault holds the song's folder itself (the source or destination of
+    /// a transfer it may not change, a linked archive, a restore in flight),
+    /// even when the card still reads Active or Keep Local.
+    public let blocksFileActions: Bool
+
+    /// Archive-only cards are restore targets, not workflow inputs, and a folder
+    /// the Vault holds keeps its status. The cards (menu, drag, VoiceOver) and
+    /// `ArchiveBrowserViewModel.canMutateWorkflowStatus(for:)` read this one rule.
+    public var allowsWorkflowMutation: Bool {
+        guard !blocksFileActions else { return false }
+        switch state {
+        case .active, .keepLocal:
+            return true
+        case .archived, .restoring, .archiving, .needsAttention:
+            return false
+        }
+    }
 
     public var statusLabel: String {
         if isReadyToFreeSpace, state == .active {
@@ -238,11 +255,13 @@ public struct ProjectVaultCardPresentation: Equatable, Sendable {
         restore: VaultRestoreRecord? = nil,
         linkedArchiveAvailability: Availability? = nil,
         isReadyToFreeSpace: Bool = false,
-        isVerifiedCopy: Bool = false
+        isVerifiedCopy: Bool = false,
+        blocksFileActions: Bool = false
     ) {
         self.transferState = transferState
         self.isReadyToFreeSpace = isReadyToFreeSpace
         self.isVerifiedCopy = isVerifiedCopy
+        self.blocksFileActions = blocksFileActions
         isKeepLocal = record.pinned
         self.restorePhase = restore?.phase ?? restorePhase
         availability = record.locations.contains { $0.kind == .active && $0.availability == .local }

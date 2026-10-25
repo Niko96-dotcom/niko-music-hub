@@ -34,7 +34,7 @@ struct SongCardView: View {
     }
 
     private var allowsWorkflowMutation: Bool {
-        ProjectVaultCardWorkflowPolicy.allowsWorkflowMutation(for: vaultPresentation)
+        vaultPresentation?.allowsWorkflowMutation ?? true
     }
 
     var body: some View {
