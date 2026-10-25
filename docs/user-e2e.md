@@ -105,7 +105,4 @@ When a selected song’s main preview was chosen by an equal-score tiebreak, the
 
 ## Local gates
 
-```bash
-./script/ci.sh
-./script/e2e_user_smoke.sh
-```
+The E2E smoke is the second local gate after `./script/ci.sh`; see [CONTRIBUTING.md](../CONTRIBUTING.md).

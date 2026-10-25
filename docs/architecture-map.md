@@ -16,7 +16,8 @@ Each section says what kind of statement it makes:
 Detail lives in [architecture.md](architecture.md) (owners, safety, Project Vault),
 [design-contract.md](design-contract.md) (UI), [decisions/](decisions/) (ADRs 017–022),
 [vault-durability.md](vault-durability.md) and [vault-recovery.md](vault-recovery.md).
-[product-scope.md](product-scope.md) is the historical v0.1 scope.
+[product-scope.md](history/product/product-scope.md) is the historical v0.1 scope. Every live document is
+listed in the [documentation index](README.md).
 
 ## Entry points (observed)
 
@@ -229,7 +230,7 @@ caller.
 - Source guards in `Tests/AppCoreTests/*SourceTests.swift` read the source text and enforce the rules in
   [AGENTS.md](../AGENTS.md#rules-and-what-enforces-them): module boundaries, design contract, SwiftUI state
   ownership, output guard, real-defaults access, count copy, package settings.
-- `./script/ci.sh`: fixtures, clean strict build (`--explicit-target-dependency-import-check error`,
+- `./script/ci.sh`: fixtures, the Markdown link check (`script/check-doc-links.py`), clean strict build (`--explicit-target-dependency-import-check error`,
   warnings as errors, fails on any printed warning except SwiftPM's notices about a pinned dependency,
   `warning: '<dependency>': …`), `swift test` minus host-only CoreAudio tests,
   recorder gate, UI-probe self-test, `NikoMusicCoreSelfTest`, CLI export smoke and refusal,

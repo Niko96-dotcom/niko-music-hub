@@ -15,20 +15,8 @@ seams, gates, and where the code differs from the principles below. This page ho
 
 ## Current module graph
 
-```text
-NikoMusicHub (executable)
-├── AppComposition / AppShell
-├── FeatureArchiveBrowser      # archive browse/search/detail/play + Project Vault UI
-├── FeatureBPMTapper
-├── FeatureAudioConverter
-├── FeatureAudioRecorder
-├── FeatureDownloader
-├── FeatureStemSeparation      # narrow exception below
-├── AppUpdates                 # isolated Sparkle updater
-├── ProjectVaultRuntime        # Project Vault runtime (ADR 022)
-├── AppCore                    # shared shell kit (see below)
-└── NikoMusicCore              # scan, rank, search, open safety, persistence, Vault engines
-```
+The targets, what each owns and the declared dependencies are in the
+[architecture map](architecture-map.md#modules-observed). The rules for its edges:
 
 - `FeatureArchiveBrowser` depends on `AppCore`, `ProjectVaultRuntime` and `NikoMusicCore` only.
 - `ProjectVaultRuntime` depends on `AppCore` and `NikoMusicCore`. Only `FeatureArchiveBrowser` and the app target
@@ -91,7 +79,7 @@ Archive domain and safety. No SwiftUI/AppKit.
   song folders a full scan walks at once: the smaller of the root volume's limit (network 2, other external 4,
   internal 8) and the caller's budget (a scan someone waits for, including a first scan: 8; a rescan behind cached
   songs already on screen: 4). Measurements and the benchmark tools:
-  `docs/performance/archive-startup-2026-10-20.md`, `script/performance/`, `script/benchmark_scan_workers.sh`
+  `docs/history/performance/archive-startup-2026-10-20.md`, `script/performance/`, `script/benchmark_scan_workers.sh`
   (read-only worker sweep on a real archive disk), `script/bakeoff/` (synthetic 1k/10k archive and isolated launch).
   Memory: `SQLiteArchiveIndexStore` saves by diffing against the songs its rows hold (`SnapshotRowsMemo`, `SongRowDiff`),
   so an unchanged catalog costs no JSON and no row writes, and the launch load of a current snapshot records what the
@@ -144,7 +132,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 - Views: `ArchiveBrowserView`, `SongDetailView`, board/list/analytics subviews (see `docs/design-contract.md`; do not regress).
 - A board lane is an `NSTableView` (`ArchiveBoardNativeSongList`) with reusable rows; each row hosts the unchanged
   SwiftUI `ArchiveBoardSongCard`. AppKit owns the document height, so a fling to the end always realizes the last card.
-  Measurements and known costs: `docs/performance/archive-board-2026-10-21.md`.
+  Measurements and known costs: `docs/history/performance/archive-board-2026-10-21.md`.
 - Horizontal board movement uses `ArchiveBoardHorizontalScroll`: one native viewport whose document directly
   contains the retained column drop hosts. It adds no SwiftUI hosting graph. Lane rectangles are read only during
   drag edge scrolling; offsets are never published as SwiftUI state. Presentation equality reuses the catalog's
@@ -153,7 +141,7 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
   when a lane is reused with a different board controller. Hover uses a 0.10-second ease-out (disabled by Reduce
   Motion); lane/row motion remains 0.16 seconds. Live scroll end restores hover synchronously; one board-local
   pointer tracking area clears unphased-wheel suppression on the first move, without waiting for the idle timer.
-  See `docs/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
+  See `docs/history/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
 - The board stays mounted under the song detail page (`ArchivePageModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
   hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.
@@ -375,8 +363,8 @@ Archive Browser footer shows: at most one message and one warning, joined by one
 ## Shell navigation and tool-page scaffold (2026-09)
 
 - `HubNavigationHistory` (AppCore) gives the shell browser-style back/forward. It is created once in
-  `AppComposition` and passed to both `ToolContext` values (the archive VM and the shell must share
-  the same instance). Tools with inner pages record an opaque route and register a restorer.
+  `AppComposition` and passed in the one `ToolContext`, so the archive view model and the shell share
+  the same instance. Tools with inner pages record an opaque route and register a restorer.
 - `ToolFeature.makeTitleBarAccessory(context:)` lets a tool place a control in the window title bar
   (the archive's board⇄list flip icon).
 - Production tools render through `HubInspectorPage` (content column + fixed inspector rail). Layout

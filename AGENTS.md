@@ -35,7 +35,7 @@ behavior into Swift modules instead.
 
 Start with `docs/architecture-map.md`: entry points, main flows, state owners, seams, gates, where the code
 differs from these rules, and open questions. Full detail: `docs/architecture.md`. Product intent (historical
-v0.1 scope): `docs/product-scope.md`.
+v0.1 scope): `docs/history/product/product-scope.md`.
 
 ## Engineering baseline
 
@@ -71,7 +71,7 @@ question updates `docs/architecture-map.md` in the same commit.
 - Stem separation contract: `docs/reference/stem-separation-contract.md`
 - Architecture decisions: `docs/decisions/`
 - **Current UI design contract (binding): `docs/design-contract.md`** — read it before touching any
-  SwiftUI view. Superseded design history (do **not** implement from it): `docs/UI-REDESIGN-PLAN.md`
+  SwiftUI view. Superseded design history (do **not** implement from it): `docs/history/design/UI-REDESIGN-PLAN.md`
 
 ## UI design contract (do not regress)
 
@@ -158,7 +158,7 @@ Work directly from the user request, current source, Git state and validation ev
 
 ## Local gates
 
-For scoped implementation changes, run the checks relevant to the affected behavior. Run the full local gates for integration or release work. Documentation-only changes need structural and link checks. Once sufficient checks pass, repeat them only for new changes, failures or unresolved concerns. Release requirements below still apply.
+For scoped implementation changes, run the checks relevant to the affected behavior. Run the full local gates for integration or release work. Documentation-only changes need structural and link checks (`script/check-doc-links.py`). Once sufficient checks pass, repeat them only for new changes, failures or unresolved concerns. Release requirements below still apply.
 
 ```bash
 ./script/ci.sh

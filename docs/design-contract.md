@@ -1,6 +1,6 @@
 # Niko Music Hub — UI design contract (binding, 2026-09-18)
 
-This is the current design direction. It supersedes `docs/UI-REDESIGN-PLAN.md`
+This is the current design direction. It supersedes `docs/history/design/UI-REDESIGN-PLAN.md`
 (historical) and is enforced by `Tests/AppCoreTests/HubDesignContractSourceTests.swift`
 plus the older design guards. If a change needs to break a rule here, change the
 rule and the test in the same commit — never "just this once".

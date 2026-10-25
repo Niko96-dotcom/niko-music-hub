@@ -1,9 +1,9 @@
 # path-prefix-or-regex | reason
 ^docs/reference/ | Reference material preserves upstream/archive-browser history and compatibility examples.
-^docs/UI-REDESIGN-PLAN\.md$ | Superseded design record with historical version labels.
+^docs/history/design/UI-REDESIGN-PLAN\.md$ | Superseded design record with historical version labels.
 ^CHANGELOG\.md$ | Historical changelog entries preserve prior release labels.
 ^Tests/ | Test fixtures may contain version-looking strings for domain behavior.
 ^Fixtures/ | Fixture names and README examples are compatibility material, not app release metadata.
-^docs/audits/ | HIG audit evidence records the exact build under test; rewriting it would falsify the record.
+^docs/history/audits/ | HIG audit evidence records the exact build under test; rewriting it would falsify the record.
 ^Sources/AppCore/Settings/AppSettings\.swift$ | Documents the upgrade path from the release that introduced the default.
 ^docs/decisions/018-codex-chrome-material\.md$ | Accepted historical decision records the release that introduced this chrome.
