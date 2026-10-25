@@ -1,7 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.9.0 - 2026-10-25
 
+- Send a project whose Active-copy removal was interrupted to review at the next launch, also when a newer Vault copy exists. Until you choose Recover, the app does not resume or retry the project's other transfers, and Retry on them is refused; Recover marks them superseded and keeps every copy. The song detail shows the removal under review first.
+- Leave no empty folder in the output folder after a stem separation is canceled or fails without writing a stem.
+- Make a plain Esc on a tool page cancel what Edit ▸ Cancel cancels, and let Return, Esc and Space act only on the tool page you see. A running conversion, download or stem separation shows one shared progress row, and the WAV Converter greys Stop After This File once you ask for it.
+- Give the archive the keyboard after a page change that did not come from a click (VoiceOver's Open song detail, the Song menu, Back and Forward), so Esc and the song shortcuts work at once.
+- Make horizontal scrolling on the archive board smoother, let cards answer hover right after a scroll, and refresh cards edited in a song detail as soon as you go back to the board.
+- Let a paused archive player follow the song you select, and read song titles from session bounces whose collaborator credits are not in parentheses.
+- Show a refused output folder or a failed save in Settings below the form, where you see it without scrolling.
 - Remove "Archive automatically", its "After *n* days untouched" and "Or when less than *n* GiB is free" steppers, and the login-item row with its warning from Settings → Project Vault: they promised background archiving that never ran. Marking a song Done still makes a verified copy that keeps the Active folder. Open at login stays in General, without its subtitle "Lets Project Vault archive while you’re away".
 - Name the real reason when a Done archive is refused (Emergency Stop, Project Vault off, a missing folder, the Keep Local review, "After archiving" set to keep the Active copy, or the missing backup confirmation) instead of "Automatic archiving is turned off." When the Vault free-space settings cannot be checked, the message no longer names the removed inactivity setting.
 - Drop the `automatic_archiving`, `automation_permitted`, `inactivity_days` and `minimum_free_space_gib` lines from Project Vault diagnostics. Settings and recovery copies saved by 1.8.1 still load.

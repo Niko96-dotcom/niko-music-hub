@@ -224,12 +224,18 @@ transfer-path timings when touching this pragma set.
 
 `LocalFolderArchiveStorage.capabilities().waitsForDurability` stays `false`
 as a frozen contract (pinned by
-`LocalVaultTransferEngineTests.testLocalFolderProviderReportsOnlyVerifiedLocalDurability`;
-no production code branches on the flag). `waitsForDurability` means remote
-asynchronous durability (provider upload/sync, as
-`FileProviderArchiveStorage` reports `true`); it does not mean "no wait at
-all". Local `waitUntilDurable` always blocks on the barrier flush above —
-callers must not skip it based on the flag.
+`LocalVaultTransferEngineTests.testLocalFolderProviderReportsOnlyVerifiedLocalDurability`).
+`waitsForDurability` means remote asynchronous durability (provider
+upload/sync, as `FileProviderArchiveStorage` reports `true`); it does not mean
+"no wait at all". Local `waitUntilDurable` always blocks on the barrier flush
+above — callers must not skip it based on the flag.
+
+`LocalVaultTransferEngine` checks the flag against the fresh durability claim,
+never to skip a wait. Before it removes an Active copy (`removeActiveCopy`) and
+when it retires survivors at launch (`freshSurvivorDurabilityForRetirement`),
+`false` must come with a fresh `.verifiedLocal` and `true` with a fresh
+`.syncedToProvider`; any other pair keeps every copy. Online-only retirement
+also requires `true`.
 
 ## Tests
 

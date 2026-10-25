@@ -286,11 +286,9 @@ These rules are documented and, where named, enforced. The full table is in
     on the WAV Converter (the second Esc stops the file in flight) and on Stem Separation
     ([architecture.md § Tool page keys](architecture.md#tool-page-keys)).
 
-Documents that disagree with the code:
-
-- [vault-durability.md § Capabilities note](vault-durability.md#capabilities-note) says no production code
-  branches on `waitsForDurability`. `LocalVaultTransferEngine` branches on it before removal and when it
-  retires survivors.
+Documents that disagree with the code: none known. (Closed on 2026-10-25:
+[vault-durability.md § Capabilities note](vault-durability.md#capabilities-note) now names the two places where
+`LocalVaultTransferEngine` checks `waitsForDurability`.)
 
 ## Open questions
 
