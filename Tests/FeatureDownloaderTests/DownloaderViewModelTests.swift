@@ -1091,7 +1091,7 @@ final class DownloaderViewModelTests: XCTestCase {
         viewModel.startDownload()
 
         // Synchronous: the pending start is registered before startDownload returns.
-        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart.rawValue])
         let pending = try XCTUnwrap(center.quitBlockingWork.first)
         XCTAssertFalse(pending.listed)
         XCTAssertTrue(pending.blocksQuit)
@@ -1111,7 +1111,7 @@ final class DownloaderViewModelTests: XCTestCase {
         try await waitUntil { viewModel.job != nil }
         let runningJob = try XCTUnwrap(viewModel.job)
         XCTAssertTrue(center.quitBlockingWork.map(\.id).contains(runningJob.id.uuidString))
-        XCTAssertFalse(center.quitBlockingWork.map(\.id).contains(ShellJobExtraSourceID.downloadStart))
+        XCTAssertFalse(center.quitBlockingWork.map(\.id).contains(ShellJobExtraSourceID.downloadStart.rawValue))
     }
 
     func testQuitDuringPendingDownloadStartCancelsLookupAndUnregisters() async throws {
@@ -1129,7 +1129,7 @@ final class DownloaderViewModelTests: XCTestCase {
         viewModel.downloadState = .readyToDownload
 
         viewModel.startDownload()
-        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart.rawValue])
 
         center.cancelAllForQuit()
 
@@ -1154,7 +1154,7 @@ final class DownloaderViewModelTests: XCTestCase {
         viewModel.downloadState = .readyToDownload
 
         viewModel.startDownload()
-        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart.rawValue])
 
         useCase.release()
         try await waitUntil { viewModel.downloadState != .downloading }
@@ -1180,7 +1180,7 @@ final class DownloaderViewModelTests: XCTestCase {
         viewModel.downloadState = .readyToDownload
 
         viewModel.startDownload()
-        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart.rawValue])
 
         viewModel.cancelDownload()
         XCTAssertEqual(viewModel.downloadState, .canceled)
@@ -1190,11 +1190,11 @@ final class DownloaderViewModelTests: XCTestCase {
 
         // Let the cancelled older start unwind; it must not clear the newer entry.
         try await waitUntil { useCase.sawCancellation }
-        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart])
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.downloadStart.rawValue])
 
         useCase.release()
         try await waitUntil { viewModel.job != nil }
-        XCTAssertFalse(center.quitBlockingWork.map(\.id).contains(ShellJobExtraSourceID.downloadStart))
+        XCTAssertFalse(center.quitBlockingWork.map(\.id).contains(ShellJobExtraSourceID.downloadStart.rawValue))
     }
 
     // B-002: every configured music root stays write-protected for downloads while the

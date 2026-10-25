@@ -16,10 +16,10 @@ public enum ConverterJobReporting: Sendable {
         guard isConverting else { return nil }
         let filename = filename.flatMap { $0.isEmpty ? nil : $0 }
         return ShellJobStatus(
-            id: ShellJobExtraSourceID.converter,
+            id: ShellJobExtraSourceID.converter.rawValue,
             title: filename ?? fallbackTitle,
             percent: percent > 0 ? percent : nil,
-            cancelActionID: ShellJobExtraSourceID.converter,
+            cancelActionID: ShellJobExtraSourceID.converter.rawValue,
             // Without a file name the row reads "WAV Converter", not "Converting “WAV Converter”".
             activityVerb: filename == nil ? nil : "Converting",
             sourceToolID: .wavConverter,

@@ -4382,7 +4382,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         }
         try await waitUntil("the first operation is active") { viewModel.projectVaultActiveOperation?.songID == "quit-a" }
 
-        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.vaultTransfer])
+        XCTAssertEqual(center.quitBlockingWork.map(\.id), [ShellJobExtraSourceID.vaultTransfer.rawValue])
         XCTAssertTrue(center.hasUnfinishedQuitBlockingWork)
 
         center.cancelAllForQuit()
@@ -4426,7 +4426,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         viewModel.isScanning = true
         viewModel.publishShellJobStatus()
 
-        XCTAssertTrue(viewModel.jobStatusCenter.jobs.contains { $0.id == ShellJobExtraSourceID.archiveScan })
+        XCTAssertTrue(viewModel.jobStatusCenter.jobs.contains { $0.id == ShellJobExtraSourceID.archiveScan.rawValue })
         XCTAssertTrue(viewModel.jobStatusCenter.quitBlockingWork.isEmpty)
         // Shell work: Esc keeps the archive's own meaning on the archive pane and
         // cancels the scan from a pane that does not handle Esc.
@@ -4435,7 +4435,7 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         XCTAssertEqual(InAppJobCancelRouting.escapeJobs(selectedTool: archivePane, in: jobs), [])
         XCTAssertEqual(
             InAppJobCancelRouting.escapeJobs(selectedTool: nil, in: jobs).map(\.id),
-            [ShellJobExtraSourceID.archiveScan]
+            [ShellJobExtraSourceID.archiveScan.rawValue]
         )
         viewModel.isScanning = false
     }

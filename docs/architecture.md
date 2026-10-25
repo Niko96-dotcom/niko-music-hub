@@ -607,8 +607,9 @@ and `updates(for:)`. The Downloader and Stem Separation run this way.
   helper probe, an animation), observing a job or a stream, or a step that a job or a take awaits and cancels. An
   unstructured `Task` does not inherit the job's cancellation, so the step forwards it by hand
   (`DemucsMLXBackend`'s separation inside the stem job); otherwise Esc leaves it running and quit waits the full 5 s.
-- Work that cannot be a job registers with `ShellJobStatusCenter.setExtraJob` by hand, under a named
-  `ShellJobExtraSourceID`, and clears its entry only after it has unwound. Tasks outside the registry shipped three
+- Work that cannot be a job registers with `ShellJobStatusCenter.setExtraJob` by hand, under a
+  `ShellJobExtraSourceID` case (a closed enum: the compiler refuses any other source), and clears its entry only
+  after it has unwound. Tasks outside the registry shipped three
   times: recorder takes and helper installs (061ea81) and the download's title lookup (c69717f) were cut off by quit.
   The named exceptions:
 
@@ -622,8 +623,8 @@ and `updates(for:)`. The Downloader and Stem Separation run this way.
 
 - `ToolWorkSourceTests` enforces it: every `Task` that a tool creates (`Sources/Feature*` except the archive browser,
   `AppCore/HelperTools`, and the app target's Settings and Dev Tool features) is listed by file and enclosing
-  declaration with its reason, `ShellJobExtraSourceID` is the closed list above, and only the owner's files register
-  each source. The detector does not see SwiftUI's `.task {}`, structured child tasks or `DispatchQueue.async`.
+  declaration with its reason, every `ShellJobExtraSourceID` case has its reason above, and only the owner's files
+  register each source. The detector does not see SwiftUI's `.task {}`, structured child tasks or `DispatchQueue.async`.
 - Known gap: the Settings recovery bundle export and import (`ProjectVaultRecoverySection`) and the test restore
   (`ProjectVaultSettingsView.runRestoreDrill`) run in unregistered tasks, so quit does not wait for them. They are
   listed as such in the check; making them jobs would add rows to the jobs strip, a product change.

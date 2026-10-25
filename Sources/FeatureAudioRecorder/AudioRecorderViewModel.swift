@@ -356,7 +356,7 @@ public final class AudioRecorderViewModel: ObservableObject {
         jobStatusCenter.setExtraJob(
             sourceID: ShellJobExtraSourceID.audioRecorder,
             status: ShellJobStatus(
-                id: ShellJobExtraSourceID.audioRecorder,
+                id: ShellJobExtraSourceID.audioRecorder.rawValue,
                 title: ShellJobStatusCopy.recordingTake,
                 listed: false
             ),

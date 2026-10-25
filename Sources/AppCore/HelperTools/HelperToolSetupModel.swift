@@ -121,7 +121,7 @@ public final class HelperToolSetupModel: ObservableObject {
         jobStatusCenter?.setExtraJob(
             sourceID: ShellJobExtraSourceID.helperInstall,
             status: ShellJobStatus(
-                id: ShellJobExtraSourceID.helperInstall,
+                id: ShellJobExtraSourceID.helperInstall.rawValue,
                 title: ShellJobStatusCopy.installingHelperTools,
                 listed: false
             ),

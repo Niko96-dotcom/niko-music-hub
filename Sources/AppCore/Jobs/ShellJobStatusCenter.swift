@@ -41,11 +41,12 @@ public final class ShellJobStatusCenter: ObservableObject, @unchecked Sendable {
     /// `quitCancel` replaces `cancel` when quit stops the work (ADR-019); pass it
     /// when the jobs-strip cancel only asks for confirmation.
     public func setExtraJob(
-        sourceID: String,
+        sourceID: ShellJobExtraSourceID,
         status: ShellJobStatus?,
         cancel: (@Sendable () -> Void)? = nil,
         quitCancel: (@Sendable () -> Void)? = nil
     ) {
+        let sourceID = sourceID.rawValue
         lock.withLock {
             if let status {
                 extraJobs[sourceID] = status

@@ -17,7 +17,7 @@ public struct HubQuitPrompt: Equatable, Sendable {
     public var message: String {
         var lines = work.map(\.displayLine)
         lines.append("")
-        if work.contains(where: { $0.id == ShellJobExtraSourceID.vaultTransfer }) {
+        if work.contains(where: { $0.id == ShellJobExtraSourceID.vaultTransfer.rawValue }) {
             lines.append(
                 "Quitting stops them. Project Vault cancels its waiting requests and stops the transfer at the next safe point; existing recovery records are kept."
             )

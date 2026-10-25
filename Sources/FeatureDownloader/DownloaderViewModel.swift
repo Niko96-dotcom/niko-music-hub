@@ -279,7 +279,7 @@ public final class DownloaderViewModel: ObservableObject {
         context.jobStatusCenter.setExtraJob(
             sourceID: ShellJobExtraSourceID.downloadStart,
             status: ShellJobStatus(
-                id: ShellJobExtraSourceID.downloadStart,
+                id: ShellJobExtraSourceID.downloadStart.rawValue,
                 title: DownloaderUseCase.fallbackJobTitle(for: sourceURL),
                 activityVerb: DownloaderUseCase.activityVerb,
                 sourceToolID: .downloader,

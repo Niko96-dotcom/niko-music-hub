@@ -442,7 +442,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
             model.install(.downloadAndConvert)
             let work = center.quitBlockingWork
-            XCTAssertEqual(work.map(\.id), [ShellJobExtraSourceID.helperInstall])
+            XCTAssertEqual(work.map(\.id), [ShellJobExtraSourceID.helperInstall.rawValue])
             XCTAssertEqual(work.first?.listed, false)
             XCTAssertTrue(center.jobs.isEmpty, "Installs show their progress in Set Up, not in the jobs strip")
             try await Task.sleep(for: .milliseconds(100))

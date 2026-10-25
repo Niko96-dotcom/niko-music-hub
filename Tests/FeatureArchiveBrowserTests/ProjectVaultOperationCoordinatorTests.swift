@@ -576,17 +576,17 @@ final class ProjectVaultOperationCoordinatorTests: XCTestCase {
         }
         try await waitUntil { viewModel.projectVaultActiveOperation != nil }
         XCTAssertTrue(
-            viewModel.jobStatusCenter.jobs.contains(where: { $0.id == ShellJobExtraSourceID.vaultTransfer }),
+            viewModel.jobStatusCenter.jobs.contains(where: { $0.id == ShellJobExtraSourceID.vaultTransfer.rawValue }),
             "vault-transfer job must be present while active"
         )
-        let vaultRow = try XCTUnwrap(viewModel.jobStatusCenter.jobs.first { $0.id == ShellJobExtraSourceID.vaultTransfer })
+        let vaultRow = try XCTUnwrap(viewModel.jobStatusCenter.jobs.first { $0.id == ShellJobExtraSourceID.vaultTransfer.rawValue })
         XCTAssertEqual(vaultRow.displayLine, "Transferring “VM Job”")
         XCTAssertEqual(vaultRow.cancelTarget, .vaultTransfer)
         XCTAssertNil(vaultRow.sourceToolID)
         await gate.open()
         try await waitUntil { viewModel.projectVaultActiveOperation == nil && viewModel.projectVaultBusySongIDs.isEmpty }
         try await waitUntil {
-            !viewModel.jobStatusCenter.jobs.contains(where: { $0.id == ShellJobExtraSourceID.vaultTransfer })
+            !viewModel.jobStatusCenter.jobs.contains(where: { $0.id == ShellJobExtraSourceID.vaultTransfer.rawValue })
         }
     }
 
