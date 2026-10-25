@@ -3,7 +3,7 @@
 **Status:** Accepted — implemented (strict import check in `ci.sh` and the app-bundle build, `ModuleBoundarySourceTests`)  
 **Date:** 2026-09-27  
 **Deciders:** Niko Music Hub owner + implementation  
-**Scope:** `script/ci.sh`, `script/lib/app_lifecycle.sh`, `Tests/AppCoreTests/ModuleBoundarySourceTests.swift`
+**Scope:** `script/ci.sh`, `script/lib/app_lifecycle.sh`, `Tests/RepoRuleTests/ModuleBoundarySourceTests.swift`
 
 ## Context
 

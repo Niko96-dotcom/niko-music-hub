@@ -93,11 +93,10 @@ app's stdout-based `ConsoleDiagnostics`. It also launches with normal user setti
 Use the disposable startup command for unattended startup verification. Window
 visibility alone does not certify every workflow or guarantee error-free logs.
 
-## Fresh worktree and verification baseline
+## Fresh worktree
 
 No package download, helper installation, fixture regeneration, or copied `.build`
-directory was needed for a fresh detached worktree on the verification Mac. The
-synthetic archive fixtures are tracked. From a fresh worktree, run:
+directory is needed for a fresh worktree: the synthetic archive fixtures are tracked. Run:
 
 ```bash
 ./script/dev.sh doctor
@@ -105,31 +104,9 @@ synthetic archive fixtures are tracked. From a fresh worktree, run:
 ./script/dev.sh startup
 ```
 
-Verified on 2026-09-05 with macOS 26.5.2, Xcode's Swift 6.3.3, and `HEAD` at
-`5c9369911eda`:
-
-- The existing dirty working tree passed CI: 1,154 XCTest cases (5 skipped),
-  54 Swift Testing cases, core self-test, CLI export, and release/source-script gates.
-- A fresh detached `HEAD` worktree passed doctor, clean compilation, and CI.
-- Baseline strict E2E passed archive scan, fuzzy search, dry-run latest-CPR open,
-  read-only/archive-unchanged checks, synthetic recorder-to-inbox handoff, and
-  accessibility-visible first-run UI. The ordinary startup command also passed
-  when explicitly given an isolated settings suite.
-- A manual UI pass selected `Fixtures/CubaseArchive`, scanned nine songs, searched
-  `neon hk`, and displayed Neon Hook's latest CPR and preview. The Open in Cubase
-  button was exercised in dry-run mode; the automated smoke provides its log assertion.
-- The new startup mode was exercised alongside an existing fixture app: the other
-  PID survived, the new window was verified, runtime/AX logs were retained, and the
-  new process and settings suite were cleaned up. Lifecycle regression tests cover
-  inherited launch overrides, unavailable window APIs, launch failure cleanup,
-  and invalid arguments without stopping or building an app.
-- The completed `./script/dev.sh check` passed all three stages after these changes.
-- A deliberately malformed `output-inbox.json` in a separate disposable suite
-  produced the visible “Output Inbox could not be loaded” message and a captured
-  `[error] Output Inbox load failed` line in stdout, confirming runtime-error access.
-
-No baseline gate failures were observed. Error messages emitted by deliberate
-failure-injection tests are not test failures; inspect test exit status and assertions.
+The latest `./script/ci.sh` result is the check baseline in the
+[architecture map](architecture-map.md#check-baseline-2026-10-25). Error messages emitted by
+deliberate failure-injection tests are not test failures; inspect test exit status and assertions.
 
 Verification limits and what resolves them:
 

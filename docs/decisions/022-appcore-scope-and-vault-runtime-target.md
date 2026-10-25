@@ -3,7 +3,7 @@
 **Status:** Accepted — implemented (`ProjectVaultRuntime` target and `ProjectVaultRuntimeTests`; `ModuleBoundarySourceTests`)  
 **Date:** 2026-10-25  
 **Deciders:** Niko Music Hub owner (asked for the move on 2026-10-25) + implementation  
-**Scope:** `Package.swift`, `Sources/AppCore`, `Sources/ProjectVaultRuntime`, `Tests/AppCoreTests/ModuleBoundarySourceTests.swift`
+**Scope:** `Package.swift`, `Sources/AppCore`, `Sources/ProjectVaultRuntime`, `Tests/RepoRuleTests/ModuleBoundarySourceTests.swift`
 
 ## Context
 

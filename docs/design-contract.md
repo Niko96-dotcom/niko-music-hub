@@ -1,7 +1,7 @@
 # Niko Music Hub — UI design contract (binding, 2026-09-18)
 
-This is the current design direction. It supersedes `docs/UI-REDESIGN-PLAN.md`
-(historical) and is enforced by `Tests/AppCoreTests/HubDesignContractSourceTests.swift`
+This is the current design direction. It supersedes `docs/history/design/UI-REDESIGN-PLAN.md`
+(historical) and is enforced by `Tests/RepoRuleTests/HubDesignContractSourceTests.swift`
 plus the older design guards. If a change needs to break a rule here, change the
 rule and the test in the same commit — never "just this once".
 
@@ -280,7 +280,7 @@ column past the window and clipped the sidebar. Seed the isolated suite's
 with real-looking rows, and check light appearance too — both were blind spots.
 
 
-1. `swift build && swift test` (source guards live in `Tests/AppCoreTests/*Source*Tests`).
+1. `swift build && swift test` (the rule tests live in `Tests/RepoRuleTests/`).
 2. Launch the dev bundle with the fixture archive (`script/lib/app_lifecycle.sh`
    `nmh_build_bundle`, export `NIKO_MUSIC_HUB_FIXTURE_ROOT=…`,
    `NIKO_MUSIC_HUB_SETTINGS_SUITE=<fresh>` and `NIKO_MUSIC_HUB_DRY_RUN_OPEN=1`, then

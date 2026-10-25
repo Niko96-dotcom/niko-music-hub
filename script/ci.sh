@@ -11,6 +11,14 @@ fi
 echo "== generate deterministic fixtures =="
 ./script/fixtures/generate_cubase_archive_fixtures.sh
 
+echo "== documentation links =="
+# Every relative link and #anchor in the Markdown files resolves. The buyer source export
+# (script/export-source-sale.sh) ships neither this script nor most of the docs the exported
+# ones link to, so the check runs only where the script is.
+if [[ -f script/check-doc-links.py ]]; then
+  /usr/bin/python3 -I script/check-doc-links.py
+fi
+
 echo "== swift build (clean, fails on any warning) =="
 # -warnings-as-errors (strictSwiftSettings) cannot promote every warning: Swift keeps
 # a call into main-actor isolation inferred from a @preconcurrency protocol (SwiftUI's
@@ -20,9 +28,16 @@ CLEAN_BUILD="$(mktemp -d -t niko-ci-build.XXXXXX)"
 CLEAN_BUILD_LOG="$CLEAN_BUILD/ci-build.log"
 trap 'rm -rf "$CLEAN_BUILD"' EXIT
 swift build --build-tests --explicit-target-dependency-import-check error --scratch-path "$CLEAN_BUILD" 2>&1 | tee "$CLEAN_BUILD_LOG"
-if grep -q 'warning: ' "$CLEAN_BUILD_LOG"; then
+# Every warning fails: the compiler's (<file>.swift:<line>:<col>: warning:), this
+# package's manifest, the driver and the linker. Only SwiftPM's notices about a pinned
+# dependency pass ("warning: 'sparkle': skipping cache due to an error" when two SwiftPM
+# processes share the package cache); they say nothing about this code. Colors are
+# stripped first, so a colored notice is recognized too.
+DEPENDENCY_NOTICE="^warning: '($(sed -n 's/.*"identity" : "\([^"]*\)".*/\1/p' Package.resolved | paste -sd'|' -))': "
+BUILD_WARNINGS="$(sed $'s/\033\\[[0-9;]*m//g' "$CLEAN_BUILD_LOG" | grep 'warning: ' | grep -Ev "$DEPENDENCY_NOTICE" || true)"
+if [[ -n "$BUILD_WARNINGS" ]]; then
   echo "swift build printed warnings; AGENTS.md allows none:" >&2
-  grep 'warning: ' "$CLEAN_BUILD_LOG" >&2
+  printf '%s\n' "$BUILD_WARNINGS" >&2
   exit 1
 fi
 

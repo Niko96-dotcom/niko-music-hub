@@ -131,7 +131,7 @@ restore stopped across relaunch for explicit Retry.
 
 Successful reads do not establish remote upload durability or authorize Active
 removal. The local adapter still reports only `.verifiedLocal`, with no cloud
-eviction capability. See the [real-folder L340 check](audits/l340-dropbox-2026-10-21.md)
+eviction capability. See the [real-folder L340 check](history/audits/l340-dropbox-2026-10-21.md)
 for the actual-app download and retry observations.
 
 ## Barrier success is not a hardware guarantee

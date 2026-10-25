@@ -1,5 +1,7 @@
 # Niko Music Hub — Agent Rules
 
+The one rulebook, for agents and people. Reading order: [CONTRIBUTING.md](CONTRIBUTING.md). All docs: [docs/README.md](docs/README.md).
+
 ## Mission
 
 **Niko Music Hub** is a shipped native macOS SwiftUI app (current release version: `VERSION`) that combines
@@ -28,14 +30,14 @@ behavior into Swift modules instead.
   and the composition, gets its own target over `AppCore`, as `ProjectVaultRuntime` did (ADR 022).
 - `FeatureArchiveBrowser`: SwiftUI feature behind the same `ToolFeature` boundary as the other tools.
 - Feature modules stay independent: `FeatureBPMTapper`, `FeatureAudioConverter`, `FeatureAudioRecorder`,
-  `FeatureDownloader`, `FeatureStemSeparation`. The one documented exception is Stem Separation → Downloader;
-  `ModuleBoundarySourceTests` and the strict import check in `./script/ci.sh` enforce the edges
-  (`docs/decisions/020-module-boundary-checks.md`). A tool runs work the person waits for as a `JobRunner` job.
+  `FeatureDownloader`, `FeatureStemSeparation`. The one documented exception is Stem Separation → Downloader.
 - App target is `NikoMusicHub`; bundle identity is fixed in `BUNDLE_ID`.
 
 Start with `docs/architecture-map.md`: entry points, main flows, state owners, seams, gates, where the code
-differs from these rules, and open questions. Full detail: `docs/architecture.md`. Product intent (historical
-v0.1 scope): `docs/product-scope.md`.
+differs from these rules, and open questions. Detail: `docs/architecture.md`. UI: `docs/design-contract.md`
+(binding; read it before touching any SwiftUI view). Decisions: `docs/decisions/`. Reference material:
+`docs/reference/`. Records in `docs/history/` (the superseded UI plan, the v0.1 scope, audits, benchmarks)
+are not maintained: do **not** implement from them.
 
 ## Engineering baseline
 
@@ -59,98 +61,46 @@ pick the design that leaves the reader less to hold in mind.
   `+Extension.swift` files or helpers only to make it shorter: that adds jumps and keeps the shared state.
 - **Respect Swift's idioms and the project's constraints.** Swift 6 concurrency (`@MainActor` view models,
   actors for shared mutable state, `Sendable` values), value types and enums over flags, `throws` for a
-  refusal, the SwiftUI state rules below, no warnings, the module edges of ADR 020, local-first and
-  read-only toward music archives.
-
-A change that adds a module or a module edge, moves a state owner, changes a main flow or settles an open
-question updates `docs/architecture-map.md` in the same commit.
-
-## Reference material
-
-- Cubase archive/file-organization reference: `docs/reference/cubase-file-orga/`
-- Stem separation contract: `docs/reference/stem-separation-contract.md`
-- Architecture decisions: `docs/decisions/`
-- **Current UI design contract (binding): `docs/design-contract.md`** — read it before touching any
-  SwiftUI view. Superseded design history (do **not** implement from it): `docs/UI-REDESIGN-PLAN.md`
-
-## UI design contract (do not regress)
-
-`docs/design-contract.md` is binding and guarded by `Tests/AppCoreTests/HubDesignContractSourceTests.swift`
-(plus the other `*SourceTests`). The short version:
-
-- One header (`HubPageHeader` / `ToolHeaderBlock`), one tool-page scaffold (`HubInspectorPage`),
-  one rail width + material for sidebar / inspector / inbox (`Size.chromeRailWidth`, `hubChromeMaterial`).
-- Chrome material is the bare system `.sidebar` vibrancy (the Codex sidebar material, red-sheet verified —
-  `docs/decisions/018-codex-chrome-material.md`): never `glassEffect`, never a veil/gradient over it.
-  No full-width title strip: each column reserves the 44pt title row inside its own material.
-- Inspector mirrors the sidebar: 12pt inset, labels on the "Library" keyline (y=120), 30pt controls on
-  the nav-row keyline (y=144). Choices are `HubSegmentedChoice` (grid via `columns:`); fields, sliders and
-  paths use `.hubInspectorRow()`. Nothing in an inspector changes height with state.
-- Return and Esc on a tool page go through `HubInspectorPage(primaryKey:cancelKey:)`, bound only on the visible
-  page; a running job shows as `HubJobProgressRow`.
-- The primary action is `HubLabeledButton(.primary, expands: true)`, FIRST in the `action` slot; it is
-  pinned to the bottom on every tool (`HubPrimaryLastStack`).
-- Every `.focusable()` pairs with `.focusEffectDisabled()` — the system focus ring is blue and blue is
-  banned. Cards only for bounded objects. Buttons share `Radius.button` (no `Capsule()`).
-- Copy: title = object, no idle status lines, empty states are one line, no "Welcome to / Manage your".
-- Verify by measurement, not by eye: dump accessibility frames of the running dev bundle (resolved by
-  PID, window title = tool name) and compare to the keyline table in the contract, then screenshot.
-- If a rule must change, change the contract doc and the guard test in the same commit.
-
-## SwiftUI state ownership (do not regress)
-
-Guarded by `Tests/AppCoreTests/SwiftUIStateOwnershipSourceTests.swift`. The short version:
-
-- The `App` observes only scene-structural state: `MenuBarExtraState` (is the extra inserted),
-  `AppAppearanceController` and `HubFullScreenState` (is the key window full screen, for the ⌃⌘F
-  item). It never observes `HubShellSession` — any publish there would re-evaluate
-  every scene and re-init the shell (the old "LAUNCH-HANG" loops).
-- `HubShellSession` is the single owner of the selected tool and panel visibility, and records
-  `HubNavigationHistory` itself. The launch tool is resolved once in `AppComposition` before any scene
-  exists; `AppShellView.init` has no side effects and holds no copy of the selection.
-- `QuickAccessRouter` requests are one-shot values (`QuickAccessToolRequest` with a sequence,
-  `openSettingsPane` consumed by `HubSettingsRoot`). Settings-pane deep links go through
-  `router.requestSettingsPane` only — no `NotificationCenter` routing; feature views use
-  `ToolContext.router`.
-- Durable settings are observed through `ToolContext.appSettings` (`AppSettingsObserver`, fed by
-  `SettingsStore.settingsChanges`) — never snapshotted in `onAppear` (cached panes never re-appear).
-- Tool panes stay mounted; `@Environment(\.hubToolIsActive)` tells a pane when it is the visible one.
-  App-wide effects (Song menu `focusedSceneValue`, the archive arrow-key monitor) follow that flag, never
-  `onAppear`/`onDisappear`. Esc/⌘. cancel routing reads `HubShellCancelContext` as a focused scene value
-  and `ShellJobStatusCenter` for jobs.
-- Feature views `@ObservedObject` their session-owned view models; `@StateObject` is only for state a
-  view creates itself. `@AppStorage` reads the composition's defaults suite (`defaultAppStorage`).
-- Window shortcuts: ⌘W/⌘M are the system items (key-window aware); ⌃⌘F is the one custom item
-  (`HubWindowCommandGroup`, key window). No process-wide `NSEvent` monitors.
+  refusal, the SwiftUI state rules, no warnings, the module edges of ADR 020, local-first and read-only
+  toward music archives.
 
 ## Rules and what enforces them
 
-Each rule exists because agents broke it more than once. Prefer the enforcer over this table: if a
-change trips one, fix the code, not the check. When the operator corrects a mistake, fix it and add
-its rule here. A rule that is already listed with "judgment" next to it is a repeat: enforce it in the
-same change (architecture, then types, then a test that names the right file or function). Drop a
-row once its mistake cannot compile.
+Each rule exists because agents broke it more than once. Prefer the enforcer over this table: if a change
+trips one, fix the code, not the check. When the operator corrects a mistake, fix it and add its rule here.
+A rule that is already listed with "judgment" next to it is a repeat: enforce it in the same change
+(architecture, then types, then a test that names the right file or function). Drop a row once its mistake
+cannot compile. Rule tests live in `Tests/RepoRuleTests/` (a test in another target names it) and fail as
+`Rule: … Why: … See: <row> Fix: …`; `RulebookSourceTests` checks that every test named below exists.
 
-| Rule | Enforced by |
-| --- | --- |
-| Every count in a string goes through `CountCopy.count` / `CountCopy.noun` (NikoMusicCore) — never `"\(n) songs"` or `n == 1 ? "song" : "songs"` | `CountCopySourceTests` (all of Sources/) |
-| No compiler warnings, in any configuration | `strictSwiftSettings` (`-warnings-as-errors`) on every target; `PackageSettingsSourceTests`. The flag cannot promote a warning Swift downgraded itself (a call into isolation inferred from a `@preconcurrency` protocol such as SwiftUI's `View`), so `./script/ci.sh` builds clean and fails on any printed warning |
-| A caller that registers Undo/Redo, queues Vault work or reports success branches on `MetadataCommitOutcome`; `_ =` only for a plain edit whose refusal reports its own warning | The outcome is not `@discardableResult` and warnings fail the build; `ArchiveMetadataEditingOwnerTests` |
-| Only `AppComposition.makeUserDefaults` picks the person's real defaults; tests, previews and harnesses use `InMemoryPreferenceStore` or `UserDefaults(suiteName:)` | Store initializers have no `.standard` default; `RealUserDefaultsSourceTests` |
-| UI fixture launches also isolate AppKit preferences with a disposable bundle ID and an embedded settings suite; a suite alone is insufficient | `IsolatedAppLaunch` runs before SwiftUI; `IsolatedAppLaunchTests`; E2E compares the full production preferences domain |
-| A tool run gets its output folder and guard from one `ToolOutputDestination.load(from:)`; other folder checks use `ToolOutputGuard(settings:)`; the archive browser's exports and New Song use `writeProtectedRoots()`; never the browse list, never `[]` | `ToolOutputGuard` is the only app-side root list (`outputProtectedRoots` is internal); no "protect nothing" defaults; `OutputGuardSourceTests` (the files that build a `ToolOutputGuard` are listed with their reasons) |
-| Settings that gate a write or a Project Vault decision are loaded with `try`, and the action is refused when it throws; display-only code reads `ToolContext.appSettings` | `OutputGuardSourceTests` (per-file list of the few `try? …loadSettings()` sites that must stay, each with its reason) |
-| Keep Local pins are checked, written and removed only through `VaultSettings.keepLocalPins` (`KeepLocalPins`, ADR 021); never build a key set of IDs and path spellings | `keepLocalProjectIDs` is internal to AppCore; `KeepLocalPinsSourceTests` |
-| A tool page reads its recent outputs only through `ToolRecentOutputs` (AppCore); feature modules never call `listItems()` or observe `.outputInboxDidChange` | `HandoffSurfacingSourceTests.testFeatureModulesReadRecentOutputsOnlyThroughToolRecentOutputs` |
-| A tool runs work the person waits for as a `JobRunner` job (`ToolContext.jobRunner.enqueue`); its own `Task` is only for view-local async or a step its job or take awaits and cancels; work outside the runner registers by hand as a named `ShellJobExtraSourceID` exception (`docs/architecture.md` § How a tool runs its work) | `ShellJobExtraSourceID` is a closed enum, so `setExtraJob(sourceID:)` takes no other source; `ToolWorkSourceTests` (every `Task` a tool creates listed by file and enclosing declaration with its reason; every case has a reason and is registered only by its owner) |
-| Archive views state intent (`openSongDetail`, `showBoard`, `setBrowseLayout(list:)`, `showAnalytics`, `clearSelection`, …); only `ArchivePageModel` writes `viewMode` and `listShowsDetail` | `private(set)` setters in `ArchivePageModel`; `ArchiveViewIntentSourceTests` |
-| Each built-in tool ID is defined once (`BuiltInToolIDs.swift`); shell code orders, routes and labels tools from `ToolMetadata` (`section`, `handlesEscape`) and `ShellJobStatus` (`cancelTarget`, `cancelHelp`), never by comparing IDs | `ToolIDSourceTests`, `ToolSectionTests`, `InAppJobCancelRoutingTests` |
-| Module boundaries: Core imports, feature→feature edges, Vault runtime edges | `ModuleBoundarySourceTests`; `--explicit-target-dependency-import-check error` in every build script |
-| UI design contract (`docs/design-contract.md`) | `HubDesignContractSourceTests` and the other `*SourceTests` |
-| Text in a fixed slot or sheet fits without clipping | `HubShellChromeSourceTests.testOutputInboxStatusLinesFitBesideTheRowActions`, `HubDesignContractSourceTests.testSheetsHaveBoundedWidth`; other slots: judgment, verify in the running app |
-| SwiftUI state ownership | `SwiftUIStateOwnershipSourceTests` |
-| An async test waits for the event it needs (job started, own store's notification), never for time or for any sender | Judgment (6de4480, 76d1867) |
-| Docs that describe changed behavior change in the same commit | Judgment (76bd783, 0f27ea6) |
+| Rule | Enforced by | Doc |
+| --- | --- | --- |
+| **Count copy.** Every count in a string goes through `CountCopy.count` / `CountCopy.noun` (NikoMusicCore) — never `"\(n) songs"` or `n == 1 ? "song" : "songs"` | `CountCopySourceTests.testNoRawCountBeforeAPluralNounUnderSources` (all of Sources/) | `Sources/NikoMusicCore/Domain/CountCopy.swift` |
+| **No warnings.** No compiler warnings, in any configuration | `strictSwiftSettings` (`-warnings-as-errors`) on every target: `PackageSettingsSourceTests.testEveryTargetBuildsWithWarningsAsErrors`. The flag cannot promote a warning Swift downgraded itself (a call into isolation inferred from a `@preconcurrency` protocol such as SwiftUI's `View`), so `./script/ci.sh` builds clean and fails on any printed warning but SwiftPM's pinned-dependency notices: `.testCIFailsOnAnyWarningInACleanBuild` | [CONTRIBUTING](CONTRIBUTING.md#gates) |
+| **Commit outcome.** A caller that registers Undo/Redo, queues Vault work or reports success branches on `MetadataCommitOutcome`; `_ =` only for a plain edit whose refusal reports its own warning | The outcome is not `@discardableResult` and warnings fail the build; `ArchiveMetadataEditingOwnerTests` (FeatureArchiveBrowserTests) | [architecture § metadata editing](docs/architecture.md#archive-metadata-editing-ownership) |
+| **Real defaults.** Only `AppComposition.makeUserDefaults` picks the person's real defaults; tests, previews and harnesses use `InMemoryPreferenceStore` or `UserDefaults(suiteName:)` | Store initializers have no `.standard` default; `RealUserDefaultsSourceTests.testOnlyTheCompositionRootReadsRealUserDefaults` | [map § state owners](docs/architecture-map.md#state-owners-observed) |
+| **Isolated launches.** UI fixture launches also isolate AppKit preferences with a disposable bundle ID and an embedded settings suite; a suite alone is insufficient | `IsolatedAppLaunch` runs before SwiftUI; `IsolatedAppLaunchTests` (AppCoreTests); `E2ESmokeIsolationSourceTests`, `LocalExternalProofHarnessSourceTests`; E2E compares the full production preferences domain | [local-dev-flow](docs/local-dev-flow.md), [user-e2e](docs/user-e2e.md) |
+| **Output admission.** A tool run gets its output folder and guard from one `ToolOutputDestination.load(from:)`; other folder checks use `ToolOutputGuard(settings:)`; the archive browser's exports and New Song use `writeProtectedRoots()`; never the browse list, never `[]` | `ToolOutputGuard` is the only app-side root list (`outputProtectedRoots` is internal); no "protect nothing" defaults; `OutputGuardSourceTests.testOnlyToolOutputGuardUsesOutputWriteGuard`, `.testToolRunsGetTheirGuardFromToolOutputDestination` (builders listed with reasons), `.testNoWriterPassesTheBrowseListOrNothingAsProtection` | [architecture § Safety](docs/architecture.md#safety-architecture) |
+| **Settings for a write.** Settings that gate a write or a Project Vault decision are loaded with `try`, and the action is refused when it throws; display-only code reads `ToolContext.appSettings` | `OutputGuardSourceTests.testNoNewTryOptionalSettingsLoads` (per-file list of the `try? …loadSettings()` sites that stay, each with its reason) | [architecture § Safety](docs/architecture.md#safety-architecture) |
+| **Keep Local pins.** Checked, written and removed only through `VaultSettings.keepLocalPins` (`KeepLocalPins`); never build a key set of IDs and path spellings | `keepLocalProjectIDs` is internal to AppCore; `KeepLocalPinsSourceTests.testOnlyTheOwnersTouchTheRawKeepLocalSet` | [ADR 021](docs/decisions/021-keep-local-pin-format.md) |
+| **Recent outputs.** A tool page reads its recent outputs only through `ToolRecentOutputs` (AppCore); feature modules never call `listItems()` or observe `.outputInboxDidChange` | `HandoffSurfacingSourceTests.testFeatureModulesReadRecentOutputsOnlyThroughToolRecentOutputs` | [architecture § recent outputs](docs/architecture.md#tool-recent-outputs) |
+| **Tool runs.** Work the person waits for is a `JobRunner` job (`ToolContext.jobRunner.enqueue`); a tool's own `Task` is only view-local async or a step its job or take awaits and cancels; work outside the runner registers by hand as a named `ShellJobExtraSourceID` exception | `ShellJobExtraSourceID` is a closed enum, so `setExtraJob(sourceID:)` takes no other source; `ToolWorkSourceTests.testEveryTaskInAToolIsListedWithItsReason`, `.testExtraSourcesAreTheNamedExceptions` | [architecture § tool work](docs/architecture.md#how-a-tool-runs-its-work) |
+| **Running work and quit.** Work that must not be cut off registers with `ShellJobStatusCenter`; quit asks `HubTerminationCoordinator`; the delegate reaps helper process groups; only the composition builds the process runner and its registry | `HubTerminationSourceTests` (3); `HubTerminationCoordinatorTests`, `ShellJobStatusCenterTests` (AppCoreTests) | [ADR 019](docs/decisions/019-running-work-and-quit.md) |
+| **Injected helpers.** Only the composition builds the helper probe and locator and the one `ToolContext`; the locator reads no process environment; helpers run without a shell | `HelperToolSourceTests` (3), `ToolContextSourceTests.testCompositionBuildsOneContextAndHandsLaunchWarningsToTheShell` | [architecture § Helper tools](docs/architecture.md#helper-tools) |
+| **Archive page.** Archive views state intent (`openSongDetail`, `showBoard`, `setBrowseLayout(list:)`, `showAnalytics`, `clearSelection`, …); only `ArchivePageModel` writes `viewMode` and `listShowsDetail`; the detail's status menu uses the status gate | The compiler: both setters are `private(set)` in `ArchivePageModel`; `ArchiveViewIntentSourceTests.testThePageSettersStayPrivate`, `.testSongDetailStatusMenuUsesTheStatusGate` | [architecture § Archive page state](docs/architecture.md#archive-page-state) |
+| **Vault records.** A transfer's state and a restore's phase change only in the engines' checked `checkAndSave` and the store's reconcile; Vault folder names come only from `VaultFolders` | `VaultStateWriterSourceTests.testOnlyTheCheckedWritesAssignAState`, `VaultFoldersSourceTests.testOnlyVaultFoldersSpellsTheFolderNames` | [architecture § Vault state changes](docs/architecture.md#vault-state-changes), [§ Vault folders](docs/architecture.md#vault-folders) |
+| **Automatic archiving.** The copy-only Done copy is the only automatic archiving; Settings offers no background archiving and no Vault login item; Settings saves the scan list and the archive follows the store | `SettingsLiquidSourceTests.testVaultSettingsOfferNoBackgroundArchivingAndNoLoginItem`, `.testSettingsAndSetUpNeverReachIntoTheArchiveViewModel` | [map gap 8](docs/architecture-map.md#where-the-code-differs-from-the-intent-observed), [architecture § scan list](docs/architecture.md#archive-scan-list) |
+| **Preview is output-only.** Archive preview playback stays on `AVPlayer` and touches no audio input; the detail page allocates no player and pages its candidates | `ArchivePreviewOutputOnlySourceTests` (3), `ArchiveDetailPerformanceSourceTests` (2) | [architecture § preview playback](docs/architecture.md#archive-preview-playback) |
+| **Tool IDs.** Each built-in tool ID is defined once (`BuiltInToolIDs.swift`); shell code orders, routes and labels tools from `ToolMetadata` (`section`, `handlesEscape`) and `ShellJobStatus` (`cancelTarget`, `cancelHelp`), never by comparing IDs | `ToolIDSourceTests` (3); `ToolSectionTests`, `InAppJobCancelRoutingTests` (AppCoreTests) | [architecture § Tool self-description](docs/architecture.md#tool-self-description) |
+| **Module boundaries.** Core imports, feature→feature edges, Vault runtime edges | `ModuleBoundarySourceTests` (5); `--explicit-target-dependency-import-check error` in every build script | [ADR 020](docs/decisions/020-module-boundary-checks.md), [ADR 022](docs/decisions/022-appcore-scope-and-vault-runtime-target.md) |
+| **Map current.** A change that adds a module or a module edge, moves a state owner, changes a main flow or settles an open question updates `docs/architecture-map.md` in the same commit | Judgment | [map](docs/architecture-map.md#keeping-this-map-current) |
+| **Design contract.** One header, one tool-page scaffold, one rail width and material; bare `.sidebar` chrome, no full-width title strip; inspector keylines; Return and Esc only through `HubInspectorPage`; the primary action first and pinned; every `.focusable()` with `.focusEffectDisabled()`; cards only for bounded objects; `Radius.button`, no `Capsule()`; copy rules | `HubDesignContractSourceTests` (16), `HubShellChromeSourceTests`, `ToolLiquidSurfaceSourceTests`, `SettingsLiquidSourceTests`, `ArchiveLiquidSurfaceSourceTests`, `HubSetupViewSourceTests`, `MenuBarSourceTests`, `QuickAccessSourceTests`, `AppAppearanceControllerSourceTests` | [design contract](docs/design-contract.md), [ADR 018](docs/decisions/018-codex-chrome-material.md), [menu bar](docs/menu-bar-quick-access.md) |
+| **Measured UI.** Verify a UI change by measurement, not by eye: dump accessibility frames of the running dev bundle (resolved by PID, window title = tool name), compare to the keyline table, then screenshot | Judgment | [design contract §7](docs/design-contract.md#7-verification-loop-do-this-every-time) |
+| **Contract changes together.** If a design rule must change, change the contract doc and its guard test in the same commit | Judgment | [design contract](docs/design-contract.md) |
+| **Text fits.** Text in a fixed slot or sheet fits without clipping | `HubShellChromeSourceTests.testOutputInboxStatusLinesFitBesideTheRowActions`, `HubDesignContractSourceTests.testSheetsHaveBoundedWidth`; other slots: judgment, verify in the running app | [design contract §6](docs/design-contract.md) |
+| **SwiftUI state.** The `App` observes only scene-structural state; `HubShellSession` owns the selection; router requests are one-shot; settings are observed through `ToolContext.appSettings`; panes follow `hubToolIsActive`; views `@ObservedObject` session-owned models; no process-wide `NSEvent` monitors | `SwiftUIStateOwnershipSourceTests` (4) | [architecture § SwiftUI state ownership](docs/architecture.md#swiftui-state-ownership) |
+| **Async tests.** An async test waits for the event it needs (job started, own store's notification), never for time or for any sender | Judgment (6de4480, 76d1867) | — |
+| **Docs with behavior.** Docs that describe changed behavior change in the same commit | Judgment (76bd783, 0f27ea6); `script/check-doc-links.py` catches a broken link | [docs index](docs/README.md) |
 
 ## Working approach
 
@@ -158,17 +108,15 @@ Work directly from the user request, current source, Git state and validation ev
 
 ## Local gates
 
-For scoped implementation changes, run the checks relevant to the affected behavior. Run the full local gates for integration or release work. Documentation-only changes need structural and link checks. Once sufficient checks pass, repeat them only for new changes, failures or unresolved concerns. Release requirements below still apply.
+For scoped implementation changes, run the checks relevant to the affected behavior. Run the full local gates for integration or release work. Documentation-only changes need structural and link checks (`script/check-doc-links.py`). Once sufficient checks pass, repeat them only for new changes, failures or unresolved concerns. Release requirements below still apply.
 
 ```bash
 ./script/ci.sh
 ./script/e2e_user_smoke.sh
 ```
 
-`./script/ci.sh` skips host-only CoreAudio recording tests that require a usable system-audio capture
-device. Those tests are still part of the source suite; they are just not a reliable always-on-Mac gate.
-
-Friendly wrappers: `./script/dev.sh run`, `./script/dev.sh doctor`, `./script/dev.sh check`.
+`./script/ci.sh` skips host-only CoreAudio recording tests that need a usable system-audio capture device;
+they stay in the source suite. Friendly wrappers: `./script/dev.sh run`, `doctor`, `check`.
 
 ## Release engineering
 
@@ -190,64 +138,9 @@ unverified. See `docs/update-feed.md`.
 
 ## Ultimate De-Slop
 
-Vendored locally from [Niko96-dotcom/ultimate-de-slop](https://github.com/Niko96-dotcom/ultimate-de-slop) (the `.cursor/` tree is gitignored; a fresh clone re-vendors it with the refresh command below):
-
-- Skill: `.cursor/skills/ultimate-de-slop/`
-- Slash command: `.cursor/commands/ultimate-de-slop.md`
-- Runtime state (gitignored): `.deslop/`
-
-Use the vendored workflow when the user explicitly requests **Ultimate De Slop**, **de-slop**,
-`/ultimate-de-slop`, or that bounded iterative workflow. Ordinary reviews, audits and scoped
-cleanup do not automatically activate the harness. Follow explicit review-only or direct-work requests.
-
-```bash
-SKILL_DIR=".cursor/skills/ultimate-de-slop"
-"$SKILL_DIR/scripts/deslop-init.sh"
-"$SKILL_DIR/scripts/deslop-doctor.py"
-"$SKILL_DIR/scripts/deslop-status.py"
-```
-
-### Desktop / Mac (nested loop)
-
-When `cursor-agent` (or another supported harness CLI) is on `PATH`:
-
-```bash
-export DESLOP_HARNESS=cursor   # auto-detected from the install marker
-"$SKILL_DIR/scripts/deslop-loop.sh" --max-iterations 5 --priority P0,P1
-"$SKILL_DIR/scripts/deslop-status.py"
-# later:
-"$SKILL_DIR/scripts/deslop-continue.sh"
-```
-
-Review-only: `"$SKILL_DIR/scripts/deslop-review.sh"`.
-
-### Cloud (parent-agent mode)
-
-Stock cloud VMs do **not** ship `cursor-agent` / `codex` / `claude`. Nested `deslop-loop.sh` agent
-stages will fail doctor/`127` there. In cloud, the current agent is the parent and must play
-reviewer → arbiter → fixer → verifier itself while still using the deterministic harness for state:
-
-1. Read `.cursor/skills/ultimate-de-slop/SKILL.md` and follow its safety defaults (one finding at a
-   time, no P3 fuel, no broad rewrites).
-2. Run `deslop-init.sh`, then use `.deslop/index.md` / `.deslop/inventory.json` to partition work.
-3. Produce high-confidence P0/P1 findings with concrete evidence; persist via the harness scripts when
-   possible, otherwise keep findings in `.deslop/findings.jsonl` shape from
-   `references/finding-schema.md`.
-4. Fix exactly one accepted finding, run repo gates (`./script/ci.sh`; `./script/e2e_user_smoke.sh` if
-   UI changed), then verify against the original finding.
-5. Do not load `.deslop/runs/` into chat unless debugging. Prefer `deslop-status.py` / `deslop-next.py`.
-6. Stop on the same stop policy as the skill (`no_eligible_findings`, max iterations, `.deslop/stop`,
-   finalize halt).
-
-Do **not** confuse this with the tiny Cursor plugin skill named `deslop` (branch-diff slop cleanup).
-Ultimate De-Slop is the bounded whole-repo control plane.
-
-Refresh the vendored skill from upstream when needed:
-
-```bash
-git clone --depth 1 https://github.com/Niko96-dotcom/ultimate-de-slop.git /tmp/ultimate-de-slop
-/tmp/ultimate-de-slop/scripts/install/install-cursor.sh --scope local --project-dir "$(pwd)"
-```
+Only when the user explicitly asks for **Ultimate De Slop**, **de-slop**, `/ultimate-de-slop` or that bounded
+iterative workflow: follow [docs/de-slop.md](docs/de-slop.md) (harness in `.cursor/`, state in `.deslop/`).
+Ordinary reviews, audits and scoped cleanup do not activate it; follow explicit review-only or direct-work requests.
 
 ## Git rules
 

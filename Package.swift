@@ -165,6 +165,13 @@ let package = Package(
             dependencies: ["AppCore", "NikoMusicCore", "ProjectVaultRuntime", "FeatureArchiveBrowser", "FeatureAudioRecorder"],
             swiftSettings: strictSwiftSettings
         ),
+        // The repository's rules that the compiler cannot check (AGENTS.md, "Rules and what enforces
+        // them"): these tests read the source text. They test rules, not behavior.
+        .testTarget(
+            name: "RepoRuleTests",
+            dependencies: ["AppCore"],
+            swiftSettings: strictSwiftSettings
+        ),
         .testTarget(
             name: "ProjectVaultRuntimeTests",
             dependencies: ["ProjectVaultRuntime", "AppCore", "NikoMusicCore"],

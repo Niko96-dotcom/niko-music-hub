@@ -175,15 +175,6 @@ final class HelperToolProbeTests: XCTestCase {
 
         XCTAssertEqual(status, .broken(message: "Python module not found"))
     }
-
-    // MARK: - Source
-
-    func testTheProbeRunsHelpersWithoutAShell() throws {
-        let source = try SourceTestSupport.read("Sources/AppCore/HelperTools/HelperToolProbe.swift")
-        let code = SourceLex.stripped(source)
-        XCTAssertFalse(code.contains("/bin/sh"))
-        XCTAssertFalse(code.contains("\"-c\""))
-    }
 }
 
 private struct ProbeRunner: ExternalProcessRunning {
