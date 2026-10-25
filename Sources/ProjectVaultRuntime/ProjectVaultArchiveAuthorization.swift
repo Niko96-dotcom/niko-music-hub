@@ -1,3 +1,4 @@
+import AppCore
 import Darwin
 import Foundation
 import NikoMusicCore

@@ -1,6 +1,7 @@
 @testable import AppCore
 import Foundation
 import NikoMusicCore
+@testable import ProjectVaultRuntime
 import XCTest
 
 /// Package 3: default Restore & Open preserves workflow metadata, pins the

@@ -1,6 +1,7 @@
-@testable import AppCore
+import AppCore
 import Foundation
 import NikoMusicCore
+@testable import ProjectVaultRuntime
 import XCTest
 
 final class ProjectVaultPolishTests: XCTestCase {

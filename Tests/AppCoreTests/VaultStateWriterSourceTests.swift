@@ -59,7 +59,7 @@ final class VaultStateWriterSourceTests: XCTestCase {
 
     /// The Vault code, plus any other file that names a Vault record, store or engine.
     private static func holdsVaultRecords(_ relative: String, _ code: String) -> Bool {
-        relative.hasPrefix("Sources/NikoMusicCore/") || relative.hasPrefix("Sources/AppCore/ProjectVault/")
+        relative.hasPrefix("Sources/NikoMusicCore/") || relative.hasPrefix("Sources/ProjectVaultRuntime/")
             || [
                 "VaultTransferRecord", "VaultTransferStoring", "LocalVaultTransferEngine",
                 "VaultRestoreRecord", "VaultRestoreStoring", "LocalVaultRestoreEngine",

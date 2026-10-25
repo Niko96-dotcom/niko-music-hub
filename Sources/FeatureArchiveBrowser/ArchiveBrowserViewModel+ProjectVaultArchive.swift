@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 
 extension ArchiveBrowserViewModel {
     /// Cancels a bounded Done retry without reusing its approval. Also releases

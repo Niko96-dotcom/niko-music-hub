@@ -2,6 +2,7 @@ import AppCore
 @testable import FeatureArchiveBrowser
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// With Project Vault off (or its folders not chosen) nothing can reach the

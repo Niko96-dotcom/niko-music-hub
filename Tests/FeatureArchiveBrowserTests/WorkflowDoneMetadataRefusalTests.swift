@@ -2,6 +2,7 @@ import AppCore
 @testable import FeatureArchiveBrowser
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// A Done confirmation must stop when its metadata step does not land: a

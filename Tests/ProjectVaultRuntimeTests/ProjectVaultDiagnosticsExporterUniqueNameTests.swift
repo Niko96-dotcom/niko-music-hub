@@ -1,7 +1,8 @@
+import AppCore
 import Foundation
 import NikoMusicCore
+@testable import ProjectVaultRuntime
 import XCTest
-@testable import AppCore
 
 /// NMH-055: Settings vault diagnostics export uses a dated default name (no silent
 /// overwrite of a fixed name) while the archive-root write guard stays fail-closed.

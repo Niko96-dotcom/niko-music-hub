@@ -2,6 +2,7 @@ import AppCore
 import Combine
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 
 /// Archive shell composition and browse/selection state. Metadata editing,
 /// Vault observation and operations, scanning, and audio/project analysis

@@ -1,6 +1,7 @@
 import AppCore
 import AppKit
 import AppUpdates
+import ProjectVaultRuntime
 import SwiftUI
 
 @main
@@ -99,6 +100,7 @@ struct NikoMusicHubApp: App {
                 context: composition.context,
                 appearanceController: appearanceController,
                 updateController: composition.updateController,
+                vaultRecoveryService: composition.vaultRecoveryService,
                 router: composition.router,
                 shellSession: shellSession
             )

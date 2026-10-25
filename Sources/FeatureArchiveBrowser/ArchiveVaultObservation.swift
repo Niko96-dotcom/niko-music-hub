@@ -2,6 +2,7 @@ import AppCore
 import Combine
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 
 /// Single MainActor owner for Vault observation/presentation state.
 ///

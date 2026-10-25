@@ -1,3 +1,4 @@
+import AppCore
 import Foundation
 import NikoMusicCore
 
@@ -59,5 +60,27 @@ public struct ProjectVaultRestoreProgress: Equatable, Sendable {
     /// Position of `phase` within `checklistPhases`, or nil for `.superseded`.
     public var checklistIndex: Int? {
         Self.checklistPhases.firstIndex(of: phase)
+    }
+}
+
+extension ShellJobStatusCopy {
+    public static let vaultTransferFallback = "Project Vault transfer"
+
+    /// NMH-054: vault transfer row, at operation start (`progress == nil`) and
+    /// during a restore. `percent` is the honest staging fraction
+    /// (nil while totals are unknown), so the jobs row reads determinate
+    /// (`Transferring “Song” · 42%`) exactly when the detail bar does.
+    public static func vaultTransferStatus(
+        songName: String,
+        progress: ProjectVaultRestoreProgress?
+    ) -> ShellJobStatus {
+        ShellJobStatus(
+            id: ShellJobExtraSourceID.vaultTransfer,
+            title: songName.isEmpty ? vaultTransferFallback : songName,
+            percent: progress?.fraction,
+            cancelActionID: ShellJobExtraSourceID.vaultTransfer,
+            activityVerb: "Transferring",
+            cancelTarget: .vaultTransfer
+        )
     }
 }

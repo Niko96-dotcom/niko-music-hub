@@ -1,5 +1,6 @@
 import AppCore
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// NMH-091: one name for this action, everywhere. The name is Restore & Open

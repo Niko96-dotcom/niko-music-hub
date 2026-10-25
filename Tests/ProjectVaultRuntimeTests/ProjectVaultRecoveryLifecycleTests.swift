@@ -2,6 +2,7 @@
 import CryptoKit
 import Foundation
 import NikoMusicCore
+@testable import ProjectVaultRuntime
 import XCTest
 
 /// Recovery lifecycle test using disposable fixtures only.

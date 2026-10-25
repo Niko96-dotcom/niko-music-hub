@@ -20,7 +20,7 @@ BIN_DIR="$(swift build -c release --show-bin-path)"
 mkdir -p .build/performance-startup
 TOOL=startup
 if [[ "${1:-}" == "launch" || "${1:-}" == "startup" || "${1:-}" == "tools" ]]; then TOOL="$1"; shift; fi
-MODULES=(FeatureArchiveBrowser AppCore NikoMusicCore)
+MODULES=(FeatureArchiveBrowser ProjectVaultRuntime AppCore NikoMusicCore)
 if [[ "$TOOL" == "tools" ]]; then
   MODULES+=(FeatureBPMTapper FeatureAudioConverter FeatureAudioRecorder FeatureDownloader FeatureStemSeparation)
   for module in FeatureBPMTapper FeatureAudioConverter FeatureAudioRecorder FeatureDownloader FeatureStemSeparation; do

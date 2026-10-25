@@ -1,6 +1,7 @@
 import AppCore
 @testable import FeatureArchiveBrowser
 import Foundation
+import ProjectVaultRuntime
 import XCTest
 
 @MainActor

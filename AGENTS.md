@@ -23,10 +23,10 @@ behavior into Swift modules instead.
 
 - `NikoMusicCore`: pure Swift domain/scanning/search/opening safety, SQLite persistence and the Project Vault
   engines. No SwiftUI, no AppKit UI.
-- `AppCore`: the shared shell kit (tool registry, context, settings, jobs and quit, output inbox, diagnostics,
-  shared components, helper tools) and, until it gets its own target, the Project Vault runtime.
-- `FeatureArchiveBrowser`: SwiftUI feature registered through the same `ToolFeature` boundary as the
-  other tools.
+- `AppCore`: only the shell kit (tool registry, context, settings, jobs and quit, output inbox, diagnostics,
+  shared components, helper tools). A subsystem with its own state owners and rules, used only by one feature
+  and the composition, gets its own target over `AppCore`, as `ProjectVaultRuntime` did (ADR 022).
+- `FeatureArchiveBrowser`: SwiftUI feature behind the same `ToolFeature` boundary as the other tools.
 - Feature modules stay independent: `FeatureBPMTapper`, `FeatureAudioConverter`,
   `FeatureAudioRecorder`, `FeatureDownloader`, `FeatureStemSeparation`. The one documented exception is
   Stem Separation → Downloader; `ModuleBoundarySourceTests` and the strict import check in `./script/ci.sh`
@@ -144,7 +144,7 @@ row once its mistake cannot compile.
 | A tool page reads its recent outputs only through `ToolRecentOutputs` (AppCore); feature modules never call `listItems()` or observe `.outputInboxDidChange` | `HandoffSurfacingSourceTests.testFeatureModulesReadRecentOutputsOnlyThroughToolRecentOutputs` |
 | Archive views state intent (`openSongDetail`, `showBoard`, `setBrowseLayout(list:)`, `showAnalytics`, `clearSelection`, …); only `ArchiveBrowserViewModel*.swift` writes `viewMode` and `listShowsDetail` | `ArchiveViewIntentSourceTests` |
 | Each built-in tool ID is defined once (`BuiltInToolIDs.swift`); shell code orders, routes and labels tools from `ToolMetadata` (`section`, `handlesEscape`) and `ShellJobStatus` (`cancelTarget`, `cancelHelp`), never by comparing IDs | `ToolIDSourceTests`, `ToolSectionTests`, `InAppJobCancelRoutingTests` |
-| Module boundaries: Core imports, feature→feature edges | `ModuleBoundarySourceTests`; `--explicit-target-dependency-import-check error` in every build script |
+| Module boundaries: Core imports, feature→feature edges, Vault runtime edges | `ModuleBoundarySourceTests`; `--explicit-target-dependency-import-check error` in every build script |
 | UI design contract (`docs/design-contract.md`) | `HubDesignContractSourceTests` and the other `*SourceTests` |
 | Text in a fixed slot or sheet fits without clipping | `HubShellChromeSourceTests.testOutputInboxStatusLinesFitBesideTheRowActions`, `HubDesignContractSourceTests.testSheetsHaveBoundedWidth`; other slots: judgment, verify in the running app |
 | SwiftUI state ownership | `SwiftUIStateOwnershipSourceTests` |

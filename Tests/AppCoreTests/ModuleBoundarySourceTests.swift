@@ -2,8 +2,8 @@ import Foundation
 import XCTest
 
 /// ADR-020: the module rules in AGENTS.md and docs/architecture.md are checked mechanically.
-/// Adding a Core framework or a feature→feature edge means changing docs/architecture.md and
-/// this test in the same commit, like the design contract.
+/// Adding a Core framework, a feature→feature edge or a Project Vault runtime edge (ADR-022) means
+/// changing docs/architecture.md and this test in the same commit, like the design contract.
 final class ModuleBoundarySourceTests: XCTestCase {
     /// Core is pure domain code: no SwiftUI, no AppKit, no app modules.
     private static let coreAllowedImports: Set<String> = [
@@ -14,6 +14,15 @@ final class ModuleBoundarySourceTests: XCTestCase {
     private static let documentedFeatureEdges: Set<String> = [
         "FeatureStemSeparation -> FeatureDownloader",
     ]
+
+    /// ADR-022: the Project Vault runtime sits on the shell kit and Core, with no UI frameworks.
+    private static let vaultRuntimeAllowedImports: Set<String> = [
+        "AppCore", "NikoMusicCore", "Foundation", "Darwin", "CryptoKit",
+    ]
+
+    /// ADR-022: the archive feature and the app target use the Vault runtime; the shell kit and
+    /// every other module do not.
+    private static let vaultRuntimeImporters: Set<String> = ["FeatureArchiveBrowser", "NikoMusicHub"]
 
     private static let strictImportCheckFlag = "--explicit-target-dependency-import-check error"
 
@@ -47,6 +56,37 @@ final class ModuleBoundarySourceTests: XCTestCase {
             edges,
             Self.documentedFeatureEdges,
             "Feature→feature imports changed. Document a new edge in docs/architecture.md and update this test in the same commit."
+        )
+    }
+
+    func testProjectVaultRuntimeImportsOnlyShellKitCoreAndSystemFrameworks() throws {
+        let files = try swiftFiles(under: "Sources/ProjectVaultRuntime")
+        XCTAssertFalse(files.isEmpty, "No Swift sources found under Sources/ProjectVaultRuntime")
+        for file in files {
+            for module in try importedModules(in: file) where !Self.vaultRuntimeAllowedImports.contains(module) {
+                XCTFail("ProjectVaultRuntime imports \(module), which is not in its allowlist: \(relativePath(file))")
+            }
+        }
+    }
+
+    func testOnlyTheArchiveFeatureAndTheAppImportProjectVaultRuntime() throws {
+        let modules = try FileManager.default
+            .contentsOfDirectory(atPath: SourceTestSupport.packageRoot.appendingPathComponent("Sources").path)
+            .filter { $0 != "ProjectVaultRuntime" && !$0.hasPrefix(".") }
+            .sorted()
+        XCTAssertTrue(modules.contains("AppCore"), "Source module directories not found under Sources/")
+
+        var importers: Set<String> = []
+        for module in modules {
+            for file in try swiftFiles(under: "Sources/\(module)")
+                where try importedModules(in: file).contains("ProjectVaultRuntime") {
+                importers.insert(module)
+            }
+        }
+        XCTAssertEqual(
+            importers,
+            Self.vaultRuntimeImporters,
+            "ProjectVaultRuntime importers changed. ADR-022 allows only the archive feature and the app target."
         )
     }
 

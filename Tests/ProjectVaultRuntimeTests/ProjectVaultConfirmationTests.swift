@@ -1,6 +1,7 @@
 import AppCore
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 final class ProjectVaultConfirmationTests: XCTestCase {

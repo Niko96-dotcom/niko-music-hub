@@ -1,6 +1,7 @@
 import AppCore
 import Combine
 import Foundation
+import ProjectVaultRuntime
 
 /// Single MainActor owner for Project Vault transfer queue state, running
 /// task/stop, per-request batch accounting, and bounded Done-retry bookkeeping.

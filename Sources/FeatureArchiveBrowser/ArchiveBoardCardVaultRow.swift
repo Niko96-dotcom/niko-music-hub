@@ -1,4 +1,5 @@
 import AppCore
+import ProjectVaultRuntime
 import SwiftUI
 
 /// The Vault status line under a board card's title, with the inline

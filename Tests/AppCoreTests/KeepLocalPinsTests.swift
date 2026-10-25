@@ -1,6 +1,7 @@
 @testable import AppCore
 @testable import FeatureArchiveBrowser
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// ADR 021: one owner for Keep Local matching over the unchanged stored keys.

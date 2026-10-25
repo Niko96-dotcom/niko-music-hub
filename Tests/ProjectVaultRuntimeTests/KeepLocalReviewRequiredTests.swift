@@ -1,6 +1,7 @@
 @testable import AppCore
 import Foundation
 import NikoMusicCore
+@testable import ProjectVaultRuntime
 import XCTest
 
 /// Final settings-repair safety finding: a repair that resets the Keep Local

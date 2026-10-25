@@ -3,6 +3,7 @@ import AppCore
 import Combine
 import Foundation
 import NikoMusicCore
+import ProjectVaultRuntime
 import XCTest
 
 /// Vault observation ownership: prepared settings/catalog/snapshot transitions,

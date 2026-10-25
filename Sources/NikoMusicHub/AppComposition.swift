@@ -2,6 +2,7 @@ import AppCore
 import AppKit
 import AppUpdates
 import FeatureArchiveBrowser
+import ProjectVaultRuntime
 import UniformTypeIdentifiers
 import NikoMusicCore
 import FeatureAudioConverter
@@ -21,6 +22,10 @@ struct AppComposition {
     let helperSetup: HelperToolSetupModel
     let appearanceController: AppAppearanceController
     let updateController: AppUpdateController
+    /// Project Vault recovery export and import for the Vault settings pane; nil when the
+    /// archive database is damaged (import still works through the standalone service
+    /// entry point, so recovery never depends on a healthy current database).
+    let vaultRecoveryService: ProjectVaultRecoveryService?
     let archiveViewModel: ArchiveBrowserViewModel
     /// Stores that failed to open and a failed tool registry; the shell's
     /// warning banner is their only reader.
@@ -167,7 +172,6 @@ struct AppComposition {
             navigationHistory: navigationHistory,
             appSettings: appSettings,
             router: quickAccessRouter,
-            recoveryService: recoveryService,
             settingsRepair: settingsRepair,
             helperHealth: helperHealth,
             audioCaptureActivity: audioCaptureActivity
@@ -277,6 +281,7 @@ struct AppComposition {
             helperSetup: helperSetup,
             appearanceController: appearanceController,
             updateController: updateController,
+            vaultRecoveryService: recoveryService,
             archiveViewModel: archiveViewModel,
             persistenceIssues: persistenceIssues,
             termination: HubTerminationCoordinator(jobStatusCenter: jobStatusCenter),

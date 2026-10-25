@@ -26,11 +26,6 @@ public struct ToolContext: Sendable {
     public let appSettings: AppSettingsObserver
     /// App routing store: tool-open and Settings-pane requests from features.
     public let router: QuickAccessRouter
-    /// Optional Project Vault recovery integration. Created with the live
-    /// archive database and settings store; nil when the database is damaged
-    /// (import still works through the standalone service entry point, so
-    /// recovery never depends on a healthy current database).
-    public let recoveryService: ProjectVaultRecoveryService?
     /// Explicit repair for settings that no longer decode (see `SettingsRepairModel`).
     public let settingsRepair: SettingsRepairModel
     /// What each helper (yt-dlp, FFmpeg, demucs-mlx) can do now, and its locator.
@@ -54,7 +49,6 @@ public struct ToolContext: Sendable {
         navigationHistory: HubNavigationHistory = HubNavigationHistory(),
         appSettings: AppSettingsObserver? = nil,
         router: QuickAccessRouter? = nil,
-        recoveryService: ProjectVaultRecoveryService? = nil,
         settingsRepair: SettingsRepairModel? = nil,
         helperHealth: HelperToolHealth? = nil,
         audioCaptureActivity: AudioCaptureActivity? = nil
@@ -71,7 +65,6 @@ public struct ToolContext: Sendable {
         self.navigationHistory = navigationHistory
         self.appSettings = appSettings ?? AppSettingsObserver(store: settingsStore)
         self.router = router ?? QuickAccessRouter()
-        self.recoveryService = recoveryService
         self.settingsRepair = settingsRepair ?? SettingsRepairModel(store: settingsStore, backupDirectory: nil)
         self.helperHealth = helperHealth ?? HelperToolHealth(
             probe: HelperToolProbe(runner: processRunner, locator: HelperToolLocator(runtime: .current)),

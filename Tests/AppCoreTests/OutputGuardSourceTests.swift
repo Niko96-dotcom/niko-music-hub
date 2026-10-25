@@ -125,7 +125,7 @@ final class OutputGuardSourceTests: XCTestCase {
     static let toolOutputGuardBuilders: [String: String] = [
         "Sources/AppCore/Settings/ToolOutputDestination.swift": "the owner: pairs a run's folder with its guard",
         "Sources/NikoMusicHub/Settings/SettingsView.swift": "the output picker checks a candidate folder before it is saved, not a run",
-        "Sources/AppCore/ProjectVault/ProjectVaultRecoveryService.swift": "the recovery bundle export writes to a folder the person chose, not the output folder",
+        "Sources/ProjectVaultRuntime/ProjectVaultRecoveryService.swift": "the recovery bundle export writes to a folder the person chose, not the output folder",
     ]
 
     private static let toolOutputGuardConstruction = try! NSRegularExpression(pattern: #"\bToolOutputGuard\s*\("#)
@@ -143,7 +143,7 @@ final class OutputGuardSourceTests: XCTestCase {
     /// for display. Lower a number when a site goes; remove a file at zero.
     static let tryOptionalSettingsLoadBaseline: [String: Int] = [
         // Fails closed: unreadable settings skip launch recovery; the browser's snapshot read reports them.
-        "Sources/AppCore/ProjectVault/LiveProjectVaultRuntime+Recovery.swift": 1,
+        "Sources/ProjectVaultRuntime/LiveProjectVaultRuntime+Recovery.swift": 1,
         // The display mirror itself: unreadable settings show defaults; writes load with `try`.
         "Sources/AppCore/Settings/AppSettingsObserver.swift": 1,
         // First-launch probe: a damaged blob belongs to a returning user, who gets no Set Up sheet.

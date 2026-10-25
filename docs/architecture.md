@@ -25,13 +25,16 @@ NikoMusicHub (executable)
 ├── FeatureDownloader
 ├── FeatureStemSeparation      # narrow exception below
 ├── AppUpdates                 # isolated Sparkle updater
-├── AppCore                    # shared shell kit + Project Vault runtime (see below)
+├── ProjectVaultRuntime        # Project Vault runtime (ADR 022)
+├── AppCore                    # shared shell kit (see below)
 └── NikoMusicCore              # scan, rank, search, open safety, persistence, Vault engines
 ```
 
-- `FeatureArchiveBrowser` depends on `AppCore` and `NikoMusicCore` only.
+- `FeatureArchiveBrowser` depends on `AppCore`, `ProjectVaultRuntime` and `NikoMusicCore` only.
+- `ProjectVaultRuntime` depends on `AppCore` and `NikoMusicCore`. Only `FeatureArchiveBrowser` and the app target
+  import it; `AppCore` never does ([ADR 022](decisions/022-appcore-scope-and-vault-runtime-target.md)).
 - Feature modules stay independent except the documented Stem Separation → Downloader exception.
-- Guarded ([ADR 020](decisions/020-module-boundary-checks.md)): the product builds pass `--explicit-target-dependency-import-check error`, and `ModuleBoundarySourceTests` pins Core's framework imports and the feature→feature edges. A new edge changes this document and that test in the same commit.
+- Guarded ([ADR 020](decisions/020-module-boundary-checks.md)): the product builds pass `--explicit-target-dependency-import-check error`, and `ModuleBoundarySourceTests` pins Core's framework imports, the feature→feature edges and the Vault runtime's imports and importers. A new edge changes this document and that test in the same commit.
 - Composition: [`AppComposition`](../Sources/NikoMusicHub/AppComposition.swift) registers all features; the archive is the default home. Shared tool wiring flows through [`ToolContext`](../Sources/AppCore/Services/ToolContext.swift).
 
 ## Existing feature dependency: Stem Separation → Downloader
@@ -99,7 +102,10 @@ Archive domain and safety. No SwiftUI/AppKit.
 
 ### `AppCore` (shared)
 
-`AppCore` holds two things: the shared shell kit, and (until it gets its own target) the Project Vault runtime.
+`AppCore` holds only the shared shell kit. A subsystem with its own state owners and rules, used only by one feature
+and the composition, gets its own target over `AppCore`
+([ADR 022](decisions/022-appcore-scope-and-vault-runtime-target.md)). The stored settings model stays here, Vault
+fields and `KeepLocalPins` included, because the shell's settings repair and output guard read it too.
 
 - Shell kit: `ToolFeature` / `ToolRegistry` / `ToolContext`, `JobRunner`, the Output Inbox (`OutputInbox/`),
   `SettingsStore` (`UserDefaultsSettingsStore`), diagnostics, `HelperTools/` (helper locator, probe, status owner,
@@ -108,10 +114,24 @@ Archive domain and safety. No SwiftUI/AppKit.
 - Shell jobs and quit: `ShellJobStatusCenter`, `CancelCopy`, `HubTerminationCoordinator` (see
   [Running work and quit](#running-work-and-quit)); Esc and ⌘. routing (`InAppJobCancelRouting`, see
   [Tool self-description](#tool-self-description)).
-- Project Vault runtime: `LiveProjectVaultRuntime`, `ProjectVaultOperating`, the admissions and the capacity probe (`FoundationProjectVaultCapacityProbe`); it uses the transfer/catalog SQLite stores owned by `NikoMusicCore/Persistence`. The activity probe (`SystemVaultAutomationActivityProbe`) lives in `NikoMusicCore/Vault/VaultAutomation.swift`.
 - Shared UI: `ToolHeaderBlock`, `HubInspectorPage`, hub design tokens (see `docs/design-contract.md`).
 - `HubRelativeTime` formats relative dates in English, matching the app's UI independently of the system locale.
 - Recorder startup explains the macOS system-audio prompt. Stop during startup waits for the capture backend to settle, shows why it is waiting, and reports when no recording began instead of silently returning to idle.
+
+### `ProjectVaultRuntime`
+
+The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no AppKit.
+
+- `LiveProjectVaultRuntime` (actor), `ProjectVaultOperating`, the admissions and the capacity probe
+  (`FoundationProjectVaultCapacityProbe`); it uses the transfer/catalog SQLite stores owned by
+  `NikoMusicCore/Persistence`. The activity probe (`SystemVaultAutomationActivityProbe`) lives in
+  `NikoMusicCore/Vault/VaultAutomation.swift`.
+- The bound archive token (`ProjectVaultArchiveAuthorization`), confirmation copy, presentation and health,
+  restore options and progress, the recovery bundle and `ProjectVaultRecoveryService`, diagnostics export, and
+  `VaultRootManager` (the Active/Archive root pairing rule).
+- The jobs-strip row of a Vault transfer (`ShellJobStatusCopy.vaultTransferStatus`) is an extension here, so the
+  shell kit names no runtime type. The recovery service reaches the Project Vault settings pane from
+  `AppComposition.vaultRecoveryService` through the Settings scene, not through `ToolContext`.
 
 ### `FeatureArchiveBrowser` (SwiftUI feature)
 
@@ -143,7 +163,7 @@ Archive domain and safety. No SwiftUI/AppKit.
 ## Persistence, services, composition
 
 - Settings: `UserDefaultsSettingsStore` owns `AppSettings` (music roots, vault bindings, Keep Local pins). Vault presentation reads settings only at explicit boundaries (`refreshProjectVaultPresentationContext`). The archive's scan list is edited only through `ArchiveScanList` ([Archive scan list](#archive-scan-list)).
-- Archive persistence (production `AppComposition.make()`): one shared `SQLiteArchiveDatabase` backs `SQLiteArchiveIndexStore` (`ArchiveIndexStoring`), `SQLiteSongUserMetadataStore` (`SongUserMetadataStoring`), `SQLiteCollaboratorStore` (`CollaboratorStoring`), `SQLiteProjectCatalogStore`, and `SQLiteVaultTransferStore`. SQLite stores live in `NikoMusicCore/Persistence`; the Vault runtime (`LiveProjectVaultRuntime`, `ProjectVaultOperating`) lives in `AppCore`. Scans reconcile with stored user metadata through `ArchiveCatalogCoordinator`. Project identity in `SQLiteProjectCatalogStore` is reconciled only by the Vault runtime, when a song is archived (`LiveProjectVaultRuntime+Catalog.swift`).
+- Archive persistence (production `AppComposition.make()`): one shared `SQLiteArchiveDatabase` backs `SQLiteArchiveIndexStore` (`ArchiveIndexStoring`), `SQLiteSongUserMetadataStore` (`SongUserMetadataStoring`), `SQLiteCollaboratorStore` (`CollaboratorStoring`), `SQLiteProjectCatalogStore`, and `SQLiteVaultTransferStore`. SQLite stores live in `NikoMusicCore/Persistence`; the Vault runtime (`LiveProjectVaultRuntime`, `ProjectVaultOperating`) lives in `ProjectVaultRuntime`. Scans reconcile with stored user metadata through `ArchiveCatalogCoordinator`. Project identity in `SQLiteProjectCatalogStore` is reconciled only by the Vault runtime, when a song is archived (`LiveProjectVaultRuntime+Catalog.swift`).
 - Song metadata: `SongUserMetadataStoring` SQLite rows (titles, aliases, notes, workflow status, collaborators); per-song merge/commit path with corrupt-row gating.
 - Vault transfers: `SQLiteVaultTransferStore` over `SQLiteArchiveDatabase` (transfer journal is authoritative for phases/recovery).
 - Vault catalog: `SQLiteProjectCatalogStore` (project records, locations, identity reviews).

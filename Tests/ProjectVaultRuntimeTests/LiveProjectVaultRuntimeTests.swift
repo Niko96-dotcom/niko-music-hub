@@ -2,6 +2,7 @@
 import Darwin
 import Foundation
 import NikoMusicCore
+@testable import ProjectVaultRuntime
 import SQLite3
 import XCTest
 

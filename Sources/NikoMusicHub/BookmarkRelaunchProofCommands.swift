@@ -3,6 +3,7 @@ import AppCore
 import Foundation
 import NikoMusicCore
 import OSLog
+import ProjectVaultRuntime
 
 enum BookmarkRelaunchProofCommands {
     static func runIfRequested() -> Bool {
