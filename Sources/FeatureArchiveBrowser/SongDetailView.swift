@@ -676,7 +676,7 @@ struct SongDetailView: View {
                     || viewModel.metadataRepairSongIDs.contains(liveSong.id)
             )
             SongCollaboratorsSection(
-                collaborators: viewModel.collaborators,
+                collaborators: viewModel.addressBook.collaborators,
                 selectedIDs: liveSong.collaboratorIDs,
                 onToggle: setCollaborator
             )

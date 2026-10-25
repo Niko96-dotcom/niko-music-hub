@@ -235,8 +235,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
         }
     }
     @Published var archiveAccessFailure: ArchiveAccessFailure?
-    @Published var collaborators: [Collaborator] = []
-    @Published var pendingCollaboratorRemoval: Collaborator?
+    /// The collaborator address book and a removal waiting for confirmation.
+    private(set) lazy var addressBook = ArchiveAddressBookModel(
+        store: collaboratorStore,
+        diagnostics: diagnostics,
+        reportWarning: { [weak self] warning in self?.recordPersistenceWarning(warning) }
+    )
+    /// The address book's list: the projections, the scan and the metadata
+    /// edits resolve collaborator names against it.
+    var collaborators: [Collaborator] { addressBook.collaborators }
     /// Collaborator suggestions, duplicate hints, the missing-audio summary and
     /// the "until the next scan" dismissals. `refreshIntelligence()` feeds it.
     let intelligence = ArchiveIntelligenceModel()
@@ -419,6 +426,7 @@ public final class ArchiveBrowserViewModel: ObservableObject {
     var intelligenceCancellable: AnyCancellable?
     var browseCancellable: AnyCancellable?
     var pageCancellable: AnyCancellable?
+    var addressBookCancellable: AnyCancellable?
     /// V3 bound-authorization capture state. Every confirmation request bumps
     /// `projectVaultAuthCaptureGeneration` and replaces
     /// `projectVaultAuthCaptureTask`; a capture only presents its dialog when
@@ -561,13 +569,15 @@ public final class ArchiveBrowserViewModel: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
         pageCancellable = page.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+        addressBookCancellable = addressBook.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
         loadRootsFromSettings()
         followStoredSettingsChanges()
         page.attach(context.navigationHistory) { [weak self] route in
             self?.restoreNavigationRoute(route)
         }
         refreshProjectVaultPresentationContext(notifyWhenChanged: false)
-        loadCollaborators()
+        addressBook.load()
         refreshFirstRunState()
         restartArchiveRootWatching()
         loadCachedIndexIfAvailable()

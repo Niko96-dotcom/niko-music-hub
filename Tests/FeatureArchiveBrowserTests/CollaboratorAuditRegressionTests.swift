@@ -116,10 +116,10 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         blockSongWithVaultTransfer(viewModel, song: blocked)
         XCTAssertTrue(viewModel.blocksGenericProjectVaultFileActions(for: blocked))
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         // The address-book row survives in memory and in the store.
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
@@ -164,10 +164,10 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         viewModel.applyCatalogScanUpdate(update, roots: [])
         XCTAssertNotNil(viewModel.catalog.metadataEditBlockWarning(for: song.id))
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.collaboratorIDs, [jamie.id])
@@ -196,10 +196,10 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         )
         viewModel.applyCatalogEdit(.load([song, plain]))
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertTrue(viewModel.collaborators.isEmpty)
         XCTAssertTrue(try store.loadAll().isEmpty)
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.collaboratorIDs, [])
@@ -229,14 +229,14 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [jamie.id])
         XCTAssertEqual(metadataStore.snapshot[song.id]?.collaboratorIDs, [jamie.id])
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
         // The row is retained (memory + store) and the failure is visible;
         // the stored assignment is not clobbered, so no dangling ID can
         // appear on reload. The visible in-memory edit follows the codebase's
         // retain-with-warning contract for ordinary storage failures.
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(metadataStore.snapshot[song.id]?.collaboratorIDs, [jamie.id])
@@ -251,7 +251,7 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         let viewModel = makeViewModel(collaboratorStore: store)
         let jamie = Collaborator(displayName: "Jamie")
         try store.upsert(jamie)
-        viewModel.loadCollaborators()
+        viewModel.addressBook.load()
 
         let folder = try makeSongFolder(named: "Assigned Song", root: root)
         let song = Song(
@@ -261,14 +261,14 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         viewModel.applyCatalogEdit(.load([song]))
 
         store.failDelete = true
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
         // Unassigns landed in memory but the row delete threw: the row stays
         // in memory and in the store, both facts are surfaced in a warning
         // (assignments removed, row not deleted), and success is never
         // claimed. No stale rollback runs.
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [])
@@ -281,9 +281,9 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         // The removal stays retryable: clearing the failure and confirming
         // again deletes the row while keeping the unassigned songs.
         store.failDelete = false
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertTrue(viewModel.collaborators.isEmpty)
         XCTAssertTrue(try store.loadAll().isEmpty)
         XCTAssertEqual(viewModel.songs.first?.collaboratorIDs, [])
@@ -295,12 +295,12 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         let viewModel = makeViewModel(collaboratorStore: store)
         let jamie = Collaborator(displayName: "Jamie")
         try store.upsert(jamie)
-        viewModel.loadCollaborators()
+        viewModel.addressBook.load()
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertNil(viewModel.persistenceWarningMessage)
 
         store.failLoad = true
-        viewModel.loadCollaborators()
+        viewModel.addressBook.load()
 
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         let warning = try XCTUnwrap(viewModel.persistenceWarningMessage)
@@ -336,14 +336,14 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         let seededWarning = try XCTUnwrap(viewModel.persistenceWarningMessage)
         XCTAssertTrue(seededWarning.contains("could not be saved"))
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
         // Explicit confirmed persistence: the identical repeated failure keeps
         // the row, keeps live and stored assignments, and keeps the warning.
         // No dangling ID can appear on reload; unrelated metadata and music
         // files are untouched.
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.collaboratorIDs, [jamie.id])
@@ -388,13 +388,13 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         XCTAssertEqual(metadataStore.snapshot[songB.id]?.collaboratorIDs, [jamie.id])
         XCTAssertNil(viewModel.persistenceWarningMessage)
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
         // The single batch persist failed: the row stays and BOTH songs keep
         // their live and stored assignments (no partial visible unassign, no
         // stale rollback). Unrelated metadata and music files are untouched.
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first { $0.id == songA.id }?.collaboratorIDs, [jamie.id])
@@ -437,12 +437,12 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             absentSongID: SongUserMetadata(songID: absentSongID, collaboratorIDs: [jamie.id]),
         ]
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
         // Refused before ANY write: row retained, live and stored assignments
         // kept, actionable copy to load the missing projects first.
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first { $0.id == live.id }?.collaboratorIDs, [jamie.id])
@@ -480,10 +480,10 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             absentSongID: SongUserMetadata(songID: absentSongID, collaboratorIDs: [jamie.id])
         ]
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first { $0.id == plain.id }?.collaboratorIDs, [])
@@ -518,10 +518,10 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
             absentSongID: SongUserMetadata(songID: absentSongID, appNote: "other", collaboratorIDs: []),
         ]
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertTrue(viewModel.collaborators.isEmpty)
         XCTAssertTrue(try store.loadAll().isEmpty)
         XCTAssertEqual(viewModel.songs.first { $0.id == live.id }?.collaboratorIDs, [])
@@ -548,11 +548,11 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         )
         viewModel.applyCatalogEdit(.load([live]))
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
         // Rows are unknowable: refuse with no writes at all.
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first { $0.id == live.id }?.collaboratorIDs, [jamie.id])
@@ -581,12 +581,12 @@ final class CollaboratorAuditRegressionTests: XCTestCase {
         metadataStore.metadata = [live.id: SongUserMetadata(songID: live.id, collaboratorIDs: [jamie.id])]
         metadataStore.corruptSongIDs = ["unreadable-row"]
 
-        viewModel.requestRemoveCollaborator(jamie)
+        viewModel.addressBook.requestRemoval(jamie)
         viewModel.confirmRemoveCollaborator()
 
         // Corrupt rows make the full reference set unknowable: fail closed
         // with no writes and no invented default metadata.
-        XCTAssertNil(viewModel.pendingCollaboratorRemoval)
+        XCTAssertNil(viewModel.addressBook.pendingCollaboratorRemoval)
         XCTAssertEqual(viewModel.collaborators.map(\.id), [jamie.id])
         XCTAssertEqual(try store.loadAll().map(\.id), [jamie.id])
         XCTAssertEqual(viewModel.songs.first { $0.id == live.id }?.collaboratorIDs, [jamie.id])

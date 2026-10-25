@@ -142,7 +142,7 @@ final class ArchiveAnalyticsTests: XCTestCase {
         model.showAnalytics()
         let baselineReads = store.historyReadCount
 
-        model.requestRemoveCollaborator(jamie)
+        model.addressBook.requestRemoval(jamie)
         model.confirmRemoveCollaborator()
 
         XCTAssertEqual(model.songs.map(\.collaboratorIDs), [[], [], []])

@@ -239,12 +239,12 @@ struct ArchiveSidebarView: View {
                 set: { viewModel.browse.setSelectedCollaboratorID($0.isEmpty ? nil : $0) }
             )) {
                 Text("Choose…").tag("")
-                ForEach(viewModel.collaborators) { collaborator in
+                ForEach(viewModel.addressBook.collaborators) { collaborator in
                     Text(collaborator.displayName).tag(collaborator.id)
                 }
             }
             .labelsHidden()
-            .disabled(viewModel.collaborators.isEmpty)
+            .disabled(viewModel.addressBook.collaborators.isEmpty)
         }
     }
 

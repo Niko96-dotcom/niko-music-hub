@@ -179,6 +179,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Vault presentation and automatic recovery | `ArchiveVaultObservation` | derived |
 | Vault transfers and project identity | `LiveProjectVaultRuntime` (actor) → `SQLiteVaultTransferStore`, `SQLiteProjectCatalogStore` | `archive-index.sqlite` |
 | Vault transfer state, restore phase | the tables `ProjectVaultStateMachine` and `VaultRestorePhase.allowedNextPhases`; written only by each engine's `checkAndSave` and the restore reconcile ([architecture.md § Vault state changes](architecture.md#vault-state-changes)) | `vault_transfers`, `vault_restores` in `archive-index.sqlite` |
+| Collaborator address book as the archive shows it, and a staged removal | `ArchiveAddressBookModel`, held as `ArchiveBrowserViewModel.addressBook`, over `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive intelligence (collaborator suggestions and their dismissals, duplicate hints, missing audio) | `ArchiveIntelligenceModel`, held as `ArchiveBrowserViewModel.intelligence` | memory |
 | Archive song analysis (BPM/key of the main preview, the project's plug-ins) | `ArchiveSongAnalysisModel`, held as `ArchiveBrowserViewModel.songAnalysis`; follows each catalog change | memory |
 | Preview playback | `ArchivePreviewSession`, held by `ArchiveBrowserViewModel.previewSession`; views get it by initializer ([architecture.md § Archive preview playback](architecture.md#archive-preview-playback)) | memory |
@@ -289,7 +290,8 @@ These rules are documented and, where named, enforced. The full table is in
    footer rules moved out to `ArchiveFooterStatus` on 2026-10-22, the song lists to `SongCatalog` on 2026-10-23).
    Owners extracted so far: scan orchestrator, catalog, metadata editing, Vault queue and observation, and since
    2026-10-25 the song analysis (`ArchiveSongAnalysisModel`), the intelligence hints (`ArchiveIntelligenceModel`)
-   the browse page (`ArchiveBrowseModel`) and the page and selection (`ArchivePageModel`). The other extensions still
+   the browse page (`ArchiveBrowseModel`), the page and selection (`ArchivePageModel`) and the address book
+   (`ArchiveAddressBookModel`). The other extensions still
    share one set of state, and the root reset still resets about 10 properties by hand.
 7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
    and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
