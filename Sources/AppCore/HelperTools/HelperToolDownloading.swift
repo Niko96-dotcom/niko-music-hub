@@ -11,21 +11,59 @@ public protocol HelperDownloading: Sendable {
     func fetchText(_ url: URL) async throws -> String
 }
 
+/// Downloads over `URLSession`. A connection that drops or does not come up starts the request again from the
+/// beginning, once after each of `retryDelays`; every other failure, and cancellation, ends it at once.
 public struct URLSessionHelperDownloader: HelperDownloading, Sendable {
     private static let chunkSize = 64 * 1024
+    /// URLSession's codes for a connection that dropped or did not come up, which a new attempt can cure.
+    private static let droppedConnectionCodes: Set<URLError.Code> = [
+        .networkConnectionLost, .timedOut, .cannotConnectToHost, .notConnectedToInternet, .dnsLookupFailed,
+    ]
 
-    public init() {}
+    private let session: URLSession
+    private let retryDelays: [Duration]
+
+    public init(session: URLSession = .shared, retryDelays: [Duration] = [.seconds(2), .seconds(5)]) {
+        self.session = session
+        self.retryDelays = retryDelays
+    }
 
     public func fetchText(_ url: URL) async throws -> String {
+        try await retryingDroppedConnections { try await fetchTextOnce(url) }
+    }
+
+    public func download(
+        _ url: URL,
+        to destinationFile: URL,
+        progress: @escaping @Sendable (Double?) -> Void
+    ) async throws -> URL {
+        try await retryingDroppedConnections { try await downloadOnce(url, to: destinationFile, progress: progress) }
+    }
+
+    private func retryingDroppedConnections<Value>(_ attempt: () async throws -> Value) async throws -> Value {
+        var delays = retryDelays[...]
+        while true {
+            do {
+                return try await attempt()
+            } catch let dropped as DroppedConnection {
+                guard let delay = delays.popFirst() else {
+                    throw HelperInstallError.downloadFailed(dropped.detail)
+                }
+                try await Task.sleep(for: delay)
+            }
+        }
+    }
+
+    private func fetchTextOnce(_ url: URL) async throws -> String {
         try Task.checkCancellation()
         let request = Self.request(for: url)
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await session.data(for: request)
         } catch {
             // URLSession reports network failures and task cancellation as URLError.
             try Task.checkCancellation()
-            throw HelperInstallError.downloadFailed("\(url.lastPathComponent): \(error.localizedDescription)")
+            throw Self.failure(error, downloading: url)
         }
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else {
@@ -40,7 +78,8 @@ public struct URLSessionHelperDownloader: HelperDownloading, Sendable {
         return text
     }
 
-    public func download(
+    /// Writes the whole file again on each attempt.
+    private func downloadOnce(
         _ url: URL,
         to destinationFile: URL,
         progress: @escaping @Sendable (Double?) -> Void
@@ -49,11 +88,11 @@ public struct URLSessionHelperDownloader: HelperDownloading, Sendable {
         let request = Self.request(for: url)
         let (bytes, response): (URLSession.AsyncBytes, URLResponse)
         do {
-            (bytes, response) = try await URLSession.shared.bytes(for: request)
+            (bytes, response) = try await session.bytes(for: request)
         } catch {
             // URLSession reports network failures and task cancellation as URLError.
             try Task.checkCancellation()
-            throw HelperInstallError.downloadFailed("\(url.lastPathComponent): \(error.localizedDescription)")
+            throw Self.failure(error, downloading: url)
         }
         guard let http = response as? HTTPURLResponse else {
             throw HelperInstallError.downloadFailed("\(url.lastPathComponent): unexpected response")
@@ -114,7 +153,7 @@ public struct URLSessionHelperDownloader: HelperDownloading, Sendable {
             // URLSession byte-stream errors surface here; surface as a download failure
             // unless the task was cancelled.
             try Task.checkCancellation()
-            throw HelperInstallError.downloadFailed("\(url.lastPathComponent): \(error.localizedDescription)")
+            throw Self.failure(error, downloading: url)
         }
 
         try Task.checkCancellation()
@@ -124,6 +163,19 @@ public struct URLSessionHelperDownloader: HelperDownloading, Sendable {
             progress(nil)
         }
         return response.url ?? url
+    }
+
+    /// A dropped connection is worth another attempt; any other URLSession error is the final download failure.
+    private static func failure(_ error: any Error, downloading url: URL) -> any Error {
+        let detail = "\(url.lastPathComponent): \(error.localizedDescription)"
+        if let error = error as? URLError, droppedConnectionCodes.contains(error.code) {
+            return DroppedConnection(detail: detail)
+        }
+        return HelperInstallError.downloadFailed(detail)
+    }
+
+    private struct DroppedConnection: Error {
+        let detail: String
     }
 
     private static func request(for url: URL) -> URLRequest {

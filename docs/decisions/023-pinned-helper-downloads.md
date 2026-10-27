@@ -77,8 +77,9 @@ What the hosts publish (checked on 2026-10-27):
 - An install gets the same FFmpeg, uv and demucs-mlx until the next app release pins new ones.
 - A Stem Separation install is about 1 GB instead of about 1.2 GB (no PyTorch). Existing installs keep
   their environment until "Install again", which also removes the old one.
-- The pins protect content, not availability: martin-riedl.de is one person's service, and a download
-  that drops still fails the install.
+- The pins protect content, not availability: martin-riedl.de is one person's service. A download whose
+  connection drops starts again twice (`URLSessionHelperDownloader`, added 2026-10-28); a host that stays
+  down still fails the install.
 - If yt-dlp changes its key, installs refuse every new release until an app update ships the new key.
   The script stops on such a change, so the change is reviewed by hand.
 - Helpers the person chooses or the app finds in system folders are still trusted by their path and
