@@ -91,11 +91,12 @@ final class ArchivePageModel: ObservableObject {
         pluginsSectionExpanded = false
     }
 
-    /// A root change: no song is selected. The page and the list detail flag stay.
+    /// A root change: no song is selected, and the compact list leaves its
+    /// detail (the song it showed is gone; a stale flag would open the detail
+    /// on the next single click). The page (board, list, analytics) stays: it
+    /// is the person's layout choice, not song state.
     func clearForRootChange() {
-        selectedSong = nil
-        songDetailsExpanded = false
-        pluginsSectionExpanded = false
+        clearSelection()
     }
 
     /// Where an arrow key moves the highlight: through the list in list order, on

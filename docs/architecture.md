@@ -229,6 +229,9 @@ writing it: `openSongDetail(_:)`, `showBoard()` (back from the detail or analyti
 setters are `private(set)`, so the compiler refuses a write outside `ArchivePageModel.swift`; `ArchiveViewIntentSourceTests` keeps them private. When the page changes, `ArchiveBrowserView` gives the archive the keyboard
 (unless the search field has it), so Esc and the song shortcuts work after a page change that did not come from a
 click: VoiceOver's "Open song detail", the Song menu, Back/Forward (`ArchiveKeyboardFocusTests`).
+A root change (`clearForRootChange()`) keeps the page the person chose (board, list or analytics) and forgets the
+song and the compact list's detail, so the first click afterwards selects instead of opening a detail for a song of
+the old root (`ArchivePageModelTests`).
 
 Gates follow the same rule: a view asks the view model the question the edit coordinator also asks. The song detail's
 status menu uses `canMutateWorkflowStatus(for:)`, like board drops and the Song menu; the shorter
