@@ -54,6 +54,8 @@ public enum HelperInstallError: LocalizedError, Equatable, Sendable {
     case extractFailed(String)
     case setupFailed(String)
     case verificationFailed(String)
+    /// A download that is not what its publisher released: a bad signature, another key, or a release too old.
+    case untrustedRelease(String)
 
     public var errorDescription: String? {
         switch self {
@@ -83,17 +85,22 @@ public enum HelperInstallError: LocalizedError, Equatable, Sendable {
             } else {
                 "Could not verify \(detail). Try again."
             }
+        case let .untrustedRelease(detail):
+            "The install stopped: \(detail). If this happens again, update Niko Music Hub."
         }
     }
 }
 
 public enum HelperToolDownloadSources {
-    public static let ytDlpBinary: URL = URL(
-        string: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
+    /// The newest yt-dlp release as GitHub's API names it; the installer then downloads that release's files.
+    public static let ytDlpLatestRelease: URL = URL(
+        string: "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
     )!
-    public static let ytDlpChecksums: URL = URL(
-        string: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"
-    )!
+
+    public static func ytDlpReleaseFile(_ name: String, tag: String) -> URL {
+        URL(string: "https://github.com/yt-dlp/yt-dlp/releases/download/\(tag)/\(name)")!
+    }
+
 
     public static let pythonVersion = "3.12"
     public static let warmupModel = "htdemucs_ft"
@@ -110,9 +117,9 @@ public struct PinnedDownload: Equatable, Sendable {
     }
 }
 
-/// The exact helper builds an install accepts. The checksums come from the app, not from the server
-/// that serves the files, so a build that changed on the host fails the install. `HelperToolPins.release`
-/// (HelperToolPins.swift) holds the shipped values; tests pass their own.
+/// What an install trusts: the exact builds it accepts, and the key yt-dlp releases must be signed with. The
+/// checksums come from the app, not from the server that serves the files, so a build that changed on the host
+/// fails the install. `HelperToolPins.release` (HelperToolPins.swift) holds the shipped values; tests pass their own.
 public struct HelperToolPins: Equatable, Sendable {
     public var ffmpeg: PinnedDownload
     public var ffprobe: PinnedDownload
@@ -120,12 +127,21 @@ public struct HelperToolPins: Equatable, Sendable {
     /// demucs-mlx and every package it needs, each with one exact version and the SHA-256 of each of its files
     /// (`uv pip install --require-hashes`). The model weights are pinned by the hashes inside demucs-mlx.
     public var demucsRequirements: String
+    /// yt-dlp follows the newest release, so it has no pinned hash: its checksum list must carry this key's signature.
+    public var ytDlpSigningKey: YtDlpSigningKey
 
-    public init(ffmpeg: PinnedDownload, ffprobe: PinnedDownload, uv: PinnedDownload, demucsRequirements: String) {
+    public init(
+        ffmpeg: PinnedDownload,
+        ffprobe: PinnedDownload,
+        uv: PinnedDownload,
+        demucsRequirements: String,
+        ytDlpSigningKey: YtDlpSigningKey
+    ) {
         self.ffmpeg = ffmpeg
         self.ffprobe = ffprobe
         self.uv = uv
         self.demucsRequirements = demucsRequirements
+        self.ytDlpSigningKey = ytDlpSigningKey
     }
 }
 
@@ -200,12 +216,24 @@ public actor HelperToolInstaller {
         try Task.checkCancellation()
         progress(HelperInstallProgress(phase: "Downloading yt-dlp", fractionCompleted: 0.0))
 
-        let checksumsText = try await downloader.fetchText(HelperToolDownloadSources.ytDlpChecksums)
+        // One release tag for all three files, so the list, its signature and the binary belong together.
+        let ytTag = try await latestYtDlpTag()
         try Task.checkCancellation()
-        let ytExpected = try expectedYtDlpHash(from: checksumsText)
+        let sumsStaged = staging.appendingPathComponent("SHA2-256SUMS", isDirectory: false)
+        let signatureStaged = staging.appendingPathComponent("SHA2-256SUMS.sig", isDirectory: false)
+        _ = try await downloader.download(
+            HelperToolDownloadSources.ytDlpReleaseFile("SHA2-256SUMS", tag: ytTag), to: sumsStaged
+        ) { _ in }
+        _ = try await downloader.download(
+            HelperToolDownloadSources.ytDlpReleaseFile("SHA2-256SUMS.sig", tag: ytTag), to: signatureStaged
+        ) { _ in }
+        try Task.checkCancellation()
+        let sums = try Data(contentsOf: sumsStaged)
+        try pins.ytDlpSigningKey.verify(signature: try Data(contentsOf: signatureStaged), of: sums)
+        let ytExpected = try expectedYtDlpHash(from: String(decoding: sums, as: UTF8.self))
         let ytStaged = staging.appendingPathComponent("yt-dlp_macos", isDirectory: false)
         _ = try await downloader.download(
-            HelperToolDownloadSources.ytDlpBinary,
+            HelperToolDownloadSources.ytDlpReleaseFile("yt-dlp_macos", tag: ytTag),
             to: ytStaged
         ) { value in
             let sub = value ?? 0
@@ -545,6 +573,30 @@ public actor HelperToolInstaller {
         for name in names where !activeAttempts.contains(name) {
             try? fileManager.removeItem(at: directory.appendingPathComponent(name))
         }
+    }
+
+    /// The newest yt-dlp release tag. A tag that is not a release date is refused, and so is a release older than
+    /// the one YouTube needs: an old release is still validly signed, so the date stops a downgrade.
+    private func latestYtDlpTag() async throws -> String {
+        struct Release: Decodable {
+            let tagName: String
+            enum CodingKeys: String, CodingKey { case tagName = "tag_name" }
+        }
+        let text = try await downloader.fetchText(HelperToolDownloadSources.ytDlpLatestRelease)
+        guard let tag = try? JSONDecoder().decode(Release.self, from: Data(text.utf8)).tagName else {
+            throw HelperInstallError.downloadFailed("yt-dlp: unreadable release information")
+        }
+        guard tag.range(of: #"^20[0-9]{2}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$"#, options: .regularExpression) != nil else {
+            throw HelperInstallError.untrustedRelease("yt-dlp: unexpected release name")
+        }
+        let floor = YtDlpVersionPolicy.youtubeCompatibilityFloor
+        guard let date = YtDlpVersionPolicy.parseVersionDate(tag),
+              let floorDate = YtDlpVersionPolicy.parseVersionDate(floor),
+              date >= floorDate
+        else {
+            throw HelperInstallError.untrustedRelease("yt-dlp \(tag) is older than \(floor)")
+        }
+        return tag
     }
 
     private func expectedYtDlpHash(from text: String) throws -> String {

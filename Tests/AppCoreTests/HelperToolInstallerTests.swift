@@ -192,7 +192,31 @@ final class HelperToolInstallerTests: XCTestCase {
         for pinned in [pins.ffmpeg.url, pins.ffprobe.url, pins.uv.url] {
             XCTAssertTrue(downloader.downloadRequests.contains(pinned), "not downloaded: \(pinned)")
         }
-        XCTAssertEqual(downloader.textRequests, [HelperToolDownloadSources.ytDlpChecksums])
+        XCTAssertEqual(downloader.textRequests, [HelperToolDownloadSources.ytDlpLatestRelease])
+    }
+
+    func testYtDlpWithAChangedChecksumListIsRefused() async throws {
+        try await assertYtDlpRefused(
+            "yt-dlp: the checksum list does not match its signature",
+            sumsAsServed: { $0 + Data("0000  yt-dlp_extra\n".utf8) }
+        )
+    }
+
+    func testYtDlpSignedByAnotherKeyIsRefused() async throws {
+        try await assertYtDlpRefused("yt-dlp: the release is signed by another key", signer: String(repeating: "CD", count: 20))
+    }
+
+    /// An old release is still validly signed; the YouTube floor stops a downgrade before any file is fetched.
+    func testYtDlpReleaseOlderThanTheFloorIsRefusedBeforeAnyDownload() async throws {
+        let downloader = try await assertYtDlpRefused(
+            "yt-dlp 2025.01.01 is older than \(YtDlpVersionPolicy.youtubeCompatibilityFloor)", tag: "2025.01.01"
+        )
+        XCTAssertEqual(downloader.downloadRequests, [])
+    }
+
+    func testYtDlpTagThatIsNoReleaseDateIsRefusedBeforeAnyDownload() async throws {
+        let downloader = try await assertYtDlpRefused("yt-dlp: unexpected release name", tag: "../../evil")
+        XCTAssertEqual(downloader.downloadRequests, [])
     }
 
     func testUvChecksumMismatchKeepsExistingDemucs() async throws {
@@ -392,7 +416,7 @@ final class HelperToolInstallerTests: XCTestCase {
         let downloader = FakeDownloader()
         let runner = FakeRunner()
         seedDownloadAndConvert(downloader: downloader)
-        downloader.hang(url: HelperToolDownloadSources.ytDlpBinary)
+        downloader.hang(url: Self.ytDlpFile("yt-dlp_macos"))
 
         let installer = HelperToolInstaller(
             locator: locator,
@@ -465,7 +489,7 @@ final class HelperToolInstallerTests: XCTestCase {
             let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
             let downloader = FakeDownloader()
             seedDownloadAndConvert(downloader: downloader)
-            downloader.hang(url: HelperToolDownloadSources.ytDlpBinary)
+            downloader.hang(url: Self.ytDlpFile("yt-dlp_macos"))
             let center = ShellJobStatusCenter(jobRunner: JobRunner())
             let model = HelperToolSetupModel(
                 locator: locator,
@@ -825,6 +849,42 @@ final class HelperToolInstallerTests: XCTestCase {
 
     // MARK: - Seeding
 
+    /// Installs Download & Convert from a yt-dlp release served with `tag`, `sumsAsServed` and `signer`, expects the
+    /// refusal `detail`, and checks that nothing was installed. Returns the downloader for further checks.
+    @discardableResult
+    private func assertYtDlpRefused(
+        _ detail: String,
+        tag: String = TestYtDlpSigner.releaseTag,
+        sumsAsServed: ((Data) -> Data)? = nil,
+        signer: String = TestYtDlpSigner.fingerprint,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws -> FakeDownloader {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let managedRoot = root.appendingPathComponent("Tools", isDirectory: true)
+        let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
+        let downloader = FakeDownloader()
+        seedYtDlp(downloader: downloader, tag: tag, sumsAsServed: sumsAsServed, signer: signer)
+        downloader.serve(data: HelperToolPins.ffmpegPayload, for: HelperToolPins.fixtures.ffmpeg.url)
+        downloader.serve(data: HelperToolPins.ffprobePayload, for: HelperToolPins.fixtures.ffprobe.url)
+
+        let installer = HelperToolInstaller(locator: locator, pins: .fixtures, downloader: downloader, processRunner: FakeRunner())
+        do {
+            try await installer.install(.downloadAndConvert) { _ in }
+            XCTFail("Expected untrustedRelease", file: file, line: line)
+        } catch let error as HelperInstallError {
+            XCTAssertEqual(error, .untrustedRelease(detail), file: file, line: line)
+        }
+        XCTAssertFalse(installer.isInstalled(.downloadAndConvert), file: file, line: line)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: locator.managedExecutableURL(for: .ytDlp).path),
+            file: file, line: line
+        )
+        assertNoStagingLeft(managedRoot: managedRoot, file: file, line: line)
+        return downloader
+    }
+
     private func seedDownloadAndConvert(downloader: FakeDownloader) {
         seedYtDlp(downloader: downloader)
         downloader.serve(data: HelperToolPins.ffmpegPayload, for: HelperToolPins.fixtures.ffmpeg.url)
@@ -841,13 +901,23 @@ final class HelperToolInstallerTests: XCTestCase {
         // Intentionally no ffprobe payload: the ffprobe download throws downloadFailed.
     }
 
-    private func seedYtDlp(downloader: FakeDownloader) {
+    /// Serves a yt-dlp release as GitHub does: its tag from the API, then a signed checksum list and the binary.
+    private func seedYtDlp(
+        downloader: FakeDownloader,
+        tag: String = TestYtDlpSigner.releaseTag,
+        sumsAsServed: ((Data) -> Data)? = nil,
+        signer: String = TestYtDlpSigner.fingerprint
+    ) {
         let ytData = Data("fake-yt-dlp-binary".utf8)
-        downloader.serve(data: ytData, for: HelperToolDownloadSources.ytDlpBinary)
-        downloader.serve(
-            text: "\(sha256Hex(ytData))  yt-dlp_macos\n",
-            for: HelperToolDownloadSources.ytDlpChecksums
-        )
+        let sums = Data("\(sha256Hex(Data("other".utf8)))  yt-dlp.exe\n\(sha256Hex(ytData))  yt-dlp_macos\n".utf8)
+        downloader.serve(text: TestYtDlpSigner.releaseJSON(tag: tag), for: HelperToolDownloadSources.ytDlpLatestRelease)
+        downloader.serve(data: sumsAsServed?(sums) ?? sums, for: Self.ytDlpFile("SHA2-256SUMS", tag: tag))
+        downloader.serve(data: TestYtDlpSigner.signature(of: sums, issuer: signer), for: Self.ytDlpFile("SHA2-256SUMS.sig", tag: tag))
+        downloader.serve(data: ytData, for: Self.ytDlpFile("yt-dlp_macos", tag: tag))
+    }
+
+    private static func ytDlpFile(_ name: String, tag: String = TestYtDlpSigner.releaseTag) -> URL {
+        HelperToolDownloadSources.ytDlpReleaseFile(name, tag: tag)
     }
 
     // MARK: - Helpers
@@ -895,7 +965,8 @@ private extension HelperToolPins {
         ffmpeg: PinnedDownload(url: URL(string: "https://ffmpeg.example/9.0.2/ffmpeg.zip")!, sha256: hex(ffmpegPayload)),
         ffprobe: PinnedDownload(url: URL(string: "https://ffmpeg.example/9.0.2/ffprobe.zip")!, sha256: hex(ffprobePayload)),
         uv: PinnedDownload(url: URL(string: "https://uv.example/0.13.6/uv-aarch64-apple-darwin.tar.gz")!, sha256: hex(uvPayload)),
-        demucsRequirements: "demucs-mlx==1.6.1 --hash=sha256:\(String(repeating: "a", count: 64))\n"
+        demucsRequirements: "demucs-mlx==1.6.1 --hash=sha256:\(String(repeating: "a", count: 64))\n",
+        ytDlpSigningKey: TestYtDlpSigner.key
     )
 
     static func hex(_ data: Data) -> String {

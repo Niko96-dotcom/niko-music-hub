@@ -343,8 +343,12 @@ The outside programs the tools run (yt-dlp, FFmpeg, ffprobe, demucs-mlx) are fou
   (`HubTerminationSourceTests`; the DEBUG E2E smoke builds its own and ends with `exit()`).
 - `HelperToolInstaller` (Set Up's one-click install) installs FFmpeg, ffprobe and uv only as the exact builds in
   `HelperToolPins.release`, each checked against the SHA-256 in that file, not against a checksum from the host. No
-  helper download uses a moving `latest` link (`HelperToolPinsSourceTests`), except yt-dlp, which follows the newest
-  release because sites change.
+  helper download uses a moving `latest` link (`HelperToolPinsSourceTests`).
+- yt-dlp follows the newest release, because sites change and old builds stop working, so it has no pinned hash. The
+  installer asks GitHub's API for the newest tag, refuses a tag that is no release date or is older than
+  `YtDlpVersionPolicy.youtubeCompatibilityFloor` (an old release is still validly signed), and downloads that tag's
+  `SHA2-256SUMS`, `SHA2-256SUMS.sig` and binary. `YtDlpSigningKey` verifies the OpenPGP signature (RSA, SHA-512) with
+  the yt-dlp signing key in `HelperToolPins.release`; the binary must match the hash in the signed list.
 - demucs-mlx goes into a fresh virtual environment per install: `uv pip install --require-hashes --no-build` of the
   lock in `HelperToolPins.release` (demucs-mlx and every package it needs, one version and the file hashes each; no
   PyTorch). The warm-up downloads the model weights into `~/.cache/demucs-mlx`; demucs-mlx accepts them only if they

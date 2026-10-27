@@ -4,7 +4,8 @@ import Foundation
 // Developer ID team KU3N25YGLU), uv 0.13.6, and demucs-mlx 1.6.1 without the PyTorch `convert` extra. Each SHA-256
 // was checked against the host's own checksum file when the pin was made. The demucs-mlx lock is
 // `uv pip compile --generate-hashes --python-version 3.12 --python-platform aarch64-apple-darwin` (uv 0.13.6,
-// MACOSX_DEPLOYMENT_TARGET=14.0) of `demucs-mlx==1.6.1`.
+// MACOSX_DEPLOYMENT_TARGET=14.0) of `demucs-mlx==1.6.1`. yt-dlp has no pin: each release must be signed by the
+// yt-dlp signing key (YtDlpSigningKey.swift).
 extension HelperToolPins {
     public static let release = HelperToolPins(
         ffmpeg: PinnedDownload(
@@ -19,7 +20,8 @@ extension HelperToolPins {
             url: URL(string: "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-aarch64-apple-darwin.tar.gz")!,
             sha256: "60fbd5c8a1ed681845eea28d9d622fcde03c51e91a43465b64a1e17db1ed3472"
         ),
-        demucsRequirements: demucsLock
+        demucsRequirements: demucsLock,
+        ytDlpSigningKey: .ytDlpProject
     )
 
     private static let demucsLock = #"""

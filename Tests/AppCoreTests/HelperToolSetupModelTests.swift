@@ -336,7 +336,7 @@ private final class SucceedingSetupRunner: StreamingExternalProcessRunning, @unc
     }
 }
 
-/// Serves fixed bytes for every link and the matching SHA-256 for every checksum URL; `pins` pin those bytes.
+/// Serves fixed bytes for every link, a yt-dlp release whose signed checksum list names them, and `pins` that pin them.
 final class ChecksummedSetupDownloader: HelperDownloading, @unchecked Sendable {
     private static let payload = Data("payload".utf8)
     private static var hash: String {
@@ -347,7 +347,8 @@ final class ChecksummedSetupDownloader: HelperDownloading, @unchecked Sendable {
         let pinned = { (name: String) in PinnedDownload(url: URL(string: "https://pins.example/\(name)")!, sha256: hash) }
         return HelperToolPins(
             ffmpeg: pinned("ffmpeg.zip"), ffprobe: pinned("ffprobe.zip"), uv: pinned("uv.tar.gz"),
-            demucsRequirements: "demucs-mlx==1.6.1 --hash=sha256:\(hash)\n"
+            demucsRequirements: "demucs-mlx==1.6.1 --hash=sha256:\(hash)\n",
+            ytDlpSigningKey: TestYtDlpSigner.key
         )
     }
 
@@ -356,13 +357,18 @@ final class ChecksummedSetupDownloader: HelperDownloading, @unchecked Sendable {
         to destinationFile: URL,
         progress: @escaping @Sendable (Double?) -> Void
     ) async throws -> URL {
-        try Self.payload.write(to: destinationFile)
+        let sums = Data("\(Self.hash)  yt-dlp_macos\n".utf8)
+        switch url.lastPathComponent {
+        case "SHA2-256SUMS": try sums.write(to: destinationFile)
+        case "SHA2-256SUMS.sig": try TestYtDlpSigner.signature(of: sums).write(to: destinationFile)
+        default: try Self.payload.write(to: destinationFile)
+        }
         progress(1)
         return url
     }
 
     func fetchText(_ url: URL) async throws -> String {
-        "\(Self.hash)  yt-dlp_macos\n"
+        TestYtDlpSigner.releaseJSON()
     }
 }
 
