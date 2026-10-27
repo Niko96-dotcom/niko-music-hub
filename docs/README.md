@@ -59,6 +59,7 @@ New to the code? Read [CONTRIBUTING.md](../CONTRIBUTING.md) first: it gives the 
 - [decisions/020-module-boundary-checks.md](decisions/020-module-boundary-checks.md): read it when you add a module or a module edge.
 - [decisions/021-keep-local-pin-format.md](decisions/021-keep-local-pin-format.md): read it when you touch Keep Local pins.
 - [decisions/022-appcore-scope-and-vault-runtime-target.md](decisions/022-appcore-scope-and-vault-runtime-target.md): read it when you decide whether code belongs in `AppCore`.
+- [decisions/023-pinned-helper-downloads.md](decisions/023-pinned-helper-downloads.md): read it when you change a helper download or make new helper pins.
 
 ## Reference
 

@@ -343,7 +343,8 @@ The outside programs the tools run (yt-dlp, FFmpeg, ffprobe, demucs-mlx) are fou
   (`HubTerminationSourceTests`; the DEBUG E2E smoke builds its own and ends with `exit()`).
 - `HelperToolInstaller` (Set Up's one-click install) installs FFmpeg, ffprobe and uv only as the exact builds in
   `HelperToolPins.release`, each checked against the SHA-256 in that file, not against a checksum from the host. No
-  helper download uses a moving `latest` link (`HelperToolPinsSourceTests`).
+  helper download uses a moving `latest` link (`HelperToolPinsSourceTests`). `script/update-helper-pins.py` makes a
+  new pin and rewrites that file; why and how: [ADR 023](decisions/023-pinned-helper-downloads.md).
 - yt-dlp follows the newest release, because sites change and old builds stop working, so it has no pinned hash. The
   installer asks GitHub's API for the newest tag, refuses a tag that is no release date or is older than
   `YtDlpVersionPolicy.youtubeCompatibilityFloor` (an old release is still validly signed), and downloads that tag's

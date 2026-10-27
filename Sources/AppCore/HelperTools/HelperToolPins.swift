@@ -1,11 +1,13 @@
 import Foundation
 
-// The helper builds this release installs: FFmpeg and ffprobe 9.0.2 (macOS arm64 release build by Martin Riedl,
-// Developer ID team KU3N25YGLU), uv 0.13.6, and demucs-mlx 1.6.1 without the PyTorch `convert` extra. Each SHA-256
-// was checked against the host's own checksum file when the pin was made. The demucs-mlx lock is
-// `uv pip compile --generate-hashes --python-version 3.12 --python-platform aarch64-apple-darwin` (uv 0.13.6,
-// MACOSX_DEPLOYMENT_TARGET=14.0) of `demucs-mlx==1.6.1`. yt-dlp has no pin: each release must be signed by the
-// yt-dlp signing key (YtDlpSigningKey.swift).
+// Written by script/update-helper-pins.py (docs/decisions/023-pinned-helper-downloads.md); change it through the
+// script. The helper builds this release installs:
+// - FFmpeg and ffprobe 9.0.2: macOS arm64 release build by Martin Riedl, Developer ID team KU3N25YGLU.
+// - uv 0.13.6.
+// - demucs-mlx 1.6.1 without the PyTorch `convert` extra, locked with `uv pip compile --generate-hashes
+//   --python-version 3.12 --python-platform aarch64-apple-darwin` (uv 0.13.6, MACOSX_DEPLOYMENT_TARGET=14.0).
+// Each SHA-256 was checked against the host's own checksum file when the pin was made. yt-dlp has no pin: each
+// release must be signed by the yt-dlp signing key (YtDlpSigningKey.swift).
 extension HelperToolPins {
     public static let release = HelperToolPins(
         ffmpeg: PinnedDownload(

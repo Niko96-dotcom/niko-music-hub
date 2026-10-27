@@ -3,13 +3,13 @@ import XCTest
 /// A moving link (`latest`) installs whatever the host serves that day, and its checksum came from the same
 /// host. FFmpeg, ffprobe and uv install the build in `HelperToolPins.release`, checked against the SHA-256 there;
 /// yt-dlp installs the newest tag's files, checked against its signed checksum list.
-/// AGENTS.md row "Pinned helpers"; docs/architecture.md § Helper tools.
+/// AGENTS.md row "Pinned helpers"; docs/architecture.md § Helper tools; docs/decisions/023-pinned-helper-downloads.md.
 final class HelperToolPinsSourceTests: XCTestCase {
     static let rule = RepoRule(
         name: "Pinned helpers",
         why: "A moving link installs whatever the host serves today, checked only against the host's own checksum",
-        see: "AGENTS.md row \"Pinned helpers\"; docs/architecture.md § Helper tools",
-        fix: "Pin the exact build and its SHA-256 in HelperToolPins.release and download that link"
+        see: "AGENTS.md row \"Pinned helpers\"; docs/decisions/023-pinned-helper-downloads.md",
+        fix: "Pin the exact build with script/update-helper-pins.py (it writes HelperToolPins.release) and download that link"
     )
 
     /// yt-dlp follows the newest release on purpose (YouTube breaks old builds within weeks), but it asks GitHub's API

@@ -116,6 +116,7 @@ EXPORT_PATHS=(
   script/release-version-allowlist.txt
   script/release-version-verify.sh
   script/ui_probe.swift
+  script/update-helper-pins.py
   script/validate-release-approval.sh
   script/validate-release-artifact.sh
   script/validate-release-metadata.py

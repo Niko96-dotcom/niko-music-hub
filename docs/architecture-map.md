@@ -15,7 +15,7 @@ Each section says what kind of statement it makes:
 - **Open**: not decided, or not verified.
 
 Detail lives in [architecture.md](architecture.md) (owners, safety, Project Vault),
-[design-contract.md](design-contract.md) (UI), [decisions/](decisions/) (ADRs 017–022),
+[design-contract.md](design-contract.md) (UI), [decisions/](decisions/) (ADRs 017–023),
 [vault-durability.md](vault-durability.md) and [vault-recovery.md](vault-recovery.md).
 [product-scope.md](history/product/product-scope.md) is the historical v0.1 scope. Every live document is
 listed in the [documentation index](README.md).
