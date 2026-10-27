@@ -278,15 +278,14 @@ public struct AudioRecorderView: View {
             }
             .buttonStyle(.plain)
             // NMH-142 (K11): FKA pattern from the BPM tap pad (NMH-029) — Tab
-            // lands here with a visible ring, Space toggles recording. Returning
-            // `.handled` consumes the key so the Button does not fire twice.
+            // lands here with a visible ring, Space toggles recording. Handling the
+            // key consumes it so the Button does not fire twice.
             .focusable()
             .focusEffectDisabled()
             .focused($recordButtonFocused)
             .onKeyPress(.space) {
                 guard isActiveTool else { return .ignored }
-                toggleRecording()
-                return .handled
+                return .handledAfterViewUpdate { toggleRecording() }
             }
             .background {
                 RoundedRectangle(cornerRadius: HubDesignSystem.Radius.button, style: .continuous)

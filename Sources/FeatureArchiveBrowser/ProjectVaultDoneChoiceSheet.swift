@@ -24,13 +24,11 @@ struct ProjectVaultDoneChoiceSheet: View {
         .frame(minWidth: 420, idealWidth: 460, maxWidth: 520)
         .onKeyPress(.return) {
             guard viewModel.vaultDialogs.pendingArchiveConfirmation != nil else { return .ignored }
-            viewModel.cancelPendingArchive()
-            return .handled
+            return .handledAfterViewUpdate { viewModel.cancelPendingArchive() }
         }
         .onKeyPress(.escape) {
             guard viewModel.vaultDialogs.pendingArchiveConfirmation != nil else { return .ignored }
-            viewModel.cancelPendingArchive()
-            return .handled
+            return .handledAfterViewUpdate { viewModel.cancelPendingArchive() }
         }
     }
 

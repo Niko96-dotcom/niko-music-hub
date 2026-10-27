@@ -355,23 +355,19 @@ struct ArchiveSidebarView: View {
             }
             .onKeyPress(.upArrow) {
                 guard isActiveTool else { return .ignored }
-                viewModel.moveSongSelection(.up)
-                return .handled
+                return .handledAfterViewUpdate { viewModel.moveSongSelection(.up) }
             }
             .onKeyPress(.downArrow) {
                 guard isActiveTool else { return .ignored }
-                viewModel.moveSongSelection(.down)
-                return .handled
+                return .handledAfterViewUpdate { viewModel.moveSongSelection(.down) }
             }
             .onKeyPress(.leftArrow) {
                 guard isActiveTool else { return .ignored }
-                viewModel.moveSongSelection(.left)
-                return .handled
+                return .handledAfterViewUpdate { viewModel.moveSongSelection(.left) }
             }
             .onKeyPress(.rightArrow) {
                 guard isActiveTool else { return .ignored }
-                viewModel.moveSongSelection(.right)
-                return .handled
+                return .handledAfterViewUpdate { viewModel.moveSongSelection(.right) }
             }
         }
     }

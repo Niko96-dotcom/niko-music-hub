@@ -154,7 +154,10 @@ Stem Separation) renders through `HubInspectorPage`:
   page declares a cancel key only when Esc must mean something else (the WAV
   Converter's "Stop After This File", the recorder's Stop). Tool views never bind
   `.defaultAction` / `.cancelAction` themselves, and their own key handlers and focus
-  follow `hubToolIsActive`.
+  follow `hubToolIsActive`. A key handler decides at once whether it handles the key
+  and makes its change with `.handledAfterViewUpdate { … }`, never with a plain
+  `.handled`: SwiftUI runs `onKeyPress` inside a view update, where a published model
+  change is undefined behavior (`KeyPressSourceTests`).
 - `action` — the primary `HubLabeledButton(style: .primary, expands: true)` FIRST;
   secondaries (Stop/Cancel/Retry/Reset/Copy) after it as `.ghost, expands: true`.
   `HubPrimaryLastStack` pins the first child to the bottom, so the primary lands on

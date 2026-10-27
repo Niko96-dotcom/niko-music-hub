@@ -44,8 +44,7 @@ struct ArchiveSearchTextField: View {
             )
             .onKeyPress(.escape) {
                 guard isActiveTool else { return .ignored }
-                handleEscape()
-                return .handled
+                return .handledAfterViewUpdate { handleEscape() }
             }
 
             if !input.query.isEmpty {

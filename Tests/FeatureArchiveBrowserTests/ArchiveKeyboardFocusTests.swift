@@ -10,6 +10,21 @@ import XCTest
 /// does not come from a click must not leave the keyboard elsewhere.
 @MainActor
 final class ArchiveKeyboardFocusTests: XCTestCase {
+    /// SwiftUI runs a key action inside a view update, and a model change published there is undefined
+    /// behavior: the app logged that fault on every Esc and Return in the archive (live check, 2026-10-27).
+    /// XCTest records the fault only as a warning; here it fails the test. The keys change the page after
+    /// the update (`KeyPress.Result.handledAfterViewUpdate`).
+    override func record(_ issue: XCTIssue) {
+        guard issue.compactDescription.hasPrefix("Publishing changes from within view updates") else {
+            return super.record(issue)
+        }
+        super.record(XCTIssue(
+            type: .assertionFailure,
+            compactDescription: "A key changed the archive inside a view update: \(issue.compactDescription)",
+            sourceCodeContext: issue.sourceCodeContext
+        ))
+    }
+
     /// VoiceOver's "Open song detail" (like the Song menu or history Back/Forward)
     /// opens the detail without a click. Esc must still return to the board.
     func testEscClosesADetailOpenedWithoutAClick() throws {

@@ -41,16 +41,17 @@ enum ArchiveShortcutFocusPolicy {
     /// the editor keeps first responder and the key passes through. Card and
     /// lane clicks hand focus back to the board themselves (NMH-006), so Space
     /// never claims it — a claim here dropped every key after the first space.
+    /// `playPause` is nil when there is nothing to play; the preview changes after the view update.
     static func handleSpaceKey(
         archiveFocused: Bool,
         in window: NSWindow?,
-        playPause: () -> Bool
+        playPause: (@MainActor () -> Void)?
     ) -> KeyPress.Result {
-        guard allowsSongShortcuts(archiveFocused: archiveFocused, firstResponder: window?.firstResponder) else {
+        guard allowsSongShortcuts(archiveFocused: archiveFocused, firstResponder: window?.firstResponder),
+              let playPause else {
             return .ignored
         }
-        guard playPause() else { return .ignored }
-        return .handled
+        return .handledAfterViewUpdate(playPause)
     }
 
     /// NMH-006: NSScrollView eats arrow keyDowns before SwiftUI `onMoveCommand` /

@@ -212,67 +212,58 @@ struct ArchiveBrowserView: View {
             keyboardFocus = .archive
         }
         .onMoveCommand(perform: handleArchiveMoveCommand)
+        // Each key decides at once and changes the archive after the view update (design contract §4).
         .onKeyPress(.upArrow) {
             guard isActiveTool, allowsSongShortcuts else { return .ignored }
-            handleArchiveMoveCommand(.up)
-            return .handled
+            return .handledAfterViewUpdate { handleArchiveMoveCommand(.up) }
         }
         .onKeyPress(.downArrow) {
             guard isActiveTool, allowsSongShortcuts else { return .ignored }
-            handleArchiveMoveCommand(.down)
-            return .handled
+            return .handledAfterViewUpdate { handleArchiveMoveCommand(.down) }
         }
         .onKeyPress(.return) {
             guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
-            viewModel.openSelectedSongDetail()
-            return .handled
+            return .handledAfterViewUpdate { viewModel.openSelectedSongDetail() }
         }
         .onKeyPress("p") {
             guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
-            performOpenPreview()
-            return .handled
+            return .handledAfterViewUpdate { performOpenPreview() }
         }
         .onKeyPress("o") {
             guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
-            performOpenProject()
-            return .handled
+            return .handledAfterViewUpdate { performOpenProject() }
         }
         .onKeyPress("f") {
             guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
-            performRevealInFinder()
-            return .handled
+            return .handledAfterViewUpdate { performRevealInFinder() }
         }
         .onKeyPress("d") {
             guard isActiveTool, allowsSongShortcuts, viewModel.page.selectedSong != nil else { return .ignored }
-            performShowVersions()
-            return .handled
+            return .handledAfterViewUpdate { performShowVersions() }
         }
         .onKeyPress(.escape) {
             guard isActiveTool else { return .ignored }
             if keyboardFocus == .search {
                 if viewModel.browse.searchQuery.isEmpty {
-                    keyboardFocus = .archive
-                } else {
+                    return .handledAfterViewUpdate { keyboardFocus = .archive }
+                }
+                return .handledAfterViewUpdate {
                     viewModel.browse.clearSearch()
                     keyboardFocus = .search
                 }
-                return .handled
             }
             if viewModel.vaultDialogs.pendingStopTransferConfirmation {
                 return .ignored
             }
             if viewModel.projectVaultActiveOperation != nil {
-                viewModel.requestStopActiveProjectVaultTransfer()
-                return .handled
+                return .handledAfterViewUpdate { viewModel.requestStopActiveProjectVaultTransfer() }
             }
             if viewModel.library.isScanning {
-                viewModel.cancelScan()
-                return .handled
+                return .handledAfterViewUpdate { viewModel.cancelScan() }
             }
             switch viewModel.page.viewMode {
             case .boardDetail, .analytics:
-                viewModel.showBoard()
-                return .handled
+                return .handledAfterViewUpdate { viewModel.showBoard() }
             case .board, .list:
                 return .ignored
             }
@@ -282,7 +273,7 @@ struct ArchiveBrowserView: View {
             return ArchiveShortcutFocusPolicy.handleSpaceKey(
                 archiveFocused: keyboardFocus == .archive,
                 in: NSApp?.keyWindow,
-                playPause: performPlayPausePreview
+                playPause: playPausePreviewChange()
             )
         }
         .sheet(item: restoreRequestBinding) { request in
@@ -486,7 +477,7 @@ struct ArchiveBrowserView: View {
             allowsWorkflowMutation: selectedSongAllowsWorkflowMutation,
             isPreviewPlaying: previewSession.isPlaying && previewSession.songID == viewModel.page.selectedSong?.id,
             canSkipPreview: previewSession.preview != nil && previewPlayer.duration > 0 && ArchiveShortcutFocusPolicy.allowsSongShortcuts(archiveFocused: true),
-            playPausePreview: { _ = performPlayPausePreview() },
+            playPausePreview: { playPausePreviewChange()?() },
             openPreview: performOpenPreview,
             openProject: performOpenProject,
             revealInFinder: performRevealInFinder,
@@ -631,7 +622,8 @@ struct ArchiveBrowserView: View {
     }
 
     @discardableResult
-    private func performPlayPausePreview() -> Bool {
+    /// What Space or the Song menu's Play/Pause does to the preview, or nil when there is nothing to play.
+    private func playPausePreviewChange() -> (@MainActor () -> Void)? {
         let session = previewSession
         switch ArchiveSpacePreviewAction.resolve(
             selectedSongID: viewModel.page.selectedSong?.id,
@@ -639,14 +631,12 @@ struct ArchiveBrowserView: View {
             hasLoadedPreview: session.preview != nil
         ) {
         case .auditionSelected:
-            guard let song = viewModel.page.selectedSong else { return false }
-            viewModel.audition(song)
-            return true
+            guard let song = viewModel.page.selectedSong else { return nil }
+            return { viewModel.audition(song) }
         case .toggleLoaded:
-            session.toggle()
-            return true
+            return { session.toggle() }
         case .none:
-            return false
+            return nil
         }
     }
 

@@ -48,7 +48,6 @@ final class ArchiveShortcutFocusPolicyTests: XCTestCase {
             var played = false
             let result = ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: archiveFocused, in: window) {
                 played = true
-                return true
             }
 
             XCTAssertEqual(result, .ignored, "archiveFocused=\(archiveFocused)")
@@ -67,14 +66,14 @@ final class ArchiveShortcutFocusPolicyTests: XCTestCase {
         defer { window.orderOut(nil) }
         _ = window.makeFirstResponder(nil)
 
-        var plays = 0
-        let toggle = { plays += 1; return true }
-        XCTAssertEqual(ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: true, in: window, playPause: toggle), .handled)
-        XCTAssertEqual(plays, 1)
-        XCTAssertEqual(ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: false, in: window, playPause: toggle), .ignored)
-        XCTAssertEqual(ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: true, in: nil, playPause: toggle), .ignored)
-        XCTAssertEqual(plays, 1)
-        XCTAssertEqual(ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: true, in: window) { false }, .ignored)
+        // The preview changes after the view update, so the test waits for the play itself.
+        let played = expectation(description: "Space plays the preview")
+        XCTAssertEqual(ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: true, in: window) { played.fulfill() }, .handled)
+        wait(for: [played], timeout: 2)
+        let mustNotPlay: @MainActor () -> Void = { XCTFail("Space played the preview without the keyboard") }
+        XCTAssertEqual(ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: false, in: window, playPause: mustNotPlay), .ignored)
+        XCTAssertEqual(ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: true, in: nil, playPause: mustNotPlay), .ignored)
+        XCTAssertEqual(ArchiveShortcutFocusPolicy.handleSpaceKey(archiveFocused: true, in: window, playPause: nil), .ignored)
     }
 
     func testArchiveSpaceHandlerRoutesThroughPolicyWithoutClaimingFocus() throws {

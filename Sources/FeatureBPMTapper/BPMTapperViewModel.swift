@@ -88,6 +88,11 @@ public final class BPMTapperViewModel: ObservableObject {
         recordTap(at: monotonicNow())
     }
 
+    /// The tap clock now. A key tap reads it when the key arrives and records the tap after the view update.
+    func tapClockNow() -> TimeInterval {
+        monotonicNow()
+    }
+
     public func recordTap(at timestamp: TimeInterval) {
         let estimate = estimator.tap(at: timestamp)
         applyTapEstimate(estimate)
