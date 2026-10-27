@@ -341,6 +341,10 @@ The outside programs the tools run (yt-dlp, FFmpeg, ffprobe, demucs-mlx) are fou
   `AppComposition` builds on the app's `LiveProcessGroupRegistry`, so quit reaches it
   ([Running work and quit](#running-work-and-quit)). No other file builds a runner or a registry
   (`HubTerminationSourceTests`; the DEBUG E2E smoke builds its own and ends with `exit()`).
+- `HelperToolInstaller` (Set Up's one-click install) installs FFmpeg, ffprobe and uv only as the exact builds in
+  `HelperToolPins.release`, each checked against the SHA-256 in that file, not against a checksum from the host. No
+  helper download uses a moving `latest` link (`HelperToolPinsSourceTests`), except yt-dlp, which follows the newest
+  release because sites change.
 
 ## Archive footer ownership
 

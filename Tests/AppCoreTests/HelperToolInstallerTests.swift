@@ -46,6 +46,7 @@ final class HelperToolInstallerTests: XCTestCase {
             }
             let installer = HelperToolInstaller(
                 locator: locator,
+                pins: .fixtures,
                 downloader: FakeDownloader(),
                 processRunner: FakeRunner()
             )
@@ -88,6 +89,7 @@ final class HelperToolInstallerTests: XCTestCase {
             }
             let installer = HelperToolInstaller(
                 locator: locator,
+                pins: .fixtures,
                 downloader: FakeDownloader(),
                 processRunner: FakeRunner()
             )
@@ -117,6 +119,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -144,7 +147,7 @@ final class HelperToolInstallerTests: XCTestCase {
         let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
         let downloader = FakeDownloader()
         let runner = FakeRunner()
-        seedDownloadAndConvert(downloader: downloader, badFfmpegChecksum: true)
+        seedDownloadAndConvert(downloader: downloader)
 
         let bin = locator.managedBinDirectory
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
@@ -153,8 +156,12 @@ final class HelperToolInstallerTests: XCTestCase {
         try original.write(to: existing)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: existing.path)
 
+        // The host serves bytes that differ from the pinned build.
+        var pins = HelperToolPins.fixtures
+        pins.ffmpeg = PinnedDownload(url: pins.ffmpeg.url, sha256: String(repeating: "0", count: 64))
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: pins,
             downloader: downloader,
             processRunner: runner
         )
@@ -168,26 +175,45 @@ final class HelperToolInstallerTests: XCTestCase {
         assertNoStagingLeft(managedRoot: managedRoot)
     }
 
-    func testFfmpegChecksumFetchedFromFinalURL() async throws {
+    func testPinnedDownloadsFetchNoChecksumFromTheirHost() async throws {
         let root = try makeTempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let managedRoot = root.appendingPathComponent("Tools", isDirectory: true)
         let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
         let downloader = FakeDownloader()
-        let runner = FakeRunner()
-        let finals = seedDownloadAndConvert(downloader: downloader)
+        seedDownloadAndConvert(downloader: downloader)
+        seedStemSeparation(downloader: downloader)
 
-        let installer = HelperToolInstaller(
-            locator: locator,
-            downloader: downloader,
-            processRunner: runner
-        )
+        let installer = HelperToolInstaller(locator: locator, pins: .fixtures, downloader: downloader, processRunner: FakeRunner())
         try await installer.install(.downloadAndConvert) { _ in }
+        try await installer.install(.stemSeparation) { _ in }
 
-        let expectedFfmpeg = URL(string: finals.ffmpeg.absoluteString + ".sha256")!
-        let expectedFfprobe = URL(string: finals.ffprobe.absoluteString + ".sha256")!
-        XCTAssertTrue(downloader.textRequests.contains(expectedFfmpeg))
-        XCTAssertTrue(downloader.textRequests.contains(expectedFfprobe))
+        let pins = HelperToolPins.fixtures
+        for pinned in [pins.ffmpeg.url, pins.ffprobe.url, pins.uv.url] {
+            XCTAssertTrue(downloader.downloadRequests.contains(pinned), "not downloaded: \(pinned)")
+        }
+        XCTAssertEqual(downloader.textRequests, [HelperToolDownloadSources.ytDlpChecksums])
+    }
+
+    func testUvChecksumMismatchKeepsExistingDemucs() async throws {
+        let root = try makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let managedRoot = root.appendingPathComponent("Tools", isDirectory: true)
+        let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
+        let downloader = FakeDownloader()
+        seedStemSeparation(downloader: downloader)
+        var pins = HelperToolPins.fixtures
+        pins.uv = PinnedDownload(url: pins.uv.url, sha256: String(repeating: "0", count: 64))
+
+        let installer = HelperToolInstaller(locator: locator, pins: pins, downloader: downloader, processRunner: FakeRunner())
+        do {
+            try await installer.install(.stemSeparation) { _ in }
+            XCTFail("Expected checksumMismatch")
+        } catch let error as HelperInstallError {
+            XCTAssertEqual(error, .checksumMismatch(file: "uv"))
+        }
+        XCTAssertFalse(installer.isInstalled(.stemSeparation))
+        assertNoStagingLeft(managedRoot: managedRoot)
     }
 
     func testStemSeparationPassesExactUvArgumentsAndEnvironment() async throws {
@@ -201,6 +227,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -266,7 +293,7 @@ final class HelperToolInstallerTests: XCTestCase {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
 
-        let installer = HelperToolInstaller(locator: locator, downloader: downloader, processRunner: FakeRunner())
+        let installer = HelperToolInstaller(locator: locator, pins: .fixtures, downloader: downloader, processRunner: FakeRunner())
         try await installer.install(.stemSeparation) { _ in }
         let first = try FileManager.default.contentsOfDirectory(atPath: uvTools.path)
         XCTAssertEqual(first.count, 1, "uv-tools: \(first)")
@@ -301,6 +328,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -329,6 +357,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -363,6 +392,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -396,7 +426,7 @@ final class HelperToolInstallerTests: XCTestCase {
                     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: target.path)
                 }
                 let runner = StemSetupGateRunner(phase: phase, checksCancellation: existing)
-                let installer = HelperToolInstaller(locator: locator, downloader: ChecksummedSetupDownloader(), processRunner: runner)
+                let installer = HelperToolInstaller(locator: locator, pins: ChecksummedSetupDownloader.pins, downloader: ChecksummedSetupDownloader(), processRunner: runner)
                 let cancelled = Task { try await installer.install(.stemSeparation) { _ in } }
                 await runner.waitUntilReached()
                 XCTAssertEqual(installer.isInstalled(.stemSeparation), existing)
@@ -435,7 +465,7 @@ final class HelperToolInstallerTests: XCTestCase {
             let center = ShellJobStatusCenter(jobRunner: JobRunner())
             let model = HelperToolSetupModel(
                 locator: locator,
-                installer: HelperToolInstaller(locator: locator, downloader: downloader, processRunner: FakeRunner()),
+                installer: HelperToolInstaller(locator: locator, pins: .fixtures, downloader: downloader, processRunner: FakeRunner()),
                 settingsProvider: { HelperToolSettings() },
                 jobStatusCenter: center
             )
@@ -463,7 +493,7 @@ final class HelperToolInstallerTests: XCTestCase {
             let center = ShellJobStatusCenter(jobRunner: JobRunner())
             let model = HelperToolSetupModel(
                 locator: locator,
-                installer: HelperToolInstaller(locator: locator, downloader: downloader, processRunner: FakeRunner()),
+                installer: HelperToolInstaller(locator: locator, pins: .fixtures, downloader: downloader, processRunner: FakeRunner()),
                 settingsProvider: { HelperToolSettings() },
                 jobStatusCenter: center
             )
@@ -495,6 +525,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
             let installer = HelperToolInstaller(
                 locator: locator,
+                pins: .fixtures,
                 downloader: downloader,
                 processRunner: runner
             )
@@ -529,6 +560,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
             let installer = HelperToolInstaller(
                 locator: locator,
+                pins: .fixtures,
                 downloader: downloader,
                 processRunner: runner
             )
@@ -573,6 +605,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -610,6 +643,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -638,6 +672,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -675,55 +710,6 @@ final class HelperToolInstallerTests: XCTestCase {
         XCTAssertEqual(ffmpegRequest.timeoutSeconds, 30)
     }
 
-    func testUnexpectedDownloadHostRejectsBeforeChecksumFetch() async throws {
-        let root = try makeTempRoot()
-        defer { try? FileManager.default.removeItem(at: root) }
-        let managedRoot = root.appendingPathComponent("Tools", isDirectory: true)
-        let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
-        let downloader = FakeDownloader()
-        let runner = FakeRunner()
-
-        let ytData = Data("fake-yt-dlp-binary".utf8)
-        downloader.serve(data: ytData, for: HelperToolDownloadSources.ytDlpBinary)
-        downloader.serve(
-            text: "\(sha256Hex(ytData))  yt-dlp_macos\n",
-            for: HelperToolDownloadSources.ytDlpChecksums
-        )
-        let ffmpegData = Data("fake-ffmpeg-zip-bytes".utf8)
-        let evilFinal = URL(string: "https://evil.example.com/final/ffmpeg.zip")!
-        downloader.serve(data: ffmpegData, for: HelperToolDownloadSources.ffmpegZip, finalURL: evilFinal)
-        let evilChecksum = URL(string: evilFinal.absoluteString + ".sha256")!
-        downloader.serve(text: "\(sha256Hex(ffmpegData))  ffmpeg.zip\n", for: evilChecksum)
-
-        let installer = HelperToolInstaller(
-            locator: locator,
-            downloader: downloader,
-            processRunner: runner
-        )
-        do {
-            try await installer.install(.downloadAndConvert) { _ in }
-            XCTFail("Expected downloadFailed")
-        } catch let error as HelperInstallError {
-            guard case let .downloadFailed(detail) = error else {
-                XCTFail("Wrong error: \(error)")
-                return
-            }
-            XCTAssertTrue(detail.contains("unexpected download host"), "detail: \(detail)")
-            XCTAssertTrue(detail.contains("evil.example.com"), "detail: \(detail)")
-        }
-        XCTAssertFalse(
-            downloader.textRequests.contains(evilChecksum),
-            "Checksum URL must never be fetched for an unexpected host"
-        )
-        XCTAssertFalse(FileManager.default.fileExists(
-            atPath: locator.managedExecutableURL(for: .ffmpeg).path
-        ))
-        XCTAssertFalse(FileManager.default.fileExists(
-            atPath: locator.managedExecutableURL(for: .ytDlp).path
-        ))
-        assertNoStagingLeft(managedRoot: managedRoot)
-    }
-
     func testUvFailureWithNoPreExistingDemucsRemovesStrayLink() async throws {
         let root = try makeTempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -737,6 +723,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: .fixtures,
             downloader: downloader,
             processRunner: runner
         )
@@ -771,6 +758,7 @@ final class HelperToolInstallerTests: XCTestCase {
 
             let installer = HelperToolInstaller(
                 locator: locator,
+                pins: .fixtures,
                 downloader: downloader,
                 processRunner: runner
             )
@@ -809,6 +797,7 @@ final class HelperToolInstallerTests: XCTestCase {
             try original.write(to: existing)
             let installer = HelperToolInstaller(
                 locator: locator,
+                pins: .fixtures,
                 downloader: downloader,
                 processRunner: runner
             )
@@ -832,67 +821,29 @@ final class HelperToolInstallerTests: XCTestCase {
 
     // MARK: - Seeding
 
-    @discardableResult
-    private func seedDownloadAndConvert(
-        downloader: FakeDownloader,
-        badFfmpegChecksum: Bool = false
-    ) -> (ffmpeg: URL, ffprobe: URL) {
-        let ytData = Data("fake-yt-dlp-binary".utf8)
-        downloader.serve(data: ytData, for: HelperToolDownloadSources.ytDlpBinary)
-        downloader.serve(
-            text: "\(sha256Hex(ytData))  yt-dlp_macos\n",
-            for: HelperToolDownloadSources.ytDlpChecksums
-        )
-
-        let ffmpegData = Data("fake-ffmpeg-zip-bytes".utf8)
-        let ffmpegFinal = URL(
-            string: "https://\(HelperToolDownloadSources.ffmpegHost)/final/ffmpeg.zip"
-        )!
-        downloader.serve(data: ffmpegData, for: HelperToolDownloadSources.ffmpegZip, finalURL: ffmpegFinal)
-        let ffmpegHash = badFfmpegChecksum ? String(repeating: "0", count: 64) : sha256Hex(ffmpegData)
-        downloader.serve(
-            text: "\(ffmpegHash)  ffmpeg.zip\n",
-            for: URL(string: ffmpegFinal.absoluteString + ".sha256")!
-        )
-
-        let ffprobeData = Data("fake-ffprobe-zip-bytes".utf8)
-        let ffprobeFinal = URL(
-            string: "https://\(HelperToolDownloadSources.ffmpegHost)/final/ffprobe.zip"
-        )!
-        downloader.serve(data: ffprobeData, for: HelperToolDownloadSources.ffprobeZip, finalURL: ffprobeFinal)
-        downloader.serve(
-            text: "\(sha256Hex(ffprobeData))  ffprobe.zip\n",
-            for: URL(string: ffprobeFinal.absoluteString + ".sha256")!
-        )
-        return (ffmpegFinal, ffprobeFinal)
+    private func seedDownloadAndConvert(downloader: FakeDownloader) {
+        seedYtDlp(downloader: downloader)
+        downloader.serve(data: HelperToolPins.ffmpegPayload, for: HelperToolPins.fixtures.ffmpeg.url)
+        downloader.serve(data: HelperToolPins.ffprobePayload, for: HelperToolPins.fixtures.ffprobe.url)
     }
 
     private func seedStemSeparation(downloader: FakeDownloader) {
-        let uvData = Data("fake-uv-archive".utf8)
-        downloader.serve(data: uvData, for: HelperToolDownloadSources.uvArchive)
-        downloader.serve(
-            text: "\(sha256Hex(uvData))  uv-aarch64-apple-darwin.tar.gz\n",
-            for: HelperToolDownloadSources.uvChecksum
-        )
+        downloader.serve(data: HelperToolPins.uvPayload, for: HelperToolPins.fixtures.uv.url)
     }
 
     private func seedOnlyYtAndFfmpeg(downloader: FakeDownloader) {
+        seedYtDlp(downloader: downloader)
+        downloader.serve(data: HelperToolPins.ffmpegPayload, for: HelperToolPins.fixtures.ffmpeg.url)
+        // Intentionally no ffprobe payload: the ffprobe download throws downloadFailed.
+    }
+
+    private func seedYtDlp(downloader: FakeDownloader) {
         let ytData = Data("fake-yt-dlp-binary".utf8)
         downloader.serve(data: ytData, for: HelperToolDownloadSources.ytDlpBinary)
         downloader.serve(
             text: "\(sha256Hex(ytData))  yt-dlp_macos\n",
             for: HelperToolDownloadSources.ytDlpChecksums
         )
-        let ffmpegData = Data("fake-ffmpeg-zip-bytes".utf8)
-        let ffmpegFinal = URL(
-            string: "https://\(HelperToolDownloadSources.ffmpegHost)/final/ffmpeg.zip"
-        )!
-        downloader.serve(data: ffmpegData, for: HelperToolDownloadSources.ffmpegZip, finalURL: ffmpegFinal)
-        downloader.serve(
-            text: "\(sha256Hex(ffmpegData))  ffmpeg.zip\n",
-            for: URL(string: ffmpegFinal.absoluteString + ".sha256")!
-        )
-        // Intentionally no ffprobe payload: the ffprobe download throws downloadFailed.
     }
 
     // MARK: - Helpers
@@ -927,6 +878,23 @@ final class HelperToolInstallerTests: XCTestCase {
         guard FileManager.default.fileExists(atPath: stagingRoot.path) else { return }
         let contents = (try? FileManager.default.contentsOfDirectory(atPath: stagingRoot.path)) ?? []
         XCTAssertTrue(contents.isEmpty, "Staging not cleaned: \(contents)", file: file, line: line)
+    }
+}
+
+private extension HelperToolPins {
+    static let ffmpegPayload = Data("fake-ffmpeg-zip-bytes".utf8)
+    static let ffprobePayload = Data("fake-ffprobe-zip-bytes".utf8)
+    static let uvPayload = Data("fake-uv-archive".utf8)
+
+    /// Pins that match the fake payloads the seeding helpers serve.
+    static let fixtures = HelperToolPins(
+        ffmpeg: PinnedDownload(url: URL(string: "https://ffmpeg.example/9.0.2/ffmpeg.zip")!, sha256: hex(ffmpegPayload)),
+        ffprobe: PinnedDownload(url: URL(string: "https://ffmpeg.example/9.0.2/ffprobe.zip")!, sha256: hex(ffprobePayload)),
+        uv: PinnedDownload(url: URL(string: "https://uv.example/0.13.6/uv-aarch64-apple-darwin.tar.gz")!, sha256: hex(uvPayload))
+    )
+
+    static func hex(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
 

@@ -170,6 +170,7 @@ final class HelperToolSetupModelTests: XCTestCase {
         )
         let installer = HelperToolInstaller(
             locator: locator,
+            pins: ChecksummedSetupDownloader.pins,
             downloader: ChecksummedSetupDownloader(),
             processRunner: ExtractingSetupRunner()
         )
@@ -211,7 +212,7 @@ final class HelperToolSetupModelTests: XCTestCase {
         try await waitUntil { health.statuses[.ytDlp] == .missing }
         let model = HelperToolSetupModel(
             locator: locator,
-            installer: HelperToolInstaller(locator: locator, downloader: ChecksummedSetupDownloader(), processRunner: ExtractingSetupRunner()),
+            installer: HelperToolInstaller(locator: locator, pins: ChecksummedSetupDownloader.pins, downloader: ChecksummedSetupDownloader(), processRunner: ExtractingSetupRunner()),
             settingsProvider: { HelperToolSettings() },
             helperHealth: health
         )
@@ -227,7 +228,7 @@ final class HelperToolSetupModelTests: XCTestCase {
             defer { try? FileManager.default.removeItem(at: root) }
             let locator = HelperToolLocator(managedRoot: root, systemDirectories: [])
             let runner = StemSetupGateRunner(phase: phase)
-            let installer = HelperToolInstaller(locator: locator, downloader: ChecksummedSetupDownloader(), processRunner: runner)
+            let installer = HelperToolInstaller(locator: locator, pins: ChecksummedSetupDownloader.pins, downloader: ChecksummedSetupDownloader(), processRunner: runner)
             let model = HelperToolSetupModel(locator: locator, installer: installer, settingsProvider: { HelperToolSettings() })
             model.refresh()
             model.install(.stemSeparation)
@@ -335,11 +336,16 @@ private final class SucceedingSetupRunner: StreamingExternalProcessRunning, @unc
     }
 }
 
-/// Serves fixed bytes and the matching SHA-256 for every checksum URL.
+/// Serves fixed bytes for every link and the matching SHA-256 for every checksum URL; `pins` pin those bytes.
 final class ChecksummedSetupDownloader: HelperDownloading, @unchecked Sendable {
     private static let payload = Data("payload".utf8)
     private static var hash: String {
         SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static var pins: HelperToolPins {
+        let pinned = { (name: String) in PinnedDownload(url: URL(string: "https://pins.example/\(name)")!, sha256: hash) }
+        return HelperToolPins(ffmpeg: pinned("ffmpeg.zip"), ffprobe: pinned("ffprobe.zip"), uv: pinned("uv.tar.gz"))
     }
 
     func download(

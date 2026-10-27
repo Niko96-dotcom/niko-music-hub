@@ -88,31 +88,47 @@ public enum HelperInstallError: LocalizedError, Equatable, Sendable {
 }
 
 public enum HelperToolDownloadSources {
-    public static let ffmpegHost = "ffmpeg.martin-riedl.de"
     public static let ytDlpBinary: URL = URL(
         string: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
     )!
     public static let ytDlpChecksums: URL = URL(
         string: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"
     )!
-    public static let ffmpegZip: URL = URL(
-        string: "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffmpeg.zip"
-    )!
-    public static let ffprobeZip: URL = URL(
-        string: "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffprobe.zip"
-    )!
-    public static let uvArchive: URL = URL(
-        string: "https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-apple-darwin.tar.gz"
-    )!
-    public static let uvChecksum: URL = URL(string: uvArchive.absoluteString + ".sha256")!
 
     public static let demucsPackageSpec = "demucs-mlx[convert]"
     public static let pythonVersion = "3.12"
     public static let warmupModel = "htdemucs_ft"
 }
 
+/// One download that an install accepts only with exactly this SHA-256.
+public struct PinnedDownload: Equatable, Sendable {
+    public let url: URL
+    public let sha256: String
+
+    public init(url: URL, sha256: String) {
+        self.url = url
+        self.sha256 = sha256
+    }
+}
+
+/// The exact helper builds an install accepts. The checksums come from the app, not from the server
+/// that serves the files, so a build that changed on the host fails the install. `HelperToolPins.release`
+/// (HelperToolPins.swift) holds the shipped values; tests pass their own.
+public struct HelperToolPins: Equatable, Sendable {
+    public var ffmpeg: PinnedDownload
+    public var ffprobe: PinnedDownload
+    public var uv: PinnedDownload
+
+    public init(ffmpeg: PinnedDownload, ffprobe: PinnedDownload, uv: PinnedDownload) {
+        self.ffmpeg = ffmpeg
+        self.ffprobe = ffprobe
+        self.uv = uv
+    }
+}
+
 public actor HelperToolInstaller {
     private let locator: HelperToolLocator
+    private let pins: HelperToolPins
     private let downloader: any HelperDownloading
     private let processRunner: any StreamingExternalProcessRunning
     private let fileManager: FileManager
@@ -123,11 +139,13 @@ public actor HelperToolInstaller {
 
     public init(
         locator: HelperToolLocator,
+        pins: HelperToolPins = .release,
         downloader: any HelperDownloading = URLSessionHelperDownloader(),
         processRunner: any StreamingExternalProcessRunning,
         fileManager: FileManager = .default
     ) {
         self.locator = locator
+        self.pins = pins
         self.downloader = downloader
         self.processRunner = processRunner
         self.fileManager = fileManager
@@ -200,10 +218,7 @@ public actor HelperToolInstaller {
         try Task.checkCancellation()
         progress(HelperInstallProgress(phase: "Downloading FFmpeg", fractionCompleted: ytEnd))
         let ffmpegZipStaged = staging.appendingPathComponent("ffmpeg.zip", isDirectory: false)
-        let ffmpegFinal = try await downloader.download(
-            HelperToolDownloadSources.ffmpegZip,
-            to: ffmpegZipStaged
-        ) { value in
+        _ = try await downloader.download(pins.ffmpeg.url, to: ffmpegZipStaged) { value in
             let sub = value ?? 0
             progress(HelperInstallProgress(
                 phase: "Downloading FFmpeg",
@@ -211,10 +226,7 @@ public actor HelperToolInstaller {
             ))
         }
         try Task.checkCancellation()
-        try validateFFmpegHost(ffmpegFinal, tool: "FFmpeg")
-        let ffmpegChecksumText = try await downloader.fetchText(checksumURL(for: ffmpegFinal))
-        let ffmpegExpected = try firstChecksumToken(from: ffmpegChecksumText, context: "FFmpeg")
-        try verifyFile(at: ffmpegZipStaged, expectedHex: ffmpegExpected, displayName: "FFmpeg")
+        try verifyFile(at: ffmpegZipStaged, expectedHex: pins.ffmpeg.sha256, displayName: "FFmpeg")
         try Task.checkCancellation()
         let ffmpegUnzipDir = staging.appendingPathComponent("unzipped-ffmpeg", isDirectory: true)
         try fileManager.createDirectory(at: ffmpegUnzipDir, withIntermediateDirectories: true)
@@ -242,10 +254,7 @@ public actor HelperToolInstaller {
         try Task.checkCancellation()
         progress(HelperInstallProgress(phase: "Downloading ffprobe", fractionCompleted: ffmpegEnd))
         let ffprobeZipStaged = staging.appendingPathComponent("ffprobe.zip", isDirectory: false)
-        let ffprobeFinal = try await downloader.download(
-            HelperToolDownloadSources.ffprobeZip,
-            to: ffprobeZipStaged
-        ) { value in
+        _ = try await downloader.download(pins.ffprobe.url, to: ffprobeZipStaged) { value in
             let sub = value ?? 0
             progress(HelperInstallProgress(
                 phase: "Downloading ffprobe",
@@ -253,10 +262,7 @@ public actor HelperToolInstaller {
             ))
         }
         try Task.checkCancellation()
-        try validateFFmpegHost(ffprobeFinal, tool: "ffprobe")
-        let ffprobeChecksumText = try await downloader.fetchText(checksumURL(for: ffprobeFinal))
-        let ffprobeExpected = try firstChecksumToken(from: ffprobeChecksumText, context: "ffprobe")
-        try verifyFile(at: ffprobeZipStaged, expectedHex: ffprobeExpected, displayName: "ffprobe")
+        try verifyFile(at: ffprobeZipStaged, expectedHex: pins.ffprobe.sha256, displayName: "ffprobe")
         try Task.checkCancellation()
         let ffprobeUnzipDir = staging.appendingPathComponent("unzipped-ffprobe", isDirectory: true)
         try fileManager.createDirectory(at: ffprobeUnzipDir, withIntermediateDirectories: true)
@@ -362,10 +368,7 @@ public actor HelperToolInstaller {
         progress(HelperInstallProgress(phase: "Downloading the setup helper", fractionCompleted: 0.0))
 
         let uvArchiveStaged = staging.appendingPathComponent("uv.tar.gz", isDirectory: false)
-        _ = try await downloader.download(
-            HelperToolDownloadSources.uvArchive,
-            to: uvArchiveStaged
-        ) { value in
+        _ = try await downloader.download(pins.uv.url, to: uvArchiveStaged) { value in
             let sub = value ?? 0
             progress(HelperInstallProgress(
                 phase: "Downloading the setup helper",
@@ -373,9 +376,7 @@ public actor HelperToolInstaller {
             ))
         }
         try Task.checkCancellation()
-        let uvChecksumText = try await downloader.fetchText(HelperToolDownloadSources.uvChecksum)
-        let uvExpected = try firstChecksumToken(from: uvChecksumText, context: "uv")
-        try verifyFile(at: uvArchiveStaged, expectedHex: uvExpected, displayName: "uv")
+        try verifyFile(at: uvArchiveStaged, expectedHex: pins.uv.sha256, displayName: "uv")
         try Task.checkCancellation()
 
         let uvExtractDir = staging.appendingPathComponent("uv", isDirectory: true)
@@ -530,19 +531,6 @@ public actor HelperToolInstaller {
         }
     }
 
-    private func checksumURL(for finalURL: URL) -> URL {
-        URL(string: finalURL.absoluteString + ".sha256")!
-    }
-
-    private func validateFFmpegHost(_ finalURL: URL, tool: String) throws {
-        guard finalURL.scheme == "https",
-              finalURL.host == HelperToolDownloadSources.ffmpegHost
-        else {
-            let host = finalURL.host ?? finalURL.absoluteString
-            throw HelperInstallError.downloadFailed("\(tool): unexpected download host \(host)")
-        }
-    }
-
     private func expectedYtDlpHash(from text: String) throws -> String {
         for rawLine in text.split(separator: "\n") {
             let parts = rawLine.split(whereSeparator: \.isWhitespace)
@@ -556,15 +544,6 @@ public actor HelperToolInstaller {
             }
         }
         throw HelperInstallError.downloadFailed("yt-dlp checksums: entry for yt-dlp_macos not found")
-    }
-
-    private func firstChecksumToken(from text: String, context: String) throws -> String {
-        guard let token = text.split(whereSeparator: \.isWhitespace).first.map(String.init),
-              !token.isEmpty
-        else {
-            throw HelperInstallError.downloadFailed("\(context) checksum: unreadable response")
-        }
-        return token
     }
 
     private func sha256HexOfFile(at url: URL) throws -> String {
