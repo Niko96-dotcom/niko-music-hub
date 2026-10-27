@@ -345,7 +345,10 @@ final class ChecksummedSetupDownloader: HelperDownloading, @unchecked Sendable {
 
     static var pins: HelperToolPins {
         let pinned = { (name: String) in PinnedDownload(url: URL(string: "https://pins.example/\(name)")!, sha256: hash) }
-        return HelperToolPins(ffmpeg: pinned("ffmpeg.zip"), ffprobe: pinned("ffprobe.zip"), uv: pinned("uv.tar.gz"))
+        return HelperToolPins(
+            ffmpeg: pinned("ffmpeg.zip"), ffprobe: pinned("ffprobe.zip"), uv: pinned("uv.tar.gz"),
+            demucsRequirements: "demucs-mlx==1.6.1 --hash=sha256:\(hash)\n"
+        )
     }
 
     func download(

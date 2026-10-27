@@ -216,10 +216,11 @@ final class HelperToolInstallerTests: XCTestCase {
         assertNoStagingLeft(managedRoot: managedRoot)
     }
 
-    func testStemSeparationPassesExactUvArgumentsAndEnvironment() async throws {
+    func testStemSeparationInstallsThePinnedLockIntoAFreshEnvironment() async throws {
         let root = try makeTempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let managedRoot = root.appendingPathComponent("Tools", isDirectory: true)
+        let home = root.appendingPathComponent("home", isDirectory: true)
         let locator = HelperToolLocator(managedRoot: managedRoot, systemDirectories: [])
         let downloader = FakeDownloader()
         let runner = FakeRunner()
@@ -229,49 +230,52 @@ final class HelperToolInstallerTests: XCTestCase {
             locator: locator,
             pins: .fixtures,
             downloader: downloader,
-            processRunner: runner
+            processRunner: runner,
+            homeDirectory: home
         )
         try await installer.install(.stemSeparation) { _ in }
 
-        let uvRequests = runner.requests.filter {
-            $0.executableURL.lastPathComponent == "uv" && $0.arguments.first == "tool"
-        }
-        XCTAssertEqual(uvRequests.count, 1)
-        let uvRequest = try XCTUnwrap(uvRequests.first)
-        XCTAssertEqual(
-            uvRequest.arguments,
-            ["tool", "install", "--upgrade", "--python", "3.12", "demucs-mlx[convert]"]
-        )
-        XCTAssertEqual(uvRequest.timeoutSeconds, 1800)
-        let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
-        let attemptBin = URL(fileURLWithPath: try XCTUnwrap(uvRequest.environment?["UV_TOOL_BIN_DIR"]))
-        let attemptRoot = attemptBin.deletingLastPathComponent()
+        let uvRequests = runner.requests.filter { $0.executableURL.lastPathComponent == "uv" }
+        XCTAssertEqual(uvRequests.map { $0.arguments.first }, ["venv", "pip"])
+        let venvRequest = try XCTUnwrap(uvRequests.first)
+        let venv = URL(fileURLWithPath: try XCTUnwrap(venvRequest.arguments.last), isDirectory: true)
+        let attemptRoot = venv.deletingLastPathComponent()
+        XCTAssertEqual(venv.lastPathComponent, "venv")
         XCTAssertEqual(attemptRoot.deletingLastPathComponent().path, managedRoot.appendingPathComponent("uv-tools").path)
-        XCTAssertNotEqual(attemptBin.path, locator.managedBinDirectory.path)
-        XCTAssertEqual(uvRequest.environment, [
-            "HOME": home,
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "UV_TOOL_DIR": attemptRoot.appendingPathComponent("tools").path,
-            "UV_TOOL_BIN_DIR": attemptBin.path,
-            "UV_PYTHON_INSTALL_DIR": attemptRoot.appendingPathComponent("python").path,
-            "UV_CACHE_DIR": attemptRoot.appendingPathComponent("cache").path,
-            "UV_PYTHON_PREFERENCE": "only-managed",
-            "UV_NO_CONFIG": "1",
+        XCTAssertEqual(venvRequest.arguments, ["venv", "--python", "3.12", venv.path])
+        let installRequest = try XCTUnwrap(uvRequests.last)
+        let requirementsPath = try XCTUnwrap(installRequest.arguments.last)
+        XCTAssertEqual(installRequest.arguments, [
+            "pip", "install", "--python", venv.appendingPathComponent("bin/python").path,
+            "--require-hashes", "--no-build", "-r", requirementsPath,
         ])
+        XCTAssertEqual(installRequest.timeoutSeconds, 1800)
+        XCTAssertEqual(runner.requirementsSeen, [HelperToolPins.fixtures.demucsRequirements], "uv installs exactly the pinned lock")
+        for request in uvRequests {
+            XCTAssertEqual(request.environment, [
+                "HOME": home.path,
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "UV_PYTHON_INSTALL_DIR": attemptRoot.appendingPathComponent("python").path,
+                "UV_CACHE_DIR": attemptRoot.appendingPathComponent("cache").path,
+                "UV_PYTHON_PREFERENCE": "only-managed",
+                "UV_NO_CONFIG": "1",
+            ])
+        }
 
         let demucsBin = locator.managedExecutableURL(for: .demucsMlx)
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: demucsBin.path))
         let uvBin = managedRoot.appendingPathComponent("uv/uv")
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: uvBin.path))
 
+        let venvBin = venv.appendingPathComponent("bin", isDirectory: true)
         let warmups = runner.requests.filter {
-            $0.executableURL.path == attemptBin.appendingPathComponent("demucs-mlx").path
+            $0.executableURL.path == venvBin.appendingPathComponent("demucs-mlx").path
         }
         XCTAssertEqual(warmups.count, 1)
         let warmup = try XCTUnwrap(warmups.first)
         XCTAssertEqual(warmup.timeoutSeconds, 1800)
-        XCTAssertEqual(warmup.environment?["PATH"], "\(attemptBin.path):\(locator.managedBinDirectory.path):/usr/bin:/bin")
-        XCTAssertNotNil(warmup.environment?["HOME"], "warm-up must use the same HOME as later runs")
+        XCTAssertEqual(warmup.environment?["PATH"], "\(venvBin.path):\(locator.managedBinDirectory.path):/usr/bin:/bin")
+        XCTAssertEqual(warmup.environment?["HOME"], home.path, "warm-up must use the same HOME as later runs")
         XCTAssertTrue(warmup.arguments.contains("-n"))
         XCTAssertTrue(warmup.arguments.contains("htdemucs_ft"))
         let outputIndex = try XCTUnwrap(warmup.arguments.firstIndex(of: "--out"))
@@ -890,7 +894,8 @@ private extension HelperToolPins {
     static let fixtures = HelperToolPins(
         ffmpeg: PinnedDownload(url: URL(string: "https://ffmpeg.example/9.0.2/ffmpeg.zip")!, sha256: hex(ffmpegPayload)),
         ffprobe: PinnedDownload(url: URL(string: "https://ffmpeg.example/9.0.2/ffprobe.zip")!, sha256: hex(ffprobePayload)),
-        uv: PinnedDownload(url: URL(string: "https://uv.example/0.13.6/uv-aarch64-apple-darwin.tar.gz")!, sha256: hex(uvPayload))
+        uv: PinnedDownload(url: URL(string: "https://uv.example/0.13.6/uv-aarch64-apple-darwin.tar.gz")!, sha256: hex(uvPayload)),
+        demucsRequirements: "demucs-mlx==1.6.1 --hash=sha256:\(String(repeating: "a", count: 64))\n"
     )
 
     static func hex(_ data: Data) -> String {
@@ -991,9 +996,23 @@ private final class FakeRunner: StreamingExternalProcessRunning, @unchecked Send
     var tarStderr = ""
     var warmupExitCode: Int32 = 0
     var warmupStderr = ""
+    private var requirementsStorage: [String] = []
 
     var requests: [ExternalProcessRequest] {
         lock.withLock { requestsStorage }
+    }
+
+    /// The text of each requirements file uv was asked to install, read while uv ran.
+    var requirementsSeen: [String] {
+        lock.withLock { requirementsStorage }
+    }
+
+    /// `uv pip install --python <venv>/bin/python …` installs into that environment's bin folder.
+    static func environmentBin(of request: ExternalProcessRequest) -> URL? {
+        guard request.arguments.first == "pip",
+              let index = request.arguments.firstIndex(of: "--python"), index + 1 < request.arguments.count
+        else { return nil }
+        return URL(fileURLWithPath: request.arguments[index + 1]).deletingLastPathComponent()
     }
 
     func run(_ request: ExternalProcessRequest) async throws -> ExternalProcessResult {
@@ -1058,20 +1077,27 @@ private final class FakeRunner: StreamingExternalProcessRunning, @unchecked Send
         }
 
         if request.executableURL.lastPathComponent == "uv" {
+            if arguments.first == "venv", let venv = arguments.last {
+                let python = URL(fileURLWithPath: venv, isDirectory: true).appendingPathComponent("bin/python")
+                try manager.createDirectory(at: python.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try "#!/bin/sh\nexit 0\n".write(to: python, atomically: true, encoding: .utf8)
+                return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+            }
+            if let index = arguments.firstIndex(of: "-r"), index + 1 < arguments.count,
+               let text = try? String(contentsOfFile: arguments[index + 1], encoding: .utf8) {
+                lock.withLock { requirementsStorage.append(text) }
+            }
+            guard let binURL = Self.environmentBin(of: request) else {
+                return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
+            }
+            let output = binURL.appendingPathComponent("demucs-mlx", isDirectory: false)
             if uvExitCode != 0 {
-                // Simulate a stray link left behind by a failed uv run when none
+                // Simulate a stray entry point left behind by a failed install when none
                 // existed before; leave a pre-existing file untouched.
-                if let binDir = request.environment?["UV_TOOL_BIN_DIR"] {
-                    let output = URL(fileURLWithPath: binDir, isDirectory: true)
-                        .appendingPathComponent("demucs-mlx", isDirectory: false)
-                    if !manager.fileExists(atPath: output.path) {
-                        try? manager.createDirectory(
-                            at: URL(fileURLWithPath: binDir, isDirectory: true),
-                            withIntermediateDirectories: true
-                        )
-                        try? "#!/bin/sh\nexit 0\n".write(to: output, atomically: true, encoding: .utf8)
-                        try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: output.path)
-                    }
+                if !manager.fileExists(atPath: output.path) {
+                    try? manager.createDirectory(at: binURL, withIntermediateDirectories: true)
+                    try? "#!/bin/sh\nexit 0\n".write(to: output, atomically: true, encoding: .utf8)
+                    try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: output.path)
                 }
                 return ExternalProcessResult(
                     exitCode: uvExitCode,
@@ -1079,13 +1105,9 @@ private final class FakeRunner: StreamingExternalProcessRunning, @unchecked Send
                     standardError: uvStderr
                 )
             }
-            if let binDir = request.environment?["UV_TOOL_BIN_DIR"] {
-                let binURL = URL(fileURLWithPath: binDir, isDirectory: true)
-                try manager.createDirectory(at: binURL, withIntermediateDirectories: true)
-                let output = binURL.appendingPathComponent("demucs-mlx", isDirectory: false)
-                try "#!/bin/sh\nexit 0\n".write(to: output, atomically: true, encoding: .utf8)
-                try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: output.path)
-            }
+            try manager.createDirectory(at: binURL, withIntermediateDirectories: true)
+            try "#!/bin/sh\nexit 0\n".write(to: output, atomically: true, encoding: .utf8)
+            try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: output.path)
             return ExternalProcessResult(exitCode: 0, standardOutput: "", standardError: "")
         }
 
@@ -1108,7 +1130,7 @@ private final class FakeRunner: StreamingExternalProcessRunning, @unchecked Send
     }
 }
 
-/// Holds the first uv publication or warmup until the test releases teardown.
+/// Holds the first `uv pip install` or warmup until the test releases teardown.
 actor StemSetupGateRunner: StreamingExternalProcessRunning {
     enum Phase: CaseIterable, Equatable { case uv, warmup }
     private let phase: Phase?
@@ -1149,10 +1171,10 @@ actor StemSetupGateRunner: StreamingExternalProcessRunning {
         onStandardError: @escaping @Sendable (String) -> Void
     ) async throws -> ExternalProcessResult {
         let result = try await base.run(request, onStandardOutput: onStandardOutput, onStandardError: onStandardError)
-        if firstBin == nil, let path = request.environment?["UV_TOOL_BIN_DIR"] {
-            firstBin = URL(fileURLWithPath: path, isDirectory: true)
+        if firstBin == nil, let bin = FakeRunner.environmentBin(of: request) {
+            firstBin = bin
         }
-        let step: Phase? = request.arguments.first == "tool" ? .uv
+        let step: Phase? = request.arguments.first == "pip" ? .uv
             : request.executableURL.lastPathComponent == "demucs-mlx" ? .warmup : nil
         if let phase, step == phase, !reached {
             await withCheckedContinuation { continuation in

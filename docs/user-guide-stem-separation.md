@@ -4,7 +4,7 @@ Niko Music Hub can split a stereo audio file into separate stems (vocals, drums,
 
 ## Prerequisites
 
-Stem Separation needs `demucs-mlx`. Install it from the app: **Help → Set Up Helper Tools…**, then **Install** on the **Stem Separation** row. The app downloads a private Python and `demucs-mlx` into `~/Library/Application Support/Niko Music Hub/Tools` and prepares the default model (about 1.2 GB in total, a few minutes). No Terminal, Homebrew, or Python install is needed.
+Stem Separation needs `demucs-mlx`. Install it from the app: **Help → Set Up Helper Tools…**, then **Install** on the **Stem Separation** row. The app downloads a private Python and `demucs-mlx` into `~/Library/Application Support/Niko Music Hub/Tools` and prepares the default model (about 1 GB in total, a few minutes). No Terminal, Homebrew, or Python install is needed.
 
 If you already installed `demucs-mlx` yourself (for example with `uv tool install demucs-mlx` into `~/.local/bin`), the app finds it automatically, or you can set its path in **Settings → Helpers**.
 

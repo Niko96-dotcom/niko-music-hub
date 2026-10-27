@@ -33,7 +33,7 @@ public enum HelperToolBundle: String, CaseIterable, Sendable, Identifiable {
         case .downloadAndConvert:
             "yt-dlp and FFmpeg · about 100 MB"
         case .stemSeparation:
-            "demucs-mlx and its model · about 1.2 GB"
+            "demucs-mlx and its model · about 1 GB"
         }
     }
 }
@@ -95,7 +95,6 @@ public enum HelperToolDownloadSources {
         string: "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"
     )!
 
-    public static let demucsPackageSpec = "demucs-mlx[convert]"
     public static let pythonVersion = "3.12"
     public static let warmupModel = "htdemucs_ft"
 }
@@ -118,11 +117,15 @@ public struct HelperToolPins: Equatable, Sendable {
     public var ffmpeg: PinnedDownload
     public var ffprobe: PinnedDownload
     public var uv: PinnedDownload
+    /// demucs-mlx and every package it needs, each with one exact version and the SHA-256 of each of its files
+    /// (`uv pip install --require-hashes`). The model weights are pinned by the hashes inside demucs-mlx.
+    public var demucsRequirements: String
 
-    public init(ffmpeg: PinnedDownload, ffprobe: PinnedDownload, uv: PinnedDownload) {
+    public init(ffmpeg: PinnedDownload, ffprobe: PinnedDownload, uv: PinnedDownload, demucsRequirements: String) {
         self.ffmpeg = ffmpeg
         self.ffprobe = ffprobe
         self.uv = uv
+        self.demucsRequirements = demucsRequirements
     }
 }
 
@@ -131,6 +134,8 @@ public actor HelperToolInstaller {
     private let pins: HelperToolPins
     private let downloader: any HelperDownloading
     private let processRunner: any StreamingExternalProcessRunning
+    /// The person's home: the warm-up puts the model where later runs read it (`~/.cache/demucs-mlx`).
+    private let homeDirectory: URL
     private let fileManager: FileManager
     /// Staging names of attempts still running. Installs can interleave at
     /// suspension points (a cancelled attempt still unwinds while its
@@ -142,12 +147,14 @@ public actor HelperToolInstaller {
         pins: HelperToolPins = .release,
         downloader: any HelperDownloading = URLSessionHelperDownloader(),
         processRunner: any StreamingExternalProcessRunning,
+        homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
         fileManager: FileManager = .default
     ) {
         self.locator = locator
         self.pins = pins
         self.downloader = downloader
         self.processRunner = processRunner
+        self.homeDirectory = homeDirectory
         self.fileManager = fileManager
     }
 
@@ -410,14 +417,15 @@ public actor HelperToolInstaller {
             fractionCompleted: demucsInstallFraction
         ))
 
-        let home = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
-        // uv environments contain absolute interpreter paths, so keep each
+        let home = homeDirectory.path
+        // A virtual environment holds absolute interpreter paths, so keep each
         // attempt at its permanent path and publish its entry point only when
         // preparation succeeds. A late cancelled writer cannot touch live tools.
         let attemptRoot = locator.managedRoot.appendingPathComponent("uv-tools")
             .appendingPathComponent(staging.lastPathComponent, isDirectory: true)
-        let attemptBin = attemptRoot.appendingPathComponent("bin", isDirectory: true)
-        try fileManager.createDirectory(at: attemptBin, withIntermediateDirectories: true)
+        let venv = attemptRoot.appendingPathComponent("venv", isDirectory: true)
+        let attemptBin = venv.appendingPathComponent("bin", isDirectory: true)
+        try fileManager.createDirectory(at: attemptRoot, withIntermediateDirectories: true)
         var published = false
         defer {
             if !published { try? fileManager.removeItem(at: attemptRoot) }
@@ -425,40 +433,48 @@ public actor HelperToolInstaller {
         let uvEnvironment: [String: String] = [
             "HOME": home,
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "UV_TOOL_DIR": attemptRoot.appendingPathComponent("tools").path,
-            "UV_TOOL_BIN_DIR": attemptBin.path,
             "UV_PYTHON_INSTALL_DIR": attemptRoot.appendingPathComponent("python").path,
             "UV_CACHE_DIR": attemptRoot.appendingPathComponent("cache").path,
             "UV_PYTHON_PREFERENCE": "only-managed",
             "UV_NO_CONFIG": "1",
         ]
-        let uvRequest = ExternalProcessRequest(
+        let requirements = staging.appendingPathComponent("demucs-requirements.txt", isDirectory: false)
+        try Data(pins.demucsRequirements.utf8).write(to: requirements)
+        let venvRequest = ExternalProcessRequest(
+            executableURL: uvDestination,
+            arguments: ["venv", "--python", HelperToolDownloadSources.pythonVersion, venv.path],
+            environment: uvEnvironment,
+            timeoutSeconds: 600
+        )
+        // Every package and file must match the pinned lock; nothing is built from source.
+        let installRequest = ExternalProcessRequest(
             executableURL: uvDestination,
             arguments: [
-                "tool", "install", "--upgrade", "--python",
-                HelperToolDownloadSources.pythonVersion,
-                HelperToolDownloadSources.demucsPackageSpec,
+                "pip", "install", "--python", attemptBin.appendingPathComponent("python").path,
+                "--require-hashes", "--no-build", "-r", requirements.path,
             ],
             environment: uvEnvironment,
             timeoutSeconds: 1800
         )
-        let uvResult = try await processRunner.run(
-            uvRequest,
-            onStandardOutput: { _ in },
-            onStandardError: { _ in }
-        )
-        if uvResult.exitCode != 0 {
-            let lines = uvResult.standardError
-                .split(separator: "\n")
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            // Keep the last 20 lines for context; the message carries the last one.
-            let tail = Array(lines.suffix(20))
-            let last = tail.last ?? "(no details)"
-            throw HelperInstallError.setupFailed("demucs-mlx: \(last)")
+        for request in [venvRequest, installRequest] {
+            let uvResult = try await processRunner.run(
+                request,
+                onStandardOutput: { _ in },
+                onStandardError: { _ in }
+            )
+            if uvResult.exitCode != 0 {
+                let lines = uvResult.standardError
+                    .split(separator: "\n")
+                    .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                // Keep the last 20 lines for context; the message carries the last one.
+                let tail = Array(lines.suffix(20))
+                let last = tail.last ?? "(no details)"
+                throw HelperInstallError.setupFailed("demucs-mlx: \(last)")
+            }
+            try Task.checkCancellation()
         }
 
-        try Task.checkCancellation()
         let demucsBin = attemptBin.appendingPathComponent(HelperTool.demucsMlx.executableName)
         guard fileManager.isExecutableFile(atPath: demucsBin.path) else {
             throw HelperInstallError.setupFailed("demucs-mlx")

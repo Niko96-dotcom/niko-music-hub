@@ -8,7 +8,7 @@ The application can invoke these separately installed helpers. They are never sh
 
 - yt-dlp: `yt-dlp_macos` from the yt-dlp GitHub releases (Unlicense).
 - FFmpeg and ffprobe: macOS arm64 release builds from ffmpeg.martin-riedl.de (signed by their publisher; FFmpeg is LGPL/GPL depending on build configuration).
-- demucs-mlx: installed from PyPI by `uv` (Astral, MIT/Apache-2.0), which also downloads a standalone CPython build (PSF License). demucs-mlx is MIT; its model weights come from the official Demucs release (MIT).
+- demucs-mlx: version 1.6.1 and the packages it needs (MLX, NumPy and others, each at the exact version and hashes in `Sources/AppCore/HelperTools/HelperToolPins.swift`), installed from PyPI by `uv` (Astral, MIT/Apache-2.0), which also downloads a standalone CPython build (PSF License). Each package's license ships with it; demucs-mlx is MIT. PyTorch is not installed. The MLX model weights are converted from the official Demucs release (MIT), come from Hugging Face (`ssmall256/demucs-mlx`), and are checked against SHA-256 values built into demucs-mlx.
 
 
 | Helper | Purpose | Bundled? | License responsibility |

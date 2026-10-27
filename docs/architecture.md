@@ -345,6 +345,10 @@ The outside programs the tools run (yt-dlp, FFmpeg, ffprobe, demucs-mlx) are fou
   `HelperToolPins.release`, each checked against the SHA-256 in that file, not against a checksum from the host. No
   helper download uses a moving `latest` link (`HelperToolPinsSourceTests`), except yt-dlp, which follows the newest
   release because sites change.
+- demucs-mlx goes into a fresh virtual environment per install: `uv pip install --require-hashes --no-build` of the
+  lock in `HelperToolPins.release` (demucs-mlx and every package it needs, one version and the file hashes each; no
+  PyTorch). The warm-up downloads the model weights into `~/.cache/demucs-mlx`; demucs-mlx accepts them only if they
+  match the hashes built into it. The installer's home folder is injected, so the live test uses an empty one.
 
 ## Archive footer ownership
 
