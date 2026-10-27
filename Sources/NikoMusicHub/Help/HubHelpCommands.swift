@@ -5,6 +5,7 @@ import SwiftUI
 /// Set Up Helper Tools opens the one-click setup sheet.
 struct HubHelpCommands: Commands {
     let router: QuickAccessRouter
+    let helpRouting: HubHelpRouting
 
     @Environment(\.openWindow) private var openWindow
 
@@ -31,7 +32,7 @@ struct HubHelpCommands: Commands {
     }
 
     private func openHelp(topic: HubHelpTopic?) {
-        HubHelpRouting.shared.showHelp(topic: topic)
+        helpRouting.showHelp(topic: topic)
         openWindow(id: HubHelpTopics.windowID)
     }
 }

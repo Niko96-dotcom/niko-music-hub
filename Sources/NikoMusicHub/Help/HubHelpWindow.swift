@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// Routes Help-menu choices into the single Help window (scroll target).
+/// Routes Help-menu choices into the single Help window (scroll target). `AppComposition` builds the one
+/// instance; the Help menu writes it and the Help window reads it.
 @MainActor
 final class HubHelpRouting: ObservableObject {
-    static let shared = HubHelpRouting()
-
     @Published private(set) var requestedTopic: HubHelpTopic?
     @Published private(set) var requestID: UInt64 = 0
 
@@ -17,10 +16,6 @@ final class HubHelpRouting: ObservableObject {
 /// In-app Help page. One window, four sections from `HubHelpTopics`.
 struct HubHelpWindow: View {
     @ObservedObject var routing: HubHelpRouting
-
-    init(routing: HubHelpRouting = .shared) {
-        self.routing = routing
-    }
 
     var body: some View {
         ScrollViewReader { proxy in

@@ -291,7 +291,10 @@ These rules are documented and, where named, enforced. The full table is in
    Downloader's inbox write depends on the view model observing the job.
 5. Closed on 2026-10-25: no dependency is global. `AppComposition` builds the one `LiveProcessGroupRegistry` and
    its runner, `ToolContext.processRunner` carries the runner to every helper, and the app delegate reaps that
-   registry; no runner initializer has a default runner or registry (`HubTerminationSourceTests`). (Helper
+   registry; no runner initializer has a default runner or registry (`HubTerminationSourceTests`). The Help menu
+   and the Help window share the one `HubHelpRouting` the composition builds (2026-10-27). No `static let shared`
+   is left under `Sources/` but `ConfidenceReasonPool`, an interning cache no behavior depends on
+   (`SingletonSourceTests`). (Helper
    consumers share one `HelperToolLocator` through `HelperToolHealth` since 2026-10-23; preview playback belongs to
    the archive view model, and the recorder and the archive share one recording signal through `ToolContext`, since
    2026-10-24.)
@@ -302,10 +305,10 @@ These rules are documented and, where named, enforced. The full table is in
    `ArchiveMetadataEditingCoordinator`, `ProjectVaultOperationCoordinator` and `ArchiveVaultObservation`. The view
    model keeps the song catalog writer, the footer, the root reset (one call per owner, in a documented order) and
    the intents that cross owners, in 10 files (it was 22).
-7. **Test harness code ships in product modules.** `ArchiveUserFlowSmoke*.swift` (FeatureArchiveBrowser)
-   and the smoke commands in `Sources/NikoMusicHub/` are `#if DEBUG`, the scenario structs included since
-   2026-10-25. `DevToolFeature` always compiles and is shown
-   only with `NIKO_MUSIC_HUB_SHOW_DEV_TOOL=1`.
+7. Closed on 2026-10-27: no test harness or developer code ships in release builds. `ArchiveUserFlowSmoke*.swift`
+   (FeatureArchiveBrowser), the smoke commands in `Sources/NikoMusicHub/`, `DevToolFeature` and
+   `DesignSystemPreviewFeature` are `#if DEBUG`; a debug build shows the two developer tools only with
+   `NIKO_MUSIC_HUB_SHOW_DEV_TOOL=1`.
 8. Closed on 2026-10-24: the "Archive automatically" switch, its steppers, the Vault login-item row and
    the unused background-scheduling code are gone. The only automatic archiving is the copy-only Done
    copy (main flow step 7; [architecture.md § Project Vault bound authorization](architecture.md#project-vault-bound-authorization)).

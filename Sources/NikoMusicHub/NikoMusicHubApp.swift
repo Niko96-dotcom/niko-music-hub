@@ -92,7 +92,7 @@ struct NikoMusicHubApp: App {
             HubCancelCommands(jobStatusCenter: composition.context.jobStatusCenter)
             HubSongCommands()
             HubFindCommands(router: composition.router)
-            HubHelpCommands(router: composition.router)
+            HubHelpCommands(router: composition.router, helpRouting: composition.helpRouting)
         }
 
         Settings {
@@ -109,7 +109,7 @@ struct NikoMusicHubApp: App {
         }
 
         Window(HubHelpTopics.windowTitle, id: HubHelpTopics.windowID) {
-            HubHelpWindow()
+            HubHelpWindow(routing: composition.helpRouting)
                 .preferredColorScheme(appearanceController.preferredColorScheme)
                 .hubOpensMainWindowFromDock()
         }

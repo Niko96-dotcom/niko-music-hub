@@ -413,8 +413,9 @@ order, route or label anything (2026-10-24, finding #9 of the 2026-10-22 review)
   hand-off) and `OutputHandoff`'s Downloader file types. `ToolIDSourceTests` keeps the literals in their owners.
 - **Order.** `ToolMetadata.section` (`library`, `production`, `settings`) places a tool. `ToolSection.sidebarOrder`
   is the one order: the sidebar, the Tools menu, ⌘1…⌘9, the arrow keys and the Dock menu use it. Registration order
-  alone is not enough, because the Dev Tool registers after Settings. A `settings` tool opens the Settings window:
-  it is never the main pane or the launch tool and has no ⌘ digit. The menu bar menu keeps its own curated order.
+  alone is not enough, because the Dev Tool (debug builds only) registers after Settings. A `settings` tool opens the
+  Settings window: it is never the main pane or the launch tool and has no ⌘ digit. The menu bar menu keeps its own
+  curated order.
 - **Esc and ⌘.** Each job says what the keys cancel it as (`ShellJobStatus.cancelTarget`) and whose it is
   (`sourceToolID`; `nil` for shell work such as a Vault transfer or a scan). Each tool says whether its pane keeps
   Esc (`ToolMetadata.handlesEscape`: the Archive Browser, Downloader, Stem Separation and WAV Converter).

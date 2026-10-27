@@ -1,3 +1,4 @@
+#if DEBUG
 import AppCore
 import SwiftUI
 
@@ -128,3 +129,4 @@ struct DevToolDetailView: View {
         }
     }
 }
+#endif

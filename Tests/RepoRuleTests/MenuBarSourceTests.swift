@@ -81,7 +81,7 @@ final class MenuBarSourceTests: XCTestCase {
     func testDockRevealFrontsOnlyTheMainWindow() {
         Self.rule.expect(Self.dock, contains: ["HubMainWindowIdentity.identifierRawValue"], lacks: ["first(where: { $0.canBecomeMain })"])
         let app = SourceTree.read(Self.app)
-        guard let helpScene = app.range(of: "HubHelpWindow()") else { return Self.rule.check(["\(Self.app) has no Help window scene"]) }
+        guard let helpScene = app.range(of: "HubHelpWindow(routing: composition.helpRouting)") else { return Self.rule.check(["\(Self.app) has no Help window scene"]) }
         Self.rule.require(app[helpScene.upperBound...].prefix(200).contains(".hubOpensMainWindowFromDock()"),
                           "the Help window no longer observes Dock reveals, so no live openWindow exists when only Help is open")
     }

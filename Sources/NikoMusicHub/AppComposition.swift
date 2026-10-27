@@ -34,6 +34,8 @@ struct AppComposition {
     let termination: HubTerminationCoordinator
     /// The helper process groups `context.processRunner` started; the app delegate reaps them at quit (ADR-019).
     let processGroups: LiveProcessGroupRegistry
+    /// The Help menu's topic request, read by the one Help window.
+    let helpRouting: HubHelpRouting
     /// AppKit saves the main window frame into the standard defaults domain, so
     /// an isolated settings suite (tests, E2E) must not autosave it.
     let persistsWindowFrame: Bool
@@ -240,7 +242,14 @@ struct AppComposition {
             quickAccessRouter.openConverter(with: [url])
         }
 
-        var features: [any ToolFeature] = [
+        // Developer tools exist only in debug builds, and show only with NIKO_MUSIC_HUB_SHOW_DEV_TOOL=1.
+        #if DEBUG
+        let developerFeatures: [any ToolFeature] =
+            runtime.showsDevTool ? [DevToolFeature(), DesignSystemPreviewFeature()] : []
+        #else
+        let developerFeatures: [any ToolFeature] = []
+        #endif
+        let features: [any ToolFeature] = [
             ArchiveBrowserFeature(viewModel: archiveViewModel),
             BPMTapperFeature(),
             AudioConverterFeature(router: quickAccessRouter),
@@ -248,13 +257,7 @@ struct AppComposition {
             DownloaderFeature(),
             StemSeparationFeature(),
             SettingsFeature()
-        ]
-        if runtime.showsDevTool {
-            features.append(DevToolFeature())
-            #if DEBUG
-            features.append(DesignSystemPreviewFeature())
-            #endif
-        }
+        ] + developerFeatures
         let registry: ToolRegistry
         do {
             registry = try ToolRegistry(features: features)
@@ -286,6 +289,7 @@ struct AppComposition {
             persistenceIssues: persistenceIssues,
             termination: HubTerminationCoordinator(jobStatusCenter: jobStatusCenter),
             processGroups: processGroups,
+            helpRouting: HubHelpRouting(),
             persistsWindowFrame: !runtime.usesIsolatedSettingsSuite
         )
     }
