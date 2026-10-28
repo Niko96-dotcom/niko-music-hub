@@ -368,7 +368,7 @@ from Terminal.app: **exit 0, no failures.**
 - XCTest: 3,023 tests run, 8 skipped (opt-in live and hardware tests), 0 failures; `RepoRuleTests` ran 176 of
   them. Swift Testing: 89 tests in 8 suites passed. The link check, recorder gate, UI-probe self-test, core
   self-test, CLI export and refusal smokes, and the release and source-distribution script tests passed.
-- The previous baseline, `8332bdb` (1.9.0 release preparation): exit 0, 2,978 XCTest tests, 8 skipped;
+- The previous baseline, `8332bdb` (the previous release preparation): exit 0, 2,978 XCTest tests, 8 skipped;
   `NMH_STRICT_UI_E2E=1 ./script/e2e_user_smoke.sh` passed on those files with production preferences unchanged.
   The process wave changed no product behavior, so E2E was not rerun.
 - `ci.sh` skips the host-only CoreAudio capture tests by design.

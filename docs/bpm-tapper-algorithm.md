@@ -10,7 +10,7 @@ run's start tap and the last 12 accepted taps. BPM = 60 / slope.
 Why a line and not an average of the intervals: a person tapping along to a song lands early or
 late around the song's fixed beat grid, and those errors do not add up. Each tap's error appears
 in two neighbouring intervals with opposite signs. The slope cancels it; the median of the
-intervals (the estimator up to 1.9.0) keeps every tap's jitter in the result. Simulated root-mean-
+intervals (the estimator before 1.9.1) keeps every tap's jitter in the result. Simulated root-mean-
 square error after 13 taps along to a song, Gaussian per-tap jitter:
 
 | Song | Jitter per tap | Median of intervals | Fitted slope |

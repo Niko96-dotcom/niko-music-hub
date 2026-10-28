@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.1 - 2026-10-28
+
+- Install FFmpeg, ffprobe and uv from Set Up only as the exact builds this version names, checked against SHA-256 values built into the app, instead of whatever build the download site offers that day.
+- Install Stem Separation without PyTorch: demucs-mlx and every package it needs come at fixed versions with checked hashes, into a fresh environment, about 1 GB instead of about 1.2 GB. An existing install keeps working; Install again replaces it and removes the old environment.
+- Install a yt-dlp release only when the yt-dlp signing key signed its checksum list and the release is not older than the oldest yt-dlp that still works with YouTube. A refused release says to update the app if it happens again.
+- Start a helper download again, up to two more times, when its connection drops or does not come up.
+- Read the BPM Tapper's tempo from a beat grid fitted to all recent taps instead of the median tap interval: ordinary timing wobble lands three to four times closer to the song's tempo, and a missed beat counts the beats it skipped instead of being thrown out.
+- Make the first click in the compact archive list select a song after the archive folder changes, instead of opening a song detail.
+- Make Esc, Return, Space and the arrow keys in the archive, the BPM Tapper and the Audio Recorder change the page right after SwiftUI draws it, not while it draws it; the app no longer logs "Publishing changes from within view updates".
+- Keep Quit waiting for a recording take to end also when stopping the recording fails.
+- Leave the developer tools out of the release app.
+
 ## 1.9.0 - 2026-10-25
 
 - Send a project whose Active-copy removal was interrupted to review at the next launch, also when a newer Vault copy exists. Until you choose Recover, the app does not resume or retry the project's other transfers, and Retry on them is refused; Recover marks them superseded and keeps every copy. The song detail shows the removal under review first.
