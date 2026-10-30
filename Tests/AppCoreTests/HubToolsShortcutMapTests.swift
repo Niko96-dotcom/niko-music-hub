@@ -75,6 +75,21 @@ final class HubToolsShortcutMapTests: XCTestCase {
         XCTAssertTrue(sidebar.contains("selectedToolID = metadata.id"))
     }
 
+    /// The sidebar's Settings row toggles the Settings window; the Tools menu
+    /// and ⌘, only open it, like every Mac app's Settings… item.
+    func testSidebarSettingsRowClosesAnOpenSettingsWindow() throws {
+        let shell = try SourceTestSupport.read("Sources/NikoMusicHub/AppShell/AppShellView.swift")
+        let binding = try XCTUnwrap(shell.range(of: "private var sidebarSelectedToolID"))
+        XCTAssertTrue(
+            shell[binding.upperBound...].prefix(700).contains("HubSettingsWindow.closeIfVisible()"),
+            "a second press on the sidebar's Settings row must close the open Settings window"
+        )
+
+        let scene = try SourceTestSupport.read("Sources/NikoMusicHub/Settings/HubSettingsScene.swift")
+        XCTAssertTrue(scene.contains("\"com_apple_SwiftUI_Settings_window\""))
+        XCTAssertTrue(scene.contains("$0.isVisible"), "a closed or minimized Settings window opens again")
+    }
+
     private func makeHubRegistry() throws -> ToolRegistry {
         try ToolRegistry(features: [
             StubToolFeature(id: "archive-browser", displayName: "Archive Browser"),

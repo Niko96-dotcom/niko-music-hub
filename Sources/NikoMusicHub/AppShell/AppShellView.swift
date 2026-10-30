@@ -277,13 +277,18 @@ struct AppShellView: View {
     }
 
     /// Sidebar writes go through `selectTool` so Settings opens the Settings
-    /// window instead of replacing the main pane.
+    /// window instead of replacing the main pane. The Settings row toggles that
+    /// window: pressed while Settings is open, it closes it.
     private var sidebarSelectedToolID: Binding<ToolFeatureID?> {
         Binding(
             get: { selectedToolID },
             set: { newValue in
                 guard let newValue else {
                     shellSession.setSelectedToolID(nil)
+                    return
+                }
+                if registry.feature(for: newValue)?.metadata.section == .settings,
+                   HubSettingsWindow.closeIfVisible() {
                     return
                 }
                 selectTool(newValue)

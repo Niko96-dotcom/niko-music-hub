@@ -1,7 +1,26 @@
 import AppCore
+import AppKit
 import AppUpdates
 import ProjectVaultRuntime
 import SwiftUI
+
+/// The Settings scene's window, found by the identifier SwiftUI gives it
+/// (nothing in the app sets it). Should SwiftUI rename it, nothing is found
+/// and the sidebar's Settings row only opens Settings, as it did before.
+enum HubSettingsWindow {
+    static let identifierRawValue = "com_apple_SwiftUI_Settings_window"
+
+    /// Closes the Settings window when it is on screen; false when there was
+    /// nothing to close.
+    @MainActor
+    static func closeIfVisible() -> Bool {
+        guard let window = NSApp.windows.first(where: {
+            $0.identifier?.rawValue == identifierRawValue && $0.isVisible
+        }) else { return false }
+        window.performClose(nil)
+        return true
+    }
+}
 
 /// Hosts hub-wide preferences in the SwiftUI Settings scene (⌘, / App menu).
 /// Pure pass-through: nothing here is observed, so router publishes do not
