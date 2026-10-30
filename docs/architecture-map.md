@@ -27,7 +27,7 @@ listed in the [documentation index](README.md).
 | App `@main` | `NikoMusicHubMain.main` in [NikoMusicHubApp.swift](../Sources/NikoMusicHub/NikoMusicHubApp.swift) | Resolves an isolated settings suite (`IsolatedAppLaunch`, exit 78 on a refused suite), then starts `NikoMusicHubApp` |
 | Composition root | `AppComposition.make()` in [AppComposition.swift](../Sources/NikoMusicHub/AppComposition.swift) | Builds every store and service, the archive view model, the feature list and the `ToolRegistry` once, before any scene |
 | Scenes | `NikoMusicHubApp.body` | Main window (`AppShellView`), Settings (`HubSettingsScene`), Help window, `MenuBarExtra`, menu command groups (`Sources/NikoMusicHub/Commands/`) |
-| AppKit delegate | `AppDelegate` in the same file | Quit contract ([ADR 019](decisions/019-running-work-and-quit.md)), Dock menu, DEBUG smoke commands |
+| AppKit delegate | `AppDelegate` in the same file | Quit contract ([ADR 019](decisions/019-running-work-and-quit.md)), Dock menu, Dock-icon reopen, DEBUG smoke commands |
 | Launch switches | [MusicHubRuntimeEnvironment.swift](../Sources/AppCore/Environment/MusicHubRuntimeEnvironment.swift) | The `NIKO_MUSIC_HUB_*` variables (fixture root, dry-run open, settings suite, E2E smoke, dev tool), read once at composition |
 | CLI | [NikoMusicHubCLI/main.swift](../Sources/NikoMusicHubCLI/main.swift) | `export-index`, `export-diagnostics` over `NikoMusicCore` |
 | Core self-test | [NikoMusicCoreSelfTest/main.swift](../Sources/NikoMusicCoreSelfTest/main.swift) | Fixture scan check; read-only counts on a real root |

@@ -17,6 +17,14 @@ to the production tools without switching to the app first.
 Stem download workflows route to Stem Separation — there is no separate
 download-to-stems entry in the menu (ROUT-06).
 
+## Dock
+
+Closing the main window (⌘W or the close button) does not quit the app. A click on the
+Dock icon then opens the main window again, and a minimized main window comes back the
+same way. SwiftUI reopens nothing for a `Window` scene, so `AppDelegate` answers the
+reopen itself (`applicationShouldHandleReopen`, through `HubMainWindow.reveal()`). The
+Dock menu (Open, the tools, Output Inbox) uses the same reveal.
+
 ## Why direct job controls are not in the menu (v1.8)
 
 Record, convert, download, and separate controls are not accessible from the menu bar.

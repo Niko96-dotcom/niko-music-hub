@@ -86,6 +86,15 @@ final class MenuBarSourceTests: XCTestCase {
                           "the Help window no longer observes Dock reveals, so no live openWindow exists when only Help is open")
     }
 
+    func testDockIconClickReopensTheClosedMainWindow() {
+        let app = SourceTree.read(Self.app)
+        guard let reopen = app.range(of: "func applicationShouldHandleReopen") else {
+            return Self.rule.check(["\(Self.app) has no applicationShouldHandleReopen: a Dock click with the main window closed shows no window"])
+        }
+        Self.rule.require(app[reopen.upperBound...].prefix(250).contains("HubMainWindow.reveal()"),
+                          "the Dock-click reopen no longer reveals the main window; SwiftUI reopens nothing for a Window scene")
+    }
+
     func testDockRevealOpensMainWindowWhenNoWindowIsOpen() {
         Self.rule.expect(Self.dock, contains: ["commandsOpenWindow?(id: windowID)"],
                          because: "reveal() calls a live openWindow, not only observers in open windows")

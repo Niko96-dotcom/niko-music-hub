@@ -186,6 +186,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         services?.processGroups.reapLiveProcessGroups()
     }
 
+    /// A Dock click after the main window was closed (⌘W, the close button):
+    /// the app keeps running, and SwiftUI reopens nothing for a `Window`
+    /// scene, so the click only activated an app with no window. Reveal the
+    /// main window ourselves; a minimized one comes back the same way.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag else { return true }
+        HubMainWindow.reveal()
+        return false
+    }
+
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         HubDockMenu.make(
             registry: services?.registry ?? ToolRegistry(),
