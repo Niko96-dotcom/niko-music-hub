@@ -289,6 +289,13 @@ plays at a time by construction; no coordinator sits between players.
   (`ArchivePreviewOutputOnlySourceTests` keeps `setActive(` out of the archive's sources). `AudioCaptureActivityWiringTests`
   runs both sides' own wiring on one context with a fake capture port: a take pauses the playing preview and blocks
   Play; after it, the preview stays paused and Play works again.
+- The play position changes ten times a second while a preview plays, so it is published on its own object,
+  `ArchivePreviewPlayer.position` (`ArchivePreviewPosition`), not on the player. `ArchiveBrowserView` and the bar observe
+  the player; a publish there for each tick re-rendered the whole archive browser and made board scrolling stutter
+  during playback. Only the bar's `ArchivePreviewProgressView` (elapsed time and position slider) observes `position`;
+  everything else reads `currentTime`. `ArchivePreviewSeekRelativeTests.testPlaybackPublishesThePositionNotThePlayer`
+  plays a preview and fails on any player publish while the position moves.
+  `script/benchmark_archive_startup.sh playback` measures the main-thread cost of a playing preview.
 
 ## Archive scan list
 

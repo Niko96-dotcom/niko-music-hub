@@ -29,6 +29,37 @@ final class ArchivePreviewSeekRelativeTests: XCTestCase {
         XCTAssertEqual(player.currentTime, duration, accuracy: 0.2)
     }
 
+    /// The position changes ten times a second while a preview plays. Every view that
+    /// observes the player (the whole archive browser) would re-render on each change,
+    /// which made board scrolling stutter during playback; only `position` may publish.
+    func testPlaybackPublishesThePositionNotThePlayer() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nmh-position-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try makeSilentWAV(seconds: 12, at: url)
+
+        // No metadata revision: the warm-up stops before it can publish a hook or duration.
+        let player = ArchivePreviewPlayer(metadataRevisionLoader: { _ in nil })
+        defer { player.forceStop() }
+        player.setVolume(0)
+        player.load(url: url, position: 0, autoplay: true)
+        _ = try await waitForDuration(on: player)
+        let start = try await waitForPosition(on: player, atLeast: 0.1)
+
+        var playerChanges = 0
+        var positionChanges = 0
+        let playerSink = player.objectWillChange.sink { playerChanges += 1 }
+        let positionSink = player.position.objectWillChange.sink { positionChanges += 1 }
+        defer {
+            playerSink.cancel()
+            positionSink.cancel()
+        }
+        _ = try await waitForPosition(on: player, atLeast: start + 0.5)
+
+        XCTAssertGreaterThanOrEqual(positionChanges, 3, "the position follows playback")
+        XCTAssertEqual(playerChanges, 0, "a playing preview must not publish on the player")
+    }
+
     func testSeekWhileLoadingRetargetsStartAndFinishesLoading() async throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("nmh-120-seek-\(UUID().uuidString).wav")
@@ -115,6 +146,24 @@ final class ArchivePreviewSeekRelativeTests: XCTestCase {
             domain: "ArchivePreviewSeekRelativeTests",
             code: 1,
             userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for preview duration"]
+        )
+    }
+
+    private func waitForPosition(
+        on player: ArchivePreviewPlayer,
+        atLeast seconds: Double,
+        attempts: Int = 150
+    ) async throws -> Double {
+        for _ in 0..<attempts {
+            if player.currentTime >= seconds {
+                return player.currentTime
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        throw NSError(
+            domain: "ArchivePreviewSeekRelativeTests",
+            code: 2,
+            userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for the position to reach \(seconds)"]
         )
     }
 

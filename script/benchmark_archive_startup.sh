@@ -8,6 +8,9 @@
 #       (script/performance/archive-launch.swift)
 #   script/benchmark_archive_startup.sh tools [--runs N]
 #       first-open cost of each tool screen (script/performance/archive-tools.swift)
+#   script/benchmark_archive_startup.sh playback --archive <CubaseArchive> [--song TITLE] [--seconds S]
+#       main-thread cost of a playing preview under the board and the player bar
+#       (script/performance/archive-playback.swift)
 # Set NMH_BENCH_BINARY_SUFFIX=-name to keep the built binary as <tool>-name (for before/after pairs).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,7 +22,7 @@ swift build -c release --target FeatureArchiveBrowser -Xswiftc -enable-testing >
 BIN_DIR="$(swift build -c release --show-bin-path)"
 mkdir -p .build/performance-startup
 TOOL=startup
-if [[ "${1:-}" == "launch" || "${1:-}" == "startup" || "${1:-}" == "tools" ]]; then TOOL="$1"; shift; fi
+if [[ "${1:-}" == "launch" || "${1:-}" == "startup" || "${1:-}" == "tools" || "${1:-}" == "playback" ]]; then TOOL="$1"; shift; fi
 MODULES=(FeatureArchiveBrowser ProjectVaultRuntime AppCore NikoMusicCore)
 if [[ "$TOOL" == "tools" ]]; then
   MODULES+=(FeatureBPMTapper FeatureAudioConverter FeatureAudioRecorder FeatureDownloader FeatureStemSeparation)

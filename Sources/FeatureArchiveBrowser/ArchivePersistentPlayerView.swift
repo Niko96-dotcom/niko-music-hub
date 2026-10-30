@@ -77,15 +77,10 @@ public struct ArchivePersistentPlayerView: View {
                     .help(preview.fileName)
                     .accessibilityLabel("Open playing song: \(session.songTitle)")
 
-                    Text(Self.time(session.player.currentTime)).monospacedDigit()
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                    Slider(value: Binding(
-                        get: { min(session.player.currentTime, max(session.player.duration, 1)) },
-                        set: { session.player.seek(to: $0, url: preview.filePath) }
-                    ), in: 0...max(session.player.duration, 1))
-                    .disabled(session.player.duration <= 0 || session.player.isLoading)
-                    .controlSize(.small)
-                    .accessibilityLabel("Preview position")
+                    ArchivePreviewProgressView(
+                        position: player.position, player: player, url: preview.filePath,
+                        duration: player.duration, isLoading: player.isLoading
+                    )
                     Text(Self.time(session.player.duration)).monospacedDigit()
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                     Image(systemName: "speaker.wave.2").foregroundStyle(.secondary)
@@ -105,5 +100,27 @@ public struct ArchivePersistentPlayerView: View {
         guard seconds.isFinite, seconds >= 0 else { return "0:00" }
         let value = Int(seconds)
         return "\(value / 60):\(String(format: "%02d", value % 60))"
+    }
+}
+
+/// The elapsed time and the position slider: the only views that follow the play
+/// position, so a playing preview re-renders these and not the bar or the board.
+private struct ArchivePreviewProgressView: View {
+    @ObservedObject var position: ArchivePreviewPosition
+    let player: ArchivePreviewPlayer
+    let url: URL
+    let duration: Double
+    let isLoading: Bool
+
+    var body: some View {
+        Text(ArchivePersistentPlayerView.time(position.seconds)).monospacedDigit()
+            .font(.system(size: 10)).foregroundStyle(.secondary)
+        Slider(value: Binding(
+            get: { min(position.seconds, max(duration, 1)) },
+            set: { player.seek(to: $0, url: url) }
+        ), in: 0...max(duration, 1))
+        .disabled(duration <= 0 || isLoading)
+        .controlSize(.small)
+        .accessibilityLabel("Preview position")
     }
 }

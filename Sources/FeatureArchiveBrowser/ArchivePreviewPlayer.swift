@@ -7,7 +7,12 @@ import SwiftUI
 final class ArchivePreviewPlayer: ObservableObject {
     typealias MetadataRevisionLoader = @Sendable (URL) async -> Date?
 
-    @Published private(set) var currentTime: Double = 0
+    /// The play position lives on its own object: it changes ten times a second while
+    /// a preview plays, and a publish here would re-render every view that observes the
+    /// player, the whole archive browser included. Read it through `currentTime`;
+    /// observe `position` only in the view that shows it.
+    let position = ArchivePreviewPosition()
+    var currentTime: Double { position.seconds }
     @Published private(set) var duration: Double = 0
     @Published private(set) var hookTime: Double?
     @Published private(set) var activeURL: URL?
@@ -145,7 +150,7 @@ final class ArchivePreviewPlayer: ObservableObject {
         activeURL = url
         duration = 0
         hookTime = nil
-        currentTime = 0
+        position.seconds = 0
         hookSeekPending = true
         playbackIntentActive = false
     }
@@ -174,7 +179,7 @@ final class ArchivePreviewPlayer: ObservableObject {
         }
         if player != nil { return }
         ensurePlayer(for: url)
-        currentTime = 0
+        position.seconds = 0
         hookSeekPending = true
         playbackIntentActive = false
         scheduleMetadataWarmup(for: url, includesHook: false)
@@ -235,13 +240,13 @@ final class ArchivePreviewPlayer: ObservableObject {
             // The start seek owns the player until loading ends. Retarget it so readiness
             // and the autoplay intent survive a skip made while the preview still loads.
             pendingStart = clamped
-            currentTime = clamped
+            position.seconds = clamped
             resolvePendingStart()
             return
         }
         pendingStart = nil
         player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600))
-        currentTime = clamped
+        position.seconds = clamped
     }
 
     /// Explicit auditioning starts from zero; Compare carries a timestamp. Readiness,
@@ -281,7 +286,7 @@ final class ArchivePreviewPlayer: ObservableObject {
         let seconds = item.duration.seconds
         if seconds.isFinite, seconds > 0 { duration = seconds }
         let target = duration > 0 ? min(start, duration) : start
-        currentTime = target
+        position.seconds = target
         let generation = requestGeneration
         startSeekToken &+= 1
         let token = startSeekToken
@@ -439,7 +444,7 @@ final class ArchivePreviewPlayer: ObservableObject {
         guard let player else { return }
         let time = CMTime(seconds: hook, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
-        currentTime = hook
+        position.seconds = hook
         hookSeekPending = false
     }
 
@@ -462,7 +467,7 @@ final class ArchivePreviewPlayer: ObservableObject {
             activeURL = nil
         }
         if currentTime != 0 {
-            currentTime = 0
+            position.seconds = 0
         }
         if duration != 0 {
             duration = 0
@@ -483,11 +488,18 @@ final class ArchivePreviewPlayer: ObservableObject {
             guard seconds.isFinite else { return }
             Task { @MainActor [weak self] in
                 guard let self, self.requestGeneration == generation, !self.isLoading else { return }
-                self.currentTime = seconds
+                self.position.seconds = seconds
                 if self.duration > 0, seconds >= self.duration - 0.02, self.playbackIntentActive {
                     self.pause()
                 }
             }
         }
     }
+}
+
+/// The preview's play position, apart from the player so that only the views showing
+/// the position follow its ten-a-second changes (`ArchivePreviewPlayer.position`).
+@MainActor
+final class ArchivePreviewPosition: ObservableObject {
+    @Published fileprivate(set) var seconds: Double = 0
 }
