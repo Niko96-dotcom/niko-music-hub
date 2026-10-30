@@ -134,9 +134,6 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
             contentView.scroll(to: contentView.constrainBoundsRect(top).origin)
             reflectScrolledClipView(contentView)
         }
-        // A hidden lane has no visible rows, so a change applied while the board was
-        // hidden (a song detail's edit) never reached its cards: refresh them on return.
-        let boardReturned = !wasBoardVisible && next.isBoardVisible
         wasBoardVisible = next.isBoardVisible
         let nextIDs = next.songs.map(\.id)
         let oldIDs = old?.songs.map(\.id) ?? []
@@ -175,9 +172,12 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                 reloaded = true
             }
         }
-        // Refresh only realized rows, including selection, playback owner,
-        // metadata and Vault activity. Offscreen rows read the latest input
-        // when AppKit asks for them; no old Song values are cached in cells.
+        // Refresh every realized row, including selection, playback owner,
+        // metadata, Vault activity and the color scheme. A realized row can be out
+        // of view (the board scrolled the lane sideways, or a song detail hides the
+        // board) and is shown again as it is, so visibility must not decide. Rows
+        // not realized read the latest input when AppKit asks for them; no old Song
+        // values are cached in cells.
         guard !reloaded, let old else { return }
         var changedHeights = IndexSet()
         if !old.songs.equalsConcurrently(next.songs) {
@@ -192,22 +192,23 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                 changedHeights.insert(row)
             }
         }
-        for row in table.rows(in: table.visibleRect).integerRange where next.songs.indices.contains(row) {
+        table.enumerateAvailableRowViews { _, row in
+            guard next.songs.indices.contains(row) else { return }
             let song = next.songs[row]
             let previousSong = oldRows[song.id].map { old.songs[$0] }
             let contentChanged = previousSong != song
                 || old.vaultPresentations[song.id] != next.vaultPresentations[song.id]
                 || old.vaultActivity[song.id] != next.vaultActivity[song.id]
             let selectionChanged = (old.selectedSongID == song.id) != (next.selectedSongID == song.id)
-            guard contentChanged || selectionChanged || boardReturned || old.viewModel !== next.viewModel
+            guard contentChanged || selectionChanged || old.viewModel !== next.viewModel
                     || old.colorScheme != next.colorScheme || old.reduceMotion != next.reduceMotion
-                    || old.boardScroll !== next.boardScroll else { continue }
+                    || old.boardScroll !== next.boardScroll else { return }
             if let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ArchiveBoardCardCell {
                 cell.setCard(card(at: row), colorScheme: next.colorScheme, isLast: row == next.songs.count - 1,
                              interaction: interaction, width: table.tableColumns[0].width,
                              scrollActivity: next.boardScroll?.activity, reduceMotion: next.reduceMotion)
             }
-            if contentChanged || boardReturned { changedHeights.insert(row) }
+            if contentChanged { changedHeights.insert(row) }
         }
         if !changedHeights.isEmpty { table.noteHeightOfRows(withIndexesChanged: changedHeights) }
     }
@@ -365,11 +366,5 @@ private struct ArchiveBoardCardEntrance: ViewModifier {
             .onAppear {
                 if animated { withAnimation(ArchiveBoardMotion.animation) { appeared = true } }
             }
-    }
-}
-
-private extension NSRange {
-    var integerRange: Range<Int> {
-        location == NSNotFound ? 0..<0 : location..<(location + length)
     }
 }

@@ -85,6 +85,38 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         XCTAssertEqual(firstCardTitle(), "Song Edited")
     }
 
+    /// The board scrolls lanes sideways out of its viewport. A lane out of view has no
+    /// visible rows, but its realized cards must still take a light/dark switch: they
+    /// are shown again as they are when the lane scrolls back.
+    func testLaneScrolledOutOfViewShowsTheNewColorSchemeWhenItScrollsBack() throws {
+        let fixture = makeFixture()
+        defer { fixture.window.close() }
+        fixture.window.contentView?.layoutSubtreeIfNeeded()
+        let table = try XCTUnwrap(fixture.list.documentView as? NSTableView)
+        let home = fixture.list.frame
+        func lane(_ colorScheme: ColorScheme) -> ArchiveBoardNativeSongList {
+            ArchiveBoardNativeSongList(
+                songs: fixture.songs, selectedSongID: nil, vaultPresentations: [:], vaultActivity: [:],
+                viewModel: fixture.model, dropLayout: fixture.layout, colorScheme: colorScheme, reduceMotion: true
+            )
+        }
+
+        // The board scrolls this lane out of its viewport, then the app switches to dark.
+        fixture.list.frame = home.offsetBy(dx: -(home.width + 40), dy: 0)
+        XCTAssertTrue(table.visibleRect.isEmpty)
+        fixture.list.apply(lane(.dark), animated: false)
+
+        // The board scrolls back.
+        fixture.list.frame = home
+        fixture.window.contentView?.layoutSubtreeIfNeeded()
+        let rows = table.rows(in: table.visibleRect)
+        XCTAssertGreaterThan(rows.length, 0)
+        for row in rows.location..<rows.location + rows.length {
+            let cell = try XCTUnwrap(table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ArchiveBoardCardCell)
+            XCTAssertEqual(cell.displayedContent?.colorScheme, .dark, "row \(row)")
+        }
+    }
+
     func testEndOfLongLaneIsRealizedAndCardSpacingHasNoTableInsets() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }
