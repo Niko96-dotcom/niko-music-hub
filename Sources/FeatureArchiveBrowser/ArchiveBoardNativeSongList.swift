@@ -179,6 +179,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
         // not realized read the latest input when AppKit asks for them; no old Song
         // values are cached in cells.
         guard !reloaded, let old else { return }
+        let selectedRow = next.selectedSongID.flatMap { rowByID[$0] }
         var changedHeights = IndexSet()
         if !old.songs.equalsConcurrently(next.songs) {
             for (row, song) in next.songs.enumerated() {
@@ -192,8 +193,10 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                 changedHeights.insert(row)
             }
         }
-        table.enumerateAvailableRowViews { _, row in
+        table.enumerateAvailableRowViews { rowView, row in
             guard next.songs.indices.contains(row) else { return }
+            (rowView as? ArchiveBoardCardRow)?.showsSeparator =
+                Self.showsSeparator(below: row, count: next.songs.count, selectedRow: selectedRow)
             let song = next.songs[row]
             let previousSong = oldRows[song.id].map { old.songs[$0] }
             let contentChanged = previousSong != song
@@ -204,7 +207,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                     || old.colorScheme != next.colorScheme || old.reduceMotion != next.reduceMotion
                     || old.boardScroll !== next.boardScroll else { return }
             if let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ArchiveBoardCardCell {
-                cell.setCard(card(at: row), colorScheme: next.colorScheme, isLast: row == next.songs.count - 1,
+                cell.setCard(card(at: row), colorScheme: next.colorScheme,
                              interaction: interaction, width: table.tableColumns[0].width,
                              scrollActivity: next.boardScroll?.activity, reduceMotion: next.reduceMotion)
             }
@@ -221,7 +224,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
         guard let input, input.songs.indices.contains(row) else { return nil }
         let cell = (tableView.makeView(withIdentifier: Self.cellID, owner: nil) as? ArchiveBoardCardCell) ?? ArchiveBoardCardCell()
         cell.identifier = Self.cellID
-        cell.setCard(card(at: row), colorScheme: input.colorScheme, isLast: row == input.songs.count - 1,
+        cell.setCard(card(at: row), colorScheme: input.colorScheme,
                      insertionAnimated: enteringIDs.contains(input.songs[row].id), interaction: interaction,
                      width: table.tableColumns[0].width, scrollActivity: input.boardScroll?.activity,
                      reduceMotion: input.reduceMotion)
@@ -231,7 +234,18 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let view = (tableView.makeView(withIdentifier: Self.rowID, owner: nil) as? ArchiveBoardCardRow) ?? ArchiveBoardCardRow()
         view.identifier = Self.rowID
+        if let input {
+            view.showsSeparator = Self.showsSeparator(
+                below: row, count: input.songs.count,
+                selectedRow: input.selectedSongID.flatMap { rowByID[$0] })
+        }
         return view
+    }
+
+    /// A hairline between two rows, but none under the last row and none
+    /// touching the selected row, whose pill stands on its own.
+    static func showsSeparator(below row: Int, count: Int, selectedRow: Int?) -> Bool {
+        row < count - 1 && selectedRow != row && selectedRow != row + 1
     }
 
     func cardFrame(for id: String) -> CGRect? {
@@ -263,21 +277,37 @@ private final class ArchiveBoardCardTable: NSTableView {
     override var acceptsFirstResponder: Bool { false }
 }
 
-private final class ArchiveBoardCardRow: NSTableRowView {
-    override func drawBackground(in dirtyRect: NSRect) {}
-    override func drawSelection(in dirtyRect: NSRect) {}
+/// Draws only the hairline under its row; the list decides which rows have
+/// one. AppKit drawing keeps the line out of the SwiftUI row, and the
+/// separator color resolves from the window's appearance.
+final class ArchiveBoardCardRow: NSTableRowView {
+    var showsSeparator = false {
+        didSet { if showsSeparator != oldValue { needsDisplay = true } }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard showsSeparator else { return }
+        let inset = ArchiveBoardCardView.rowInset
+        let y = isFlipped ? bounds.maxY - 1 : bounds.minY
+        NSColor(HubDesignSystem.Palette.separator).setFill()
+        NSRect(x: bounds.minX + inset, y: y, width: max(0, bounds.width - 2 * inset), height: 1).fill()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
 }
 
 final class ArchiveBoardCardCell: NSTableCellView {
     private var host: NSHostingController<ArchiveBoardCardContent>?
-    private var bottomConstraint: NSLayoutConstraint?
     private var heightConstraint: NSLayoutConstraint?
     private var measuredWidth: CGFloat = 0
     private var needsMeasurement = true
 
     var displayedContent: ArchiveBoardCardContent? { host?.rootView }
 
-    func setCard(_ card: ArchiveBoardSongCard, colorScheme: ColorScheme, isLast: Bool,
+    func setCard(_ card: ArchiveBoardSongCard, colorScheme: ColorScheme,
                  insertionAnimated: Bool = false, interaction: ArchiveBoardNativeCardInteraction, width: CGFloat,
                  scrollActivity: ArchiveBoardScrollActivity? = nil, reduceMotion: Bool = false) {
         if let old = host?.rootView, old.card.song.id != card.song.id || old.card.song.workflowStatus != card.song.workflowStatus {
@@ -296,20 +326,17 @@ final class ArchiveBoardCardCell: NSTableCellView {
             let hosted = host.view
             hosted.translatesAutoresizingMaskIntoConstraints = false
             addSubview(hosted)
-            let bottom = hosted.bottomAnchor.constraint(equalTo: bottomAnchor)
             let height = hosted.heightAnchor.constraint(equalToConstant: 68)
             NSLayoutConstraint.activate([
                 hosted.leadingAnchor.constraint(equalTo: leadingAnchor),
                 hosted.trailingAnchor.constraint(equalTo: trailingAnchor),
                 hosted.topAnchor.constraint(equalTo: topAnchor),
-                bottom,
+                hosted.bottomAnchor.constraint(equalTo: bottomAnchor),
                 height,
             ])
             self.host = host
-            bottomConstraint = bottom
             heightConstraint = height
         }
-        bottomConstraint?.constant = isLast ? 0 : -6
         needsMeasurement = true
         measure(at: width)
     }

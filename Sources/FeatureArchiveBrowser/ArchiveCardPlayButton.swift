@@ -6,6 +6,11 @@ struct ArchiveCardPlayButton: View {
     let isPlaying: Bool
     let isLoaded: Bool
     let isEnabled: Bool
+    /// Hit target side. Board rows use a smaller one than list rows.
+    var size: CGFloat = 44
+    /// False hides only the glyph: the button keeps its place, its click and its
+    /// accessibility element.
+    var showsGlyph = true
     var hoverTarget: ArchiveBoardHoverTarget? = nil
     var scrollActivity: ArchiveBoardScrollActivity? = nil
     let action: () -> Void
@@ -19,9 +24,12 @@ struct ArchiveCardPlayButton: View {
                 .foregroundStyle(isHovered || isLoaded
                     ? HubDesignSystem.Palette.textPrimary
                     : HubDesignSystem.Palette.textSecondary)
+                .opacity(showsGlyph ? 1 : 0)
                 .animation(reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.hover,
                            value: isHovered)
-                .frame(width: 44, height: 44)
+                .animation(reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.hover,
+                           value: showsGlyph)
+                .frame(width: size, height: size)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

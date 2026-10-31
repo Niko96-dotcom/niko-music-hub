@@ -60,8 +60,9 @@ final class SongCardInteractionTests: XCTestCase {
                                        onProjectVaultPrimaryAction: nil, onPlay: { plays += 1 })
         try withView(card.frame(width: 220)) { window in
             let midY = window.contentView!.bounds.midY
-            for point in [CGPoint(x: 167, y: midY - 19), CGPoint(x: 205, y: midY - 19),
-                          CGPoint(x: 167, y: midY + 19), CGPoint(x: 205, y: midY + 19)] {
+            // The board row's 32pt play target ends 4pt before the trailing edge: x 184...216.
+            for point in [CGPoint(x: 187, y: midY - 13), CGPoint(x: 213, y: midY - 13),
+                          CGPoint(x: 187, y: midY + 13), CGPoint(x: 213, y: midY + 13)] {
                 try click(point, in: window)
             }
             XCTAssertEqual(plays, 4)

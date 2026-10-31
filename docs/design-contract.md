@@ -215,6 +215,15 @@ measured Codex step (§1.1) — no sheen, no rim, no shadow. Every row label
 renders at full strength — the pill alone carries the state, exactly like the
 ChatGPT/Codex sidebar. Sidebar rows and inspector cells use the same treatment.
 
+Board songs are rows, not cards (2026-10-31): the lane is the bounded object.
+A row has no fill or border at rest; the selected row takes the selection pill,
+the row under the pointer half of it (the sidebar's hover). A `Palette.separator`
+hairline sits between rows, inset to the text (`ArchiveBoardCardView.rowInset`),
+with none under the last row and none touching the selected row
+(`ArchiveBoardCardRow`). The play glyph shows only on the hovered, selected and
+loaded row; elsewhere the button keeps its 32pt target and its accessibility
+element.
+
 ### Archive selection and persistent preview player
 
 - While paused or idle, selecting a song arms its main preview and updates the persistent

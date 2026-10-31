@@ -235,20 +235,31 @@ struct ArchiveBoardCardView: View {
         return parts.isEmpty ? "No project files" : parts.joined(separator: " · ")
     }
 
-    private var showsSelectionFill: Bool { isSelected || isHovered }
+    /// Board songs are rows, not cards: the selected row takes the full
+    /// selection pill, the row under the pointer half of it (the sidebar's
+    /// rule). The lane draws the hairlines between rows.
+    private var rowFillOpacity: Double { isSelected ? 1 : isHovered ? 0.5 : 0 }
+
+    /// The play glyph shows on the row under the pointer, the selected row and
+    /// the song the preview holds. Elsewhere the button keeps its place and its
+    /// accessibility element; only the glyph is hidden.
+    private var showsPlayGlyph: Bool { isHovered || isSelected || session.songID == song.id }
+
+    /// Leading text inset of a row; the lane's hairlines start here too.
+    static let rowInset: CGFloat = 10
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(song.effectiveDisplayTitle)
-                        .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
+                        .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
                         .foregroundStyle(HubDesignSystem.Palette.textPrimary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Text(captionLine)
                         .font(HubDesignSystem.Typography.micro())
-                        .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -269,6 +280,8 @@ struct ArchiveBoardCardView: View {
                         isPlaying: session.songID == song.id && session.isPlaying,
                         isLoaded: session.songID == song.id,
                         isEnabled: !session.captureActive,
+                        size: 32,
+                        showsGlyph: showsPlayGlyph,
                         hoverTarget: .play(songID: song.id, laneID: song.workflowStatus?.rawValue),
                         scrollActivity: scrollActivity
                     ) {
@@ -287,28 +300,17 @@ struct ArchiveBoardCardView: View {
                 )
             }
         }
-        .padding(12)
+        .padding(.vertical, 9)
+        .padding(.leading, Self.rowInset)
+        .padding(.trailing, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            // Cross-fade two layers instead of animating one fill between them: the raised
-            // surface is opaque and the selection fill is translucent, and interpolating the
-            // two colors passes through a darker half-transparent gray (a one-frame flash).
-            ZStack {
-                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                    .fill(HubDesignSystem.Palette.surfaceRaised)
-                    .opacity(showsSelectionFill ? 0 : 1)
-                RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                    .fill(HubDesignSystem.Palette.selection)
-                    .opacity(showsSelectionFill ? 1 : 0)
-            }
-            .animation(reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.hover,
-                       value: showsSelectionFill)
-        }
-        .overlay {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .strokeBorder(isSelected ? HubDesignSystem.Palette.accent.opacity(0.55)
-                              : HubDesignSystem.Palette.separator.opacity(0.7), lineWidth: 1)
-                .allowsHitTesting(false)
+                .fill(HubDesignSystem.Palette.selection.opacity(rowFillOpacity))
+                // The hairline under this row stays outside the pill.
+                .padding(.bottom, 1)
+                .animation(reduceMotion || scrollActivity?.isScrolling == true ? nil : ArchiveBoardMotion.hover,
+                           value: rowFillOpacity)
         }
         .contentShape(Rectangle())
         // The title area owns double-click; transport clicks must never open detail.

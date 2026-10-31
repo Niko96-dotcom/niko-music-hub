@@ -117,7 +117,7 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         }
     }
 
-    func testEndOfLongLaneIsRealizedAndCardSpacingHasNoTableInsets() throws {
+    func testEndOfLongLaneIsRealizedAndRowsTouchWithNoTableInsets() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }
         let table = try XCTUnwrap(fixture.list.documentView as? NSTableView)
@@ -126,12 +126,43 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         let second = try XCTUnwrap(fixture.layout.frame(for: fixture.songs[1].id))
         XCTAssertEqual(first.minX, 0, accuracy: 0.5)
         XCTAssertEqual(first.minY, 0, accuracy: 0.5)
-        XCTAssertEqual(second.minY - first.maxY, 6, accuracy: 0.5)
+        XCTAssertEqual(second.minY - first.maxY, 0, accuracy: 0.5, "board songs are rows; the hairline sits between them")
         table.scrollRowToVisible(fixture.songs.count - 1)
         fixture.window.contentView?.layoutSubtreeIfNeeded()
         let last = try XCTUnwrap(fixture.layout.frame(for: fixture.songs.last!.id))
         XCTAssertTrue(last.intersects(fixture.container.bounds))
         XCTAssertGreaterThan(last.height, 0)
+    }
+
+    /// Board songs are rows: a hairline between two rows, none under the last
+    /// row and none touching the selected row.
+    func testHairlinesSitBetweenRowsButNotUnderTheLastOrAroundTheSelection() throws {
+        let fixture = makeFixture()
+        defer { fixture.window.close() }
+        let table = try XCTUnwrap(fixture.list.documentView as? NSTableView)
+        let songs = Array(fixture.songs.prefix(4))
+        func lane(selected: Int?) -> ArchiveBoardNativeSongList {
+            ArchiveBoardNativeSongList(
+                songs: songs, selectedSongID: selected.map { songs[$0].id }, vaultPresentations: [:],
+                vaultActivity: [:], viewModel: fixture.model, dropLayout: fixture.layout,
+                colorScheme: .light, reduceMotion: true
+            )
+        }
+        func hairlines() -> [Bool] {
+            (0..<table.numberOfRows).map {
+                (table.rowView(atRow: $0, makeIfNecessary: false) as? ArchiveBoardCardRow)?.showsSeparator ?? false
+            }
+        }
+
+        fixture.list.apply(lane(selected: nil), animated: false)
+        fixture.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertEqual(hairlines(), [true, true, true, false])
+
+        fixture.list.apply(lane(selected: 1), animated: false)
+        XCTAssertEqual(hairlines(), [false, false, true, false])
+
+        fixture.list.apply(lane(selected: 3), animated: false)
+        XCTAssertEqual(hairlines(), [true, true, false, false])
     }
 
     func testRealizedCardReceivesLatestMetadataSelectionAndVaultActivity() throws {
