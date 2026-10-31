@@ -249,8 +249,9 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
     }
 
     /// Brings a dropped song's row into sight, at the pace the lanes move,
-    /// where its row fades in. Lanes sort by recent activity, so a drop can
-    /// land far from where it was let go.
+    /// where its row fades in, and marks it with the landed pill. Lanes sort
+    /// by recent activity, so a drop can land far from where it was let go.
+    /// A selected row has its pill already.
     func revealDroppedSong(songID: String, reduceMotion: Bool) {
         guard let row = rowByID[songID] else { return }
         NSAnimationContext.runAnimationGroup { context in
@@ -258,6 +259,9 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
             context.timingFunction = ArchiveBoardMotion.moveCurve
             context.allowsImplicitAnimation = !reduceMotion
             table.scrollRowToVisible(row)
+        }
+        if input?.selectedSongID != songID {
+            (table.rowView(atRow: row, makeIfNecessary: true) as? ArchiveBoardCardRow)?.markLanded(reduceMotion: reduceMotion)
         }
     }
 
@@ -296,6 +300,58 @@ private final class ArchiveBoardCardTable: NSTableView {
 final class ArchiveBoardCardRow: NSTableRowView {
     var showsSeparator = false {
         didSet { if showsSeparator != oldValue { needsDisplay = true } }
+    }
+
+    private var landedMark: NSView?
+    var showsLandedMark: Bool { landedMark != nil }
+    static let landedFade: TimeInterval = 0.8
+
+    /// The selection pill drawn like the SwiftUI one (color, corner, bottom
+    /// inset) under the row's content. It fades in with the dropped row, then
+    /// out, so the eye finds the song in its new place.
+    func markLanded(reduceMotion: Bool) {
+        landedMark?.removeFromSuperview()
+        var frame = bounds
+        frame.size.height -= 1
+        if !isFlipped { frame.origin.y += 1 }
+        let mark = NSView(frame: frame)
+        mark.autoresizingMask = [.width, .height]
+        mark.wantsLayer = true
+        mark.layer?.cornerRadius = HubDesignSystem.Radius.row
+        mark.layer?.cornerCurve = .continuous
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            mark.layer?.backgroundColor = NSColor(HubDesignSystem.Palette.selection).cgColor
+        }
+        mark.alphaValue = reduceMotion ? 1 : 0
+        addSubview(mark, positioned: .below, relativeTo: nil)
+        landedMark = mark
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = reduceMotion ? 0 : ArchiveBoardMotion.move
+            context.timingFunction = ArchiveBoardMotion.moveCurve
+            mark.animator().alphaValue = 1
+        } completionHandler: { [weak self, weak mark] in
+            MainActor.assumeIsolated { self?.fadeOutLandedMark(mark) }
+        }
+    }
+
+    private func fadeOutLandedMark(_ mark: NSView?) {
+        guard let mark, mark === landedMark else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.landedFade
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            mark.animator().alphaValue = 0
+        } completionHandler: { [weak self, weak mark] in
+            MainActor.assumeIsolated {
+                mark?.removeFromSuperview()
+                if let self, self.landedMark === mark { self.landedMark = nil }
+            }
+        }
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        landedMark?.removeFromSuperview()
+        landedMark = nil
     }
 
     override func draw(_ dirtyRect: NSRect) {

@@ -166,8 +166,9 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
     }
 
     /// Lanes sort by recent activity, so a drop can land far down a lane:
-    /// the moved row is scrolled into sight where it fades in.
-    func testRevealDroppedSongScrollsItsRowIntoSight() throws {
+    /// the moved row is scrolled into sight where it fades in, marked with the
+    /// landed pill unless it is selected (its pill is there already).
+    func testRevealDroppedSongScrollsItsRowIntoSightAndMarksIt() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }
         let table = try XCTUnwrap(fixture.list.documentView as? NSTableView)
@@ -176,8 +177,16 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
 
         fixture.list.revealDroppedSong(songID: fixture.songs[150].id, reduceMotion: true)
         XCTAssertTrue(table.rows(in: table.visibleRect).contains(150))
+        XCTAssertEqual((table.rowView(atRow: 150, makeIfNecessary: false) as? ArchiveBoardCardRow)?.showsLandedMark, true)
         fixture.list.revealDroppedSong(songID: "not-in-this-lane", reduceMotion: true)
         XCTAssertTrue(table.rows(in: table.visibleRect).contains(150))
+
+        fixture.list.apply(ArchiveBoardNativeSongList(
+            songs: fixture.songs, selectedSongID: fixture.songs[151].id, vaultPresentations: [:], vaultActivity: [:],
+            viewModel: fixture.model, dropLayout: fixture.layout, colorScheme: .light, reduceMotion: true
+        ), animated: false)
+        fixture.list.revealDroppedSong(songID: fixture.songs[151].id, reduceMotion: true)
+        XCTAssertEqual((table.rowView(atRow: 151, makeIfNecessary: false) as? ArchiveBoardCardRow)?.showsLandedMark, false)
     }
 
     func testRealizedCardReceivesLatestMetadataSelectionAndVaultActivity() throws {

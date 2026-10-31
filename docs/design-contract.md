@@ -225,7 +225,8 @@ loaded row; elsewhere the button keeps its 32pt target and its accessibility
 element. The drag image is the row itself (same text, marks, insets and width)
 on the selection pill. A drop is one calm motion: the image goes at release,
 and both lanes' rows and the moved row's fade-in share `ArchiveBoardMotion.move`.
-No flight and no landing highlight: both read as busy.
+The moved row's selection pill fades in with it and out over 0.8 s, so the eye
+finds the song. No flying copy: it read as busy.
 
 ### Archive selection and persistent preview player
 

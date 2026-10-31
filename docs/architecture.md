@@ -146,9 +146,10 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 - A board drop is one calm motion: AppKit's own slide (`animatesToDestination`) stays off, so the drag image goes
   at release; both lanes' rows make room and close up, and the moved row fades in at its new place, all at
   `ArchiveBoardMotion.move`. The lane scrolls the moved row into sight at the same pace
-  (`ArchiveBoardNativeSongListView.revealDroppedSong`), because lanes sort by recent activity. A drop that moves
+  (`ArchiveBoardNativeSongListView.revealDroppedSong`), because lanes sort by recent activity, and marks it with the
+  selection pill, which fades in with the row and out over 0.8 s (`ArchiveBoardCardRow.markLanded`). A drop that moves
   nothing is refused, so AppKit slides the image back. Tried and removed on 2026-10-31 as too busy: a copy of the drag
-  image flying into the row (701f625) and a fading pill on the landed row (288eb48).
+  image flying into the row (701f625).
 - The board stays mounted under the song detail page (`ArchivePageModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
   hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.
