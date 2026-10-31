@@ -13,12 +13,10 @@ import SwiftUI
 /// same pill, which then fades.
 @MainActor
 enum ArchiveBoardDropLanding {
-    /// Fast out of the hand, then a soft settle with no overshoot.
-    static let curve = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
-
-    /// A short hop lands quicker than a flight across the board.
+    /// The lanes' move pace, a little longer for a longer way, so the gap is
+    /// open just before the copy arrives.
     static func flightDuration(distance: CGFloat) -> TimeInterval {
-        min(0.36, max(0.2, 0.18 + Double(distance) / 2400))
+        min(0.44, ArchiveBoardMotion.move + Double(distance) / 4000)
     }
 
     /// - Parameters:
@@ -53,7 +51,7 @@ enum ArchiveBoardDropLanding {
             }
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = flightDuration(distance: hypot(target.midX - start.midX, target.midY - start.midY))
-                context.timingFunction = curve
+                context.timingFunction = ArchiveBoardMotion.moveCurve
                 copy.animator().frame = target
             } completionHandler: {
                 MainActor.assumeIsolated { settle(songID, copy: copy, list: list, completion: completion) }

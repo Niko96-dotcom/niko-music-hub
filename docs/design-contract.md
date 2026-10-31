@@ -224,7 +224,8 @@ with none under the last row and none touching the selected row
 loaded row; elsewhere the button keeps its 32pt target and its accessibility
 element. The drag image is the row as it looks just after landing (same text,
 marks, insets and width, on the selection pill), so the dropped copy hands over
-to the row without a visible change; the pill then fades over 0.9 s.
+to the row without a visible change; the pill then fades over 0.8 s. Rows of
+both lanes and the flying copy share one motion (`ArchiveBoardMotion.move`).
 
 ### Archive selection and persistent preview player
 

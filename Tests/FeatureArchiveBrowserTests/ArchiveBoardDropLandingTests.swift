@@ -48,11 +48,13 @@ final class ArchiveBoardDropLandingTests: XCTestCase {
         XCTAssertEqual(fixture.rowView(song.id)?.showsLandedMark, true)
     }
 
-    func testShortHopsLandQuickerThanLongFlightsWithinBounds() {
-        XCTAssertEqual(ArchiveBoardDropLanding.flightDuration(distance: 0), 0.2, accuracy: 0.001)
+    /// The copy flies at the lanes' move pace (never quicker, so the gap is
+    /// open when it arrives) and at most a little longer for a long way.
+    func testFlightKeepsTheLanesMovePaceWithinBounds() {
+        XCTAssertEqual(ArchiveBoardDropLanding.flightDuration(distance: 0), ArchiveBoardMotion.move, accuracy: 0.001)
         XCTAssertLessThan(ArchiveBoardDropLanding.flightDuration(distance: 150),
-                          ArchiveBoardDropLanding.flightDuration(distance: 600))
-        XCTAssertEqual(ArchiveBoardDropLanding.flightDuration(distance: 5_000), 0.36, accuracy: 0.001)
+                          ArchiveBoardDropLanding.flightDuration(distance: 400))
+        XCTAssertEqual(ArchiveBoardDropLanding.flightDuration(distance: 5_000), 0.44, accuracy: 0.001)
     }
 
     /// The hand-off at the end of a flight is invisible only if the copy and

@@ -156,13 +156,13 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                 enteringIDs = newSet.subtracting(oldSet)
                 entranceGeneration &+= 1
                 let generation = entranceGeneration
-                DispatchQueue.main.asyncAfter(deadline: .now() + ArchiveBoardMotion.duration) { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + ArchiveBoardMotion.move) { [weak self] in
                     guard let self, self.entranceGeneration == generation else { return }
                     self.enteringIDs = []
                 }
                 NSAnimationContext.runAnimationGroup { context in
-                    context.duration = ArchiveBoardMotion.duration
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    context.duration = ArchiveBoardMotion.move
+                    context.timingFunction = ArchiveBoardMotion.moveCurve
                     table.beginUpdates()
                     table.removeRows(at: IndexSet(oldIDs.indices.filter { !newSet.contains(oldIDs[$0]) }), withAnimation: .effectFade)
                     table.insertRows(at: IndexSet(nextIDs.indices.filter { !oldSet.contains(nextIDs[$0]) }), withAnimation: .effectGap)
@@ -340,8 +340,7 @@ final class ArchiveBoardCardRow: NSTableRowView {
         landedMark = mark
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Self.landedFade
-            // Holds, then lets go: the pill stays while the eye arrives.
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             mark.animator().alphaValue = 0
         } completionHandler: { [weak self, weak mark] in
             MainActor.assumeIsolated {
@@ -351,7 +350,7 @@ final class ArchiveBoardCardRow: NSTableRowView {
         }
     }
 
-    static let landedFade: TimeInterval = 0.9
+    static let landedFade: TimeInterval = 0.8
 
     override func prepareForReuse() {
         super.prepareForReuse()
@@ -465,7 +464,7 @@ private struct ArchiveBoardCardEntrance: ViewModifier {
             .opacity(animated && !appeared ? 0 : 1)
             .offset(y: animated && !appeared ? 4 : 0)
             .onAppear {
-                if animated { withAnimation(ArchiveBoardMotion.animation) { appeared = true } }
+                if animated { withAnimation(ArchiveBoardMotion.moveAnimation) { appeared = true } }
             }
     }
 }

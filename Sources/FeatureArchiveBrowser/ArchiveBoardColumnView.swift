@@ -93,7 +93,7 @@ final class ArchiveBoardNativeColumn {
         if input.column.status == .done {
             input.viewModel.requestWorkflowDoneArchive(for: song)
         } else {
-            withAnimation(input.reduceMotion ? nil : ArchiveBoardMotion.animation) {
+            withAnimation(input.reduceMotion ? nil : ArchiveBoardMotion.moveAnimation) {
                 input.viewModel.applyWorkflowStatus(input.column.status, for: song)
             }
         }
