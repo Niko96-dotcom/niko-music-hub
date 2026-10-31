@@ -231,8 +231,11 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         ), animated: false)
         fixture.window.contentView?.layoutSubtreeIfNeeded()
         XCTAssertEqual(fixture.list.contentView.bounds.minY, 0, accuracy: 0.5)
-        let updated = try XCTUnwrap(fixture.layout.frame(for: songs[0].id))
-        XCTAssertGreaterThan(updated.height, oldHeight)
+        // A row's title holds two lines inside the play button's height, so the
+        // edit shows in the realized row's song, not in a taller row.
+        let cell = try XCTUnwrap(table.view(atColumn: 0, row: 0, makeIfNecessary: false) as? ArchiveBoardCardCell)
+        XCTAssertEqual(cell.displayedContent?.card.song, songs[0])
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(fixture.layout.frame(for: songs[0].id)).height, oldHeight)
         XCTAssertTrue(fixture.list.documentView === table)
     }
 

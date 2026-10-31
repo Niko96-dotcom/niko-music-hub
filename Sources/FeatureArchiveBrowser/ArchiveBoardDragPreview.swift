@@ -23,6 +23,7 @@ struct ArchiveBoardDragPreview: View {
                 Color.clear.frame(width: ArchiveBoardCardView.playTarget, height: ArchiveBoardCardView.playTarget)
             } else {
                 Image(systemName: "speaker.slash")
+                    .frame(width: ArchiveBoardCardView.playTarget, height: ArchiveBoardCardView.playTarget)
             }
         }
         .padding(ArchiveBoardCardView.rowPadding)

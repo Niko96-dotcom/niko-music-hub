@@ -268,7 +268,9 @@ struct ArchiveBoardCardView: View {
                         playPreview()
                     }
                 } else if song.mainPreviewURL == nil {
+                    // In the play button's slot, so every row has the same height.
                     Image(systemName: "speaker.slash").help("No preview")
+                        .frame(width: Self.playTarget, height: Self.playTarget)
                 }
             }
 
