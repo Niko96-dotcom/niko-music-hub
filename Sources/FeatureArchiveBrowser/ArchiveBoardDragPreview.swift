@@ -2,29 +2,40 @@ import AppCore
 import NikoMusicCore
 import SwiftUI
 
-/// A stable image for the native drag session. It has no hover state, buttons,
-/// or observed model, so the lifted card doesn't capture an in-flight hover
-/// animation or change its contents while moving between stages.
+/// The drag image of a board row, and the copy a drop flies into the lane.
+///
+/// It is the row as it looks just after landing: the same text, marks and
+/// insets at the same width, on the selection pill over the lane's surface
+/// (opaque, so it reads over anything while it moves). It has no hover state,
+/// buttons or observed model, so the lifted row doesn't capture an in-flight
+/// hover animation or change its contents while it moves.
 struct ArchiveBoardDragPreview: View {
-    let title: String
-    let status: ProjectWorkflowStatus?
+    let song: Song
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(HubDesignSystem.Typography.bodySmall().weight(.semibold))
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                .lineLimit(2)
-            Text(status?.displayTitle ?? "No Status")
-                .font(HubDesignSystem.Typography.micro())
-                .foregroundStyle(HubDesignSystem.Palette.textSecondary)
+        HStack(spacing: 8) {
+            ArchiveBoardRowText(song: song)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if !song.displayScanWarnings().isEmpty {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(HubDesignSystem.Palette.warning)
+            }
+            if song.mainPreviewURL != nil {
+                // The play button's place; a landed row shows no glyph there.
+                Color.clear.frame(width: ArchiveBoardCardView.playTarget, height: ArchiveBoardCardView.playTarget)
+            } else {
+                Image(systemName: "speaker.slash")
+            }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 8)
-        .frame(width: 184, alignment: .leading)
+        .padding(ArchiveBoardCardView.rowPadding)
+        .frame(width: ArchiveBoardLaneLayout.rowWidth, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
-                .fill(HubDesignSystem.Palette.surfaceRaised)
+            ZStack {
+                HubDesignSystem.Palette.surface
+                HubDesignSystem.Palette.selection
+            }
+            .clipShape(RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous))
+            .padding(.bottom, 1)
         }
     }
 }

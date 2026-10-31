@@ -51,14 +51,14 @@ final class ArchiveBoardNativeColumn {
                 isCompact: input.compactWhenEmpty, isBoardVisible: input.state.isBoardVisible
             ),
             accepts: { [weak self] in self?.acceptsDrop(songID: $0) == true },
-            perform: { [weak self] in self?.performDrop(songID: $0) },
+            perform: { [weak self] in self?.performDrop(songID: $0) ?? false },
             locationChanged: { [weak self] x in
                 guard let self else { return }
                 self.input.locationChanged(self.input.column.id, x)
             },
             ended: { [weak self] in self?.input.ended() },
             targeted: { [weak self] in self?.setTargeted($0) },
-            landingFrame: { [weak self] in self?.dropLayout.frame(for: $0) },
+            land: { [weak self] in self?.landDrop(songID: $0, released: $1) },
             refreshedContent: { [weak self] in
                 guard let self else { return content }
                 let column = ArchiveBoardProjection.columns(from: self.input.viewModel.browse.filteredSongs,
@@ -68,7 +68,6 @@ final class ArchiveBoardNativeColumn {
                                     state: ArchiveBoardLaneState(viewModel: self.input.viewModel),
                                     targeted: self.isTargeted, layout: self.dropLayout)
             },
-            reduceMotion: input.reduceMotion,
             boardScroll: input.boardScroll
         ).update(view)
     }
@@ -85,10 +84,12 @@ final class ArchiveBoardNativeColumn {
         return input.viewModel.canMutateWorkflowStatus(for: song)
     }
 
-    private func performDrop(songID: String) {
+    /// False when the drop moves nothing (the song's own lane, a song that
+    /// cannot move now), so AppKit slides the image back.
+    private func performDrop(songID: String) -> Bool {
         guard let song = input.viewModel.songs.first(where: { $0.id == songID }),
               input.viewModel.canMutateWorkflowStatus(for: song),
-              song.workflowStatus != input.column.status else { return }
+              song.workflowStatus != input.column.status else { return false }
         if input.column.status == .done {
             input.viewModel.requestWorkflowDoneArchive(for: song)
         } else {
@@ -96,6 +97,16 @@ final class ArchiveBoardNativeColumn {
                 input.viewModel.applyWorkflowStatus(input.column.status, for: song)
             }
         }
+        return true
+    }
+
+    private func landDrop(songID: String, released: CGRect?) {
+        guard let list = dropLayout.nativeList,
+              let song = input.viewModel.songs.first(where: { $0.id == songID }) else { return }
+        ArchiveBoardDropLanding.land(
+            song, releasedAt: released.map { (frame: $0, view: view) }, into: list,
+            over: input.boardScroll.scrollView, colorScheme: input.colorScheme, reduceMotion: input.reduceMotion
+        )
     }
 
     private static func content(input: ArchiveBoardColumnInput, column: ArchiveBoardColumn,
@@ -168,7 +179,7 @@ struct ArchiveBoardColumnContent: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(8)
+        .padding(ArchiveBoardLaneLayout.padding)
         .frame(maxHeight: .infinity, alignment: .top)
         .background {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)

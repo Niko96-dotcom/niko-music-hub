@@ -223,18 +223,6 @@ struct ArchiveBoardCardView: View {
         vaultPresentation?.allowsWorkflowMutation ?? true
     }
 
-    private var captionLine: String {
-        var parts: [String] = []
-        let versions = song.visibleProjectVersions.count
-        if versions > 0 {
-            parts.append(CountCopy.count(versions, "version"))
-        }
-        if song.hasStems {
-            parts.append("stems")
-        }
-        return parts.isEmpty ? "No project files" : parts.joined(separator: " · ")
-    }
-
     /// Board songs are rows, not cards: the selected row takes the full
     /// selection pill, the row under the pointer half of it (the sidebar's
     /// rule). The lane draws the hairlines between rows.
@@ -247,27 +235,19 @@ struct ArchiveBoardCardView: View {
 
     /// Leading text inset of a row; the lane's hairlines start here too.
     static let rowInset: CGFloat = 10
+    static let rowPadding = EdgeInsets(top: 9, leading: rowInset, bottom: 9, trailing: 4)
+    static let playTarget: CGFloat = 32
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(song.effectiveDisplayTitle)
-                        .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
-                        .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Text(captionLine)
-                        .font(HubDesignSystem.Typography.micro())
-                        .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture { performInteraction(.singleClick) }
-                .simultaneousGesture(TapGesture(count: 2).onEnded { _ in
-                    performInteraction(.doubleClick)
-                })
+                ArchiveBoardRowText(song: song)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { performInteraction(.singleClick) }
+                    .simultaneousGesture(TapGesture(count: 2).onEnded { _ in
+                        performInteraction(.doubleClick)
+                    })
                 if !song.displayScanWarnings().isEmpty {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(HubDesignSystem.Palette.warning)
@@ -280,7 +260,7 @@ struct ArchiveBoardCardView: View {
                         isPlaying: session.songID == song.id && session.isPlaying,
                         isLoaded: session.songID == song.id,
                         isEnabled: !session.captureActive,
-                        size: 32,
+                        size: Self.playTarget,
                         showsGlyph: showsPlayGlyph,
                         hoverTarget: .play(songID: song.id, laneID: song.workflowStatus?.rawValue),
                         scrollActivity: scrollActivity
@@ -300,9 +280,7 @@ struct ArchiveBoardCardView: View {
                 )
             }
         }
-        .padding(.vertical, 9)
-        .padding(.leading, Self.rowInset)
-        .padding(.trailing, 4)
+        .padding(Self.rowPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: HubDesignSystem.Radius.row, style: .continuous)
@@ -334,12 +312,7 @@ struct ArchiveBoardCardView: View {
                 onWorkflowStatusChange: onWorkflowStatusChange
             )
         }
-        .modifier(ArchiveBoardCardDragModifier(
-            songID: song.id,
-            title: song.effectiveDisplayTitle,
-            status: song.workflowStatus,
-            isEnabled: allowsWorkflowMutation
-        ))
+        .modifier(ArchiveBoardCardDragModifier(song: song, isEnabled: allowsWorkflowMutation))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(song.effectiveDisplayTitle)
         .accessibilityValue(SongCardAccessibility.warningValue(song: song))
@@ -372,17 +345,47 @@ struct ArchiveBoardCardView: View {
     }
 }
 
+/// What a board row says: the title and the versions line. The row and its
+/// drag image both draw it, so a landing drop covers the row exactly.
+struct ArchiveBoardRowText: View {
+    let song: Song
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(song.effectiveDisplayTitle)
+                .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
+                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Text(Self.caption(for: song))
+                .font(HubDesignSystem.Typography.micro())
+                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
+                .lineLimit(1)
+        }
+    }
+
+    static func caption(for song: Song) -> String {
+        var parts: [String] = []
+        let versions = song.visibleProjectVersions.count
+        if versions > 0 {
+            parts.append(CountCopy.count(versions, "version"))
+        }
+        if song.hasStems {
+            parts.append("stems")
+        }
+        return parts.isEmpty ? "No project files" : parts.joined(separator: " · ")
+    }
+}
+
 private struct ArchiveBoardCardDragModifier: ViewModifier {
-    let songID: String
-    let title: String
-    let status: ProjectWorkflowStatus?
+    let song: Song
     let isEnabled: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if isEnabled {
-            content.draggable(songID) {
-                ArchiveBoardDragPreview(title: title, status: status)
+            content.draggable(song.id) {
+                ArchiveBoardDragPreview(song: song)
             }
         } else {
             content

@@ -142,6 +142,13 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
   Motion); lane/row motion remains 0.16 seconds. Live scroll end restores hover synchronously; one board-local
   pointer tracking area clears unphased-wheel suppression on the first move, without waiting for the idle timer.
   See `docs/history/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
+- A board drop lands itself (`ArchiveBoardDropLanding`); AppKit's own slide (`animatesToDestination`) stays off,
+  because it ran beside the lane's row animation and slid onto a row that had already faded in. The drop host reads
+  the drag image's frame at release, moves the song, and hands both to the landing: the new row waits hidden in its
+  lane (`holdLanding`), a copy of the drag image (`ArchiveBoardDragPreview`, the landed row's own pixels) flies from
+  the release into it, and the row takes over under the copy with a selection pill that fades (`finishLanding`,
+  `ArchiveBoardCardRow.markLanded`). A drop that moves nothing is refused, so AppKit slides the image back. Reduce
+  Motion skips the flight and keeps the fading pill.
 - The board stays mounted under the song detail page (`ArchivePageModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
   hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.

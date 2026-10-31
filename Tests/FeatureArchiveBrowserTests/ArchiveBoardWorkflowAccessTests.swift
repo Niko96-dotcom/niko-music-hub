@@ -31,7 +31,7 @@ final class ArchiveBoardWorkflowAccessTests: XCTestCase {
         XCTAssertTrue(board.contains("SongItemCommands"), "Board card must share the list item context menu")
         XCTAssertTrue(board.contains("SongWorkflowAccessibilityActions"), "Board card must expose named Move to… VoiceOver actions")
         XCTAssertTrue(board.contains("ArchiveBoardCardDragModifier"), "Drag onto columns must remain")
-        XCTAssertTrue(board.contains(".draggable(songID)"), "Drag payload stays the song id")
+        XCTAssertTrue(board.contains(".draggable(song.id)"), "Drag payload stays the song id")
         XCTAssertTrue(
             songs.contains("applyWorkflowStatus"),
             "Board card workflow changes must use applyWorkflowStatus so Done confirms (NMH-003)"

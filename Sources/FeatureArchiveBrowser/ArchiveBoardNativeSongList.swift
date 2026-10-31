@@ -39,6 +39,8 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
     private var documentHeight: CGFloat = 0
     private var correctionPending = false
     private var enteringIDs: Set<String> = []
+    /// The dropped song whose row stays hidden while its copy flies in.
+    private var landingID: String?
     private var entranceGeneration: UInt64 = 0
     private let interaction = ArchiveBoardNativeCardInteraction()
     private static let cellID = NSUserInterfaceItemIdentifier("archive-board-card")
@@ -198,6 +200,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
             (rowView as? ArchiveBoardCardRow)?.showsSeparator =
                 Self.showsSeparator(below: row, count: next.songs.count, selectedRow: selectedRow)
             let song = next.songs[row]
+            table.view(atColumn: 0, row: row, makeIfNecessary: false)?.alphaValue = song.id == landingID ? 0 : 1
             let previousSong = oldRows[song.id].map { old.songs[$0] }
             let contentChanged = previousSong != song
                 || old.vaultPresentations[song.id] != next.vaultPresentations[song.id]
@@ -228,6 +231,7 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
                      insertionAnimated: enteringIDs.contains(input.songs[row].id), interaction: interaction,
                      width: table.tableColumns[0].width, scrollActivity: input.boardScroll?.activity,
                      reduceMotion: input.reduceMotion)
+        cell.alphaValue = input.songs[row].id == landingID ? 0 : 1
         return cell
     }
 
@@ -246,6 +250,35 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
     /// touching the selected row, whose pill stands on its own.
     static func showsSeparator(below row: Int, count: Int, selectedRow: Int?) -> Bool {
         row < count - 1 && selectedRow != row && selectedRow != row + 1
+    }
+
+    // MARK: Drop landing (`ArchiveBoardDropLanding`)
+
+    /// Hides the dropped song's row, here or in a row realized later, until
+    /// `finishLanding`.
+    func holdLanding(songID: String) {
+        landingID = songID
+        if let row = rowByID[songID] { table.view(atColumn: 0, row: row, makeIfNecessary: false)?.alphaValue = 0 }
+    }
+
+    /// The landing row's frame in `view`, scrolled into sight; nil when the
+    /// song is not in this lane.
+    func landingFrame(songID: String, in view: NSView) -> CGRect? {
+        guard let row = rowByID[songID] else { return nil }
+        table.scrollRowToVisible(row)
+        guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: true) else { return nil }
+        return cell.convert(cell.bounds, to: view)
+    }
+
+    /// Shows the landed row with the selection pill, which then fades, so the
+    /// eye finds the song in its new place. A selected row has its pill already.
+    func finishLanding(songID: String) {
+        if landingID == songID { landingID = nil }
+        guard let row = rowByID[songID] else { return }
+        table.view(atColumn: 0, row: row, makeIfNecessary: false)?.alphaValue = 1
+        if input?.selectedSongID != songID {
+            (table.rowView(atRow: row, makeIfNecessary: false) as? ArchiveBoardCardRow)?.markLanded()
+        }
     }
 
     func cardFrame(for id: String) -> CGRect? {
@@ -283,6 +316,47 @@ private final class ArchiveBoardCardTable: NSTableView {
 final class ArchiveBoardCardRow: NSTableRowView {
     var showsSeparator = false {
         didSet { if showsSeparator != oldValue { needsDisplay = true } }
+    }
+
+    private var landedMark: NSView?
+    var showsLandedMark: Bool { landedMark != nil }
+
+    /// The selection pill drawn like the SwiftUI one (color, corner, bottom
+    /// inset), shown at once and faded out under the row's content.
+    func markLanded() {
+        landedMark?.removeFromSuperview()
+        var frame = bounds
+        frame.size.height -= 1
+        if !isFlipped { frame.origin.y += 1 }
+        let mark = NSView(frame: frame)
+        mark.autoresizingMask = [.width, .height]
+        mark.wantsLayer = true
+        mark.layer?.cornerRadius = HubDesignSystem.Radius.row
+        mark.layer?.cornerCurve = .continuous
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            mark.layer?.backgroundColor = NSColor(HubDesignSystem.Palette.selection).cgColor
+        }
+        addSubview(mark, positioned: .below, relativeTo: nil)
+        landedMark = mark
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.landedFade
+            // Holds, then lets go: the pill stays while the eye arrives.
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            mark.animator().alphaValue = 0
+        } completionHandler: { [weak self, weak mark] in
+            MainActor.assumeIsolated {
+                mark?.removeFromSuperview()
+                if let self, self.landedMark === mark { self.landedMark = nil }
+            }
+        }
+    }
+
+    static let landedFade: TimeInterval = 0.9
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        landedMark?.removeFromSuperview()
+        landedMark = nil
     }
 
     override func draw(_ dirtyRect: NSRect) {

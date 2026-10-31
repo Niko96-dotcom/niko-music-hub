@@ -3,19 +3,21 @@ import AppKit
 import ProjectVaultRuntime
 import SwiftUI
 
-/// SwiftUI's DropDelegate cannot supply the drag manager's final image frame.
-/// This boundary hosts one column and gives AppKit the actual laid-out card rect.
+/// SwiftUI's DropDelegate cannot read where the drag image was let go.
+/// This boundary hosts one column and hands that frame to the board's landing
+/// (`ArchiveBoardDropLanding`).
 struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
     let content: Content
     let renderKey: ArchiveBoardColumnRenderKey
     let accepts: (String) -> Bool
-    let perform: (String) -> Void
+    /// False when the drop moves nothing.
+    let perform: (String) -> Bool
     let locationChanged: (CGFloat) -> Void
     let ended: () -> Void
     let targeted: (Bool) -> Void
-    let landingFrame: (String) -> CGRect?
+    /// The dropped song's id and the drag image's frame at release, in the host.
+    let land: (String, CGRect?) -> Void
     let refreshedContent: () -> Content
-    let reduceMotion: Bool
     var boardScroll: ArchiveBoardScrollController? = nil
 
     func makeNSView(context: Context) -> ArchiveBoardDropHostingView<Content> {
@@ -44,9 +46,8 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
         view.locationChanged = locationChanged
         view.ended = ended
         view.targeted = targeted
-        view.landingFrame = landingFrame
+        view.land = land
         view.refreshedContent = refreshedContent
-        view.reduceMotion = reduceMotion
         boardScroll?.register(view, columnID: renderKey.column.id, isDropTargeted: renderKey.isTargeted)
     }
 }
@@ -54,13 +55,12 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
 final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, ArchiveBoardColumnFrameSpace {
     var renderedKey: ArchiveBoardColumnRenderKey?
     var accepts: (String) -> Bool = { _ in false }
-    var perform: (String) -> Void = { _ in }
+    var perform: (String) -> Bool = { _ in false }
     var locationChanged: (CGFloat) -> Void = { _ in }
     var ended: () -> Void = {}
     var targeted: (Bool) -> Void = { _ in }
-    var landingFrame: (String) -> CGRect? = { _ in nil }
+    var land: (String, CGRect?) -> Void = { _, _ in }
     var refreshedContent: (() -> Content)?
-    var reduceMotion = false
     /// NMH-141: tracks whether this view pushed the not-allowed cursor for a
     /// rejected drag, so the push/pop stays balanced per view.
     private(set) var isShowingNotAllowedCursor = false
@@ -129,28 +129,38 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
     override func concludeDragOperation(_ sender: (any NSDraggingInfo)?) { finish() }
     override func wantsPeriodicDraggingUpdates() -> Bool { true }
 
+    // `animatesToDestination` stays false: AppKit removes the drag image as
+    // soon as the drop is accepted, and the board lands its own copy. AppKit's
+    // slide ran beside the lane's row animation with no shared end, so it slid
+    // onto a row that had already faded in.
     override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        guard acceptedID(sender) != nil else { return false }
-        // AppKit reads this before calling performDragOperation.
-        sender.animatesToDestination = !reduceMotion
-        return true
+        acceptedID(sender) != nil
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         defer { finish() }
         guard let id = acceptedID(sender) else { return false }
-        perform(id)
-        // Publish the destination content now so its final layout is available
-        // before returning the accepted drop to AppKit.
+        let released = draggingFrame(of: id, in: sender)
+        // A drop that moves nothing (the song's own lane) is refused, so AppKit
+        // slides the image back to the row it came from.
+        guard perform(id) else { return false }
+        // Publish the destination content now, so the new row exists when the
+        // landing looks for it.
         if let refreshedContent { rootView = refreshedContent() }
         layoutSubtreeIfNeeded()
-        if let frame = landingFrame(id), frame.intersects(bounds) {
-            sender.enumerateDraggingItems(options: [], for: self, classes: [NSString.self], searchOptions: [:]) { item, _, _ in
-                guard item.item as? String == id else { return }
-                item.draggingFrame = frame
-            }
-        }
+        land(id, released)
         return true
+    }
+
+    /// Where the drag image is at release, in this view.
+    private func draggingFrame(of id: String, in sender: any NSDraggingInfo) -> CGRect? {
+        var frame: CGRect?
+        sender.enumerateDraggingItems(options: [], for: self, classes: [NSString.self], searchOptions: [:]) { item, _, stop in
+            guard item.item as? String == id else { return }
+            frame = item.draggingFrame
+            stop.pointee = true
+        }
+        return frame.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     private func finish() {
@@ -172,23 +182,13 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
     }
 }
 
-/// Layout measurements are not observable state: recording a frame must not
+/// The lane's native list, reached by the column's drop landing. Layout
+/// measurements are not observable state: reading a frame must not
 /// invalidate the board or make drag hover perform a new projection.
 @MainActor
 final class ArchiveBoardDropLayout {
     weak var nativeList: ArchiveBoardNativeSongListView?
-    var frames: [String: CGRect] = [:]
-    func frame(for id: String) -> CGRect? {
-        if let nativeList { return nativeList.cardFrame(for: id) }
-        return frames[id]
-    }
-}
-
-struct ArchiveBoardCardFramesKey: PreferenceKey {
-    static let defaultValue: [String: CGRect] = [:]
-    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-    }
+    func frame(for id: String) -> CGRect? { nativeList?.cardFrame(for: id) }
 }
 
 /// Marks the native coordinate space used by the column's drop target.
