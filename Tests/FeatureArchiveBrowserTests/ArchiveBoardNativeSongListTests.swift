@@ -165,46 +165,19 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         XCTAssertEqual(hairlines(), [true, true, false, false])
     }
 
-    /// A dropped song's row waits hidden while its copy flies in, also when the
-    /// lane refreshes or realizes the row later, and comes back marked.
-    func testLandingRowStaysHiddenUntilTheLandingFinishesThenShowsTheMark() throws {
+    /// Lanes sort by recent activity, so a drop can land far down a lane:
+    /// the moved row is scrolled into sight where it fades in.
+    func testRevealDroppedSongScrollsItsRowIntoSight() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }
         let table = try XCTUnwrap(fixture.list.documentView as? NSTableView)
         fixture.window.contentView?.layoutSubtreeIfNeeded()
-        let near = fixture.songs[1].id
-        let far = fixture.songs[150].id
-        func cell(_ id: String) -> NSView? {
-            fixture.songs.firstIndex { $0.id == id }.flatMap { table.view(atColumn: 0, row: $0, makeIfNecessary: false) }
-        }
-        func rowView(_ id: String) -> ArchiveBoardCardRow? {
-            fixture.songs.firstIndex { $0.id == id }.flatMap { table.rowView(atRow: $0, makeIfNecessary: false) as? ArchiveBoardCardRow }
-        }
+        XCTAssertFalse(table.rows(in: table.visibleRect).contains(150))
 
-        fixture.list.holdLanding(songID: near)
-        XCTAssertEqual(cell(near)?.alphaValue, 0)
-        fixture.list.apply(ArchiveBoardNativeSongList(
-            songs: fixture.songs, selectedSongID: fixture.songs[0].id, vaultPresentations: [:], vaultActivity: [:],
-            viewModel: fixture.model, dropLayout: fixture.layout, colorScheme: .light, reduceMotion: true
-        ), animated: false)
-        XCTAssertEqual(cell(near)?.alphaValue, 0, "a refresh must not show the row before its copy arrives")
-        fixture.list.finishLanding(songID: near)
-        XCTAssertEqual(cell(near)?.alphaValue, 1)
-        XCTAssertEqual(rowView(near)?.showsLandedMark, true)
-
-        fixture.list.holdLanding(songID: far)
-        let frame = try XCTUnwrap(fixture.list.landingFrame(songID: far, in: fixture.container))
-        XCTAssertTrue(fixture.container.bounds.intersects(frame), "the landing row is scrolled into sight")
-        XCTAssertEqual(cell(far)?.alphaValue, 0, "a row realized during the landing starts hidden")
-        fixture.list.finishLanding(songID: far)
-        XCTAssertEqual(cell(far)?.alphaValue, 1)
-
-        // The selected row has its pill already: no second one on top.
-        fixture.list.holdLanding(songID: fixture.songs[0].id)
-        table.scrollRowToVisible(0)
-        fixture.list.finishLanding(songID: fixture.songs[0].id)
-        XCTAssertEqual(rowView(fixture.songs[0].id)?.showsLandedMark, false)
-        XCTAssertNil(fixture.list.landingFrame(songID: "not-in-this-lane", in: fixture.container))
+        fixture.list.revealDroppedSong(songID: fixture.songs[150].id, reduceMotion: true)
+        XCTAssertTrue(table.rows(in: table.visibleRect).contains(150))
+        fixture.list.revealDroppedSong(songID: "not-in-this-lane", reduceMotion: true)
+        XCTAssertTrue(table.rows(in: table.visibleRect).contains(150))
     }
 
     func testRealizedCardReceivesLatestMetadataSelectionAndVaultActivity() throws {

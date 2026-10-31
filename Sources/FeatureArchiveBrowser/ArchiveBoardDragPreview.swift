@@ -2,11 +2,9 @@ import AppCore
 import NikoMusicCore
 import SwiftUI
 
-/// The drag image of a board row, and the copy a drop flies into the lane.
-///
-/// It is the row as it looks just after landing: the same text, marks and
-/// insets at the same width, on the selection pill over the lane's surface
-/// (opaque, so it reads over anything while it moves). It has no hover state,
+/// The drag image of a board row: the row itself (the same text, marks and
+/// insets at the same width) on the selection pill over the lane's surface,
+/// opaque so it reads over anything while it moves. It has no hover state,
 /// buttons or observed model, so the lifted row doesn't capture an in-flight
 /// hover animation or change its contents while it moves.
 struct ArchiveBoardDragPreview: View {

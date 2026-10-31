@@ -3,9 +3,9 @@ import AppKit
 import ProjectVaultRuntime
 import SwiftUI
 
-/// SwiftUI's DropDelegate cannot read where the drag image was let go.
-/// This boundary hosts one column and hands that frame to the board's landing
-/// (`ArchiveBoardDropLanding`).
+/// One column's AppKit drop target. SwiftUI's DropDelegate cannot refuse a
+/// drop after the fact (so AppKit slides the image back) or leave AppKit's
+/// own landing off.
 struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
     let content: Content
     let renderKey: ArchiveBoardColumnRenderKey
@@ -15,8 +15,8 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
     let locationChanged: (CGFloat) -> Void
     let ended: () -> Void
     let targeted: (Bool) -> Void
-    /// The dropped song's id and the drag image's frame at release, in the host.
-    let land: (String, CGRect?) -> Void
+    /// Runs after an accepted drop moved the song.
+    let land: (String) -> Void
     let refreshedContent: () -> Content
     var boardScroll: ArchiveBoardScrollController? = nil
 
@@ -59,7 +59,7 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
     var locationChanged: (CGFloat) -> Void = { _ in }
     var ended: () -> Void = {}
     var targeted: (Bool) -> Void = { _ in }
-    var land: (String, CGRect?) -> Void = { _, _ in }
+    var land: (String) -> Void = { _ in }
     var refreshedContent: (() -> Content)?
     /// NMH-141: tracks whether this view pushed the not-allowed cursor for a
     /// rejected drag, so the push/pop stays balanced per view.
@@ -130,9 +130,9 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
     override func wantsPeriodicDraggingUpdates() -> Bool { true }
 
     // `animatesToDestination` stays false: AppKit removes the drag image as
-    // soon as the drop is accepted, and the board lands its own copy. AppKit's
-    // slide ran beside the lane's row animation with no shared end, so it slid
-    // onto a row that had already faded in.
+    // soon as the drop is accepted, and the song fades in at its new place.
+    // AppKit's slide ran beside the lanes' row motion with no shared end and
+    // slid onto a row that had already faded in.
     override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         acceptedID(sender) != nil
     }
@@ -140,27 +140,15 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         defer { finish() }
         guard let id = acceptedID(sender) else { return false }
-        let released = draggingFrame(of: id, in: sender)
         // A drop that moves nothing (the song's own lane) is refused, so AppKit
         // slides the image back to the row it came from.
         guard perform(id) else { return false }
-        // Publish the destination content now, so the new row exists when the
-        // landing looks for it.
+        // Publish the destination content now, so the new row exists when
+        // `land` looks for it.
         if let refreshedContent { rootView = refreshedContent() }
         layoutSubtreeIfNeeded()
-        land(id, released)
+        land(id)
         return true
-    }
-
-    /// Where the drag image is at release, in this view.
-    private func draggingFrame(of id: String, in sender: any NSDraggingInfo) -> CGRect? {
-        var frame: CGRect?
-        sender.enumerateDraggingItems(options: [], for: self, classes: [NSString.self], searchOptions: [:]) { item, _, stop in
-            guard item.item as? String == id else { return }
-            frame = item.draggingFrame
-            stop.pointee = true
-        }
-        return frame.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     private func finish() {
@@ -182,7 +170,7 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
     }
 }
 
-/// The lane's native list, reached by the column's drop landing. Layout
+/// The lane's native list, reached by the column after a drop. Layout
 /// measurements are not observable state: reading a frame must not
 /// invalidate the board or make drag hover perform a new projection.
 @MainActor

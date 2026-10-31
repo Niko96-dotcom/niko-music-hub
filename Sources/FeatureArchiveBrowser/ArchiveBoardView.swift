@@ -346,7 +346,7 @@ struct ArchiveBoardCardView: View {
 }
 
 /// What a board row says: the title and the versions line. The row and its
-/// drag image both draw it, so a landing drop covers the row exactly.
+/// drag image both draw it, so the image you drag is the row you see.
 struct ArchiveBoardRowText: View {
     let song: Song
 

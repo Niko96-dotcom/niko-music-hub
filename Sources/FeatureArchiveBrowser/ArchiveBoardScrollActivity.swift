@@ -6,10 +6,10 @@ enum ArchiveBoardMotion {
     static let duration = 0.16
     static let animation = Animation.easeOut(duration: duration)
     static let hover = Animation.easeOut(duration: 0.10)
-    /// A song changing lanes. Both lanes' rows make room and close up at this
-    /// pace and curve, and a drop's copy flies on the same curve, so the board
-    /// moves as one calm motion: a gentle start and a long, soft stop.
-    static let move = 0.32
+    /// A song changing lanes. Both lanes' rows make room and close up, and the
+    /// moved row fades in, at this slow pace and curve, so the board moves as
+    /// one calm motion: a gentle start and a long, soft stop.
+    static let move = 0.45
     static var moveCurve: CAMediaTimingFunction { CAMediaTimingFunction(controlPoints: 0.4, 0, 0.2, 1) }
     static let moveAnimation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: move)
 }

@@ -16,14 +16,14 @@ final class ArchiveBoardDropHostTests: XCTestCase {
         view.accepts = { $0 == "fixture-song" }
         view.perform = { _ in true }
         view.refreshedContent = { FixtureColumnLayout(showsCard: true) }
-        view.land = { _, _ in landedOnNewLayout = view.rootView.showsCard && !view.needsLayout }
+        view.land = { _ in landedOnNewLayout = view.rootView.showsCard && !view.needsLayout }
         XCTAssertTrue(view.prepareForDragOperation(info))
         XCTAssertTrue(view.performDragOperation(info))
-        XCTAssertTrue(landedOnNewLayout, "the landing looks for the new row, so the moved content must be laid out")
+        XCTAssertTrue(landedOnNewLayout, "the reveal looks for the new row, so the moved content must be laid out")
     }
 
-    /// The board lands drops itself; AppKit's slide ran beside the row
-    /// animation and slid onto a row that had already faded in.
+    /// AppKit's slide stays off: it ran beside the lanes' row motion and slid
+    /// onto a row that had already faded in.
     func testDropValidatesAgainBeforeMutationAndLeavesAppKitsLandingOff() {
         let view = ArchiveBoardDropHostingView(rootView: Text("Fixture"))
         let info = FixtureDraggingInfo(id: "fixture-song")
@@ -39,27 +39,23 @@ final class ArchiveBoardDropHostTests: XCTestCase {
         XCTAssertEqual(mutations, 0)
     }
 
-    func testAcceptedDropHandsTheReleaseFrameToTheLandingAfterMutation() {
+    func testAcceptedDropRevealsTheSongAfterMutation() {
         let view = ArchiveBoardDropHostingView(rootView: Text("Fixture"))
         view.frame = CGRect(x: 0, y: 0, width: 200, height: 600)
         let info = FixtureDraggingInfo(id: "fixture-song")
         defer { info.draggingPasteboard.releaseGlobally() }
-        let released = CGRect(x: 30, y: 210, width: 204, height: 50)
-        info.item.draggingFrame = released
         var moved = false
-        var landing: (id: String, frame: CGRect?, afterMove: Bool)?
+        var revealed: (id: String, afterMove: Bool)?
         var ended = false
         view.accepts = { $0 == "fixture-song" }
         view.perform = { _ in moved = true; return true }
-        view.land = { landing = ($0, $1, moved) }
+        view.land = { revealed = ($0, moved) }
         view.ended = { ended = true }
         XCTAssertTrue(view.prepareForDragOperation(info))
         XCTAssertTrue(view.performDragOperation(info))
-        XCTAssertEqual(landing?.id, "fixture-song")
-        XCTAssertEqual(landing?.frame, released)
-        XCTAssertEqual(landing?.afterMove, true)
+        XCTAssertEqual(revealed?.id, "fixture-song")
+        XCTAssertEqual(revealed?.afterMove, true)
         XCTAssertTrue(ended)
-        XCTAssertTrue(info.enumerationView === view)
     }
 
     /// A drop on the song's own lane moves nothing: refusing it makes AppKit
@@ -72,7 +68,7 @@ final class ArchiveBoardDropHostTests: XCTestCase {
         var ended = false
         view.accepts = { $0 == "fixture-song" }
         view.perform = { _ in false }
-        view.land = { _, _ in landed = true }
+        view.land = { _ in landed = true }
         view.ended = { ended = true }
         XCTAssertTrue(view.prepareForDragOperation(info))
         XCTAssertFalse(view.performDragOperation(info))

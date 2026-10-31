@@ -139,18 +139,16 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
   shared-storage comparisons. Hover suppression tracks only the controls under the pointer. Scroll activity observes
   only the viewport and native lanes' own scroll/clip views; subscriptions end on detach or destruction and refresh
   when a lane is reused with a different board controller. Hover uses a 0.10-second ease-out (disabled by Reduce
-  Motion); lane jumps take 0.16 seconds; a song changing lanes moves its rows at `ArchiveBoardMotion.move` (0.32 s,
+  Motion); lane jumps take 0.16 seconds; a song changing lanes moves its rows at `ArchiveBoardMotion.move` (0.45 s,
   a gentle start and a long, soft stop). Live scroll end restores hover synchronously; one board-local
   pointer tracking area clears unphased-wheel suppression on the first move, without waiting for the idle timer.
   See `docs/history/performance/archive-horizontal-scroll-2026-10-21.md` for the measured comparison and limitations.
-- A board drop lands itself (`ArchiveBoardDropLanding`); AppKit's own slide (`animatesToDestination`) stays off,
-  because it ran beside the lane's row animation and slid onto a row that had already faded in. The drop host reads
-  the drag image's frame at release, moves the song, and hands both to the landing: the new row waits hidden in its
-  lane (`holdLanding`), a copy of the drag image (`ArchiveBoardDragPreview`, the landed row's own pixels) flies from
-  the release into it, and the row takes over under the copy with a selection pill that fades (`finishLanding`,
-  `ArchiveBoardCardRow.markLanded`). The flight uses the rows' move curve at 0.32 to 0.44 s by distance, so both
-  lanes and the copy move as one motion. A drop that moves nothing is refused, so AppKit slides the image back. Reduce
-  Motion skips the flight and keeps the fading pill.
+- A board drop is one calm motion: AppKit's own slide (`animatesToDestination`) stays off, so the drag image goes
+  at release; both lanes' rows make room and close up, and the moved row fades in at its new place, all at
+  `ArchiveBoardMotion.move`. The lane scrolls the moved row into sight at the same pace
+  (`ArchiveBoardNativeSongListView.revealDroppedSong`), because lanes sort by recent activity. A drop that moves
+  nothing is refused, so AppKit slides the image back. Tried and removed on 2026-10-31 as too busy: a copy of the drag
+  image flying into the row (701f625) and a fading pill on the landed row (288eb48).
 - The board stays mounted under the song detail page (`ArchivePageModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
   hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.

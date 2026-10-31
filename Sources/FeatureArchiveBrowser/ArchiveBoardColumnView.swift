@@ -58,7 +58,7 @@ final class ArchiveBoardNativeColumn {
             },
             ended: { [weak self] in self?.input.ended() },
             targeted: { [weak self] in self?.setTargeted($0) },
-            land: { [weak self] in self?.landDrop(songID: $0, released: $1) },
+            land: { [weak self] in self?.revealDrop(songID: $0) },
             refreshedContent: { [weak self] in
                 guard let self else { return content }
                 let column = ArchiveBoardProjection.columns(from: self.input.viewModel.browse.filteredSongs,
@@ -100,13 +100,12 @@ final class ArchiveBoardNativeColumn {
         return true
     }
 
-    private func landDrop(songID: String, released: CGRect?) {
-        guard let list = dropLayout.nativeList,
-              let song = input.viewModel.songs.first(where: { $0.id == songID }) else { return }
-        ArchiveBoardDropLanding.land(
-            song, releasedAt: released.map { (frame: $0, view: view) }, into: list,
-            over: input.boardScroll.scrollView, colorScheme: input.colorScheme, reduceMotion: input.reduceMotion
-        )
+    /// Next turn: the lane has laid out the moved row by then.
+    private func revealDrop(songID: String) {
+        let reduceMotion = input.reduceMotion
+        DispatchQueue.main.async { [weak self] in
+            self?.dropLayout.nativeList?.revealDroppedSong(songID: songID, reduceMotion: reduceMotion)
+        }
     }
 
     private static func content(input: ArchiveBoardColumnInput, column: ArchiveBoardColumn,
