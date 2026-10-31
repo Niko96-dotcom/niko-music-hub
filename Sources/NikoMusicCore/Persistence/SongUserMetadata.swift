@@ -11,6 +11,8 @@ public struct SongUserMetadata: Equatable, Sendable, Codable {
     public var ignoredPreviewCandidateIDs: [String]
     public var collaboratorIDs: [String]
     public var workflowStatus: ProjectWorkflowStatus?
+    /// The song's place in its board lane (`Song.boardPosition`).
+    public var boardPosition: Double?
     public var isIgnored: Bool
     public var cprSelectionMode: CPRSelectionMode
     public var manualMainCPRID: String?
@@ -27,6 +29,7 @@ public struct SongUserMetadata: Equatable, Sendable, Codable {
         ignoredPreviewCandidateIDs: [String] = [],
         collaboratorIDs: [String] = [],
         workflowStatus: ProjectWorkflowStatus? = nil,
+        boardPosition: Double? = nil,
         isIgnored: Bool = false,
         cprSelectionMode: CPRSelectionMode = .auto,
         manualMainCPRID: String? = nil,
@@ -42,6 +45,7 @@ public struct SongUserMetadata: Equatable, Sendable, Codable {
         self.ignoredPreviewCandidateIDs = ignoredPreviewCandidateIDs
         self.collaboratorIDs = collaboratorIDs
         self.workflowStatus = workflowStatus
+        self.boardPosition = boardPosition
         self.isIgnored = isIgnored
         self.cprSelectionMode = cprSelectionMode
         self.manualMainCPRID = manualMainCPRID
@@ -60,6 +64,7 @@ public struct SongUserMetadata: Equatable, Sendable, Codable {
             ignoredPreviewCandidateIDs: song.ignoredPreviewCandidateIDs,
             collaboratorIDs: song.collaboratorIDs,
             workflowStatus: song.workflowStatus,
+            boardPosition: song.boardPosition,
             isIgnored: song.isIgnored,
             cprSelectionMode: song.cprSelectionMode,
             manualMainCPRID: song.cprSelectionMode == .manual ? song.manualMainCPRID : nil,

@@ -10,9 +10,13 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
     let content: Content
     let renderKey: ArchiveBoardColumnRenderKey
     let accepts: (String) -> Bool
-    /// False when the drop moves nothing.
-    let perform: (String) -> Bool
+    /// The dropped song's id and the drop point in window coordinates; false
+    /// when the drop moves nothing.
+    let perform: (String, NSPoint) -> Bool
     let locationChanged: (CGFloat) -> Void
+    /// The dragged song's id and the pointer in window coordinates while an
+    /// accepted drag is over the column; nil when it leaves or ends.
+    let pointerChanged: ((songID: String, windowPoint: NSPoint)?) -> Void
     let ended: () -> Void
     let targeted: (Bool) -> Void
     /// Runs after an accepted drop moved the song.
@@ -44,6 +48,7 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
         view.accepts = accepts
         view.perform = perform
         view.locationChanged = locationChanged
+        view.pointerChanged = pointerChanged
         view.ended = ended
         view.targeted = targeted
         view.land = land
@@ -55,8 +60,9 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
 final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, ArchiveBoardColumnFrameSpace {
     var renderedKey: ArchiveBoardColumnRenderKey?
     var accepts: (String) -> Bool = { _ in false }
-    var perform: (String) -> Bool = { _ in false }
+    var perform: (String, NSPoint) -> Bool = { _, _ in false }
     var locationChanged: (CGFloat) -> Void = { _ in }
+    var pointerChanged: ((songID: String, windowPoint: NSPoint)?) -> Void = { _ in }
     var ended: () -> Void = {}
     var targeted: (Bool) -> Void = { _ in }
     var land: (String) -> Void = { _ in }
@@ -110,8 +116,9 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard acceptedID(sender) != nil else {
+        guard let id = acceptedID(sender) else {
             targeted(false)
+            pointerChanged(nil)
             ended()
             // NMH-141 (TRACK-39): show the not-allowed pointer on rejected drags
             // (archive-only projection / busy vault). Do not change accept rules.
@@ -121,6 +128,7 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
         popNotAllowedCursorIfNeeded()
         targeted(true)
         locationChanged(convert(sender.draggingLocation, from: nil).x)
+        pointerChanged((id, sender.draggingLocation))
         return .move
     }
 
@@ -142,7 +150,7 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
         guard let id = acceptedID(sender) else { return false }
         // A drop that moves nothing (the song's own lane) is refused, so AppKit
         // slides the image back to the row it came from.
-        guard perform(id) else { return false }
+        guard perform(id, sender.draggingLocation) else { return false }
         // Publish the destination content now, so the new row exists when
         // `land` looks for it.
         if let refreshedContent { rootView = refreshedContent() }
@@ -153,6 +161,7 @@ final class ArchiveBoardDropHostingView<Content: View>: NSHostingView<Content>, 
 
     private func finish() {
         popNotAllowedCursorIfNeeded()
+        pointerChanged(nil)
         targeted(false)
         ended()
     }

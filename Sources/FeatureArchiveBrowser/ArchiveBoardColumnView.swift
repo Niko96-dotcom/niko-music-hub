@@ -51,11 +51,12 @@ final class ArchiveBoardNativeColumn {
                 isCompact: input.compactWhenEmpty, isBoardVisible: input.state.isBoardVisible
             ),
             accepts: { [weak self] in self?.acceptsDrop(songID: $0) == true },
-            perform: { [weak self] in self?.performDrop(songID: $0) ?? false },
+            perform: { [weak self] in self?.performDrop(songID: $0, at: $1) ?? false },
             locationChanged: { [weak self] x in
                 guard let self else { return }
                 self.input.locationChanged(self.input.column.id, x)
             },
+            pointerChanged: { [weak self] in self?.showDropPlace(for: $0) },
             ended: { [weak self] in self?.input.ended() },
             targeted: { [weak self] in self?.setTargeted($0) },
             land: { [weak self] in self?.revealDrop(songID: $0) },
@@ -84,20 +85,53 @@ final class ArchiveBoardNativeColumn {
         return input.viewModel.canMutateWorkflowStatus(for: song)
     }
 
-    /// False when the drop moves nothing (the song's own lane, a song that
+    /// False when the drop moves nothing (the song's own place, a song that
     /// cannot move now), so AppKit slides the image back.
-    private func performDrop(songID: String) -> Bool {
+    private func performDrop(songID: String, at windowPoint: NSPoint) -> Bool {
         guard let song = input.viewModel.songs.first(where: { $0.id == songID }),
-              input.viewModel.canMutateWorkflowStatus(for: song),
-              song.workflowStatus != input.column.status else { return false }
-        if input.column.status == .done {
+              input.viewModel.canMutateWorkflowStatus(for: song) else { return false }
+        let place = dropPlace(of: song, at: windowPoint)
+        let sameLane = song.workflowStatus == input.column.status
+        if sameLane, place == nil { return false }
+        if input.column.status == .done, !sameLane {
             input.viewModel.requestWorkflowDoneArchive(for: song)
-        } else {
-            withAnimation(input.reduceMotion ? nil : ArchiveBoardMotion.moveAnimation) {
-                input.viewModel.applyWorkflowStatus(input.column.status, for: song)
-            }
+            return true
+        }
+        let position = place.map { ArchiveBoardProjection.position(insertingAt: $0.index, in: $0.lane) }
+        withAnimation(input.reduceMotion ? nil : ArchiveBoardMotion.moveAnimation) {
+            input.viewModel.applyWorkflowStatus(input.column.status, for: song, boardPosition: position)
         }
         return true
+    }
+
+    /// Where a drop at `windowPoint` places `song`: the index among this lane's
+    /// songs without it. Nil when the lane takes no place (a search keeps its
+    /// relevance order; a drop into Done waits for its confirmation) or the
+    /// place is the song's own.
+    private func dropPlace(of song: Song, at windowPoint: NSPoint) -> (index: Int, lane: [Song])? {
+        guard !input.viewModel.browse.isSearching,
+              input.column.status != .done || song.workflowStatus == .done,
+              let list = dropLayout.nativeList else { return nil }
+        var index = list.insertionIndex(at: windowPoint)
+        var lane = input.column.songs
+        if let own = lane.firstIndex(where: { $0.id == song.id }) {
+            if index == own || index == own + 1 { return nil }
+            if own < index { index -= 1 }
+            lane.remove(at: own)
+        }
+        return (index, lane)
+    }
+
+    /// The line where a drop would land, hidden where it would change nothing.
+    private func showDropPlace(for pointer: (songID: String, windowPoint: NSPoint)?) {
+        guard let list = dropLayout.nativeList else { return }
+        guard let pointer,
+              let song = input.viewModel.songs.first(where: { $0.id == pointer.songID }),
+              dropPlace(of: song, at: pointer.windowPoint) != nil else {
+            list.showInsertion(at: nil, windowPoint: pointer?.windowPoint)
+            return
+        }
+        list.showInsertion(at: list.insertionIndex(at: pointer.windowPoint), windowPoint: pointer.windowPoint)
     }
 
     /// Next turn: the lane has laid out the moved row by then.

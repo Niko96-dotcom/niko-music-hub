@@ -251,6 +251,7 @@ extension ArchiveBrowserViewModel {
         registerWorkflowStatusUndo(
             songID: song.id,
             previousStatus: previous,
+            previousPosition: song.boardPosition,
             actionName: "Mark Done"
         )
         if outcome == .savedWithWarning {

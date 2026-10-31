@@ -18,11 +18,13 @@ final class ArchiveWorkflowUndoTarget: NSObject {
     func undoWorkflowStatus(
         songID: String,
         previousStatus: ProjectWorkflowStatus?,
+        previousPosition: Double?,
         actionName: String
     ) {
         coordinator?.undoWorkflowStatus(
             songID: songID,
             previousStatus: previousStatus,
+            previousPosition: previousPosition,
             actionName: actionName
         )
     }

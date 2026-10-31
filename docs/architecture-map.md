@@ -175,7 +175,7 @@ comes from `VaultFolders` (Core); see [architecture.md § Vault folders](archite
 | Loaded roots, their access, first-run state, scan state (scanning, scan error, diagnostics, root generation) | `ArchiveLibraryModel`, held as `ArchiveBrowserViewModel.library` | memory |
 | Archive browse inputs and results (search text, shelf, filters, sort, filtered list, search index) | `ArchiveBrowseModel`, held as `ArchiveBrowserViewModel.browse` | memory |
 | Archive page (`viewMode`, `listShowsDetail`) and the selected song | `ArchivePageModel`, held as `ArchiveBrowserViewModel.page`; views call intents ([architecture.md § Archive page state](architecture.md#archive-page-state)) | memory; the route is recorded in `HubNavigationHistory` |
-| User metadata (titles, notes, stages, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
+| User metadata (titles, notes, stages, board places, collaborators) | `ArchiveMetadataEditingCoordinator` → `SQLiteSongUserMetadataStore`, `SQLiteCollaboratorStore` | `archive-index.sqlite` |
 | Archive footer (message and warning) | `ArchiveFooterStatus`, held as `ArchiveBrowserViewModel.footer` | memory |
 | Keep Local pins | `KeepLocalPins`, stored as `VaultSettings.keepLocalPins`; its keys are private to it ([ADR 021](decisions/021-keep-local-pin-format.md)) | settings JSON in UserDefaults (key `keepLocalProjectIDs`) |
 | Vault queue, retries, capacity | `ProjectVaultOperationCoordinator` | memory; the journal is authoritative |

@@ -145,12 +145,22 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
             var oldSet: Set<String> = []
             var newSet: Set<String> = []
             var keepsOrder = false
+            var move: (from: Int, to: Int)?
             if animated, old != nil {
                 oldSet = Set(oldIDs)
                 newSet = Set(nextIDs)
                 keepsOrder = oldIDs.filter { newSet.contains($0) } == nextIDs.filter { oldSet.contains($0) }
+                if !keepsOrder, oldSet == newSet { move = Self.singleMove(from: oldIDs, to: nextIDs) }
             }
-            if keepsOrder {
+            if let move {
+                // A song placed elsewhere in its own lane slides there.
+                enteringIDs = []
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = ArchiveBoardMotion.move
+                    context.timingFunction = ArchiveBoardMotion.moveCurve
+                    table.moveRow(at: move.from, to: move.to)
+                }
+            } else if keepsOrder {
                 enteringIDs = newSet.subtracting(oldSet)
                 entranceGeneration &+= 1
                 let generation = entranceGeneration
@@ -246,6 +256,94 @@ final class ArchiveBoardNativeSongListView: NSScrollView, NSTableViewDataSource,
     /// touching the selected row, whose pill stands on its own.
     static func showsSeparator(below row: Int, count: Int, selectedRow: Int?) -> Bool {
         row < count - 1 && selectedRow != row && selectedRow != row + 1
+    }
+
+    /// The one row that moved when `next` is `old` with a single song placed
+    /// elsewhere (a drop in its own lane); nil for any other change.
+    static func singleMove(from old: [String], to next: [String]) -> (from: Int, to: Int)? {
+        guard old.count == next.count,
+              let first = old.indices.first(where: { old[$0] != next[$0] }),
+              let last = old.indices.last(where: { old[$0] != next[$0] }) else { return nil }
+        if old[first] == next[last], old[(first + 1)...last].elementsEqual(next[first..<last]) {
+            return (first, last)
+        }
+        if old[last] == next[first], old[first..<last].elementsEqual(next[(first + 1)...last]) {
+            return (last, first)
+        }
+        return nil
+    }
+
+    // MARK: Placing a drop
+
+    private lazy var insertionLine: NSView = {
+        let line = NSView()
+        line.wantsLayer = true
+        line.layer?.cornerRadius = 1
+        line.isHidden = true
+        return line
+    }()
+
+    /// Where a drop at `windowPoint` lands among the lane's rows: the row
+    /// under the pointer, or the one after it below the row's middle.
+    func insertionIndex(at windowPoint: NSPoint) -> Int {
+        let point = table.convert(windowPoint, from: nil)
+        let count = table.numberOfRows
+        guard count > 0 else { return 0 }
+        let row = table.row(at: point)
+        guard row >= 0 else { return point.y < table.rect(ofRow: 0).minY ? 0 : count }
+        return point.y < table.rect(ofRow: row).midY ? row : row + 1
+    }
+
+    /// Shows the line where a drop lands (nil hides it), and scrolls a long
+    /// lane when the pointer nears its top or bottom edge.
+    func showInsertion(at index: Int?, windowPoint: NSPoint?) {
+        if let windowPoint { scrollTowardEdge(near: table.convert(windowPoint, from: nil)) }
+        guard let index else {
+            insertionLine.isHidden = true
+            return
+        }
+        let count = table.numberOfRows
+        let y: CGFloat
+        if count == 0 {
+            y = 0
+        } else if index < count {
+            y = table.rect(ofRow: index).minY
+        } else {
+            y = table.rect(ofRow: count - 1).maxY
+        }
+        let inset = ArchiveBoardCardView.rowInset
+        let frame = NSRect(x: inset, y: y - 1, width: max(0, table.bounds.width - 2 * inset), height: 2)
+        if insertionLine.superview !== table { table.addSubview(insertionLine) }
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            insertionLine.layer?.backgroundColor = NSColor(HubDesignSystem.Palette.accent).cgColor
+        }
+        if insertionLine.isHidden {
+            insertionLine.frame = frame
+            insertionLine.isHidden = false
+        } else if insertionLine.frame != frame {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                context.timingFunction = ArchiveBoardMotion.moveCurve
+                insertionLine.animator().frame = frame
+            }
+        }
+    }
+
+    private func scrollTowardEdge(near point: NSPoint) {
+        let visible = contentView.bounds
+        let edge: CGFloat = 28
+        let step: CGFloat
+        if point.y < visible.minY + edge {
+            step = -8
+        } else if point.y > visible.maxY - edge {
+            step = 8
+        } else {
+            return
+        }
+        var origin = visible.origin
+        origin.y += step
+        contentView.scroll(to: contentView.constrainBoundsRect(NSRect(origin: origin, size: visible.size)).origin)
+        reflectScrolledClipView(contentView)
     }
 
     /// Brings a dropped song's row into sight, at the pace the lanes move,

@@ -320,27 +320,35 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
     func applyWorkflowStatus(
         _ status: ProjectWorkflowStatus?,
         for song: Song,
+        boardPosition: Double? = nil,
         registerUndo: Bool = true
     ) {
-        updateWorkflowStatus(for: song, status: status, registerUndo: registerUndo)
+        updateWorkflowStatus(for: song, status: status, boardPosition: boardPosition, registerUndo: registerUndo)
     }
 
+    /// `boardPosition` places the song in its lane (a board drop, which may keep
+    /// the status). Without one, a status change clears the song's place, so it
+    /// sorts by recent work in its new lane, and an unchanged status changes
+    /// nothing. Status and place change in one save and one Undo step.
     func updateWorkflowStatus(
         for song: Song,
         status: ProjectWorkflowStatus?,
+        boardPosition: Double? = nil,
         registerUndo: Bool = true
     ) {
         guard host.canMutateStatus(song) else { return }
         guard let songs = host.currentSongs() else { return }
-        let previous = songs.first(where: { $0.id == song.id })?.workflowStatus ?? song.workflowStatus
-        guard previous != status else { return }
-        if status == .done {
+        let current = songs.first(where: { $0.id == song.id }) ?? song
+        let previous = current.workflowStatus
+        let previousPosition = current.boardPosition
+        guard previous != status || (boardPosition != nil && boardPosition != previousPosition) else { return }
+        if status == .done, previous != .done {
             if host.canArchive(song) {
                 host.requestDoneArchive(song)
                 return
             }
         }
-        let outcome = commitWorkflowStatus(status, for: song)
+        let outcome = commitWorkflowStatus(status, boardPosition: boardPosition, for: song)
         if previous == .done, status != .done {
             // Revoked even when the save was refused: cancelling pending Done archive work is the fail-safe direction.
             host.revokeDoneWork(song.id)
@@ -351,20 +359,27 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
             registerWorkflowStatusUndo(
                 songID: song.id,
                 previousStatus: previous,
-                actionName: "Change Workflow Status"
+                previousPosition: previousPosition,
+                actionName: previous == status ? "Move Song" : "Change Workflow Status"
             )
         }
     }
 
-    func commitWorkflowStatus(_ status: ProjectWorkflowStatus?, for song: Song) -> MetadataCommitOutcome {
+    func commitWorkflowStatus(
+        _ status: ProjectWorkflowStatus?,
+        boardPosition: Double? = nil,
+        for song: Song
+    ) -> MetadataCommitOutcome {
         applyMetadataMerge(for: song) { metadata, _ in
             metadata.workflowStatus = status
+            metadata.boardPosition = boardPosition
         }
     }
 
     func registerWorkflowStatusUndo(
         songID: String,
         previousStatus: ProjectWorkflowStatus?,
+        previousPosition: Double?,
         actionName: String
     ) {
         guard let undoManager = drivingUndoManager else { return }
@@ -373,6 +388,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
                 target.undoWorkflowStatus(
                     songID: songID,
                     previousStatus: previousStatus,
+                    previousPosition: previousPosition,
                     actionName: actionName
                 )
             }
@@ -385,13 +401,15 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
     func undoWorkflowStatus(
         songID: String,
         previousStatus: ProjectWorkflowStatus?,
+        previousPosition: Double?,
         actionName: String
     ) {
         guard let songs = host.currentSongs(),
               let song = songs.first(where: { $0.id == songID }) else { return }
         let currentStatus = song.workflowStatus
+        let currentPosition = song.boardPosition
         let leavingDone = currentStatus == .done && previousStatus != .done
-        let outcome = commitWorkflowStatus(previousStatus, for: song)
+        let outcome = commitWorkflowStatus(previousStatus, boardPosition: previousPosition, for: song)
         if leavingDone {
             // Revoked even when the save was refused: cancelling pending Done archive work is the fail-safe direction.
             host.revokeDoneWork(songID)
@@ -406,6 +424,7 @@ final class ArchiveMetadataEditingCoordinator: ObservableObject {
         registerWorkflowStatusUndo(
             songID: songID,
             previousStatus: currentStatus,
+            previousPosition: currentPosition,
             actionName: actionName
         )
     }

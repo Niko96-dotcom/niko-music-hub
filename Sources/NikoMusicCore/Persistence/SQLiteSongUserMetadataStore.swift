@@ -41,7 +41,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
             SELECT song_id, virtual_title, aliases_json, app_note, preview_selection_mode,
                    manual_main_preview_id, ignored_preview_ids_json, updated_at,
                    collaborator_ids_json, is_ignored, cpr_selection_mode,
-                   manual_main_cpr_id, ignored_cpr_ids_json, workflow_status
+                   manual_main_cpr_id, ignored_cpr_ids_json, workflow_status, board_position
             FROM song_metadata;
             """
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -75,6 +75,8 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
                 let manualCPRID = optionalText(statement, column: 11)
                 let ignoredCPRJSON = textColumn(statement, column: 12) ?? "[]"
                 let workflowStatusRaw = optionalText(statement, column: 13)
+                let boardPosition = sqlite3_column_type(statement, 14) == SQLITE_NULL
+                    ? nil : sqlite3_column_double(statement, 14)
                 let aliases: [String]
                 let ignoredPreviews: [String]
                 let collaboratorIDs: [String]
@@ -104,6 +106,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
                     ignoredPreviewCandidateIDs: ignoredPreviews,
                     collaboratorIDs: collaboratorIDs,
                     workflowStatus: workflowStatus,
+                    boardPosition: boardPosition,
                     isIgnored: isIgnored,
                     cprSelectionMode: cprMode,
                     manualMainCPRID: manualCPRID,
@@ -257,8 +260,8 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
           song_id, virtual_title, aliases_json, app_note, preview_selection_mode,
           manual_main_preview_id, ignored_preview_ids_json, updated_at,
           collaborator_ids_json, is_ignored, cpr_selection_mode,
-          manual_main_cpr_id, ignored_cpr_ids_json, workflow_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          manual_main_cpr_id, ignored_cpr_ids_json, workflow_status, board_position
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(song_id) DO UPDATE SET
           virtual_title = excluded.virtual_title,
           aliases_json = excluded.aliases_json,
@@ -272,7 +275,8 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
           cpr_selection_mode = excluded.cpr_selection_mode,
           manual_main_cpr_id = excluded.manual_main_cpr_id,
           ignored_cpr_ids_json = excluded.ignored_cpr_ids_json,
-          workflow_status = excluded.workflow_status;
+          workflow_status = excluded.workflow_status,
+          board_position = excluded.board_position;
         """
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
             throw StoreError.prepare(message(db))
@@ -291,6 +295,11 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
         bindOptionalText(statement, index: 12, value: item.manualMainCPRID)
         sqlite3_bind_text(statement, 13, ignoredCPRJSON, -1, sqliteTransient)
         bindOptionalText(statement, index: 14, value: item.workflowStatus?.rawValue)
+        if let boardPosition = item.boardPosition {
+            sqlite3_bind_double(statement, 15, boardPosition)
+        } else {
+            sqlite3_bind_null(statement, 15)
+        }
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw StoreError.step(message(db))
         }
@@ -302,7 +311,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
         "song_id", "virtual_title", "aliases_json", "app_note", "preview_selection_mode",
         "manual_main_preview_id", "ignored_preview_ids_json", "updated_at",
         "collaborator_ids_json", "is_ignored", "cpr_selection_mode",
-        "manual_main_cpr_id", "ignored_cpr_ids_json", "workflow_status",
+        "manual_main_cpr_id", "ignored_cpr_ids_json", "workflow_status", "board_position",
     ]
 
     private static let listColumns: [(column: SongUserMetadataListColumn, name: String)] = [
@@ -566,7 +575,8 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
               cpr_selection_mode TEXT NOT NULL DEFAULT 'auto',
               manual_main_cpr_id TEXT,
               ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]',
-              workflow_status TEXT
+              workflow_status TEXT,
+              board_position REAL
             );
             """
             guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
@@ -611,6 +621,7 @@ public struct SQLiteSongUserMetadataStore: SongUserMetadataStoring, SongUserMeta
             ("manual_main_cpr_id", "ALTER TABLE song_metadata ADD COLUMN manual_main_cpr_id TEXT;"),
             ("ignored_cpr_ids_json", "ALTER TABLE song_metadata ADD COLUMN ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]';"),
             ("workflow_status", "ALTER TABLE song_metadata ADD COLUMN workflow_status TEXT;"),
+            ("board_position", "ALTER TABLE song_metadata ADD COLUMN board_position REAL;"),
         ]
         for migration in migrations {
             if try columnExists(migration.column, db: db) { continue }

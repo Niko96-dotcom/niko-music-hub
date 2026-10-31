@@ -189,6 +189,27 @@ final class ArchiveBoardNativeSongListTests: XCTestCase {
         XCTAssertEqual((table.rowView(atRow: 151, makeIfNecessary: false) as? ArchiveBoardCardRow)?.showsLandedMark, false)
     }
 
+    /// A drop lands above the row under the pointer's upper half and below
+    /// its lower half; a song placed elsewhere in its lane is one row move.
+    func testDropIndexFollowsThePointerAndAPlacingIsOneRowMove() throws {
+        let fixture = makeFixture()
+        defer { fixture.window.close() }
+        let table = try XCTUnwrap(fixture.list.documentView as? NSTableView)
+        fixture.window.contentView?.layoutSubtreeIfNeeded()
+        let row = table.rect(ofRow: 2)
+        func index(atY y: CGFloat) -> Int {
+            fixture.list.insertionIndex(at: table.convert(NSPoint(x: row.midX, y: y), to: nil))
+        }
+        XCTAssertEqual(index(atY: row.minY + 2), 2)
+        XCTAssertEqual(index(atY: row.maxY - 2), 3)
+
+        XCTAssertEqual(ArchiveBoardNativeSongListView.singleMove(from: ["a", "b", "c", "d"], to: ["b", "c", "a", "d"])?.from, 0)
+        XCTAssertEqual(ArchiveBoardNativeSongListView.singleMove(from: ["a", "b", "c", "d"], to: ["b", "c", "a", "d"])?.to, 2)
+        XCTAssertEqual(ArchiveBoardNativeSongListView.singleMove(from: ["a", "b", "c", "d"], to: ["a", "d", "b", "c"])?.from, 3)
+        XCTAssertEqual(ArchiveBoardNativeSongListView.singleMove(from: ["a", "b", "c", "d"], to: ["a", "d", "b", "c"])?.to, 1)
+        XCTAssertNil(ArchiveBoardNativeSongListView.singleMove(from: ["a", "b", "c", "d"], to: ["b", "a", "d", "c"]))
+    }
+
     func testRealizedCardReceivesLatestMetadataSelectionAndVaultActivity() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }

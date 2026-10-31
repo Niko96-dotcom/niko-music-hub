@@ -85,9 +85,10 @@ extension ArchiveBrowserViewModel {
     func applyWorkflowStatus(
         _ status: ProjectWorkflowStatus?,
         for song: Song,
+        boardPosition: Double? = nil,
         registerUndo: Bool = true
     ) {
-        metadataEditing.applyWorkflowStatus(status, for: song, registerUndo: registerUndo)
+        metadataEditing.applyWorkflowStatus(status, for: song, boardPosition: boardPosition, registerUndo: registerUndo)
     }
 
     func updateWorkflowStatus(
@@ -105,11 +106,13 @@ extension ArchiveBrowserViewModel {
     func registerWorkflowStatusUndo(
         songID: String,
         previousStatus: ProjectWorkflowStatus?,
+        previousPosition: Double?,
         actionName: String
     ) {
         metadataEditing.registerWorkflowStatusUndo(
             songID: songID,
             previousStatus: previousStatus,
+            previousPosition: previousPosition,
             actionName: actionName
         )
     }

@@ -146,10 +146,18 @@ The Project Vault runtime, over `AppCore` and `NikoMusicCore`; no SwiftUI, no Ap
 - A board drop is one calm motion: AppKit's own slide (`animatesToDestination`) stays off, so the drag image goes
   at release; both lanes' rows make room and close up, and the moved row fades in at its new place, all at
   `ArchiveBoardMotion.move`. The lane scrolls the moved row into sight at the same pace
-  (`ArchiveBoardNativeSongListView.revealDroppedSong`), because lanes sort by recent activity, and marks it with the
-  selection pill, which fades in with the row and out over 0.8 s (`ArchiveBoardCardRow.markLanded`). A drop that moves
-  nothing is refused, so AppKit slides the image back. Tried and removed on 2026-10-31 as too busy: a copy of the drag
-  image flying into the row (701f625).
+  (`ArchiveBoardNativeSongListView.revealDroppedSong`) and marks it with the selection pill, which fades in with the
+  row and out over 0.8 s (`ArchiveBoardCardRow.markLanded`). A drop that moves nothing is refused, so AppKit slides the
+  image back. Tried and removed on 2026-10-31 as too busy: a copy of the drag image flying into the row (701f625).
+- Board order: a lane sorts by `ArchiveBoardProjection.sortKey`, ascending: a song's place (`Song.boardPosition`,
+  stored in `song_metadata.board_position`) or, unplaced, its newest CPR activity negated, so lanes read by recent
+  work until the owner places songs. While a drag is over a lane, a line shows where it lands
+  (`ArchiveBoardNativeSongListView.showInsertion`, hidden where nothing would change; a long lane scrolls near its
+  edges). A drop takes the place between its new neighbours' keys (`ArchiveBoardProjection.position`), so only the
+  moved song is written, together with its status, in one save and one Undo step
+  (`ArchiveMetadataEditingCoordinator.updateWorkflowStatus(for:status:boardPosition:)`). A drop in the song's own lane
+  slides its row there (`NSTableView.moveRow`). A status change without a place (menu, keyboard, song page) clears
+  the place. A search keeps its relevance order and takes no place; a drop into Done waits for its confirmation.
 - The board stays mounted under the song detail page (`ArchivePageModel.showsBoardPage`): going back must not
   rebuild its lanes. While covered it is transparent, takes no hits, is hidden from accessibility, and its native lane
   hosts are hidden; lanes rewind to the top when the detail page opens. Leaving for the list or analytics drops it.

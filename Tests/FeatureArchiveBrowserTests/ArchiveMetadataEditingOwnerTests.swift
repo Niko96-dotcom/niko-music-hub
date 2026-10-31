@@ -294,6 +294,40 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
         return (coordinator, box, undo)
     }
 
+    /// A drop places the song: status and place save together, one Undo step
+    /// puts both back, an unchanged status without a place changes nothing,
+    /// and a status change from a menu clears the place.
+    func testBoardPlacementSavesWithTheStatusAndUndoesInOneStep() throws {
+        let root = try makeTempRoot()
+        let song = makeSong(in: root, named: "Placed Song", workflow: .prod)
+        let store = OwnerFakeMetadataStore()
+        let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: store)
+
+        coordinator.updateWorkflowStatus(for: song, status: .prod, boardPosition: 12.5)
+        XCTAssertEqual(store.saved[song.id]?.workflowStatus, .prod)
+        XCTAssertEqual(store.saved[song.id]?.boardPosition, 12.5)
+        let placed = try XCTUnwrap(box.replaced.last)
+        XCTAssertEqual(placed.boardPosition, 12.5)
+        XCTAssertEqual(undo.undoActionName, "Move Song")
+        box.songs = [placed]
+
+        undo.undo()
+        let restored = try XCTUnwrap(box.replaced.last)
+        XCTAssertEqual(restored.workflowStatus, .prod)
+        XCTAssertNil(restored.boardPosition)
+        box.songs = [restored]
+
+        let saves = box.replaced.count
+        coordinator.updateWorkflowStatus(for: restored, status: .prod)
+        XCTAssertEqual(box.replaced.count, saves, "same status, no place: nothing to save")
+
+        coordinator.updateWorkflowStatus(for: restored, status: .song, boardPosition: 3)
+        box.songs = [try XCTUnwrap(box.replaced.last)]
+        coordinator.updateWorkflowStatus(for: try XCTUnwrap(box.replaced.last), status: .sessionProd)
+        XCTAssertEqual(box.replaced.last?.workflowStatus, .sessionProd)
+        XCTAssertNil(box.replaced.last?.boardPosition, "a menu move lets the song sort by recent work")
+    }
+
     func testRefusedStatusChangeRegistersNoUndo() throws {
         let root = try makeTempRoot()
         let song = makeSong(in: root, named: "Refused Song")
@@ -388,7 +422,7 @@ final class ArchiveMetadataEditingOwnerTests: XCTestCase {
         try FileManager.default.createDirectory(at: song.folderPath, withIntermediateDirectories: true)
         let (coordinator, box, undo) = makeStatusHarness(song: song, root: root, store: OwnerFakeMetadataStore())
         box.vaultStatuses = ["Marked Done. Archiving is paused."]
-        coordinator.registerWorkflowStatusUndo(songID: song.id, previousStatus: .prod, actionName: "Mark Done")
+        coordinator.registerWorkflowStatusUndo(songID: song.id, previousStatus: .prod, previousPosition: nil, actionName: "Mark Done")
 
         undo.undo()
 

@@ -42,6 +42,39 @@ final class ArchiveBoardProjectionTests: XCTestCase {
         XCTAssertEqual(byID[ProjectWorkflowStatus.done.rawValue]?.songs.map(\.id), [finished.id])
     }
 
+    /// A placed song keeps its place among the others, whose order still
+    /// comes from recent work; placing writes only the moved song.
+    func testPlacedSongsKeepTheirPlaceAmongSongsOrderedByRecentWork() {
+        let newest = song("/tmp/newest", title: "Newest", status: .song, cprModified: Date(timeIntervalSince1970: 3_000))
+        let middle = song("/tmp/middle", title: "Middle", status: .song, cprModified: Date(timeIntervalSince1970: 2_000))
+        let oldest = song("/tmp/oldest", title: "Oldest", status: .song, cprModified: Date(timeIntervalSince1970: 1_000))
+        let lane = ArchiveBoardProjection.columns(from: [oldest, middle, newest])[2].songs
+        XCTAssertEqual(lane.map(\.displayTitle), ["Newest", "Middle", "Oldest"])
+
+        // The oldest song placed at the top, then the newest placed last.
+        var placed = oldest
+        placed.boardPosition = ArchiveBoardProjection.position(insertingAt: 0, in: [newest, middle])
+        var columns = ArchiveBoardProjection.columns(from: [placed, middle, newest])
+        XCTAssertEqual(columns[2].songs.map(\.displayTitle), ["Oldest", "Newest", "Middle"])
+
+        var last = newest
+        last.boardPosition = ArchiveBoardProjection.position(insertingAt: 2, in: [placed, middle])
+        columns = ArchiveBoardProjection.columns(from: [placed, middle, last])
+        XCTAssertEqual(columns[2].songs.map(\.displayTitle), ["Oldest", "Middle", "Newest"])
+
+        // Between two neighbours.
+        var between = middle
+        between.boardPosition = ArchiveBoardProjection.position(insertingAt: 1, in: [placed, last])
+        columns = ArchiveBoardProjection.columns(from: [placed, between, last])
+        XCTAssertEqual(columns[2].songs.map(\.displayTitle), ["Oldest", "Middle", "Newest"])
+        XCTAssertGreaterThan(between.boardPosition!, placed.boardPosition!)
+        XCTAssertLessThan(between.boardPosition!, last.boardPosition!)
+
+        // A search keeps its relevance order, placed or not.
+        let searched = ArchiveBoardProjection.columns(from: [last, placed], preservingOrder: true)
+        XCTAssertEqual(searched[2].songs.map(\.displayTitle), ["Newest", "Oldest"])
+    }
+
     func testColumnsSortByNewestCPRThenTitle() {
         let older = song("/tmp/older", title: "Older", status: .prod, cprModified: Date(timeIntervalSince1970: 1_000))
         let newer = song("/tmp/newer", title: "Newer", status: .prod, cprModified: Date(timeIntervalSince1970: 2_000))

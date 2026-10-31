@@ -24,6 +24,9 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
     public var collaboratorNames: [String]
     /// App-owned workflow status; never writes into Cubase/music folders.
     public var workflowStatus: ProjectWorkflowStatus?
+    /// Where the owner placed the song in its board lane: a sort key among the
+    /// lane's songs, nil until placed (`ArchiveBoardProjection`).
+    public var boardPosition: Double?
     public var isIgnored: Bool
     public var cprSelectionMode: CPRSelectionMode
     public var manualMainCPRID: String?
@@ -101,6 +104,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         collaboratorIDs: [String] = [],
         collaboratorNames: [String] = [],
         workflowStatus: ProjectWorkflowStatus? = nil,
+        boardPosition: Double? = nil,
         isIgnored: Bool = false,
         cprSelectionMode: CPRSelectionMode = .auto,
         manualMainCPRID: String? = nil,
@@ -123,6 +127,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         self.collaboratorIDs = collaboratorIDs
         self.collaboratorNames = collaboratorNames
         self.workflowStatus = workflowStatus
+        self.boardPosition = boardPosition
         self.isIgnored = isIgnored
         self.cprSelectionMode = cprSelectionMode
         self.manualMainCPRID = manualMainCPRID
@@ -166,6 +171,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         case collaboratorIDs
         case collaboratorNames
         case workflowStatus
+        case boardPosition
         case isIgnored
         case cprSelectionMode
         case manualMainCPRID
@@ -192,6 +198,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         collaboratorIDs = try container.decodeIfPresent([String].self, forKey: .collaboratorIDs) ?? []
         collaboratorNames = try container.decodeIfPresent([String].self, forKey: .collaboratorNames) ?? []
         workflowStatus = try container.decodeIfPresent(ProjectWorkflowStatus.self, forKey: .workflowStatus)
+        boardPosition = try container.decodeIfPresent(Double.self, forKey: .boardPosition)
         isIgnored = try container.decodeIfPresent(Bool.self, forKey: .isIgnored) ?? false
         cprSelectionMode = try container.decodeIfPresent(CPRSelectionMode.self, forKey: .cprSelectionMode) ?? .auto
         manualMainCPRID = try container.decodeIfPresent(String.self, forKey: .manualMainCPRID)
@@ -218,6 +225,7 @@ public struct Song: Identifiable, Hashable, Sendable, Codable {
         try container.encode(collaboratorIDs, forKey: .collaboratorIDs)
         try container.encode(collaboratorNames, forKey: .collaboratorNames)
         try container.encodeIfPresent(workflowStatus, forKey: .workflowStatus)
+        try container.encodeIfPresent(boardPosition, forKey: .boardPosition)
         try container.encode(isIgnored, forKey: .isIgnored)
         try container.encode(cprSelectionMode, forKey: .cprSelectionMode)
         try container.encodeIfPresent(manualMainCPRID, forKey: .manualMainCPRID)

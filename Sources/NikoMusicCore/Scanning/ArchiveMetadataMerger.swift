@@ -28,6 +28,7 @@ public enum ArchiveMetadataMerger {
         song.ignoredPreviewCandidateIDs = metadata.ignoredPreviewCandidateIDs
         song.collaboratorIDs = metadata.collaboratorIDs
         song.workflowStatus = metadata.workflowStatus
+        song.boardPosition = metadata.boardPosition
         song.isIgnored = metadata.isIgnored
         song.cprSelectionMode = metadata.cprSelectionMode
         song.manualMainCPRID = metadata.manualMainCPRID

@@ -14,7 +14,7 @@ final class ArchiveBoardDropHostTests: XCTestCase {
         defer { info.draggingPasteboard.releaseGlobally() }
         var landedOnNewLayout = false
         view.accepts = { $0 == "fixture-song" }
-        view.perform = { _ in true }
+        view.perform = { _, _ in true }
         view.refreshedContent = { FixtureColumnLayout(showsCard: true) }
         view.land = { _ in landedOnNewLayout = view.rootView.showsCard && !view.needsLayout }
         XCTAssertTrue(view.prepareForDragOperation(info))
@@ -31,7 +31,7 @@ final class ArchiveBoardDropHostTests: XCTestCase {
         var valid = true
         var mutations = 0
         view.accepts = { valid && $0 == "fixture-song" }
-        view.perform = { _ in mutations += 1; return true }
+        view.perform = { _, _ in mutations += 1; return true }
         XCTAssertTrue(view.prepareForDragOperation(info))
         XCTAssertFalse(info.animatesToDestination)
         valid = false
@@ -48,7 +48,7 @@ final class ArchiveBoardDropHostTests: XCTestCase {
         var revealed: (id: String, afterMove: Bool)?
         var ended = false
         view.accepts = { $0 == "fixture-song" }
-        view.perform = { _ in moved = true; return true }
+        view.perform = { _, _ in moved = true; return true }
         view.land = { revealed = ($0, moved) }
         view.ended = { ended = true }
         XCTAssertTrue(view.prepareForDragOperation(info))
@@ -67,7 +67,7 @@ final class ArchiveBoardDropHostTests: XCTestCase {
         var landed = false
         var ended = false
         view.accepts = { $0 == "fixture-song" }
-        view.perform = { _ in false }
+        view.perform = { _, _ in false }
         view.land = { _ in landed = true }
         view.ended = { ended = true }
         XCTAssertTrue(view.prepareForDragOperation(info))

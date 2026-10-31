@@ -26,7 +26,14 @@ struct ArchiveBoardColumn: Equatable, Identifiable {
 }
 
 /// Pure board projection: the browse list split into workflow columns,
-/// preserving search relevance or sorting by recent CPR activity within each column.
+/// preserving search relevance, or in each lane's board order.
+///
+/// Board order: a song sorts by its sort key, ascending. A song the owner
+/// placed (`Song.boardPosition`) keeps that key; any other song's key comes
+/// from its most recent CPR activity, the newest first. So a lane reads by
+/// recent work until songs are placed, and a placed song keeps its place
+/// among the others; a placing only ever writes the moved song
+/// (`position(insertingAt:in:)`).
 enum ArchiveBoardProjection {
     static func columns(from songs: [Song], preservingOrder: Bool = false) -> [ArchiveBoardColumn] {
         let statuses: [ProjectWorkflowStatus?] = [nil] + ProjectWorkflowStatus.allCases
@@ -35,17 +42,40 @@ enum ArchiveBoardProjection {
             if preservingOrder {
                 return ArchiveBoardColumn(status: status, songs: matching)
             }
-            // CPR selection walks version/ignore lists. Derive the date once per member
-            // instead of repeating that walk in every comparison, and sort (index, date)
-            // pairs: moving `(Song, Date)` tuples copied and retained every song's arrays.
-            let keyed = matching.enumerated().map { (index: $0.offset, date: ArchiveShelfRanker.latestCPRActivity(for: $0.element) ?? .distantPast) }
+            // CPR selection walks version/ignore lists. Derive the key once per member
+            // instead of repeating that walk in every comparison, and sort (index, key)
+            // pairs: moving `(Song, Double)` tuples copied and retained every song's arrays.
+            let keyed = matching.enumerated().map { (index: $0.offset, key: sortKey(for: $0.element)) }
             let members = keyed
                 .sorted { lhs, rhs in
-                    if lhs.date != rhs.date { return lhs.date > rhs.date }
+                    if lhs.key != rhs.key { return lhs.key < rhs.key }
                     return matching[lhs.index].effectiveDisplayTitle.localizedCaseInsensitiveCompare(matching[rhs.index].effectiveDisplayTitle) == .orderedAscending
                 }
                 .map { matching[$0.index] }
             return ArchiveBoardColumn(status: status, songs: members)
+        }
+    }
+
+    /// A placed song's position, or its newest CPR activity in seconds, negated
+    /// so the newest sorts first. A song without a CPR sorts last.
+    static func sortKey(for song: Song) -> Double {
+        if let position = song.boardPosition { return position }
+        let date = ArchiveShelfRanker.latestCPRActivity(for: song) ?? .distantPast
+        return -date.timeIntervalSinceReferenceDate
+    }
+
+    /// The position that places a song at `index` among `lane` (the lane in
+    /// board order, without the placed song): between its new neighbours'
+    /// keys, one second past the end one at either end.
+    static func position(insertingAt index: Int, in lane: [Song]) -> Double {
+        let index = min(max(index, 0), lane.count)
+        let above = index > 0 ? sortKey(for: lane[index - 1]) : nil
+        let below = index < lane.count ? sortKey(for: lane[index]) : nil
+        switch (above, below) {
+        case let (above?, below?): return (above + below) / 2
+        case let (above?, nil): return above + 1
+        case let (nil, below?): return below - 1
+        case (nil, nil): return -Date().timeIntervalSinceReferenceDate
         }
     }
 }

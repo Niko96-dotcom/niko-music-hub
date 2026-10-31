@@ -63,6 +63,45 @@ final class SQLiteSongUserMetadataStoreTests: XCTestCase {
         XCTAssertEqual(loaded.workflowStatus, .waitingFeedback)
     }
 
+    /// A board place survives a save and a relaunch; a database written by an
+    /// older version gains the column and reads as unplaced.
+    func testBoardPositionRoundTripsAndOlderDatabasesGainTheColumn() throws {
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("song-metadata-board-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: databaseURL) }
+        try executeSQL(
+            """
+            CREATE TABLE song_metadata (
+              song_id TEXT PRIMARY KEY,
+              virtual_title TEXT,
+              aliases_json TEXT NOT NULL DEFAULT '[]',
+              app_note TEXT,
+              preview_selection_mode TEXT NOT NULL DEFAULT 'auto',
+              manual_main_preview_id TEXT,
+              ignored_preview_ids_json TEXT NOT NULL DEFAULT '[]',
+              updated_at TEXT NOT NULL,
+              collaborator_ids_json TEXT NOT NULL DEFAULT '[]',
+              is_ignored INTEGER NOT NULL DEFAULT 0,
+              cpr_selection_mode TEXT NOT NULL DEFAULT 'auto',
+              manual_main_cpr_id TEXT,
+              ignored_cpr_ids_json TEXT NOT NULL DEFAULT '[]',
+              workflow_status TEXT
+            );
+            INSERT INTO song_metadata (song_id, updated_at, workflow_status)
+              VALUES ('/tmp/older', '2026-10-01T00:00:00Z', 'prod');
+            """,
+            databaseURL: databaseURL
+        )
+
+        let store = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        XCTAssertNil(try XCTUnwrap(try store.loadAll()["/tmp/older"]).boardPosition)
+        try store.upsert(SongUserMetadata(songID: "/tmp/placed", workflowStatus: .song, boardPosition: -812_345.25))
+
+        let reopened = try SQLiteSongUserMetadataStore(databaseURL: databaseURL)
+        XCTAssertEqual(try XCTUnwrap(try reopened.loadAll()["/tmp/placed"]).boardPosition, -812_345.25)
+        XCTAssertEqual(try XCTUnwrap(try reopened.loadAll()["/tmp/older"]).workflowStatus, .prod)
+    }
+
     func testStatusHistoryRecordsTransitions() throws {
         let databaseURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("song-metadata-history-\(UUID().uuidString).sqlite")
