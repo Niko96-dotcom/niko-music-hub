@@ -40,6 +40,40 @@ final class SongTitleResolverTests: XCTestCase {
         )
     }
 
+    /// A session folder ("Thursday Stockholm") can hold a song that got its
+    /// name later: a bounce exported into a folder of its own name names it.
+    func testDisplayTitleUsesABounceInItsOwnExportFolderOverASessionFolder() {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/Thursday Stockholm/paper lanterns session bounce 120bpm aminor/paper lanterns session bounce 120bpm aminor.wav"),
+            fileName: "paper lanterns session bounce 120bpm aminor.wav",
+            folderRole: .other,
+            modifiedAt: .distantPast,
+            detectedRole: .mainMix,
+            confidenceScore: 54
+        )
+        XCTAssertEqual(
+            resolver.displayTitle(fromFolderName: "THURSDAY STOCKHOLM", mainPreview: preview),
+            "Paper Lanterns"
+        )
+    }
+
+    /// Only the export folder named after its bounce counts; a bounce in any
+    /// other subfolder leaves the song folder's name.
+    func testDisplayTitleKeepsTheFolderForABounceInAnUnrelatedSubfolder() {
+        let preview = PreviewCandidate(
+            filePath: URL(fileURLWithPath: "/tmp/Thursday Stockholm/old bounces/paper lanterns session bounce.wav"),
+            fileName: "paper lanterns session bounce.wav",
+            folderRole: .other,
+            modifiedAt: .distantPast,
+            detectedRole: .mainMix,
+            confidenceScore: 54
+        )
+        XCTAssertEqual(
+            resolver.displayTitle(fromFolderName: "Thursday Stockholm", mainPreview: preview),
+            "Thursday Stockholm"
+        )
+    }
+
     func testDisplayTitleUsesDeliveryOverFolderAndProjectWorkingNames() {
         let preview = PreviewCandidate(
             filePath: URL(fileURLWithPath: "/tmp/x/GARDEN OF EDEN SESHY BOUNCE.wav"),

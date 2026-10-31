@@ -64,7 +64,7 @@ public struct SongTitleResolver: Sendable {
         }
 
         if let preview = mainPreview,
-           preview.folderRole == .root || preview.folderRole == .mixdown,
+           preview.folderRole == .root || preview.folderRole == .mixdown || Self.sitsInItsOwnExportFolder(preview),
            PreviewFilenameSemantics.isSongPreview(preview),
            isTrustworthyPreviewForTitle(preview),
            let deliveryTitle = PreviewSongIdentity.unstructuredDeliveryTitle(preview.fileName),
@@ -104,6 +104,16 @@ public struct SongTitleResolver: Sendable {
         }
 
         return trimmedFolder
+    }
+
+    /// A bounce exported into a folder of its own name ("Song session bounce/
+    /// Song session bounce.wav") is as deliberate a delivery as one in the
+    /// song's root or Mixdown folder, even when the song folder is named after
+    /// the session ("Thursday Stockholm").
+    static func sitsInItsOwnExportFolder(_ preview: PreviewCandidate) -> Bool {
+        let stem = (preview.fileName as NSString).deletingPathExtension.trimmingCharacters(in: .whitespaces)
+        let folder = preview.filePath.deletingLastPathComponent().lastPathComponent.trimmingCharacters(in: .whitespaces)
+        return !stem.isEmpty && folder.compare(stem, options: .caseInsensitive) == .orderedSame
     }
 
     /// Legacy entry point — folder name only (no preview context).

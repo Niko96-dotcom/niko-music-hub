@@ -10,7 +10,7 @@ public enum PreviewAutoSelectionNormalizer {
     /// the main preview). A snapshot records the version of the scan that wrote it. Bump it whenever
     /// detection, ranking or title resolution changes what a scan produces;
     /// `PreviewSemanticsVersionTests` fails until the version and its recorded digest are updated.
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     /// Each song normalizes independently, so a large catalog runs across all cores. Order is preserved.
     public static func normalized(_ songs: [Song]) -> [Song] {
