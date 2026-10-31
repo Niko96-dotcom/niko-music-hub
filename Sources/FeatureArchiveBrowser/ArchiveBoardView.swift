@@ -235,7 +235,7 @@ struct ArchiveBoardCardView: View {
 
     /// Leading text inset of a row; the lane's hairlines start here too.
     static let rowInset: CGFloat = 10
-    static let rowPadding = EdgeInsets(top: 9, leading: rowInset, bottom: 9, trailing: 4)
+    static let rowPadding = EdgeInsets(top: 4, leading: rowInset, bottom: 4, trailing: 4)
     static let playTarget: CGFloat = 32
 
     var body: some View {
@@ -345,35 +345,18 @@ struct ArchiveBoardCardView: View {
     }
 }
 
-/// What a board row says: the title and the versions line. The row and its
-/// drag image both draw it, so the image you drag is the row you see.
+/// What a board row says: the song's title, nothing else (versions and stems
+/// are on the song's page). The row and its drag image both draw it, so the
+/// image you drag is the row you see.
 struct ArchiveBoardRowText: View {
     let song: Song
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(song.effectiveDisplayTitle)
-                .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
-                .foregroundStyle(HubDesignSystem.Palette.textPrimary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            Text(Self.caption(for: song))
-                .font(HubDesignSystem.Typography.micro())
-                .foregroundStyle(HubDesignSystem.Palette.textTertiary)
-                .lineLimit(1)
-        }
-    }
-
-    static func caption(for song: Song) -> String {
-        var parts: [String] = []
-        let versions = song.visibleProjectVersions.count
-        if versions > 0 {
-            parts.append(CountCopy.count(versions, "version"))
-        }
-        if song.hasStems {
-            parts.append("stems")
-        }
-        return parts.isEmpty ? "No project files" : parts.joined(separator: " · ")
+        Text(song.effectiveDisplayTitle)
+            .font(HubDesignSystem.Typography.bodySmall().weight(.medium))
+            .foregroundStyle(HubDesignSystem.Palette.textPrimary)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
     }
 }
 
