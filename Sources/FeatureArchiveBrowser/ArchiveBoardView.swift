@@ -235,7 +235,7 @@ struct ArchiveBoardCardView: View {
 
     /// Leading text inset of a row; the lane's hairlines start here too.
     static let rowInset: CGFloat = 10
-    static let rowPadding = EdgeInsets(top: 4, leading: rowInset, bottom: 4, trailing: 4)
+    static let rowPadding = EdgeInsets(top: 9, leading: rowInset, bottom: 9, trailing: 4)
     static let playTarget: CGFloat = 32
 
     var body: some View {

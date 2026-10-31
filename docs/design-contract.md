@@ -217,7 +217,7 @@ ChatGPT/Codex sidebar. Sidebar rows and inspector cells use the same treatment.
 
 Board songs are rows, not cards (2026-10-31): the lane is the bounded object.
 A row shows the song's title only (versions and stems are on the song's page),
-40pt tall. A row has no fill or border at rest; the selected row takes the selection pill,
+50pt tall. A row has no fill or border at rest; the selected row takes the selection pill,
 the row under the pointer half of it (the sidebar's hover). A `Palette.separator`
 hairline sits between rows, inset to the text (`ArchiveBoardCardView.rowInset`),
 with none under the last row and none touching the selected row
