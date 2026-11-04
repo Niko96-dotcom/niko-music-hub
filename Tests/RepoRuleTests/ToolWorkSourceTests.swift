@@ -254,6 +254,9 @@ final class ToolWorkSourceTests: XCTestCase {
             ("importRecovery", "the import's file work off the main actor, awaited by the run above"),
             ("launchRecoveredLibrary", "main-actor hop from the open-application callback"),
         ],
+        "Sources/NikoMusicHub/Settings/SettingsView.swift": [
+            ("refreshLaunchAtLogin", "the login item read off the main actor, awaited by the window's .task"),
+        ],
         "Sources/NikoMusicHub/Settings/ProjectVaultSettingsView.swift": [
             ("runRestoreDrill", "known gap: the test restore runs unregistered on its own temp fixture"),
         ],

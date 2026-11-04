@@ -26,6 +26,8 @@ final class HubSettingsSession: ObservableObject {
     private var settingsObserverCancellable: AnyCancellable?
     private var repairObserverCancellable: AnyCancellable?
     private var repairChangeForwarder: AnyCancellable?
+    /// Counts switch flips, so a background read that started before a flip is dropped.
+    private var launchAtLoginChanges = 0
 
     /// Explicit repair for settings that no longer decode (shared with the main window).
     var settingsRepair: SettingsRepairModel { context.settingsRepair }
@@ -162,7 +164,6 @@ final class HubSettingsSession: ObservableObject {
             context.diagnostics.log(.error, "Settings load failed: \(error)")
             settingsRepair.refresh()
         }
-        launchAtLogin = context.launchAtLogin.isEnabled()
         launchAtLoginError = nil
         launchAtLoginNeedsApproval = false
         saveError = nil
@@ -187,11 +188,36 @@ final class HubSettingsSession: ObservableObject {
         }
     }
 
+    /// Reads the login item in the background: the read is a blocking call to a
+    /// system service, and it made the first opening of Settings wait. The switch
+    /// shows the stored state when the read is back, unless the person flipped it
+    /// first.
+    func refreshLaunchAtLogin() async {
+        let controller = context.launchAtLogin
+        let changesBefore = launchAtLoginChanges
+        let enabled = await Task.detached(priority: .userInitiated) { controller.isEnabled() }.value
+        guard launchAtLoginChanges == changesBefore else { return }
+        launchAtLogin = enabled
+    }
+
+    /// The switch's only writer: a background read or a rollback sets
+    /// `launchAtLogin` directly and so never registers or unregisters anything.
+    var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { self.launchAtLogin },
+            set: { self.setLaunchAtLogin($0) }
+        )
+    }
+
     func setLaunchAtLogin(_ enabled: Bool) {
-        // A failed toggle reverts `launchAtLogin` to the real state, which fires
-        // onChange again with that state; bail out so the retry cannot clear the
-        // error just shown (or unregister a login item awaiting user approval).
-        guard enabled != context.launchAtLogin.isEnabled() else { return }
+        launchAtLoginChanges += 1
+        // The switch can still show the state from before the background read;
+        // when macOS already has the asked-for state, only the switch follows
+        // (and a login item awaiting approval is not unregistered).
+        guard enabled != context.launchAtLogin.isEnabled() else {
+            launchAtLogin = enabled
+            return
+        }
         do {
             try context.launchAtLogin.setEnabled(enabled)
             launchAtLogin = context.launchAtLogin.isEnabled()
@@ -282,11 +308,10 @@ struct SettingsView: View {
             SettingsGeneralSection(
                 settingsAvailable: session.settingsLoadError == nil,
                 appearance: session.appearanceBinding,
-                launchAtLogin: $session.launchAtLogin,
+                launchAtLogin: session.launchAtLoginBinding,
                 launchAtLoginError: session.launchAtLoginError,
                 launchAtLoginNeedsApproval: session.launchAtLoginNeedsApproval,
                 showMenuBarExtra: session.showMenuBarExtraBinding,
-                onLaunchAtLoginChange: session.setLaunchAtLogin,
                 onOpenLoginItems: session.openLoginItemsSettings
             )
             SettingsOutputSection(
@@ -425,7 +450,6 @@ private struct SettingsGeneralSection: View {
     let launchAtLoginError: String?
     let launchAtLoginNeedsApproval: Bool
     @Binding var showMenuBarExtra: Bool
-    let onLaunchAtLoginChange: (Bool) -> Void
     let onOpenLoginItems: () -> Void
 
     var body: some View {
@@ -444,9 +468,6 @@ private struct SettingsGeneralSection: View {
                     .toggleStyle(.switch)
                     .tint(HubDesignSystem.Palette.indicator)
                     .labelsHidden()
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        onLaunchAtLoginChange(enabled)
-                    }
             }
             if let launchAtLoginError {
                 SettingsRowDivider()

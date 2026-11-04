@@ -256,9 +256,26 @@ final class SettingsStoreTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(
-            source.contains("guard enabled != context.launchAtLogin.isEnabled() else { return }")
-        )
+        // Only a flip of the switch writes: a rollback or the background read sets the
+        // published state, which would fire an `onChange` writer again and clear the error.
+        XCTAssertTrue(source.contains("launchAtLogin: session.launchAtLoginBinding"))
+        XCTAssertTrue(source.contains("set: { self.setLaunchAtLogin($0) }"))
+        XCTAssertFalse(source.contains("onChange(of: launchAtLogin)"))
+        XCTAssertTrue(source.contains("guard enabled != context.launchAtLogin.isEnabled() else {"))
+    }
+
+    /// The login item read is a blocking call to a system service; it runs in the
+    /// background, so the first opening of Settings does not wait for it.
+    func testSettingsReadsTheLoginItemOffTheMainActor() throws {
+        let session = try String(contentsOfFile: "Sources/NikoMusicHub/Settings/SettingsView.swift", encoding: .utf8)
+        let root = try String(contentsOfFile: "Sources/NikoMusicHub/Settings/HubSettingsRoot.swift", encoding: .utf8)
+
+        XCTAssertTrue(session.contains("await Task.detached(priority: .userInitiated) { controller.isEnabled() }"))
+        XCTAssertTrue(root.contains(".task { await session.refreshLaunchAtLogin() }"))
+        let refresh = session.components(separatedBy: "func refresh() {").dropFirst().first?
+            .components(separatedBy: "func persistSettings").first ?? ""
+        XCTAssertFalse(refresh.isEmpty)
+        XCTAssertFalse(refresh.contains("launchAtLogin.isEnabled()"))
     }
 
     func testSettingsNormalizesRecordingDurationOnLoad() throws {

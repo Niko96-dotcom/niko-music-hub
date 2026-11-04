@@ -5,7 +5,8 @@ public enum LaunchAtLoginError: Error, Equatable, Sendable {
 }
 
 public protocol LaunchAtLoginControlling: Sendable {
-    @MainActor
+    /// Safe off the main actor. The read is a blocking call to a system service,
+    /// so Settings reads it in the background while its window opens.
     func isEnabled() -> Bool
 
     @MainActor
@@ -36,7 +37,6 @@ public enum LaunchAtLoginCopy {
 public struct NoopLaunchAtLoginController: LaunchAtLoginControlling {
     public init() {}
 
-    @MainActor
     public func isEnabled() -> Bool { false }
 
     @MainActor

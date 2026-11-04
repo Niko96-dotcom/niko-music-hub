@@ -4,7 +4,7 @@ import ServiceManagement
 
 @MainActor
 final class SMAppServiceLaunchAtLoginController: LaunchAtLoginControlling {
-    func isEnabled() -> Bool {
+    nonisolated func isEnabled() -> Bool {
         SMAppService.mainApp.status == .enabled
     }
 

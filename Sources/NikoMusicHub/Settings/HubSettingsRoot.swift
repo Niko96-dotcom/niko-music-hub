@@ -53,6 +53,7 @@ struct HubSettingsRoot: View {
             session.refresh()
             consumePendingSettingsPane()
         }
+        .task { await session.refreshLaunchAtLogin() }
         // Pane deep links arrive only through `router.requestSettingsPane` —
         // pending until this window consumes them, so a request made while the
         // window was closed still lands on the right pane.
