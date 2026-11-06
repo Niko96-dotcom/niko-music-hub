@@ -42,6 +42,23 @@ final class ArchiveBoardProjectionTests: XCTestCase {
         XCTAssertEqual(byID[ProjectWorkflowStatus.done.rawValue]?.songs.map(\.id), [finished.id])
     }
 
+    /// A lane that holds only hidden songs looks empty, so it collapses
+    /// until hidden songs show.
+    func testALaneWithOnlyHiddenSongsCollapsesUntilHiddenSongsShow() {
+        var hidden = song("/tmp/hidden", title: "Hidden", status: nil)
+        hidden.isIgnored = true
+        let idea = song("/tmp/idea", title: "Idea", status: .songstarterBeat)
+
+        let collapsed = ArchiveBoardProjection.emptyColumnIDs(in: [hidden, idea], includeHidden: false)
+        XCTAssertTrue(collapsed.contains("no_status"))
+        XCTAssertFalse(collapsed.contains(ProjectWorkflowStatus.songstarterBeat.rawValue))
+        XCTAssertEqual(collapsed.count, ProjectWorkflowStatus.allCases.count)
+
+        let shown = ArchiveBoardProjection.emptyColumnIDs(in: [hidden, idea], includeHidden: true)
+        XCTAssertFalse(shown.contains("no_status"))
+        XCTAssertEqual(shown.count, ProjectWorkflowStatus.allCases.count - 1)
+    }
+
     /// A placed song keeps its place among the others, whose order still
     /// comes from recent work; placing writes only the moved song.
     func testPlacedSongsKeepTheirPlaceAmongSongsOrderedByRecentWork() {

@@ -56,6 +56,16 @@ enum ArchiveBoardProjection {
         }
     }
 
+    /// The lanes that collapse when the owner collapses empty board columns:
+    /// those with no song the board can show. A hidden song counts only while
+    /// hidden songs show. A search or filter collapses nothing, so lanes keep
+    /// their width while the owner types.
+    static func emptyColumnIDs(in songs: [Song], includeHidden: Bool) -> Set<String> {
+        let used = Set(songs.lazy.filter { includeHidden || !$0.isIgnored }.map(\.workflowStatus))
+        let statuses: [ProjectWorkflowStatus?] = [nil] + ProjectWorkflowStatus.allCases
+        return Set(statuses.filter { !used.contains($0) }.map { ArchiveBoardColumn(status: $0, songs: []).id })
+    }
+
     /// A placed song's position, or its newest CPR activity in seconds, negated
     /// so the newest sorts first. A song without a CPR sorts last.
     static func sortKey(for song: Song) -> Double {

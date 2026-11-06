@@ -16,9 +16,9 @@ struct ArchiveBoardLanesView: View {
     @State private var edgeAutoScroller = ArchiveBoardEdgeAutoScroller()
 
     var body: some View {
-        let compactIDs = Set(columns.filter { column in
-            compactEmptyStages && !viewModel.songs.contains { $0.workflowStatus == column.status }
-        }.map(\.id))
+        let compactIDs = compactEmptyStages
+            ? ArchiveBoardProjection.emptyColumnIDs(in: viewModel.songs, includeHidden: viewModel.browse.showHiddenSongs)
+            : []
         let presentation = ArchiveBoardLanesPresentation(
             columns: columns, compactColumnIDs: compactIDs,
             colorScheme: colorScheme, reduceMotion: reduceMotion, layoutDirection: layoutDirection,
