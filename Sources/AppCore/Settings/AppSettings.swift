@@ -72,15 +72,15 @@ public struct VaultSettings: Equatable, Codable, Sendable {
 
         public var label: String {
             switch self {
-            case .keepCopy: "Keep a verified copy"
-            case .freeSpace: "Archive and free up space"
+            case .keepCopy: "Keep on this Mac"
+            case .freeSpace: "Remove from this Mac"
             }
         }
 
         public var description: String {
             switch self {
-            case .keepCopy: "Archiving keeps the Active folder in place."
-            case .freeSpace: "Archiving can remove the Active folder after you confirm."
+            case .keepCopy: "A backup keeps the folder on this Mac."
+            case .freeSpace: "A backup can remove the folder from this Mac after you confirm."
             }
         }
     }

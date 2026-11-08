@@ -26,6 +26,15 @@ public struct ProjectVaultArchiveConfirmation: Equatable, Sendable {
     /// drift fails closed inside the runtime. `songTitle` above stays
     /// display-only; the authorization carries no title.
     public var authorization: ProjectVaultArchiveAuthorization?
+    /// Why a Done backup cannot run now, read from live settings when the
+    /// dialog opens (`ProjectVaultRolloutPolicy.userInitiatedRefusal`). The
+    /// Done dialog then names the reason and offers "Mark Done, Back Up
+    /// Later": the runtime refuses the copy, and the automatic Done copy
+    /// makes it once the reason is gone. Nil when a backup can run.
+    public var backupPausedReason: ProjectVaultRuntimeError?
+    /// The Archive / Vault folder's name, so the Done dialog says where a
+    /// backup goes. Display-only.
+    public var vaultFolderName: String?
 
     public init(
         songID: String,
@@ -33,7 +42,9 @@ public struct ProjectVaultArchiveConfirmation: Equatable, Sendable {
         trigger: ProjectVaultArchiveTrigger,
         willRemoveActiveCopy: Bool,
         independentBackupConfirmed: Bool,
-        authorization: ProjectVaultArchiveAuthorization? = nil
+        authorization: ProjectVaultArchiveAuthorization? = nil,
+        backupPausedReason: ProjectVaultRuntimeError? = nil,
+        vaultFolderName: String? = nil
     ) {
         self.songID = songID
         self.songTitle = songTitle
@@ -41,6 +52,8 @@ public struct ProjectVaultArchiveConfirmation: Equatable, Sendable {
         self.willRemoveActiveCopy = willRemoveActiveCopy
         self.independentBackupConfirmed = independentBackupConfirmed
         self.authorization = authorization
+        self.backupPausedReason = backupPausedReason
+        self.vaultFolderName = vaultFolderName
     }
 }
 
@@ -90,15 +103,19 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         )
     }
 
-    public static let workflowDoneCancelTitle = "Keep Status"
+    public static let workflowDoneCancelTitle = "Cancel"
 
     /// Done storage choices. Done is a creative workflow state independent of
     /// storage: marking Done always commits the status, then handles the
     /// Active folder per choice. Removal is offered only when the bound token
-    /// allows it.
-    public static let workflowDoneFreeSpaceTitle = "Archive and free up space"
-    public static let workflowDoneKeepCopyTitle = "Keep a verified copy"
-    public static let workflowDoneKeepLocalTitle = "Keep on this Mac"
+    /// allows it. The words say what happens to the folder ("back up",
+    /// "remove from Mac"), not how the Vault proves it.
+    public static let workflowDoneFreeSpaceTitle = "Back Up and Remove from Mac"
+    public static let workflowDoneKeepCopyTitle = "Mark Done and Back Up"
+    /// The backup choice while `backupPausedReason` is set: the copy runs
+    /// later, by itself, so the button promises no backup now.
+    public static let workflowDoneBackUpLaterTitle = "Mark Done, Back Up Later"
+    public static let workflowDoneKeepLocalTitle = "Mark Done Without Backup"
 
     public static func workflowDoneConfirmTitle(willRemoveActiveCopy: Bool) -> String {
         willRemoveActiveCopy ? "Archive" : "Archive and Mark Done"
@@ -113,7 +130,7 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         willRemoveActiveCopy: Bool
     ) -> String {
         if willRemoveActiveCopy {
-            return "Moving “\(songTitle)” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes this song’s folder in Active Projects because you chose Archive and free up space and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Restore & Open."
+            return "Moving “\(songTitle)” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes this song’s folder in Active Projects because you chose Remove from this Mac and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Restore & Open."
         }
         return "Moving “\(songTitle)” to Done starts a Project Vault archive. The Active Projects folder stays in place. You can change the workflow status later from the card menu or with Edit → Undo."
     }
@@ -122,18 +139,43 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         willRemoveActiveCopy ? "Move to Done?" : "Move to Done?"
     }
 
-    /// Concise choice message for the three-option Done confirmation. States
-    /// the Done commit plus the storage outcome without implying scheduler
-    /// behavior. Removal wording restates the backup gate; copy/local wording
-    /// states the Active folder stays.
+    /// Choice message for the Done confirmation. States the Done commit, where
+    /// a backup goes, and what happens to the folder on this Mac. Removal
+    /// wording restates the backup gate. While a backup is paused it names the
+    /// reason and says the backup follows by itself, so no choice promises a
+    /// copy that the runtime will refuse.
     public static func workflowDoneChoiceMessage(
         songTitle: String,
-        willRemoveActiveCopy: Bool
+        willRemoveActiveCopy: Bool,
+        vaultFolderName: String? = nil,
+        backupPausedReason: ProjectVaultRuntimeError? = nil
     ) -> String {
-        if willRemoveActiveCopy {
-            return "“\(songTitle)” will be marked Done. Archive and free up space verifies a Vault copy, then permanently deletes the Active folder. Deleted files do not go to the Trash. Settings records an independent backup. Recovery is Restore & Open."
+        let destination = vaultFolderName.map { "the Vault folder “\($0)”" } ?? "the Vault"
+        if let backupPausedReason {
+            return "“\(songTitle)” will be marked Done. Its folder stays on this Mac. \(backupPausedMessage(for: backupPausedReason))"
         }
-        return "“\(songTitle)” will be marked Done and the Active folder stays. You can still keep a verified copy, or keep it on this Mac. Change status later with Edit → Undo."
+        if willRemoveActiveCopy {
+            return "“\(songTitle)” will be marked Done. A backup copies its folder to \(destination) and checks every file. Back Up and Remove from Mac then permanently deletes the folder on this Mac; deleted files do not go to the Trash. Settings records an independent backup. To get the project back, use Restore & Open."
+        }
+        return "“\(songTitle)” will be marked Done. Its folder stays on this Mac. A backup also copies it to \(destination) and checks every file."
+    }
+
+    /// Why the Done dialog offers no backup now, and when it follows: the
+    /// automatic Done copy runs after a snapshot refresh (launch, a scan or a
+    /// watched file change), not on the settings change itself. Only the
+    /// refusals of `ProjectVaultRolloutPolicy.userInitiatedRefusal` for a copy
+    /// reach the dialog.
+    public static func backupPausedMessage(for reason: ProjectVaultRuntimeError) -> String {
+        switch reason {
+        case .emergencyStop:
+            "No backup now: Emergency Stop is on in Settings → Project Vault. After you turn it off, the app backs up this song by itself at its next archive scan."
+        case .disabled:
+            "No backup now: Project Vault is off in Settings. After you turn it on, the app backs up this song by itself at its next archive scan."
+        case .unavailable:
+            "No backup now: choose both Project Vault folders in Settings. After that, the app backs up this song by itself at its next archive scan."
+        default:
+            "No backup now: \(reason.localizedDescription)"
+        }
     }
 
     public static let independentBackupToggleTitle = "I protect the Archive with an independent backup"
@@ -142,7 +184,7 @@ public enum ProjectVaultConfirmationCopy: Sendable {
         "Archive Now can delete the Active Projects folder only when this is on and the other safety checks pass. Turning this on does not delete anything. Niko Music Hub still asks before Archive Now."
 
     public static let vaultEnabledSuccessMessage =
-        "Project Vault is on. New archives keep a verified copy. Archive and free up space removes the Active copy only after you confirm, and only when independent backup is recorded and the other safety checks pass."
+        "Project Vault is on. A backup keeps the folder on this Mac. Remove from this Mac deletes it only after you confirm, and only when independent backup is recorded and the other safety checks pass."
 
     /// Automatic-Done destructive-consent contract (V3). Marking a project
     /// Done without a bound per-operation authorization only ever creates a

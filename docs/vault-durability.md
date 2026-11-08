@@ -17,9 +17,10 @@ missing proof never authorizes deletion.
 
 ## User-visible workflow
 
-- Archiving intent is **Keep a verified copy** or **Archive and free up space**. It replaces the earlier rollout selector in the UI; the legacy value is retained for existing records. Choosing copy-only never gains removal later through a settings change.
+- Archiving intent (Settings → Project Vault → After archiving) is **Keep on this Mac** or **Remove from this Mac**. It replaces the earlier rollout selector in the UI; the legacy value is retained for existing records. Choosing copy-only never gains removal later through a settings change.
 - Nothing archives in the background: there is no timer, inactivity or low-space trigger. The only automatic archiving is the copy-only Done copy: after each archive refresh, a Done song without a Vault transfer, Keep Local or pending identity review gets a verified copy, and its Active folder stays.
-- Song completion offers **Archive and free up space** (only when permitted), **Keep a verified copy**, **Keep on this Mac**, or **Keep Status**, with the same shared manual confirmation on the board and in song detail.
+- Song completion offers **Back Up and Remove from Mac** (only when permitted), **Mark Done and Back Up**, **Mark Done Without Backup** (pins Keep Local), or **Cancel**, with the same shared manual confirmation on the board and in song detail. The message names the Vault folder a backup goes to.
+- When a backup cannot run now (Emergency Stop, Project Vault off, a missing folder: `ProjectVaultRolloutPolicy.userInitiatedRefusal` for a copy), the dialog names the reason and offers **Mark Done, Back Up Later** instead of **Mark Done and Back Up**. The runtime refuses that copy; the automatic Done copy makes it at the first archive refresh after the reason is gone (a settings change alone does not refresh).
 - Delayed retries stay copy-only. A verified archive with persisted recovery evidence can offer **Ready to free space** under a fresh confirmation.
 - Copies, pending transfers, and failures stay on the board. Archive-only songs stay hidden until shown again.
 - Restoring preserves the song's workflow stage and pins Keep Local before any copy or open. **Resume work** explicitly moves the song to the existing **Prod** stage.

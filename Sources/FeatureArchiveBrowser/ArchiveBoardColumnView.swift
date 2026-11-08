@@ -25,8 +25,11 @@ final class ArchiveBoardNativeColumn {
     private let dropLayout = ArchiveBoardDropLayout()
     private var isTargeted = false
 
+    /// A narrow lane stays narrow while a song is dragged over it: widening it
+    /// pushed the next lane (Done after Todo) away under the pointer, so the
+    /// drop landed in the narrow lane. It widens once it holds a song.
     var width: CGFloat {
-        input.compactWhenEmpty && !isTargeted ? ArchiveBoardLaneLayout.compactWidth : ArchiveBoardLaneLayout.expandedWidth
+        input.compactWhenEmpty ? ArchiveBoardLaneLayout.compactWidth : ArchiveBoardLaneLayout.expandedWidth
     }
 
     init(input: ArchiveBoardColumnInput) {
@@ -77,7 +80,6 @@ final class ArchiveBoardNativeColumn {
         guard targeted != isTargeted else { return }
         isTargeted = targeted
         apply(input)
-        input.boardScroll.scrollView?.layoutSubtreeIfNeeded()
     }
 
     private func acceptsDrop(songID: String) -> Bool {
@@ -150,7 +152,7 @@ final class ArchiveBoardNativeColumn {
             column: column, viewModel: input.viewModel,
             selectedSongID: state.selectedSong.flatMap { $0.workflowStatus == column.status ? $0.id : nil },
             vaultPresentations: state.vaultPresentations, vaultActivity: state.vaultActivity,
-            isCompact: input.compactWhenEmpty && !targeted, isDropTargeted: targeted,
+            isCompact: input.compactWhenEmpty, isDropTargeted: targeted,
             colorScheme: input.colorScheme, dropLayout: layout, isBoardVisible: state.isBoardVisible,
             onInteract: { scrolling.onInteract() }, boardScroll: scrolling
         )

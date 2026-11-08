@@ -195,6 +195,14 @@ extension ArchiveBrowserViewModel {
             setProjectVaultStatusMessage(error.localizedDescription)
             return
         }
+        // A copy capture passes Emergency Stop, but the Done copy then refuses
+        // it (`validateAutomaticArchivingEligibility`). The dialog names that
+        // refusal up front instead of offering a backup that cannot run.
+        let backupPausedReason = trigger == .workflowDone
+            ? ProjectVaultRolloutPolicy.userInitiatedRefusal(liveSettings.vault, removing: false)
+            : nil
+        let vaultFolderName = liveSettings.musicRoots
+            .first { $0.id == liveSettings.vault.archiveRootID }?.displayName
         // Bind the dialog title to the live song; the authorization itself
         // carries no title and the runtime revalidates the bound source.
         vaultDialogs.presentConfirmation(
@@ -204,7 +212,9 @@ extension ArchiveBrowserViewModel {
                 trigger: trigger,
                 willRemoveActiveCopy: willRemove,
                 independentBackupConfirmed: liveSettings.vault.independentBackupConfirmed,
-                authorization: authorization
+                authorization: authorization,
+                backupPausedReason: backupPausedReason,
+                vaultFolderName: vaultFolderName
             ),
             generation: generation
         )
@@ -265,7 +275,7 @@ extension ArchiveBrowserViewModel {
         vaultDialogs.cancelCapture()
     }
 
-    /// Done choice: Archive and free up space. Offered only when the bound
+    /// Done choice: Back Up and Remove from Mac. Offered only when the bound
     /// removal token allows it. Commits Done, then queues the exact captured
     /// removal token. Validates pending song/trigger/token and clears
     /// pending/retry state; registers a meaningful Undo.
@@ -285,7 +295,9 @@ extension ArchiveBrowserViewModel {
         archiveInProjectVault(updated, trigger: .workflowDone, authorization: authorization)
     }
 
-    /// Done choice: Keep a verified copy. Commits Done, then queues the same
+    /// Done choice: Mark Done and Back Up (Mark Done, Back Up Later while a
+    /// backup is paused; the runtime then refuses the copy and the automatic
+    /// Done copy makes it later). Commits Done, then queues the same
     /// bound token downgraded to copy-only. Never recaptures removal.
     /// Validates pending song/trigger/token and clears pending/retry state;
     /// registers a meaningful Undo.
@@ -316,7 +328,7 @@ extension ArchiveBrowserViewModel {
         archiveInProjectVault(updated, trigger: .workflowDone, authorization: nil)
     }
 
-    /// Done choice: Keep on this Mac. Commits Done, persists Keep Local, and
+    /// Done choice: Mark Done Without Backup. Commits Done, persists Keep Local, and
     /// queues no transfer. Validates pending song/trigger/token and clears
     /// pending/retry state; registers a meaningful Undo. A Keep Local setting
     /// failure never silently triggers an archive.

@@ -67,7 +67,7 @@ confirmation only; Music Hub does not create or verify that backup for you.
    replacement of your primary library. Nothing launches until you click and
    the import succeeds.
 4. Safest activation, in order: verify Active Projects and Archive / Vault
-   roots are the correct folders; choose Keep a verified copy first if the archiving intent needs changing; only unpause
+   roots are the correct folders; choose Keep on this Mac under After archiving first if the archiving intent needs changing; only unpause
    when ready to resume work. Roots, identities, and Keep Local marks are
    preserved on import, so unchanged same-Mac roots need no repick — verify
    only. Re-point paths and re-grant folder access only when folders moved or

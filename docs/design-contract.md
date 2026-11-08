@@ -230,6 +230,9 @@ The moved row's selection pill fades in with it and out over 0.8 s, so the eye
 finds the song. No flying copy: it read as busy. While a drag is over a lane, a
 2pt `Palette.accent` line between rows, inset to the text, shows where the song
 will land; it moves in 0.12 s and is hidden where the drop would change nothing.
+A narrow (empty, collapsed) lane keeps its width while a drag is over it and
+only tints: widening it moved Done away under the pointer, so a drop meant for
+Done landed in the narrow Todo lane beside it.
 
 ### Archive selection and persistent preview player
 

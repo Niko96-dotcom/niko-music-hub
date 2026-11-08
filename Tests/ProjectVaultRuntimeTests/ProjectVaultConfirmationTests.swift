@@ -95,7 +95,7 @@ final class ProjectVaultConfirmationTests: XCTestCase {
         )
         XCTAssertEqual(
             ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage,
-            "Project Vault is on. New archives keep a verified copy. Archive and free up space removes the Active copy only after you confirm, and only when independent backup is recorded and the other safety checks pass."
+            "Project Vault is on. A backup keeps the folder on this Mac. Remove from this Mac deletes it only after you confirm, and only when independent backup is recorded and the other safety checks pass."
         )
     }
 
@@ -120,9 +120,9 @@ final class ProjectVaultConfirmationTests: XCTestCase {
                 songTitle: "Test Song",
                 willRemoveActiveCopy: true
             ),
-            "Moving “Test Song” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes this song’s folder in Active Projects because you chose Archive and free up space and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Restore & Open."
+            "Moving “Test Song” to Done starts a Project Vault archive. After a verified copy, Niko Music Hub permanently deletes this song’s folder in Active Projects because you chose Remove from this Mac and Settings records an independent backup. Deleted files do not go to the Trash. Recovery is Restore & Open."
         )
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, "Keep Status")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, "Cancel")
         XCTAssertEqual(
             ProjectVaultConfirmationCopy.workflowDoneConfirmTitle(willRemoveActiveCopy: false),
             "Archive and Mark Done"
@@ -135,21 +135,22 @@ final class ProjectVaultConfirmationTests: XCTestCase {
 
     func testDoneCopyExplainsIntentInsteadOfRolloutModes() {
         let removal = ProjectVaultConfirmationCopy.workflowDoneMessage(songTitle: "Test Song", willRemoveActiveCopy: true)
-        XCTAssertTrue(removal.contains("Archive and free up space"))
+        XCTAssertTrue(removal.contains("Remove from this Mac"))
         XCTAssertFalse(removal.contains("friends rollout"))
         XCTAssertFalse(removal.contains("Private beta"))
         XCTAssertEqual(
             ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage.contains("Private beta"),
             false
         )
-        XCTAssertTrue(ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage.contains("keep a verified copy"))
+        XCTAssertTrue(ProjectVaultConfirmationCopy.vaultEnabledSuccessMessage.contains("keeps the folder on this Mac"))
     }
 
     func testWorkflowDoneChoicesExposeStorageWithoutScheduler() {
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneFreeSpaceTitle, "Archive and free up space")
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepCopyTitle, "Keep a verified copy")
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepLocalTitle, "Keep on this Mac")
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, "Keep Status")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneFreeSpaceTitle, "Back Up and Remove from Mac")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepCopyTitle, "Mark Done and Back Up")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneBackUpLaterTitle, "Mark Done, Back Up Later")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepLocalTitle, "Mark Done Without Backup")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, "Cancel")
         XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneChoiceTitle(willRemoveActiveCopy: true), "Move to Done?")
         XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneChoiceTitle(willRemoveActiveCopy: false), "Move to Done?")
         let removal = ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(songTitle: "Test Song", willRemoveActiveCopy: true)
@@ -159,6 +160,33 @@ final class ProjectVaultConfirmationTests: XCTestCase {
         let keep = ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(songTitle: "Test Song", willRemoveActiveCopy: false)
         XCTAssertTrue(keep.contains("marked Done"))
         XCTAssertTrue(keep.contains("stays"))
+    }
+
+    /// The Done message names the folder a backup goes to, and while a backup
+    /// is paused it names the reason and promises no backup now.
+    func testWorkflowDoneMessageNamesTheVaultFolderAndAPausedBackup() {
+        XCTAssertEqual(
+            ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(
+                songTitle: "Test Song", willRemoveActiveCopy: false, vaultFolderName: "01_PROJEKTE"
+            ),
+            "“Test Song” will be marked Done. Its folder stays on this Mac. A backup also copies it to the Vault folder “01_PROJEKTE” and checks every file."
+        )
+        XCTAssertTrue(
+            ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(songTitle: "Test Song", willRemoveActiveCopy: false)
+                .contains("copies it to the Vault and checks")
+        )
+        let paused = ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(
+            songTitle: "Test Song", willRemoveActiveCopy: false, vaultFolderName: "01_PROJEKTE",
+            backupPausedReason: .emergencyStop
+        )
+        XCTAssertEqual(
+            paused,
+            "“Test Song” will be marked Done. Its folder stays on this Mac. No backup now: Emergency Stop is on in Settings → Project Vault. After you turn it off, the app backs up this song by itself at its next archive scan."
+        )
+        XCTAssertFalse(paused.contains("A backup also copies"))
+        for reason in [ProjectVaultRuntimeError.disabled, .unavailable] {
+            XCTAssertTrue(ProjectVaultConfirmationCopy.backupPausedMessage(for: reason).hasPrefix("No backup now: "))
+        }
     }
 
     func testArchiveTriggerCodableMappingIsStable() throws {

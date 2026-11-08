@@ -571,7 +571,7 @@ private struct ProjectVaultSetupSheet: View {
                 .foregroundStyle(.secondary)
             setupRow("1", "Active Projects", settings.vault.activeRootID != nil, .active)
             setupRow("2", "Archive / Vault", settings.vault.archiveRootID != nil, .archive)
-            Label("New archives keep a verified copy. Archive and free up space removes the Active copy only after you confirm.", systemImage: "lock.shield")
+            Label("A backup keeps the folder on this Mac. Remove from this Mac deletes it only after you confirm.", systemImage: "lock.shield")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             HStack {

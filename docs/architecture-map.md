@@ -121,7 +121,7 @@ exceptions with their reasons ([architecture.md § How a tool runs its work](arc
 
 1. A Done drop, the Done command or Archive Now calls `startBoundArchiveCapture`
    (`+ProjectVaultArchive.swift`). It captures a `ProjectVaultArchiveAuthorization` from the runtime
-   **before** `ProjectVaultDoneChoiceSheet` opens; `ArchiveVaultDialogsModel` lets only the current capture present. "Keep a verified copy" downgrades that same token to
+   **before** `ProjectVaultDoneChoiceSheet` opens; `ArchiveVaultDialogsModel` lets only the current capture present. "Mark Done and Back Up" downgrades that same token to
    copy-only.
 2. `ProjectVaultOperationCoordinator.enqueue` runs one operation at a time, rejects duplicates and retries
    a failed Done at most 3 times, copy-only.

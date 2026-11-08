@@ -537,7 +537,7 @@ decision.
   counts everywhere. Matching is never weaker than the ten hand-built key sets it replaced.
 - The runtime gates (capture, Done eligibility, removal admission, the runtime pin flag) and the restore pins pass the
   facts each had before; the archive browser builds one project per song (`ArchiveVaultObservation.keepLocalProject(for:)`)
-  for its card flag, the automatic Done skip, and the Keep Local toggle and "Keep on this Mac" writes.
+  for its card flag, the automatic Done skip, and the Keep Local toggle and "Mark Done Without Backup" writes.
 - `KeepLocalPins` values are built once per presentation-context refresh or snapshot read. An ID-only check, or a set
   without path keys, does no filesystem work, so the card for a song without a snapshot stays cheap.
 - The Review Keep Local sheet's "N projects are currently pinned" counts stored keys, not projects; old keys cannot be

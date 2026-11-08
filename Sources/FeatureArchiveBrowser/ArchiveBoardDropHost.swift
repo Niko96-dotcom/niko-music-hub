@@ -53,7 +53,7 @@ struct ArchiveBoardDropHost<Content: View>: NSViewRepresentable {
         view.targeted = targeted
         view.land = land
         view.refreshedContent = refreshedContent
-        boardScroll?.register(view, columnID: renderKey.column.id, isDropTargeted: renderKey.isTargeted)
+        boardScroll?.register(view, columnID: renderKey.column.id)
     }
 }
 

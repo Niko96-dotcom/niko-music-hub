@@ -90,8 +90,8 @@ enum ArchiveBoardLaneLayout {
     /// Width of a row in an expanded lane, which the drag image matches.
     static let rowWidth = expandedWidth - 2 * padding
 
-    static func documentWidth(columnIDs: [String], compactIDs: Set<String>, expandedIDs: Set<String>) -> CGFloat {
-        columnIDs.reduce(0) { $0 + (compactIDs.contains($1) && !expandedIDs.contains($1) ? compactWidth : expandedWidth) }
+    static func documentWidth(columnIDs: [String], compactIDs: Set<String>) -> CGFloat {
+        columnIDs.reduce(0) { $0 + (compactIDs.contains($1) ? compactWidth : expandedWidth) }
             + CGFloat(max(0, columnIDs.count - 1)) * spacing
     }
 }

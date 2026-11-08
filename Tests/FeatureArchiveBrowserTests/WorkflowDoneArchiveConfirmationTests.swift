@@ -248,6 +248,40 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
+    /// Emergency Stop lets a copy capture through, but the Done copy then
+    /// refuses it. The dialog names the pause instead of offering a backup
+    /// now; Mark Done, Back Up Later marks Done and writes no Vault copy.
+    func testDoneWhileEmergencyStopIsOnNamesThePausedBackup() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        let viewModel = fixture.viewModel(runtime: try fixture.runtime())
+        await viewModel.scan()
+        let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
+
+        viewModel.requestWorkflowDoneArchive(for: song)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let open = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
+        XCTAssertNil(open.backupPausedReason)
+        XCTAssertEqual(open.vaultFolderName, fixture.archive.lastPathComponent)
+        viewModel.cancelPendingArchive()
+
+        try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+        viewModel.requestWorkflowDoneArchive(for: song)
+        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
+        let paused = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
+        XCTAssertEqual(paused.backupPausedReason, .emergencyStop)
+        XCTAssertFalse(paused.willRemoveActiveCopy)
+
+        viewModel.confirmWorkflowDoneKeepCopy()
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
+        XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
+        try await waitUntil { viewModel.statusMessage?.contains("Emergency Stop") == true }
+        try await waitUntil { viewModel.projectVaultBusySongIDs.isEmpty }
+        let current = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        XCTAssertNil(viewModel.projectVaultSnapshot(for: current)?.transfer)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
+    }
+
     func testWorkflowDoneFreeSpaceQueuesRemovalToken() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
@@ -338,7 +372,7 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         viewModel.confirmWorkflowDoneKeepLocal()
         XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(viewModel.songs.first(where: { $0.id == song.id })?.workflowStatus, .done)
-        // No transfer queued for Keep on this Mac.
+        // No transfer queued for Mark Done Without Backup.
         for _ in 0..<20 { await Task.yield() }
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertTrue(runtime.authCalls.isEmpty)
@@ -352,10 +386,11 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
     }
 
     func testWorkflowDoneChoiceCopyIsConciseAndKeepsCancel() {
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, "Keep Status")
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneFreeSpaceTitle, "Archive and free up space")
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepCopyTitle, "Keep a verified copy")
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepLocalTitle, "Keep on this Mac")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, "Cancel")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneFreeSpaceTitle, "Back Up and Remove from Mac")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepCopyTitle, "Mark Done and Back Up")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneBackUpLaterTitle, "Mark Done, Back Up Later")
+        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepLocalTitle, "Mark Done Without Backup")
         let removal = ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(songTitle: "Test Song", willRemoveActiveCopy: true)
         XCTAssertTrue(removal.contains("marked Done"))
         XCTAssertTrue(removal.contains("permanently deletes"))

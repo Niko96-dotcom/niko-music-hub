@@ -196,26 +196,21 @@ final class ArchiveBoardScrollController {
     private var horizontalGesture = false
     private var columnIDs: [String] = []
     private var compactIDs: Set<String> = []
-    private var expandedIDs: Set<String> = []
 
     var viewportWidth: CGFloat { scrollView?.contentView.bounds.width ?? 0 }
 
-    func register(_ view: NSView, columnID: String, isDropTargeted: Bool = false) {
+    func register(_ view: NSView, columnID: String) {
         columns.setObject(view, forKey: columnID as NSString)
-        if isDropTargeted { expandedIDs.insert(columnID) }
-        else { expandedIDs.remove(columnID) }
-        updateDocumentWidth()
     }
 
     func configureDocument(columnIDs: [String], compactIDs: Set<String>) {
         self.columnIDs = columnIDs
         self.compactIDs = compactIDs
-        expandedIDs.formIntersection(columnIDs)
         updateDocumentWidth()
     }
 
     private func updateDocumentWidth() {
-        let width = ArchiveBoardLaneLayout.documentWidth(columnIDs: columnIDs, compactIDs: compactIDs, expandedIDs: expandedIDs)
+        let width = ArchiveBoardLaneLayout.documentWidth(columnIDs: columnIDs, compactIDs: compactIDs)
         (scrollView as? any ArchiveBoardDocumentSizing)?.setDocumentWidth(width)
     }
 

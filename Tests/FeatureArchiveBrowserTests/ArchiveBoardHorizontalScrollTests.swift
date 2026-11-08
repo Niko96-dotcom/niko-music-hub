@@ -100,7 +100,10 @@ final class ArchiveBoardHorizontalScrollTests: XCTestCase {
         XCTAssertEqual(document.frame.height, fixture.scroll.contentView.bounds.height, accuracy: 1)
     }
 
-    func testCompactDropExpansionAndResizeUpdateNativeExtent() throws {
+    /// A narrow lane keeps its width while a drag is over it, so the lanes
+    /// after it stay under the pointer (a drop meant for Done once landed in
+    /// the widened Todo lane beside it). Resizing still updates the extent.
+    func testCompactLaneKeepsItsWidthUnderADragAndResizeUpdatesNativeExtent() throws {
         let fixture = makeFixture()
         defer { fixture.window.close() }
         let emptyIDs = Set(fixture.columns.dropFirst().map(\.id))
@@ -110,10 +113,13 @@ final class ArchiveBoardHorizontalScrollTests: XCTestCase {
         let document = try XCTUnwrap(fixture.scroll.documentView)
         XCTAssertEqual(document.frame.width, 682, accuracy: 1)
         let lane = try XCTUnwrap(document.subviews[1] as? ArchiveBoardDropHostingView<ArchiveBoardColumnContent>)
+        let next = try XCTUnwrap(document.subviews[2] as? ArchiveBoardDropHostingView<ArchiveBoardColumnContent>)
+        let nextOrigin = next.frame.minX
         lane.targeted(true)
         fixture.scroll.layoutSubtreeIfNeeded()
-        XCTAssertEqual(document.frame.width, 846, accuracy: 1)
-        XCTAssertEqual(lane.frame.width, 220, accuracy: 1)
+        XCTAssertEqual(document.frame.width, 682, accuracy: 1)
+        XCTAssertEqual(lane.frame.width, 56, accuracy: 1)
+        XCTAssertEqual(next.frame.minX, nextOrigin, accuracy: 0.5)
         lane.targeted(false)
         fixture.scroll.layoutSubtreeIfNeeded()
         XCTAssertEqual(document.frame.width, 682, accuracy: 1)
