@@ -501,22 +501,22 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
             $0.originalFolderName == fixture.project.lastPathComponent
         })
 
+        // A Done on a Keep Local song marks Done and queues no copy.
         viewModel.setProjectKeepLocal(true, for: song)
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
-        // The removal capture is refused for Keep Local, so the dialog agrees
-        // a copy-only token instead of presenting a stale removal approval.
-        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
-        XCTAssertEqual(pending.trigger, .workflowDone)
-        XCTAssertEqual(try XCTUnwrap(pending.authorization).maximumDestructiveness, .copyOnly)
-        XCTAssertFalse(pending.willRemoveActiveCopy)
+        try await waitUntil { viewModel.songs.first { $0.id == song.id }?.workflowStatus == .done }
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
+        XCTAssertEqual(viewModel.statusMessage, ProjectVaultConfirmationCopy.doneKeepLocalMessage)
+        XCTAssertTrue(viewModel.projectVaultQueueFailures.isEmpty)
 
-        viewModel.confirmPendingArchive()
+        // An explicit execution still rejects with the actionable Keep Local
+        // error; runtime admission is not weakened by the skip.
+        let doneSong = try XCTUnwrap(viewModel.songs.first { $0.id == song.id })
+        viewModel.archiveInProjectVault(doneSong, trigger: .workflowDone)
         try await waitUntil {
             viewModel.projectVaultBusySongIDs.isEmpty && viewModel.projectVaultActiveOperation == nil
+                && viewModel.statusMessage != ProjectVaultConfirmationCopy.doneKeepLocalMessage
         }
-        // Explicit execution still rejects with the actionable Keep Local
-        // error; runtime admission is not weakened by the automatic skip.
         XCTAssertTrue(viewModel.statusMessage?.contains("Keep Local") == true)
         XCTAssertEqual(viewModel.projectVaultQueueFailures, [song.effectiveDisplayTitle])
         XCTAssertNil(viewModel.projectVaultRetryTasks[song.id])

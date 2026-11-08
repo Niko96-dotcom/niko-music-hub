@@ -148,7 +148,6 @@ final class ProjectVaultConfirmationTests: XCTestCase {
     func testWorkflowDoneChoicesExposeStorageWithoutScheduler() {
         XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneFreeSpaceTitle, "Back Up and Remove from Mac")
         XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepCopyTitle, "Mark Done and Back Up")
-        XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneBackUpLaterTitle, "Mark Done, Back Up Later")
         XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneKeepLocalTitle, "Mark Done Without Backup")
         XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneCancelTitle, "Cancel")
         XCTAssertEqual(ProjectVaultConfirmationCopy.workflowDoneChoiceTitle(willRemoveActiveCopy: true), "Move to Done?")
@@ -162,8 +161,8 @@ final class ProjectVaultConfirmationTests: XCTestCase {
         XCTAssertTrue(keep.contains("stays"))
     }
 
-    /// The Done message names the folder a backup goes to, and while a backup
-    /// is paused it names the reason and promises no backup now.
+    /// The Done message names the folder a backup goes to. A Done whose copy
+    /// the settings refuse says so in the footer, and when the backup follows.
     func testWorkflowDoneMessageNamesTheVaultFolderAndAPausedBackup() {
         XCTAssertEqual(
             ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(
@@ -172,18 +171,13 @@ final class ProjectVaultConfirmationTests: XCTestCase {
             "“Test Song” will be marked Done. Its folder stays on this Mac. A backup also copies it to the Vault folder “01_PROJEKTE” and checks every file."
         )
         XCTAssertTrue(
-            ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(songTitle: "Test Song", willRemoveActiveCopy: false)
-                .contains("copies it to the Vault and checks")
-        )
-        let paused = ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(
-            songTitle: "Test Song", willRemoveActiveCopy: false, vaultFolderName: "01_PROJEKTE",
-            backupPausedReason: .emergencyStop
+            ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(songTitle: "Test Song", willRemoveActiveCopy: true)
+                .contains("copies its folder to the Vault and checks")
         )
         XCTAssertEqual(
-            paused,
-            "“Test Song” will be marked Done. Its folder stays on this Mac. No backup now: Emergency Stop is on in Settings → Project Vault. After you turn it off, the app backs up this song by itself at its next archive scan."
+            ProjectVaultConfirmationCopy.backupPausedMessage(for: .emergencyStop),
+            "No backup now: Emergency Stop is on in Settings → Project Vault. After you turn it off, the app backs up this song by itself at its next archive scan."
         )
-        XCTAssertFalse(paused.contains("A backup also copies"))
         for reason in [ProjectVaultRuntimeError.disabled, .unavailable] {
             XCTAssertTrue(ProjectVaultConfirmationCopy.backupPausedMessage(for: reason).hasPrefix("No backup now: "))
         }

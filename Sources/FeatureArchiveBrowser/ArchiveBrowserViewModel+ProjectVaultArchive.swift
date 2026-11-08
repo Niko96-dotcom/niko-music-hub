@@ -195,12 +195,20 @@ extension ArchiveBrowserViewModel {
             setProjectVaultStatusMessage(error.localizedDescription)
             return
         }
+        // Done backs up without asking. Only a removal opens the dialog: it
+        // deletes the folder on this Mac, so it keeps its explicit choice.
         // A copy capture passes Emergency Stop, but the Done copy then refuses
-        // it (`validateAutomaticArchivingEligibility`). The dialog names that
-        // refusal up front instead of offering a backup that cannot run.
-        let backupPausedReason = trigger == .workflowDone
-            ? ProjectVaultRolloutPolicy.userInitiatedRefusal(liveSettings.vault, removing: false)
-            : nil
+        // it (`validateAutomaticArchivingEligibility`), so that refusal is read
+        // here and named instead of queuing a copy that cannot run.
+        if trigger == .workflowDone, !willRemove {
+            vaultDialogs.endCurrentCapture(songID: songID, generation: generation)
+            markDoneAndBackUp(
+                live,
+                authorization: authorization,
+                backupPausedReason: ProjectVaultRolloutPolicy.userInitiatedRefusal(liveSettings.vault, removing: false)
+            )
+            return
+        }
         let vaultFolderName = liveSettings.musicRoots
             .first { $0.id == liveSettings.vault.archiveRootID }?.displayName
         // Bind the dialog title to the live song; the authorization itself
@@ -213,7 +221,6 @@ extension ArchiveBrowserViewModel {
                 willRemoveActiveCopy: willRemove,
                 independentBackupConfirmed: liveSettings.vault.independentBackupConfirmed,
                 authorization: authorization,
-                backupPausedReason: backupPausedReason,
                 vaultFolderName: vaultFolderName
             ),
             generation: generation
@@ -295,12 +302,10 @@ extension ArchiveBrowserViewModel {
         archiveInProjectVault(updated, trigger: .workflowDone, authorization: authorization)
     }
 
-    /// Done choice: Mark Done and Back Up (Mark Done, Back Up Later while a
-    /// backup is paused; the runtime then refuses the copy and the automatic
-    /// Done copy makes it later). Commits Done, then queues the same
-    /// bound token downgraded to copy-only. Never recaptures removal.
-    /// Validates pending song/trigger/token and clears pending/retry state;
-    /// registers a meaningful Undo.
+    /// Done choice: Mark Done and Back Up, in the dialog that also offers a
+    /// removal. Queues the same bound token downgraded to copy-only. Never
+    /// recaptures removal. Validates pending song/trigger/token and clears
+    /// pending/retry state; registers a meaningful Undo.
     func confirmWorkflowDoneKeepCopy() {
         guard let pending = vaultDialogs.pendingArchiveConfirmation,
               pending.trigger == .workflowDone,
@@ -309,12 +314,8 @@ extension ArchiveBrowserViewModel {
             guard authorization.songID == song.id,
                   authorization.trigger == pending.trigger,
                   pending.willRemoveActiveCopy == authorization.permitsRemoval else { return }
-            let copyAuthorization = authorization.downgradedToCopyOnly()
             vaultDialogs.closeConfirmation()
-            vaultOperations.cancelPendingRetry(for: song.id)
-            guard commitWorkflowDoneForConfirmation(song) else { return }
-            let updated = songs.first(where: { $0.id == song.id }) ?? song
-            archiveInProjectVault(updated, trigger: .workflowDone, authorization: copyAuthorization)
+            markDoneAndBackUp(song, authorization: authorization.downgradedToCopyOnly())
             return
         }
         // No bound token (copy-only path): still commit Done and queue a
@@ -322,10 +323,31 @@ extension ArchiveBrowserViewModel {
         // never proceeds.
         guard !pending.willRemoveActiveCopy else { return }
         vaultDialogs.closeConfirmation()
+        markDoneAndBackUp(song, authorization: nil)
+    }
+
+    /// Marks Done (with Undo) and queues a copy-only backup; the folder stays
+    /// on this Mac. A Done drop without a removal choice comes here at once.
+    /// While the settings refuse a copy, or Keep Local pins the song, it only
+    /// marks Done and says why; the automatic Done copy makes the backup once
+    /// the refusal ends.
+    private func markDoneAndBackUp(
+        _ song: Song,
+        authorization: ProjectVaultArchiveAuthorization?,
+        backupPausedReason: ProjectVaultRuntimeError? = nil
+    ) {
         vaultOperations.cancelPendingRetry(for: song.id)
         guard commitWorkflowDoneForConfirmation(song) else { return }
+        if let backupPausedReason {
+            setProjectVaultStatusMessage("Marked Done. \(ProjectVaultConfirmationCopy.backupPausedMessage(for: backupPausedReason))")
+            return
+        }
+        if vaultObservation.isIntentionalKeepLocalSkip(for: song) {
+            setProjectVaultStatusMessage(ProjectVaultConfirmationCopy.doneKeepLocalMessage)
+            return
+        }
         let updated = songs.first(where: { $0.id == song.id }) ?? song
-        archiveInProjectVault(updated, trigger: .workflowDone, authorization: nil)
+        archiveInProjectVault(updated, trigger: .workflowDone, authorization: authorization)
     }
 
     /// Done choice: Mark Done Without Backup. Commits Done, persists Keep Local, and

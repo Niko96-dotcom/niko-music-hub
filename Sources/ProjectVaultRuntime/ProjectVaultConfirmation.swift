@@ -26,12 +26,6 @@ public struct ProjectVaultArchiveConfirmation: Equatable, Sendable {
     /// drift fails closed inside the runtime. `songTitle` above stays
     /// display-only; the authorization carries no title.
     public var authorization: ProjectVaultArchiveAuthorization?
-    /// Why a Done backup cannot run now, read from live settings when the
-    /// dialog opens (`ProjectVaultRolloutPolicy.userInitiatedRefusal`). The
-    /// Done dialog then names the reason and offers "Mark Done, Back Up
-    /// Later": the runtime refuses the copy, and the automatic Done copy
-    /// makes it once the reason is gone. Nil when a backup can run.
-    public var backupPausedReason: ProjectVaultRuntimeError?
     /// The Archive / Vault folder's name, so the Done dialog says where a
     /// backup goes. Display-only.
     public var vaultFolderName: String?
@@ -43,7 +37,6 @@ public struct ProjectVaultArchiveConfirmation: Equatable, Sendable {
         willRemoveActiveCopy: Bool,
         independentBackupConfirmed: Bool,
         authorization: ProjectVaultArchiveAuthorization? = nil,
-        backupPausedReason: ProjectVaultRuntimeError? = nil,
         vaultFolderName: String? = nil
     ) {
         self.songID = songID
@@ -52,7 +45,6 @@ public struct ProjectVaultArchiveConfirmation: Equatable, Sendable {
         self.willRemoveActiveCopy = willRemoveActiveCopy
         self.independentBackupConfirmed = independentBackupConfirmed
         self.authorization = authorization
-        self.backupPausedReason = backupPausedReason
         self.vaultFolderName = vaultFolderName
     }
 }
@@ -105,17 +97,17 @@ public enum ProjectVaultConfirmationCopy: Sendable {
 
     public static let workflowDoneCancelTitle = "Cancel"
 
-    /// Done storage choices. Done is a creative workflow state independent of
-    /// storage: marking Done always commits the status, then handles the
-    /// Active folder per choice. Removal is offered only when the bound token
-    /// allows it. The words say what happens to the folder ("back up",
-    /// "remove from Mac"), not how the Vault proves it.
+    /// Done storage choices, shown only when the bound token allows a removal:
+    /// any other Done marks Done and backs up at once. Done is a creative
+    /// workflow state independent of storage: marking Done always commits the
+    /// status, then handles the folder per choice. The words say what happens
+    /// to the folder ("back up", "remove from Mac"), not how the Vault proves it.
     public static let workflowDoneFreeSpaceTitle = "Back Up and Remove from Mac"
     public static let workflowDoneKeepCopyTitle = "Mark Done and Back Up"
-    /// The backup choice while `backupPausedReason` is set: the copy runs
-    /// later, by itself, so the button promises no backup now.
-    public static let workflowDoneBackUpLaterTitle = "Mark Done, Back Up Later"
     public static let workflowDoneKeepLocalTitle = "Mark Done Without Backup"
+
+    /// Footer line for a Done whose song Keep Local pins: no backup runs.
+    public static let doneKeepLocalMessage = "Marked Done. Keep Local is on for this song, so it gets no backup."
 
     public static func workflowDoneConfirmTitle(willRemoveActiveCopy: Bool) -> String {
         willRemoveActiveCopy ? "Archive" : "Archive and Mark Done"
@@ -141,30 +133,24 @@ public enum ProjectVaultConfirmationCopy: Sendable {
 
     /// Choice message for the Done confirmation. States the Done commit, where
     /// a backup goes, and what happens to the folder on this Mac. Removal
-    /// wording restates the backup gate. While a backup is paused it names the
-    /// reason and says the backup follows by itself, so no choice promises a
-    /// copy that the runtime will refuse.
+    /// wording restates the backup gate.
     public static func workflowDoneChoiceMessage(
         songTitle: String,
         willRemoveActiveCopy: Bool,
-        vaultFolderName: String? = nil,
-        backupPausedReason: ProjectVaultRuntimeError? = nil
+        vaultFolderName: String? = nil
     ) -> String {
         let destination = vaultFolderName.map { "the Vault folder “\($0)”" } ?? "the Vault"
-        if let backupPausedReason {
-            return "“\(songTitle)” will be marked Done. Its folder stays on this Mac. \(backupPausedMessage(for: backupPausedReason))"
-        }
         if willRemoveActiveCopy {
             return "“\(songTitle)” will be marked Done. A backup copies its folder to \(destination) and checks every file. Back Up and Remove from Mac then permanently deletes the folder on this Mac; deleted files do not go to the Trash. Settings records an independent backup. To get the project back, use Restore & Open."
         }
         return "“\(songTitle)” will be marked Done. Its folder stays on this Mac. A backup also copies it to \(destination) and checks every file."
     }
 
-    /// Why the Done dialog offers no backup now, and when it follows: the
+    /// Why a Done made no backup now, and when it follows: the
     /// automatic Done copy runs after a snapshot refresh (launch, a scan or a
     /// watched file change), not on the settings change itself. Only the
     /// refusals of `ProjectVaultRolloutPolicy.userInitiatedRefusal` for a copy
-    /// reach the dialog.
+    /// reach it.
     public static func backupPausedMessage(for reason: ProjectVaultRuntimeError) -> String {
         switch reason {
         case .emergencyStop:

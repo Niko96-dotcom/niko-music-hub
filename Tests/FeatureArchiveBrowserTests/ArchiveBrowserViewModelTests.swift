@@ -1714,7 +1714,10 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
         try store.updateSettings { settings in
             settings.musicRoots = [activeRoot, archiveRoot]
-            settings.vault = VaultSettings(isEnabled: true, activeRootID: activeRoot.id, archiveRootID: archiveRoot.id)
+            settings.vault = VaultSettings(
+                isEnabled: true, activeRootID: activeRoot.id, archiveRootID: archiveRoot.id,
+                rolloutStage: .privateBeta
+            )
         }
         let viewModel = ArchiveBrowserViewModel(
             context: TestToolContext.make(settingsStore: store),
@@ -1729,12 +1732,8 @@ final class ArchiveBrowserViewModelTests: XCTestCase {
         )
         viewModel.applyCatalogEdit(.load([song]))
 
+        // Done without a removal choice backs up at once, without a dialog.
         viewModel.updateWorkflowStatus(for: song, status: .done)
-        for _ in 0..<100 where viewModel.vaultDialogs.pendingArchiveConfirmation == nil {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertNotNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
-        viewModel.confirmPendingArchive()
 
         var archivedSong: Song?
         for _ in 0..<100 {

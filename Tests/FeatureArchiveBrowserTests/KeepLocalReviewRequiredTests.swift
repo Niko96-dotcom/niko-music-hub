@@ -65,13 +65,15 @@ final class KeepLocalReviewRequiredTests: XCTestCase {
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
+        // No removal while review is required, so Done opens no dialog: it
+        // marks Done and backs up, and the folder stays.
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
-
-        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
-        XCTAssertEqual(pending.trigger, .workflowDone)
-        XCTAssertFalse(pending.willRemoveActiveCopy, "no free-space removal while review is required")
-        viewModel.cancelPendingArchive()
+        try await waitUntil {
+            viewModel.songs.first { $0.id == song.id }?.workflowStatus == .done
+                && viewModel.projectVaultBusySongIDs.isEmpty
+        }
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation, "no free-space removal while review is required")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
     func testRemovalPromptReturnsAfterReviewCleared() async throws {

@@ -293,37 +293,38 @@ final class BoundArchiveAuthorizationTests: XCTestCase {
 
     // MARK: - Settings escalation after dialog retains copy-only
 
-    func testSettingsEscalationAfterDialogRetainsCopyOnly() async throws {
+    func testSettingsEscalationAfterCaptureRetainsCopyOnly() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
         try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
         let runtime = DeterministicBoundVaultRuntime()
+        let store = fixture.settingsStore
+        // Escalate between the capture and the queued execution: the queued
+        // backup must still use the exact copy-only token, never a removal.
+        runtime.captureImpl = { song, trigger, removing, catalog in
+            try store.updateSettings {
+                $0.vault.setSpaceIntent(.freeSpace)
+                $0.vault.independentBackupConfirmed = true
+            }
+            return DeterministicBoundVaultRuntime.makeAuthorization(
+                for: song, trigger: trigger, removing: removing, catalog: catalog
+            )
+        }
         let viewModel = fixture.viewModel(runtime: runtime)
         await viewModel.scan()
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
 
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
-        let pending = try XCTUnwrap(viewModel.vaultDialogs.pendingArchiveConfirmation)
-        XCTAssertEqual(pending.willRemoveActiveCopy, false)
-        let captured = try XCTUnwrap(pending.authorization)
-        XCTAssertEqual(captured.maximumDestructiveness, .copyOnly)
-        XCTAssertEqual(runtime.captureCalls.first?.removing, false)
-
-        // Escalate after the dialog: the queued execution must still use the
-        // exact copy-only token and never escalate to removal.
-        try fixture.settingsStore.updateSettings {
-            $0.vault.setSpaceIntent(.freeSpace)
-            $0.vault.independentBackupConfirmed = true
+        try await waitUntil(timeout: .seconds(5)) {
+            runtime.authCalls.count >= 1 && viewModel.projectVaultBusySongIDs.isEmpty
         }
-        viewModel.confirmPendingArchive()
-        try await waitUntil(timeout: .seconds(5)) { runtime.authCalls.count >= 1 }
-        XCTAssertEqual(runtime.authCalls.count, 1)
-        XCTAssertEqual(runtime.authCalls.first?.auth, captured)
-        XCTAssertEqual(runtime.authCalls.first?.auth.maximumDestructiveness, .copyOnly)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(runtime.captureCalls.count, 1)
+        XCTAssertEqual(runtime.captureCalls.first?.removing, false)
+        XCTAssertEqual(runtime.authCalls.count, 1)
+        XCTAssertEqual(runtime.authCalls.first?.auth.maximumDestructiveness, .copyOnly)
         XCTAssertTrue(runtime.copyCalls.isEmpty)
-        try await waitUntil(timeout: .seconds(5)) { viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
     // MARK: - Queued Done revoked by Undo never executes while slot held

@@ -553,7 +553,7 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         XCTAssertTrue(status.contains("Nothing was archived"))
     }
 
-    func testExplicitWorkflowDoneResolutionPresentsFreshDoneConfirmation() async throws {
+    func testExplicitWorkflowDoneResolutionCapturesAFreshTokenAndBacksUp() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
         try fixture.settingsStore.updateSettings { $0.vault.setSpaceIntent(.keepCopy) }
@@ -566,39 +566,28 @@ final class ProjectIdentityReviewViewModelTests: XCTestCase {
         let song = try XCTUnwrap(viewModel.songs.first { $0.originalFolderName == fixture.project.lastPathComponent })
         XCTAssertNotEqual(song.workflowStatus, .done)
 
+        // Done without a removal choice backs up at once; the backup stops at
+        // the identity question.
         viewModel.requestWorkflowDoneArchive(for: song)
-        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
-        XCTAssertEqual(viewModel.vaultDialogs.pendingArchiveConfirmation?.trigger, .workflowDone)
-
-        viewModel.confirmPendingArchive()
-        XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
         try await waitUntil {
             viewModel.vaultDialogs.identityReviewPresentation != nil && viewModel.projectVaultBusySongIDs.isEmpty
         }
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         let presentation = try XCTUnwrap(viewModel.vaultDialogs.identityReviewPresentation)
         XCTAssertEqual(presentation.trigger, .workflowDone)
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
-
-        viewModel.resolvePresentedIdentityReview(as: .link)
-        try await waitUntil { viewModel.vaultDialogs.pendingArchiveConfirmation != nil }
-
-        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
-        let confirmation = try XCTUnwrap(
-            viewModel.vaultDialogs.pendingArchiveConfirmation,
-            "explicit Done flow requires fresh Done confirmation after identity resolution"
-        )
-        _ = try XCTUnwrap(confirmation.authorization, "V3 fresh Done confirmation must carry its captured token")
-        XCTAssertEqual(confirmation.trigger, .workflowDone)
-        XCTAssertEqual(confirmation.songID, song.id)
         XCTAssertTrue(try fixture.transferStore().allTransferRecords().isEmpty)
-        XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
 
-        viewModel.confirmPendingArchive()
+        // Resolving it captures a fresh token and backs up without asking again.
+        viewModel.resolvePresentedIdentityReview(as: .link)
         try await waitUntil {
-            viewModel.vaultDialogs.pendingArchiveConfirmation == nil && viewModel.projectVaultBusySongIDs.isEmpty
+            viewModel.projectVaultBusySongIDs.isEmpty
+                && (try? fixture.transferStore().allTransferRecords().isEmpty) == false
         }
+        XCTAssertNil(viewModel.vaultDialogs.identityReviewPresentation)
+        XCTAssertNil(viewModel.vaultDialogs.pendingArchiveConfirmation)
         XCTAssertEqual(viewModel.songs.first { $0.id == song.id }?.workflowStatus, .done)
-        XCTAssertFalse(try fixture.transferStore().allTransferRecords().isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
     func testResolvePersistenceFailureStaysVisibleAndQueuesNothing() async throws {

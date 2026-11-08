@@ -3,7 +3,8 @@ import ProjectVaultRuntime
 import SwiftUI
 
 /// Unified archive confirmation sheet (single presenter for board + detail).
-/// Done shows its storage choices plus Cancel; manual Archive Now shows
+/// Done shows its storage choices plus Cancel, and only when a removal is
+/// allowed (any other Done backs up without asking); manual Archive Now shows
 /// the bound-token confirm plus Keep in Active. Every action consumes the
 /// exact captured token; Return/Escape settle on the safe choice. Hub-only
 /// styling: no system blue, safe choice carries the default key.
@@ -106,8 +107,7 @@ struct ProjectVaultDoneChoiceSheet: View {
             ProjectVaultConfirmationCopy.workflowDoneChoiceMessage(
                 songTitle: pending.songTitle,
                 willRemoveActiveCopy: pending.willRemoveActiveCopy,
-                vaultFolderName: pending.vaultFolderName,
-                backupPausedReason: pending.backupPausedReason
+                vaultFolderName: pending.vaultFolderName
             )
         )
         .font(HubDesignSystem.Typography.bodySmall())
@@ -128,25 +128,16 @@ struct ProjectVaultDoneChoiceSheet: View {
                 .accessibilityLabel("Back up and remove from Mac. Marks Done, backs up to the Vault, then permanently deletes the folder on this Mac.")
                 .accessibilityHint("Deletes the folder only after every file of the backup is checked.")
             }
-            // While a backup is paused the same choice marks Done and leaves
-            // the copy to the automatic Done copy; it never promises a backup now.
-            let backupPaused = pending.backupPausedReason != nil
             HubLabeledButton(
-                icon: backupPaused ? "clock" : "checkmark.seal",
-                label: backupPaused
-                    ? ProjectVaultConfirmationCopy.workflowDoneBackUpLaterTitle
-                    : ProjectVaultConfirmationCopy.workflowDoneKeepCopyTitle,
+                icon: "checkmark.seal",
+                label: ProjectVaultConfirmationCopy.workflowDoneKeepCopyTitle,
                 style: .secondary,
-                help: backupPaused
-                    ? "Mark Done now; the app backs up the project when the reason above is fixed"
-                    : "Mark Done and back up to the Vault; the folder stays on this Mac",
+                help: "Mark Done and back up to the Vault; the folder stays on this Mac",
                 expands: true
             ) {
                 viewModel.confirmWorkflowDoneKeepCopy()
             }
-            .accessibilityLabel(backupPaused
-                ? "Mark Done, back up later. Marks Done now; the backup follows by itself."
-                : "Mark Done and back up. Marks Done and backs up to the Vault; the folder stays on this Mac.")
+            .accessibilityLabel("Mark Done and back up. Marks Done and backs up to the Vault; the folder stays on this Mac.")
             HubLabeledButton(
                 icon: "internaldrive",
                 label: ProjectVaultConfirmationCopy.workflowDoneKeepLocalTitle,
