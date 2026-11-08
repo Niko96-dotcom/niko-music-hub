@@ -25,6 +25,10 @@ struct ProjectVaultPresentationContext: Equatable {
     /// Without it nothing can reach the Vault, so Done stays a plain status
     /// change instead of a capture that only fails.
     let rootsConfigured: Bool
+    /// The settings let a Done copy run now (`permitsUserInitiatedArchiving`:
+    /// Emergency Stop off, the rollout not disabled, both folders chosen).
+    /// Without it the automatic Done copy queues nothing.
+    let allowsDoneCopy: Bool
 
     init?(settings: AppSettings) {
         guard settings.vault.isEnabled else { return nil }
@@ -34,5 +38,6 @@ struct ProjectVaultPresentationContext: Equatable {
         keepLocalPins = settings.vault.keepLocalPins
         allowsFreeSpaceOffer = ProjectVaultRolloutPolicy.permitsUserInitiatedRemoval(settings.vault)
         rootsConfigured = KeepLocalReviewPolicy.vaultRootsConfigured(in: settings)
+        allowsDoneCopy = ProjectVaultRolloutPolicy.permitsUserInitiatedArchiving(settings.vault)
     }
 }

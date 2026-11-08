@@ -211,6 +211,12 @@ extension ArchiveBrowserViewModel {
     }
 
     private func enqueueDoneVaultProjectsIfNeeded() {
+        // A refused copy refreshes the snapshots, and that refresh queued the
+        // next Done song without a copy: with Emergency Stop on and two such
+        // songs the queue never emptied and kept the Mac busy. While the
+        // settings refuse a copy, queue nothing; the first refresh after the
+        // refusal ends backs them up.
+        guard projectVaultPresentationContext?.allowsDoneCopy == true else { return }
         for song in songs where song.workflowStatus == .done {
             // P2: an unresolved identity sheet promises "Nothing is archived
             // until you choose." Never auto-archive the exact song that owns

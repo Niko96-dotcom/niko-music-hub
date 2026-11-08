@@ -165,10 +165,13 @@ final class ProjectVaultQueueLivePhaseTests: XCTestCase {
             StoredMusicRoot(id: activeID, role: .active, url: active),
             StoredMusicRoot(id: archiveID, role: .archive, url: archive),
         ]
+        // A Vault turned on in Settings: the disabled legacy rollout refuses
+        // every Done copy, so the automatic Done copy would queue nothing.
         settings.vault = VaultSettings(
             isEnabled: true,
             activeRootID: activeID,
             archiveRootID: archiveID,
+            rolloutStage: .privateBeta,
             independentBackupConfirmed: true
         )
         try store.saveSettings(settings)

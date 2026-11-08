@@ -192,6 +192,37 @@ final class WorkflowDoneArchiveConfirmationTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.project.path))
     }
 
+    /// While the settings refuse a copy (Emergency Stop), the automatic Done
+    /// copy queues nothing: each refused copy refreshed the snapshots, and
+    /// with two Done songs without a copy that refresh queued the other one,
+    /// forever. The first refresh after the stop ends backs both up.
+    func testAutomaticDoneCopyWaitsWhileEmergencyStopIsOn() async throws {
+        let fixture = try FriendsWorkflowFixture()
+        defer { fixture.cleanup() }
+        _ = try fixture.addSong(named: "Second Done Song", extension: "cpr")
+        try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = true }
+        let runtime = BoundArchiveAuthorizationTests.DeterministicBoundVaultRuntime()
+        let viewModel = fixture.viewModel(runtime: runtime)
+        await viewModel.scan()
+        XCTAssertEqual(viewModel.songs.count, 2)
+        for song in viewModel.songs {
+            XCTAssertEqual(viewModel.commitWorkflowStatus(.done, for: song), .saved)
+        }
+        XCTAssertEqual(viewModel.projectVaultPresentationContext?.allowsDoneCopy, false)
+
+        await viewModel.refreshProjectVaultSnapshots()
+        XCTAssertTrue(viewModel.projectVaultBusySongIDs.isEmpty)
+        XCTAssertTrue(runtime.copyCalls.isEmpty)
+
+        try fixture.settingsStore.updateSettings { $0.vault.automationEmergencyStop = false }
+        viewModel.followStoredSettings()
+        XCTAssertEqual(viewModel.projectVaultPresentationContext?.allowsDoneCopy, true)
+        await viewModel.refreshProjectVaultSnapshots()
+        try await waitUntil { runtime.copyCalls.count == 2 && viewModel.projectVaultBusySongIDs.isEmpty }
+        XCTAssertEqual(Set(runtime.copyCalls.map(\.songID)), Set(viewModel.songs.map(\.id)))
+        XCTAssertTrue(runtime.copyCalls.allSatisfy { $0.trigger == .workflowDone })
+    }
+
     func testCancelledAfterDestructiveBoundaryIsTruthful() async throws {
         let fixture = try FriendsWorkflowFixture()
         defer { fixture.cleanup() }
